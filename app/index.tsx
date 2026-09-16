@@ -17,15 +17,18 @@ import { listBooks, type BookListItem } from '../src/db/repo';
 import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
 import { pickManuscript } from '../src/import/sources/picker';
 import { supportedExtensions } from '../src/import/registry';
-import { Cover, Row, Section } from '../src/ui/primitives';
+import { Cover, Hint, Row, Section } from '../src/ui/primitives';
+import { setUiLanguage, SUPPORTED, type UiLanguage } from '../src/i18n';
 import { QueueSheet, QueueStrip } from '../src/ui/ImportQueue';
+import { PickerSheet } from '../src/ui/PickerSheet';
 import { formatCount } from '../src/text/counts';
 import { radius, space, usePalette } from '../src/theme';
 
 const SHELF_COVER = 104;
+const LANGUAGE_LABELS: Record<UiLanguage, string> = { en: 'English', 'zh-Hans': '简体中文' };
 
 export default function Home() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const palette = usePalette();
   const { width } = useWindowDimensions();
   const [books, setBooks] = useState<BookListItem[] | null>(null);
@@ -33,6 +36,7 @@ export default function Home() {
   const [queueOpen, setQueueOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
 
   const refresh = useCallback(() => {
     listBooks().then(setBooks).catch(() => setBooks([]));
@@ -133,23 +137,42 @@ export default function Home() {
             <View style={{ paddingHorizontal: space.lg }}>
               <Section title={t('settings.title')}>
                 <Row
-                  label={t('settings.ai')}
-                  onPress={() => router.push('/settings/ai-keys')}
+                  label={t('settings.aiSettings')}
                   value="›"
+                  onPress={() => router.push('/settings/ai-keys')}
                 />
                 <Row
-                  label={t('settings.more')}
-                  onPress={() => router.push('/settings')}
-                  value="›"
-                  last
+                  label={t('settings.language')}
+                  value={LANGUAGE_LABELS[i18n.language as UiLanguage] ?? 'English'}
+                  onPress={() => setLanguageOpen(true)}
                 />
+                <Row label={t('settings.exportBundle')} value={t('settings.notBuilt')} />
+                <Row label={t('settings.restoreLatest')} value={t('settings.notBuilt')} last />
               </Section>
+
+              <Section title={t('settings.privateCloud')}>
+                <Row label={t('settings.connectBucket')} value={t('settings.notBuilt')} last />
+              </Section>
+              <Hint>{t('settings.privateCloudHint')}</Hint>
             </View>
           </>
         )}
       </ScrollView>
 
       <QueueSheet jobs={jobs} visible={queueOpen} onClose={() => setQueueOpen(false)} />
+
+      {/* Picking a value never leaves the page. */}
+      <PickerSheet
+        visible={languageOpen}
+        title={t('settings.language')}
+        options={SUPPORTED.map((code) => ({ id: code, label: LANGUAGE_LABELS[code] }))}
+        selectedId={i18n.language}
+        onPick={(code) => {
+          setUiLanguage(code as UiLanguage);
+          setLanguageOpen(false);
+        }}
+        onClose={() => setLanguageOpen(false)}
+      />
     </SafeAreaView>
   );
 }

@@ -238,13 +238,25 @@ so hand-made chapter fixes are in every output.
 │ │ cover │ │ cover │ │ cover │             │   expands into a grid below
 │ └───────┘ └───────┘ └───────┘             │
 │                                           │
-│ SETTINGS                                  │ ← a section, not a tab
-│ ┌───────────────────────────────────────┐ │
-│ │ AI keys                            ›  │ │
-│ │ More settings                      ›  │ │
+│ SETTINGS                                  │ ← a section, not a tab, and flat:
+│ ┌───────────────────────────────────────┐ │   no "More settings" page whose
+│ │ AI settings                        ›  │ │   only job is holding four rows
+│ │ Language                    English   │ │ ← picking a value opens a sheet
+│ │ Export bundle          Not built yet  │ │   over the page, never a push
+│ │ Restore latest         Not built yet  │ │
 │ └───────────────────────────────────────┘ │
+│                                           │
+│ PRIVATE CLOUD                             │ ← its own section: storage you
+│ ┌───────────────────────────────────────┐ │   own, named as the user thinks
+│ │ Connect a bucket       Not built yet  │ │   of it
+│ └───────────────────────────────────────┘ │
+│ Storage you own. Off by default.          │
 └───────────────────────────────────────────┘
 ```
+
+**A page whose only job is holding links gets deleted.** Settings had exactly
+that shape — one row on Home pushing a page of four rows — so the four rows
+moved to Home and the page went away.
 
 **Library holds every book; Reading is a shortcut into it, not a slice out of
 it.** Slicing them apart leaves Library an empty heading the moment the only
@@ -269,20 +281,16 @@ blank.
 │ │        ▶  Continue · Chapter 12       │ │ ← the one primary action
 │ └───────────────────────────────────────┘ │   ("Start reading" before first open)
 │                                           │
-│ DETAILS                                   │ ← every field edits in place,
-│ ┌───────────────────────────────────────┐ │   committing on blur. A Save
-│ │ Title      《系统代理人》              │ │   button per field would be five
-│ │ Author     Ameng~                     │ │   taps a page
-│ │ Year                                  │ │
-│ │ Edition                               │ │
-│ └───────────────────────────────────────┘ │
-│                                           │
-│ CHAPTERS                            Edit  │
+│ CHAPTERS                                  │
 │ ┌───────────────────────────────────────┐ │
 │ │ Jump to chapter              509   ›  │ │ ← 509 chapters is a PICKER, not a
 │ └───────────────────────────────────────┘ │   section. Collapsed by default;
-│                                           │   the sheet is searchable and
-│ CHARACTERS                             ＋ │   marks ⚠ low-confidence ones
+│ NOTES                                     │   the sheet is searchable and
+│ ┌───────────────────────────────────────┐ │   marks ⚠ low-confidence ones
+│ │ Highlights and notes          12   ›  │ │
+│ └───────────────────────────────────────┘ │
+│                                           │
+│ CHARACTERS                             ＋ │
 │ ┌───────────────────────────────────────┐ │
 │ │ 沈墨                        老沈   ›  │ │ ← each opens its own profile page
 │ └───────────────────────────────────────┘ │
@@ -297,6 +305,16 @@ blank.
 │ └───────────────────────────────────────┘ │
 └───────────────────────────────────────────┘
 ```
+
+**The header IS the edit form.** Title, author, year and edition are editable
+where they're displayed, committing on blur. The first build had both a header
+*and* a Details section repeating the same four values — the same information
+twice, with the copy you can't touch on top. The cover carries a small ✎ badge
+in its corner rather than a stray `+` floating beneath it, which named nothing.
+
+**No control that does nothing.** An "Edit" action sat on the chapter heading
+wired to an empty handler because the structure editor isn't built. A dead
+control is worse than a missing one; it was removed until T3.6 lands.
 
 ### Character / place profile
 
@@ -674,6 +692,9 @@ translated — it should read as if drafted in Chinese.
 
 ## Deviations from the `uiux` skill
 
+- The `media-library` grid is replaced by horizontal shelves on Home, because
+  the library is one section of a page here rather than the whole screen — a
+  grid would push Settings off the bottom. The grid returns behind "More".
 - `references/foundations.md` and `references/mobile.md` are currently
   unfilled (all TODO), so layout, type, colour and gesture decisions here are
   local and should be re-checked against those files once written.

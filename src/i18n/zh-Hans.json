@@ -63,7 +63,8 @@
     "addCharacter": "添加人物",
     "addPlace": "添加地点",
     "none": "暂无",
-    "count": "{{count}}"
+    "count": "{{count}}",
+    "notesRow": "标注与想法"
   },
   "reader": {
     "empty": "本章没有内容。",
@@ -75,7 +76,20 @@
     "note": "想法",
     "share": "分享",
     "copied": "已复制",
-    "progress": "{{percent}}%"
+    "progress": "{{percent}}%",
+    "margins": "页边距",
+    "theme": "主题",
+    "spacing": "行距",
+    "font": "字体",
+    "theme_paper": "纸白",
+    "theme_sepia": "米黄",
+    "theme_grey": "灰调",
+    "theme_night": "夜间",
+    "spacing_compact": "紧凑",
+    "spacing_normal": "标准",
+    "spacing_loose": "宽松",
+    "sans": "黑体",
+    "serif": "宋体"
   },
   "settings": {
     "title": "设置",
@@ -105,7 +119,14 @@
     "aiStrategyHint": "排列顺序即回退顺序。「顺序」会一直使用第一个密钥直到它出错；「轮询」则每次调用轮换。",
     "save": "保存",
     "cancel": "取消",
-    "delete": "删除"
+    "delete": "删除",
+    "aiSettings": "AI 设置",
+    "privateCloud": "私有云",
+    "privateCloudHint": "你自己的存储。默认关闭。",
+    "connectBucket": "连接存储桶",
+    "exportBundle": "导出备份",
+    "importBundle": "导入备份",
+    "restoreLatest": "恢复最近备份"
   },
   "units": {
     "words": "{{count}} 词",
@@ -137,5 +158,15 @@
     "deleteConfirm": "删除这份资料？",
     "namePlaceholder": "姓名",
     "summaryPlaceholder": "用一两句话介绍他/她。"
+  },
+  "notes": {
+    "empty": "阅读时做的标注和想法会显示在这里。",
+    "search": "搜索标注和想法",
+    "filter_all": "全部",
+    "filter_highlight": "标注",
+    "filter_note": "想法",
+    "unplaced": "未定位",
+    "noMatches": "没有匹配的内容。",
+    "deleteConfirm": "删除这条标注？"
   }
 }
