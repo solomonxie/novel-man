@@ -31,13 +31,24 @@ import {
 import { annotationAt, layoutChapter, progressWithin } from '../../src/reader/model';
 import type { Span } from '../../src/text/segment';
 import { scriptOf } from '../../src/text/language';
-import { highlightColors, lineHeightFor, readingThemes, space, type ReadingTheme } from '../../src/theme';
+import { highlightColors, readingThemes, space } from '../../src/theme';
+import {
+  defaultSettings,
+  lineHeightFor,
+  loadSettings,
+  saveSettings,
+  type ReadingSettings,
+} from '../../src/reader/settings';
+import { ReadingSettingsSheet } from '../../src/ui/ReadingSettingsSheet';
 
-const FONT_SIZE = 18;
 const MENU_HEIGHT = 46;
 
 export default function Reader() {
-  const { id, chapter: chapterParam } = useLocalSearchParams<{ id: string; chapter?: string }>();
+  const { id, chapter: chapterParam, at } = useLocalSearchParams<{
+    id: string;
+    chapter?: string;
+    at?: string;
+  }>();
   const { t } = useTranslation();
   const { height } = useWindowDimensions();
 
@@ -46,11 +57,17 @@ export default function Reader() {
   const [text, setText] = useState('');
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [index, setIndex] = useState(0);
-  const [theme, setTheme] = useState<ReadingTheme>('paper');
+  const [settings, setSettings] = useState<ReadingSettings>(defaultSettings);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [flashAt, setFlashAt] = useState<number | null>(null);
   const [selection, setSelection] = useState<{ span: Span; y: number } | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    loadSettings().then(setSettings);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -66,11 +83,17 @@ export default function Reader() {
       setChapters(loadedChapters);
       setText(loadedText);
       setAnnotations(loadedAnnotations);
+      const target = at ? Number(at) : null;
       const requested = chapterParam ? Number(chapterParam) : null;
       const resumed = loadedChapters.findIndex((c) => offset >= c.start && offset < c.end);
       setIndex(requested ?? (resumed >= 0 ? resumed : 0));
+      // Jumping to a note has to land ON it, so flash the sentence briefly.
+      if (target !== null) {
+        setFlashAt(target);
+        setTimeout(() => setFlashAt(null), 1600);
+      }
     })();
-  }, [id, chapterParam]);
+  }, [id, chapterParam, at]);
 
   const chapter = chapters[index];
   const language = book?.language ?? 'en';
@@ -79,8 +102,9 @@ export default function Reader() {
     [chapter, text, language]
   );
 
-  const palette = readingThemes[theme];
-  const lineHeight = lineHeightFor(scriptOf(language), FONT_SIZE);
+  const palette = readingThemes[settings.theme];
+  const script = scriptOf(language);
+  const lineHeight = lineHeightFor(settings, script);
 
   const flash = useCallback((message: string) => {
     setToast(message);
@@ -146,8 +170,8 @@ export default function Reader() {
         <Text numberOfLines={1} style={{ color: palette.dim, fontSize: 13, flex: 1, textAlign: 'center' }}>
           {chapter.title.trim() || `${index + 1}`}
         </Text>
-        <Pressable onPress={() => setTheme(nextTheme(theme))} hitSlop={12}>
-          <Text style={{ color: palette.dim, fontSize: 16 }}>{theme === 'night' ? '☾' : '☀'}</Text>
+        <Pressable onPress={() => setSettingsOpen(true)} hitSlop={12}>
+          <Text style={{ color: palette.dim, fontSize: 16 }}>Aa</Text>
         </Pressable>
         <Pressable onPress={() => setListOpen(true)} hitSlop={12} style={{ marginLeft: space.lg }}>
           <Text style={{ color: palette.dim, fontSize: 16 }}>≡</Text>
@@ -156,7 +180,10 @@ export default function Reader() {
 
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={{ paddingHorizontal: space.xl, paddingBottom: space.xxl * 2 }}
+        contentContainerStyle={{
+          paddingHorizontal: settings.margin,
+          paddingBottom: space.xxl * 2,
+        }}
         onScroll={(event) => {
           const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
           const ratio = contentOffset.y / Math.max(1, contentSize.height - layoutMeasurement.height);
@@ -172,17 +199,24 @@ export default function Reader() {
           paragraphs.map((paragraph) => (
             <Text
               key={paragraph.start}
-              style={{ color: palette.text, fontSize: FONT_SIZE, lineHeight, marginBottom: lineHeight * 0.6 }}
+              style={{
+                color: palette.text,
+                fontSize: settings.fontSize,
+                lineHeight,
+                marginBottom: lineHeight * 0.6,
+                fontFamily: settings.serif ? (script === 'cjk' ? 'Songti SC' : 'Georgia') : undefined,
+              }}
             >
               {paragraph.sentences.map((span) => {
                 const highlighted = annotationAt(annotations, span);
                 const active = selection?.span.start === span.start;
+                const flashing = flashAt !== null && flashAt >= span.start && flashAt < span.end;
                 return (
                   <Text
                     key={span.start}
                     onPress={(event) => openMenu(span, event)}
                     style={{
-                      backgroundColor: active
+                      backgroundColor: active || flashing
                         ? palette.tint
                         : highlighted?.color ?? 'transparent',
                     }}
@@ -203,7 +237,7 @@ export default function Reader() {
             style={[
               styles.menu,
               {
-                backgroundColor: theme === 'night' ? '#2A2A2E' : '#2B2B2F',
+                backgroundColor: settings.theme === 'night' ? '#2A2A2E' : '#2B2B2F',
                 top: menuFlipped ? Math.min(selection.y + 28, height - 120) : menuAbove,
               },
             ]}
@@ -229,6 +263,16 @@ export default function Reader() {
           })}
         </Text>
       </View>
+
+      <ReadingSettingsSheet
+        visible={settingsOpen}
+        settings={settings}
+        onChange={(next) => {
+          setSettings(next);
+          saveSettings(next);
+        }}
+        onClose={() => setSettingsOpen(false)}
+      />
 
       <Modal visible={listOpen} animationType="slide" onRequestClose={() => setListOpen(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
@@ -272,11 +316,6 @@ function MenuItem({ label, onPress }: { label: string; onPress: () => void }) {
       <Text style={{ color: '#FFFFFF', fontSize: 14 }}>{label}</Text>
     </Pressable>
   );
-}
-
-function nextTheme(theme: ReadingTheme): ReadingTheme {
-  const order: ReadingTheme[] = ['paper', 'sepia', 'grey', 'night'];
-  return order[(order.indexOf(theme) + 1) % order.length];
 }
 
 const styles = StyleSheet.create({

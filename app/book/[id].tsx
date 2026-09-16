@@ -1,5 +1,14 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +19,7 @@ import {
   deleteBook,
   getBook,
   getProgress,
+  listAnnotations,
   listChapters,
   listEntities,
   updateBook,
@@ -19,7 +29,8 @@ import {
   type EntityKind,
 } from '../../src/db/repo';
 import { Cover, PrimaryAction, Row, Section } from '../../src/ui/primitives';
-import { EditableRow, pickImage } from '../../src/ui/fields';
+import { pickImage } from '../../src/ui/fields';
+import { InlineText } from '../../src/ui/inline';
 import { formatCount, formatDuration, readingMinutes } from '../../src/text/counts';
 import { space, usePalette } from '../../src/theme';
 
@@ -32,6 +43,7 @@ export default function BookPage() {
   const [characters, setCharacters] = useState<Entity[]>([]);
   const [places, setPlaces] = useState<Entity[]>([]);
   const [offset, setOffset] = useState(0);
+  const [noteCount, setNoteCount] = useState(0);
   const [jumpOpen, setJumpOpen] = useState(false);
 
   const load = useCallback(() => {
@@ -41,6 +53,7 @@ export default function BookPage() {
     listEntities(id, 'character').then(setCharacters);
     listEntities(id, 'place').then(setPlaces);
     getProgress(id).then(setOffset);
+    listAnnotations(id).then((rows) => setNoteCount(rows.length));
   }, [id]);
 
   useFocusEffect(load);
@@ -98,13 +111,38 @@ export default function BookPage() {
       <View style={{ flexDirection: 'row', gap: space.lg }}>
         <Pressable onPress={pickCover}>
           <Cover title={book.title} hue={book.cover_hue} width={104} path={book.cover_path} />
-          <Text style={{ color: palette.accent, fontSize: 12, textAlign: 'center', marginTop: space.xs }}>
-            {book.cover_path ? '↻' : '＋'}
-          </Text>
+          <View style={[styles.coverBadge, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+            <Text style={{ fontSize: 11 }}>✎</Text>
+          </View>
         </Pressable>
         <View style={{ flex: 1, justifyContent: 'center' }}>
-          <Text style={{ color: palette.text, fontSize: 22, fontWeight: '700' }}>{book.title}</Text>
-          {book.author ? <Text style={{ color: palette.dim, marginTop: 2 }}>{book.author}</Text> : null}
+          <InlineText
+            value={book.title}
+            placeholder={t('book.title')}
+            onCommit={(value) => edit('title', value)}
+            style={{ color: palette.text, fontSize: 21, fontWeight: '700' }}
+            multiline
+          />
+          <InlineText
+            value={book.author}
+            placeholder={t('book.author')}
+            onCommit={(value) => edit('author', value)}
+            style={{ color: palette.dim, fontSize: 15, marginTop: 2 }}
+          />
+          <View style={{ flexDirection: 'row', gap: space.lg, marginTop: 2 }}>
+            <InlineText
+              value={book.year}
+              placeholder={t('book.year')}
+              onCommit={(value) => edit('year', value)}
+              style={{ color: palette.dim, fontSize: 14 }}
+            />
+            <InlineText
+              value={book.edition}
+              placeholder={t('book.edition')}
+              onCommit={(value) => edit('edition', value)}
+              style={{ color: palette.dim, fontSize: 14 }}
+            />
+          </View>
           <Text style={{ color: palette.dim, fontSize: 13, marginTop: space.sm }}>
             {formatCount(book.word_count, book.language)} · {chapters.length} · {formatDuration(minutes)}
           </Text>
@@ -120,14 +158,7 @@ export default function BookPage() {
         style={{ marginTop: space.lg }}
       />
 
-      <Section title={t('book.details')}>
-        <EditableRow label={t('book.title')} value={book.title} onCommit={(v) => edit('title', v)} />
-        <EditableRow label={t('book.author')} value={book.author} onCommit={(v) => edit('author', v)} />
-        <EditableRow label={t('book.year')} value={book.year} onCommit={(v) => edit('year', v)} />
-        <EditableRow label={t('book.edition')} value={book.edition} onCommit={(v) => edit('edition', v)} last />
-      </Section>
-
-      <Section title={t('book.chapters')} action={{ label: t('book.edit'), onPress: () => {} }}>
+      <Section title={t('book.chapters')}>
         {chapters.length === 0 ? (
           <Row label={t('book.noChapters')} last />
         ) : (
@@ -138,6 +169,15 @@ export default function BookPage() {
             last
           />
         )}
+      </Section>
+
+      <Section title={t('book.notes')}>
+        <Row
+          label={t('book.notesRow')}
+          value={`${noteCount}  ›`}
+          onPress={() => router.push(`/book/${book.id}/notes`)}
+          last
+        />
       </Section>
 
       <EntitySection
@@ -249,3 +289,17 @@ function ChapterJump({ visible, chapters, currentId, onClose, onPick }: {
 function label(chapter: Chapter, t: (key: string) => string): string {
   return chapter.title.trim() || `${chapter.idx + 1}`;
 }
+
+const styles = StyleSheet.create({
+  coverBadge: {
+    position: 'absolute',
+    right: -6,
+    bottom: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

@@ -84,9 +84,9 @@ in it is v1.
 - [x] T5.3 Anchored action menu: above-the-sentence positioning, edge flipping, dismissal rules — `src/ui/` — depends: T5.2, T1.6
 - [x] T5.4 Annotations: highlight, stored on offset anchors — `src/db/`, `src/reader/` — depends: T1.3, T5.2 (partial: one colour only; notes, bookmarks and the re-anchoring fingerprint not built)
 - [ ] T5.5 Reader chrome: tap zones, auto-fade, progress scrubber — `app/reader/` — depends: T5.1 (partial: a static bar and the chapter list exist; nothing hides or scrubs)
-- [ ] T5.6 Reading settings sheet with live application; per-script spacing and font stacks — `app/reader/settings/` — depends: T5.5, T1.5 (partial: theme cycles from a chrome button; nothing else is adjustable)
+- [x] T5.6 Reading settings sheet with live application: font size, four themes, per-script spacing, margins, serif/sans; persisted — `src/ui/ReadingSettingsSheet.tsx`, `src/reader/settings.ts` — depends: T5.5, T1.5
 - [x] T5.7 Reading state: per-book progress offset, resume, last-read chapter on the shelf — `src/reader/` — depends: T5.1, T1.3
-- [ ] T5.8 Notes & highlights page: grouped by chapter, search, filters, jump-to with sentence flash — `app/book/[id]/notes/` — depends: T5.4
+- [x] T5.8 Notes & highlights page: grouped by chapter in reading order, search, filters, copy, jump-to with sentence flash — `app/book/[id]/notes.tsx` — depends: T5.4
 - [ ] T5.9 Share card renderer: themed quote image + text, into the OS share sheet — `src/share/` — depends: T5.4, T1.5
 
 ## Phase 6: Export and backup

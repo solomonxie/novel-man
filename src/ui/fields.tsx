@@ -66,9 +66,9 @@ export function Portrait({ name, path, hue, size, onPick }: {
   return (
     <Pressable onPress={() => pickImage().then((uri) => uri && onPick(uri))}>
       {body}
-      <Text style={{ color: palette.accent, fontSize: 12, textAlign: 'center', marginTop: space.xs }}>
-        {path ? '↻' : '＋'}
-      </Text>
+      <View style={[styles.badge, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+        <Text style={{ fontSize: 11 }}>✎</Text>
+      </View>
     </Pressable>
   );
 }
@@ -112,4 +112,15 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
   },
   fallback: { alignItems: 'center', justifyContent: 'center' },
+  badge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

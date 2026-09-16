@@ -87,7 +87,7 @@ export default function EntityPage() {
           path={entity.portrait_path}
           hue={hueFrom(entity.name)}
           size={96}
-          onPick={async (uri) => save({ portrait_path: uri })}
+          onPick={(uri) => save({ portrait_path: uri })}
         />
         <NameField
           value={entity.name}
