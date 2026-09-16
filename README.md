@@ -42,6 +42,14 @@ bucket you own. Per book, so a single book can come back without touching the
 rest. Restore never overwrites — it creates something new and tells you what
 it couldn't place.
 
+**Translation that gets better as you use it** *(planned)* — translate into
+your chosen languages with a glossary the model must obey: character names,
+places and terminology, each editable and lockable per language, seeded from
+the cast analysis. Read bilingually, fix any sentence, and the fix is kept as
+a diff against the machine output — promote it to a glossary term and every
+later chapter follows it, or leave it as a worked example the model is shown
+on similar lines. Change a name late and only the affected chapters re-run.
+
 **Planned** — AI character dossiers and per-chapter mention timelines, an
 interactive relation graph, generated portraits, continuity checks
 ("grey eyes in ch.3, green in ch.20"), screenplay conversion, and storyboards
@@ -84,6 +92,13 @@ npx expo start --ios     # or --android
 
 Opens in Expo Go — no native build needed. Import a `.txt`, `.md`, `.docx`
 or `.epub` from Files and it lands on the shelf with its chapters detected.
+Imports run through a visible queue, so the app stays usable while a long
+novel is being read in.
+
+```
+npm run check:parse     # parsers + chapter detection against fixture files
+npm run typecheck
+```
 
 
 ## Status

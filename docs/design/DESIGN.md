@@ -25,7 +25,10 @@ scattered across hundreds of pages.
 - Take an existing manuscript as-is, from wherever it already lives — local
   file, cloud drive, a link — and in whatever format it's already in.
 - Give every book one page that is the whole app for that book: read, edit
-  structure, analyse, export. No hunting across tabs for a book's own things.
+  structure, analyse, translate, export. No hunting across tabs for a book's
+  own things.
+- Make translation improve with use: every correction the user makes is
+  context for the next chapter, not a one-off fix.
 - Get the book back out again, in the format the next tool wants.
 - Structure first: chapters and scenes, correct and correctable, because
   everything downstream indexes by them.
@@ -106,6 +109,22 @@ language is detected per project from the text and overridable.
 | Google Docs API with OAuth | Needs a server for the consent redirect and token refresh. One format is not worth a backend. |
 | Ask the user to export .docx themselves | What actually happens today, and it's a fine fallback — but only as a fallback, with the app naming the steps. |
 
+**Translation granularity**
+
+| Option | Deciding factor |
+|---|---|
+| **Chapter-sized request, sentence-aligned response (chosen)** | The model needs surrounding prose to resolve pronouns, honorifics and who is speaking; the app needs per-sentence anchors to show diffs and let one line be re-edited. Numbering the sentences in the prompt and validating the count back buys both. |
+| Sentence at a time | Perfect anchoring, no context. Produces the classic machine-translation failure: every line defensible, the paragraph incoherent. Also N× the requests. |
+| Whole chapter as free prose | Best prose, but the result can't be aligned back to source sentences, so there is nowhere to hang a diff, a correction, or a re-run of one line. |
+
+**Where translation context comes from**
+
+| Option | Deciding factor |
+|---|---|
+| **Termbase + post-edit memory (chosen)** | This is the problem translation tooling already solved: a term base for names and terminology, a translation memory for accepted prose. Both are just retrieval keyed on the source sentence, and both are things the user can edit directly. |
+| Put everything in a system prompt | Works for twenty terms, not for a 400-character cast. Burns tokens on every call for entries the sentence never mentions. |
+| Fine-tuning per book | Far too slow and expensive a loop for a correction the user wants to take effect on the very next chapter. |
+
 **Chapter detection**
 
 | Option | Deciding factor |
@@ -150,6 +169,17 @@ built structure-first.**
   format declares what it is, whether it can round-trip, and what it loses.
   The UI reads that list rather than hardcoding it — which is also what lets
   it say "PDF export is one-way" honestly instead of silently degrading.
+- *Translation units are sentences, anchored on the same offsets as
+  everything else.* A translated sentence, a highlight and a chapter are all
+  `(start, end)` ranges into the one normalized text. That's what lets a
+  translation survive re-detection, lets a highlight and its translation sit on
+  the same line, and lets the reader show source and target side by side
+  without a second alignment model.
+- *The user's corrections are the product.* An AI translation that can't be
+  fixed is a worse e-book; one whose fixes compound is a tool. Every accepted
+  edit becomes a termbase entry or a memory example, so chapter 40 is
+  translated better than chapter 1 because of what happened in between. This
+  is the whole reason diffs are stored rather than just applied.
 - *Locale is infrastructure, not a feature.* Every user-facing string goes
   through the i18n layer from the first screen, with `en` and `zh-Hans`
   catalogues in the repo. Two languages from the start is what keeps the
@@ -196,6 +226,31 @@ rules, word-count method (words vs. characters) — is keyed by the **manuscript
 language, not the UI language, and lives beside the parsers rather than in the
 string catalogues.
 
+**Translation** — three tables, all anchored to the same offsets as the rest:
+
+```
+TranslationJob    book · target language · chapter range · status · cost
+TranslationUnit   (start,end) → machine text · edited text · state
+Term              source · target · kind (character/place/term) · note · locked
+Memory            source sentence · accepted target · why (the diff that made it)
+```
+
+- **`Term` is per target language**, manually editable, and seeded from the
+  cast analysis where that has run — a character named 沈墨 should be 「Shen Mo」
+  everywhere or 「Chen Mo」 everywhere, and that is the user's call, not the
+  model's. A locked term is a hard constraint stated in the prompt, not a hint.
+- **Context is assembled per request, not globally**: the terms whose source
+  strings actually occur in this chapter, the nearest memory entries, the
+  previous and next paragraph for continuity, and the book's tone settings.
+  Everything else stays out of the prompt.
+- **`TranslationUnit` keeps machine and edited text separately** so the diff
+  between them is a first-class object — displayable as diff marks, and
+  promotable into `Memory` or `Term` with one tap. Discarding the machine text
+  on edit would throw away the only signal worth learning from.
+- **Alignment is validated, not assumed.** The response must come back with the
+  same sentence count it was given; a mismatch re-runs that chapter at a smaller
+  batch size rather than silently misaligning every following line.
+
 **Credentials** — `expo-secure-store` (Keychain / Keystore), pinned
 this-device-only. Never in the DB, never in an export or a sync payload.
 
@@ -213,7 +268,12 @@ import + chapter detection   0 tokens     heuristics, always free
   └─ ambiguous structure     ~2-10 calls  ToC-sized excerpt, not full text
 character extraction         O(chapters)  one pass per chapter, cached
 portraits                    1 image/char explicit, one at a time
-script / storyboard          O(scenes)    the expensive one, per-scene, opt-in
+translation                  O(chapters)  BOTH directions -- whole book in and
+                                          whole book out. The most expensive
+                                          thing the app does; per-chapter,
+                                          resumable, never a single button that
+                                          spends the lot
+script / storyboard          O(scenes)    per-scene, opt-in
 ```
 
 **Backup, restore and cloud** — per `backup-restore.md` and
@@ -277,6 +337,36 @@ a .nmbak bundle ─────────┘   a book (or a whole library) com
 A Google Doc arrives either through the Drive provider in the picker, or as a
 pasted share link the app fetches via Docs' own `export?format=docx` URL.
 Either way it enters as `.docx` — there is no Google-specific code path.
+
+**Parsing on Hermes — the binding constraint.** React Native's engine has a
+backtracking regex implementation with none of V8's optimisations, and a
+manuscript is big enough that the difference is not a constant factor.
+Measured on a 3.4MB / 1.47M-character / 509-chapter Chinese `.docx`
+(27MB of `document.xml`):
+
+```
+                            Node/V8     Hermes (iPhone sim)
+ scan paragraphs, regex        8ms      >7 min, never finished
+   /<w:p\b[\s\S]*?<\/w:p>/g              ← lazy quantifier backtracks per
+                                            character, 44,000 times over
+ scan paragraphs, indexOf      —        ~400ms
+```
+
+Rules that follow, for every parser added later:
+
+- **Scan with `indexOf`, never a lazy quantifier over the whole document.**
+  `<tag` … `</tag>` is a linear scan; write it as one.
+- **Never build a `RegExp` inside a per-paragraph loop** — that is 44,000
+  compilations.
+- **Guard a regex with a cheap `indexOf` first.** Most runs contain no `&`,
+  most paragraphs no `<script`. Checking costs nothing and skips the engine.
+- **Measure on the device, not in Node.** Node was 8ms on the exact input that
+  never finished on Hermes; a laptop benchmark would have proved the opposite
+  of the truth.
+
+After the rewrite the same file imports in ~3.9s, of which ~2.8s is `unzip`
+plus one `TextDecoder` pass over 27MB — both single native calls that cannot be
+chunked or yielded. That is the floor until parsing moves off the JS thread.
 
 **Import formats** — all parsed on-device:
 
@@ -342,6 +432,11 @@ chapter corrections.
 - **App store policy**: API keys are classified as authentication information.
   Needs an explicit privacy declaration and a hosted privacy policy URL before
   first submission.
+- **Import still blocks the UI for ~3 seconds on a long novel**, because
+  `unzip` and `TextDecoder` are atomic. A queue and progress make that
+  legible, not shorter. Moving parsing to a worker (`react-native-worklets`,
+  or a native module) is the only real fix, and is not worth it until a
+  format arrives that is slower than this one.
 - **Format breadth is the obvious place this over-reaches.** Ten importers and
   ten exporters is more surface than the whole rest of v1. The registry keeps
   them independent, but the discipline has to be: ship `.txt/.md/.docx/.epub`
@@ -360,6 +455,20 @@ chapter corrections.
   whole library. Keeping them the same bundle format with the same code path,
   differing only in how many are selected, is what stops it becoming two
   features.
+- **Translation is the one feature where the model can be confidently wrong at
+  scale.** A mistranslated name propagates through 500 chapters and reads
+  fluent throughout. The termbase is the mitigation, but it only helps for
+  terms someone thought to add — so candidate extraction (proper nouns seen N+
+  times, not yet in the termbase) has to be proactive, surfaced before a long
+  run rather than discovered on page 300.
+- **Re-translating after a termbase change is not free.** Changing one name
+  invalidates every chapter containing it. The unit table makes it possible to
+  re-run only affected sentences, but the UI has to be honest that a late
+  correction costs another pass.
+- **Alignment drift is the likeliest failure mode** — models merge or split
+  sentences, especially between CJK and English where the natural sentence
+  boundary genuinely differs. Count validation catches it; what to do when a
+  language legitimately needs two sentences for one is an open question.
 - **Open**: does a project ever hold more than one source file (a series, or a
   manuscript split across files)? Modelled as one-to-many already; the UI
   assumes one until there's demand.

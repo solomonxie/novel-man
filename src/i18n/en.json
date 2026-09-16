@@ -1,6 +1,11 @@
 {
-  "app": { "name": "Novel Man" },
-  "tabs": { "shelf": "Shelf", "settings": "Settings" },
+  "app": {
+    "name": "Novel Man"
+  },
+  "tabs": {
+    "shelf": "Shelf",
+    "settings": "Settings"
+  },
   "shelf": {
     "title": "Shelf",
     "empty": "No books yet.",
@@ -72,5 +77,16 @@
     "characters": "{{count}} characters",
     "readTimeHours": "{{hours}}h read",
     "readTimeMinutes": "{{minutes}}m"
+  },
+  "queue": {
+    "title": "Queue ({{count}})",
+    "empty": "Nothing importing.",
+    "close": "Close",
+    "clear": "Clear",
+    "retry": "Retry",
+    "pending": "Waiting",
+    "waiting": "{{count}} waiting",
+    "failedCount": "{{count}} failed",
+    "doneChapters": "{{count}} chapters"
   }
 }

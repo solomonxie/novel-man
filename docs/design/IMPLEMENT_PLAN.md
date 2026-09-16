@@ -41,6 +41,10 @@ pipeline's shape is fixed here and never revisited.
 - [ ] T2.6 `.pdf` importer: pdf.js text extraction in a hidden WebView, with the extracted-text preview gate — see `docs/design/t2.6-pdf.md` — depends: T2.1, T2.2
 - [x] T2.7a System document picker — `src/import/sources/` — depends: T2.1
 - [ ] T2.7b Share-sheet ingestion (both platforms) and URL fetch, with the Google Docs `export?format=docx` rewrite and sign-in-page detection — `src/import/sources/` — depends: T2.7a
+- [x] T2.9 Linear `indexOf` XML scanning, entity/regex guards, no per-paragraph `RegExp` — a lazy-quantifier scan never finished on Hermes for a 27MB `document.xml` — `src/import/xml.ts` — depends: T2.4
+- [x] T2.10 Import queue: sequential jobs, per-stage progress, retry, clear, visible strip and sheet — `src/import/queue.ts`, `src/ui/ImportQueue.tsx` — depends: T2.1 (partial: in-memory, so a kill mid-import loses the job; no cancel)
+- [x] T2.11 Yield to the UI thread between parse chunks, and batch chapter inserts — `src/async/`, `src/db/repo.ts` — depends: T2.9
+- [ ] T2.12 Move parsing off the JS thread — `unzip` + `TextDecoder` are ~2.8s of atomic work on a 3.4MB docx and cannot be chunked — see `docs/design/t2.12-worker.md` — depends: T2.9
 - [ ] T2.8 Import sheet UI: per-step progress, preview gate, inline errors that keep the file — `app/import/` — depends: T2.1, T1.6 (partial: progress and errors currently render on the shelf, with no preview gate)
 
 ## Phase 3: Structure detection
@@ -138,12 +142,32 @@ passes.
 - [ ] T9.4 Continuity checks across chapters, surfaced as reviewable flags rather than edits — `src/cast/` — depends: T9.1
 - [ ] T9.5 Character bible export (`.md` / `.docx`) — `src/export/formats/` — depends: T9.2, T6.1
 
-## Phase 10: Visual and script
+## Phase 10: Translation
+
+Comes after the cast because character names are exactly what the glossary
+needs seeding with, and after the segmenter because sentences are its units.
+It is also the most expensive feature in the app -- whole book in, whole book
+out -- so the termbase and the per-chapter queue are built before the first
+bulk run, not bolted on after one goes wrong.
+
+- [ ] T10.1 Translation schema: job, unit `(start,end)` with machine and edited text kept separately, term, memory — see `docs/design/t10.1-translation-schema.md` — depends: T1.3, T3.1
+- [ ] T10.2 Termbase: per target language, CRUD, lock flag, seeded from cast where it exists — `src/translate/terms/` — depends: T10.1
+- [ ] T10.3 Candidate term extraction: proper nouns seen N+ times and absent from the glossary, surfaced before a run — `src/translate/terms/` — depends: T10.2, T3.1
+- [ ] T10.4 Context assembly: only the terms occurring in this chapter, nearest memory entries, adjacent paragraphs — `src/translate/` — depends: T10.2
+- [ ] T10.5 Chapter translation request with numbered sentences, and alignment validation that retries a mismatched chapter smaller — `src/translate/` — depends: T10.4, T7.5
+- [ ] T10.6 Translation queue: per-chapter jobs, resumable, cost stated before the run — `src/translate/` — depends: T10.5, T2.10
+- [ ] T10.7 Bilingual reader mode: source/target/both, reusing the existing sentence tap — `app/reader/` — depends: T10.5, T5.2
+- [ ] T10.8 Unit editor with diff marks against the machine output, revert, and promote-to-term — `app/book/[id]/translation/` — depends: T10.7
+- [ ] T10.9 Post-edit memory: accepted diffs become examples quoted on nearby sentences — `src/translate/` — depends: T10.8, T10.4
+- [ ] T10.10 Invalidation: changing a term marks affected chapters stale and re-runs only those sentences — `src/translate/` — depends: T10.2, T10.5
+- [ ] T10.11 Translated export: target-only or bilingual, through the Phase 6 registry — `src/export/formats/` — depends: T10.5, T6.1
+
+## Phase 11: Visual and script
 
 Everything here consumes the cast and the scene structure; none of it can be
 specified honestly before those exist in practice rather than on paper.
 
-- [ ] T10.1 Portrait generation from extracted appearance, consistency across regenerations, one at a time — `src/cast/portraits/` — depends: T9.2, T7.3
-- [ ] T10.2 Script conversion: scenes → screenplay, `.fountain` / `.fdx` export — `src/script/` — depends: T9.2, T6.1
-- [ ] T10.3 Storyboard (分镜): shot list per scene, generated panels — `src/storyboard/` — depends: T10.1, T10.2
-- [ ] T10.4 Additional formats as demand appears: `.rtf`, `.odt`, `.fb2` import — `src/import/formats/` — depends: T2.1
+- [ ] T11.1 Portrait generation from extracted appearance, consistency across regenerations, one at a time — `src/cast/portraits/` — depends: T9.2, T7.3
+- [ ] T11.2 Script conversion: scenes → screenplay, `.fountain` / `.fdx` export — `src/script/` — depends: T9.2, T6.1
+- [ ] T11.3 Storyboard (分镜): shot list per scene, generated panels — `src/storyboard/` — depends: T11.1, T11.2
+- [ ] T11.4 Additional formats as demand appears: `.rtf`, `.odt`, `.fb2` import — `src/import/formats/` — depends: T2.1

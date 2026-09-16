@@ -99,20 +99,7 @@ export async function saveImportedBook(input: {
       now
     );
     await database.runAsync('INSERT INTO documents (book_id, text) VALUES (?, ?)', id, input.text);
-    for (let i = 0; i < input.chapters.length; i++) {
-      const chapter = input.chapters[i];
-      await database.runAsync(
-        `INSERT INTO chapters (id, book_id, idx, title, start, end, confident, user_edited)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
-        newId(),
-        id,
-        i,
-        chapter.title,
-        chapter.start,
-        chapter.end,
-        chapter.confident ? 1 : 0
-      );
-    }
+    await insertChapters(database, id, input.chapters);
     await database.runAsync(
       'INSERT INTO reading_state (book_id, offset, updated_at) VALUES (?, 0, ?)',
       id,
@@ -120,6 +107,30 @@ export async function saveImportedBook(input: {
     );
   });
   return id;
+}
+
+/** A novel can carry 500+ chapters; one statement per row is 6x the round trips. */
+const CHAPTER_BATCH = 200;
+
+async function insertChapters(
+  database: Awaited<ReturnType<typeof db>>,
+  bookId: string,
+  chapters: { title: string; start: number; end: number; confident: boolean }[]
+) {
+  for (let from = 0; from < chapters.length; from += CHAPTER_BATCH) {
+    const slice = chapters.slice(from, from + CHAPTER_BATCH);
+    const values: (string | number)[] = [];
+    const rows = slice.map((chapter, offset) => {
+      values.push(newId(), bookId, from + offset, chapter.title, chapter.start, chapter.end,
+        chapter.confident ? 1 : 0);
+      return '(?, ?, ?, ?, ?, ?, ?, 0)';
+    });
+    await database.runAsync(
+      `INSERT INTO chapters (id, book_id, idx, title, start, end, confident, user_edited)
+       VALUES ${rows.join(', ')}`,
+      values
+    );
+  }
 }
 
 export async function deleteBook(id: string) {

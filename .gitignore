@@ -9,3 +9,4 @@ ios/
 android/
 *.log
 .DS_Store
+.parse-check/

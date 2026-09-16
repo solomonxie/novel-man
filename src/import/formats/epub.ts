@@ -45,7 +45,11 @@ export const epubImporter: Importer = {
 
 function blocksFromXhtml(xhtml: string): Block[] {
   const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(xhtml)?.[1] ?? xhtml;
-  const withoutNoise = body.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '');
+  // Same lazy-quantifier trap as the docx scan: only pay for it when it applies.
+  const withoutNoise =
+    body.indexOf('<script') >= 0 || body.indexOf('<style') >= 0
+      ? body.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
+      : body;
   return withoutNoise
     .replace(/<br\s*\/?>/gi, '\n')
     .split(BLOCK_END)
