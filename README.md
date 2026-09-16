@@ -69,9 +69,9 @@ your back.
 
 ## Design docs
 
-- [Design](docs/design/novel-man/DESIGN.md) — problem, scope, options, decisions
-- [UI/UX](docs/design/novel-man/UIUX_DESIGN.md) — screens, flows, states, copy
-- [Implementation plan](docs/design/novel-man/IMPLEMENT_PLAN.md) — phased task list
+- [Design](docs/design/DESIGN.md) — problem, scope, options, decisions
+- [UI/UX](docs/design/UIUX_DESIGN.md) — screens, flows, states, copy
+- [Implementation plan](docs/design/IMPLEMENT_PLAN.md) — phased task list
 
 
 ## Status

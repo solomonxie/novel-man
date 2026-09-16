@@ -1,0 +1,76 @@
+{
+  "app": { "name": "小说管家" },
+  "tabs": { "shelf": "书架", "settings": "设置" },
+  "shelf": {
+    "title": "书架",
+    "empty": "还没有书。",
+    "emptyHint": "导入 .txt、.md、.docx 或 .epub 开始。",
+    "sectionReading": "在读",
+    "sectionLibrary": "书库",
+    "add": "添加书籍",
+    "fromFiles": "从文件…",
+    "search": "搜索书籍"
+  },
+  "import": {
+    "title": "导入",
+    "reading": "正在读取文件…",
+    "parsing": "正在解析 {{format}}…",
+    "detecting": "正在识别章节…",
+    "saving": "正在保存…",
+    "done": "已导入",
+    "noText": "文件中没有找到文字。如果是扫描版 PDF，页面是图片，无法读取。",
+    "unsupported": "暂时无法读取 {{ext}} 文件。",
+    "failed": "导入失败",
+    "cancel": "取消",
+    "tryAnother": "换一个文件"
+  },
+  "book": {
+    "continue": "继续 · {{chapter}}",
+    "start": "开始阅读",
+    "chapters": "章节",
+    "showAll": "查看全部 {{count}} 章",
+    "edit": "编辑",
+    "notes": "笔记",
+    "cast": "人物",
+    "castEmpty": "尚未分析。",
+    "comingSoon": "即将推出",
+    "script": "剧本与分镜",
+    "importedFrom": "来自 {{name}}",
+    "stats": "{{words}} · {{chapters}} 章 · {{time}}",
+    "delete": "删除本书",
+    "deleteConfirm": "删除这本书？笔记和标注也会一并删除。",
+    "noChapters": "没能拆分出章节。"
+  },
+  "reader": {
+    "empty": "本章没有内容。",
+    "chapterList": "章节",
+    "hint": "点按任意句子，即可标注、写想法或分享。",
+    "copy": "复制",
+    "highlight": "标注",
+    "unhighlight": "取消标注",
+    "note": "想法",
+    "share": "分享",
+    "copied": "已复制",
+    "progress": "{{percent}}%"
+  },
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "languageSystem": "跟随系统",
+    "ai": "AI 密钥",
+    "aiHint": "用于章节识别与分析。密钥只保存在本机，备份中也不包含。",
+    "addKey": "+ 添加 AI 密钥",
+    "cloud": "云端",
+    "cloudHint": "你自己的存储。默认关闭。",
+    "connect": "+ 连接存储桶",
+    "backup": "备份",
+    "backupHint": "本机快照能应对导入出错，但手机丢了就没了。请把文件另存一份。",
+    "notBuilt": "尚未实现"
+  },
+  "units": {
+    "words": "{{count}} 词",
+    "characters": "{{count}} 字",
+    "readTimeHours": "约 {{hours}} 小时",
+    "readTimeMinutes": "{{minutes}} 分钟"
+  }
+}
