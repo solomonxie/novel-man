@@ -1,6 +1,7 @@
 # Turn a Manuscript Into a Story Bible
 
-> 🚧 Work in progress — not yet functional. Design docs only.
+> 🚧 Work in progress. Import, chapter detection and the reader run; the AI,
+> export and cloud features below are still design only.
 
 Drop in a novel. Read it properly, and get back its structure, its cast, and
 — eventually — the visual material a screen adaptation needs.
@@ -17,10 +18,10 @@ read it, fix its structure, analyse it, export it. Nothing about a book lives
 anywhere else.
 
 **Import from wherever it already is** — the system file picker (which brings
-iCloud, Google Drive, Dropbox and OneDrive with it), "Open in…" from any other
-app, a pasted link, or your own cloud backup. `.txt`, `.md`, `.docx`,
-`.epub`, `.html`, `.pdf` — a Google Doc link comes in as `.docx` without any
-Google-specific detour.
+iCloud, Google Drive, Dropbox and OneDrive with it), and in time "Open in…"
+from any other app, a pasted link, or your own cloud backup. `.txt`, `.md`,
+`.docx` and `.epub` read today; `.html` and `.pdf` are next. A Google Doc
+link will come in as `.docx`, with no Google-specific detour.
 
 **Structure, detected then corrected** — chapters and scenes found by
 heuristics first (heading styles, `Chapter 12`, `第十二章`, `* * *`, epub
@@ -74,7 +75,21 @@ your back.
 - [Implementation plan](docs/design/IMPLEMENT_PLAN.md) — phased task list
 
 
+## Running it
+
+```
+npm install
+npx expo start --ios     # or --android
+```
+
+Opens in Expo Go — no native build needed. Import a `.txt`, `.md`, `.docx`
+or `.epub` from Files and it lands on the shelf with its chapters detected.
+
+
 ## Status
 
-Pre-code. The design docs are the deliverable so far; Phase 1 of the
-implementation plan is next.
+Phases 1-5 of the [implementation plan](docs/design/IMPLEMENT_PLAN.md) are
+runnable: bilingual shell, import pipeline, chapter detection, shelf, book
+page, and a reader with sentence-level highlighting. PDF import, the
+structure editor, notes, export, AI and cloud are not built yet — the plan
+marks exactly what landed and what each partial task still owes.
