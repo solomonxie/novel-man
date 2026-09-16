@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { radius, space, usePalette } from '../theme';
 
 export function Section({ title, action, children }: {
@@ -77,13 +77,19 @@ export function PrimaryAction({ label, onPress, style }: {
   );
 }
 
-/** Cover falls through embedded → generated → placeholder; it is never blank. */
-export function Cover({ title, hue, width }: { title: string; hue: number; width: number }) {
+/** Cover falls through user-set → generated → placeholder; it is never blank. */
+export function Cover({ title, hue, width, path }: {
+  title: string;
+  hue: number;
+  width: number;
+  path?: string | null;
+}) {
   const height = Math.round(width * 1.45);
+  if (path) {
+    return <Image source={{ uri: path }} style={[styles.cover, { width, height }]} />;
+  }
   return (
-    <View
-      style={[styles.cover, { width, height, backgroundColor: `hsl(${hue}, 32%, 62%)` }]}
-    >
+    <View style={[styles.cover, { width, height, backgroundColor: `hsl(${hue}, 32%, 62%)` }]}>
       <Text numberOfLines={4} style={styles.coverTitle}>{title}</Text>
     </View>
   );

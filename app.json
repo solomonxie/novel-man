@@ -15,7 +15,14 @@
       "package": "com.solomonxie.novelman",
       "edgeToEdgeEnabled": true
     },
-    "plugins": ["expo-router", "expo-sqlite", "expo-localization"],
-    "experiments": { "typedRoutes": false }
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-localization",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
   }
 }
