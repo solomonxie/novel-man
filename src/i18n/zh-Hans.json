@@ -14,7 +14,9 @@
     "sectionLibrary": "书库",
     "add": "添加书籍",
     "fromFiles": "从文件…",
-    "search": "搜索书籍"
+    "search": "搜索书籍",
+    "more": "更多",
+    "less": "收起"
   },
   "import": {
     "title": "导入",
@@ -44,7 +46,24 @@
     "stats": "{{words}} · {{chapters}} 章 · {{time}}",
     "delete": "删除本书",
     "deleteConfirm": "删除这本书？笔记和标注也会一并删除。",
-    "noChapters": "没能拆分出章节。"
+    "noChapters": "没能拆分出章节。",
+    "sections": "板块",
+    "details": "详情",
+    "year": "年份",
+    "edition": "版本",
+    "title": "书名",
+    "author": "作者",
+    "jumpTo": "跳转到章节",
+    "arcs": "故事线",
+    "characters": "人物",
+    "places": "地点",
+    "translations": "翻译",
+    "illustrations": "插画",
+    "animations": "动画",
+    "addCharacter": "添加人物",
+    "addPlace": "添加地点",
+    "none": "暂无",
+    "count": "{{count}}"
   },
   "reader": {
     "empty": "本章没有内容。",
@@ -70,7 +89,23 @@
     "connect": "+ 连接存储桶",
     "backup": "备份",
     "backupHint": "本机快照能应对导入出错，但手机丢了就没了。请把文件另存一份。",
-    "notBuilt": "尚未实现"
+    "notBuilt": "尚未实现",
+    "more": "更多设置",
+    "aiEmpty": "还没有密钥。",
+    "aiAdd": "添加 AI 密钥",
+    "aiVendor": "服务商",
+    "aiKey": "API 密钥",
+    "aiGetOne": "还没有 {{vendor}} 密钥？去获取 →",
+    "aiTesting": "正在测试密钥…",
+    "aiBilling": "请求会计入你自己的 {{vendor}} 账户。",
+    "aiRequests": "{{count}} 次请求",
+    "aiStrategy": "回退策略",
+    "aiSequential": "顺序",
+    "aiRoundRobin": "轮询",
+    "aiStrategyHint": "排列顺序即回退顺序。「顺序」会一直使用第一个密钥直到它出错；「轮询」则每次调用轮换。",
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除"
   },
   "units": {
     "words": "{{count}} 词",
@@ -88,5 +123,19 @@
     "waiting": "还有 {{count}} 个等待",
     "failedCount": "{{count}} 个失败",
     "doneChapters": "{{count}} 章"
+  },
+  "entity": {
+    "newCharacter": "新人物",
+    "newPlace": "新地点",
+    "name": "姓名",
+    "alias": "别称",
+    "summary": "简介",
+    "fields": "资料",
+    "addField": "＋ 添加一项",
+    "fieldLabel": "名称",
+    "fieldValue": "内容",
+    "deleteConfirm": "删除这份资料？",
+    "namePlaceholder": "姓名",
+    "summaryPlaceholder": "用一两句话介绍他/她。"
   }
 }

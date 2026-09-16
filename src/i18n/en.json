@@ -14,7 +14,9 @@
     "sectionLibrary": "Library",
     "add": "Add a book",
     "fromFiles": "From Files…",
-    "search": "Search books"
+    "search": "Search books",
+    "more": "More",
+    "less": "Less"
   },
   "import": {
     "title": "Import",
@@ -44,7 +46,24 @@
     "stats": "{{words}} · {{chapters}} chapters · {{time}}",
     "delete": "Delete book",
     "deleteConfirm": "Delete this book? Its notes and highlights go with it.",
-    "noChapters": "Couldn't split this into chapters."
+    "noChapters": "Couldn't split this into chapters.",
+    "sections": "Sections",
+    "details": "Details",
+    "year": "Year",
+    "edition": "Edition",
+    "title": "Title",
+    "author": "Author",
+    "jumpTo": "Jump to chapter",
+    "arcs": "Story arcs",
+    "characters": "Characters",
+    "places": "Places",
+    "translations": "Translations",
+    "illustrations": "Illustrations",
+    "animations": "Animations",
+    "addCharacter": "Add character",
+    "addPlace": "Add place",
+    "none": "None yet",
+    "count": "{{count}}"
   },
   "reader": {
     "empty": "This chapter is empty.",
@@ -70,7 +89,23 @@
     "connect": "+ Connect a bucket",
     "backup": "Backup",
     "backupHint": "Survives a bad import or a corrupt database — not a lost phone. Copy the file off to keep it safe.",
-    "notBuilt": "Not built yet"
+    "notBuilt": "Not built yet",
+    "more": "More settings",
+    "aiEmpty": "No keys yet.",
+    "aiAdd": "Add AI Key",
+    "aiVendor": "Vendor",
+    "aiKey": "API key",
+    "aiGetOne": "Don't have a {{vendor}} key? Get one →",
+    "aiTesting": "Testing the key…",
+    "aiBilling": "Requests are billed to your own {{vendor}} account.",
+    "aiRequests": "{{count}} requests",
+    "aiStrategy": "Fallback",
+    "aiSequential": "Sequential",
+    "aiRoundRobin": "Round robin",
+    "aiStrategyHint": "Order is the fallback order. Sequential stays on the first key until it errors; round robin spreads every call.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete"
   },
   "units": {
     "words": "{{count}} words",
@@ -88,5 +123,19 @@
     "waiting": "{{count}} waiting",
     "failedCount": "{{count}} failed",
     "doneChapters": "{{count}} chapters"
+  },
+  "entity": {
+    "newCharacter": "New character",
+    "newPlace": "New place",
+    "name": "Name",
+    "alias": "Alias",
+    "summary": "Summary",
+    "fields": "Details",
+    "addField": "＋ Add a detail",
+    "fieldLabel": "Label",
+    "fieldValue": "Value",
+    "deleteConfirm": "Delete this profile?",
+    "namePlaceholder": "Name",
+    "summaryPlaceholder": "Who are they, in a line or two?"
   }
 }
