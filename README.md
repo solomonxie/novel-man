@@ -13,9 +13,14 @@ it somewhere.
 
 ## What it does
 
-**Bookshelf** — every book gets one page that is the whole app for that book:
-read it, fix its structure, analyse it, export it. Nothing about a book lives
-anywhere else.
+**One page, no tab bar** — search, the books you're reading, your library, and
+settings, stacked on a single screen. Every book then gets one page that is
+the whole app for that book: read it, fix its structure, analyse it, export
+it. Nothing about a book lives anywhere else.
+
+**Characters and places get real profiles** — portrait, alias, summary, and
+details you define yourself, because what matters about a character is
+genre-specific: cultivation level, house, ship, species.
 
 **Import from wherever it already is** — the system file picker (which brings
 iCloud, Google Drive, Dropbox and OneDrive with it), and in time "Open in…"
@@ -103,8 +108,9 @@ npm run typecheck
 
 ## Status
 
-Phases 1-5 of the [implementation plan](docs/design/IMPLEMENT_PLAN.md) are
-runnable: bilingual shell, import pipeline, chapter detection, shelf, book
-page, and a reader with sentence-level highlighting. PDF import, the
-structure editor, notes, export, AI and cloud are not built yet — the plan
-marks exactly what landed and what each partial task still owes.
+Runnable today: bilingual one-page shell, import pipeline with a visible
+queue, chapter detection, book page with editable metadata, character and
+place profiles, a reader with sentence-level highlighting, and AI key
+settings. PDF import, the structure editor, notes, export, translation and
+cloud are not built yet — the [plan](docs/design/IMPLEMENT_PLAN.md) marks
+exactly what landed and what each partial task still owes.

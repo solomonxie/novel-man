@@ -5,14 +5,21 @@ Interface only. Product reasoning in [DESIGN.md](DESIGN.md).
 Written against the `uiux` skill: `references/foundations.md`,
 `references/mobile.md`, and the `media-library`, `byo-ai-keys`,
 `credentials`, `cloud-bucket-sync`, `backup-restore`, `paste-to-fill`
-patterns. Reader interaction takes 微信读书 as the reference bar.
+patterns. Reader interaction takes 微信读书 as the reference bar;
+information architecture follows `bring-your-own-photos`, and AI settings
+follow `bring-your-own-podcasts`.
+
+**One page, no tab bar.** If the content is one library, it's one scrollable
+page with stacked sections — a tab per section is a tab standing in for a
+section. Everything about a book hangs off that book's own page; nothing is
+reachable only through a tab.
 
 
 ## Screens & surfaces
 
 | Surface | Kind | Why it's this kind |
 |---|---|---|
-| **Shelf** | page (tab root) | Home. Cover grid of books (`media-library`). |
+| **Home** | one scrollable page | Search · Reading · Library · Settings. No tabs. |
 | Add book | menu → sheet per source | The source choice is one tap from ⊕; each source then gets the sheet it needs. |
 | Import | full sheet | Multi-step (fetch → parse → preview → detect), cancellable without losing the fetched file. |
 | **Book** | page | The hub. Everything about one book lives here and nowhere else. |
@@ -29,15 +36,16 @@ patterns. Reader interaction takes 微信读书 as the reference bar.
 | Glossary | page, pushed from Translation | A searchable list that grows to hundreds of entries. |
 | Term editor | half sheet | Three fields and a lock. |
 | Export | full sheet | Format choice → options → destination. |
-| Settings | page (tab root) | AI keys, language, cloud, backup. |
+| Settings | section on Home + pushed page | The common rows sit on Home; the rest is one page behind them. |
 | Add AI key | half sheet | Two fields (`byo-ai-keys`). |
 | Cloud connection | full sheet | Variable fields, paste mode, save-time verification (`cloud-bucket-sync`). |
 | Cloud library | page, pushed from Settings | Lists the bundles in the bucket so one book can be pulled back. |
 | Sync queue | sheet | Global across connections, surfaced once (`cloud-bucket-sync`). |
 
-Two tabs: **Shelf · Settings**. Notes, Cast and Export are *per book*, so they
-push from the Book page rather than becoming tabs — a top-level "Notes" tab
-would force a book picker inside it.
+No tabs at all. Notes, Cast, Places, Translation and Export are *per book*, so
+they live on the Book page — a top-level "Notes" tab would force a book picker
+inside it. Settings is a section at the bottom of Home, not a destination of
+equal weight to the library.
 
 
 ## Flows
@@ -210,38 +218,44 @@ so hand-made chapter fixes are in every output.
 
 ## Layout sketches
 
-### Shelf (`media-library` grid)
+### Home — one page
 
 ```
 ┌───────────────────────────────────────────┐
-│ Shelf                                   ⊕ │ ← large title
-│ 🔍 Search books                           │
+│ 🔍 Search books                           │ ← search is the top of the page,
+├───────────────────────────────────────────┤   not behind a nav-bar icon
+│ Importing · big.docx        47%       ›   │ ← queue strip, only while active
 │                                           │
-│ Reading                                   │ ← bold section header
-│ ┌───────┐ ┌───────┐                       │
-│ │       │ │       │                       │ ← generated cover when the file
-│ │ cover │ │ cover │                       │   has none: title typeset on a
-│ │       │ │      ◌│                       │   colour derived from the title
-│ └───────┘ └───────┘                       │   ◌ = not yet backed up. ONLY the
-│ The Second  Ash Lane                      │   exceptional state is badged —
-│ 37% · ch.12 12%                           │   a healthy shelf reads clean
+│ Reading                                   │ ← in-progress books, one row,
+│ ┌───────┐ ┌───────┐ ┌───────┐ →           │   scrolls sideways
+│ │ cover │ │ cover │ │ cover │             │
+│ └───────┘ └───────┘ └───────┘             │
+│ 《系统…》  Ash Lane   The Sec…             │
+│ 14%       37%        2%                   │
 │                                           │
-│ Library                                   │
-│ ┌───────┐ ┌───────┐ ┌───────┐             │
-│ │       │ │      ☁│ │      ⚠│             │ ← ☁ = in cloud, not on device
-│ └───────┘ └───────┘ └───────┘             │   ⚠ = structure needs review
+│ Library                      More      ＋ │ ← ＋ sits on the row that names
+│ ┌───────┐ ┌───────┐ ┌───────┐ →           │   what it adds to. "More"
+│ │ cover │ │ cover │ │ cover │             │   expands into a grid below
+│ └───────┘ └───────┘ └───────┘             │
 │                                           │
+│ SETTINGS                                  │ ← a section, not a tab
+│ ┌───────────────────────────────────────┐ │
+│ │ AI keys                            ›  │ │
+│ │ More settings                      ›  │ │
+│ └───────────────────────────────────────┘ │
 └───────────────────────────────────────────┘
-   long-press a cover ─▶ context menu:
-       Open · Continue reading · Export · Back up now · Rename · Delete
-   (per-item actions live here, never as persistent on-tile buttons)
 ```
 
-Multi-select reuses the same tile with a checkmark overlay — no separate mode
-screen. Cover image source falls through: embedded cover → user-set image →
-generated → placeholder; the cache is a fallback, never the preference.
+**Library holds every book; Reading is a shortcut into it, not a slice out of
+it.** Slicing them apart leaves Library an empty heading the moment the only
+book is in progress — and a library that hides what you're reading isn't one.
 
-### Book — the hub
+A shelf reads *across*, so both are single horizontal rows rather than a grid
+that pushes Settings off the page. Cover falls through: user-set image →
+generated (title on a colour derived from the title) → placeholder. Never
+blank.
+
+### Book — the hub, as one page with clear sections
 
 ```
 ┌───────────────────────────────────────────┐
@@ -255,22 +269,68 @@ generated → placeholder; the cache is a fallback, never the preference.
 │ │        ▶  Continue · Chapter 12       │ │ ← the one primary action
 │ └───────────────────────────────────────┘ │   ("Start reading" before first open)
 │                                           │
-│ CHAPTERS                            Edit  │
-│ ┌───────────────────────────────────────┐ │
-│ │ 1  Crossing               2,140 · 9m  │ │
-│ │ 2  The House at Ash Lane  3,002 · 12m✎│ │ ← ✎ = user-edited, so re-detection
-│ │ 3  Untitled               1,870 · 7m ⚠│ │   leaves it alone
-│ │             Show all 47  ›            │ │ ← ⚠ = heuristics weren't confident
+│ DETAILS                                   │ ← every field edits in place,
+│ ┌───────────────────────────────────────┐ │   committing on blur. A Save
+│ │ Title      《系统代理人》              │ │   button per field would be five
+│ │ Author     Ameng~                     │ │   taps a page
+│ │ Year                                  │ │
+│ │ Edition                               │ │
 │ └───────────────────────────────────────┘ │
 │                                           │
-│ NOTES                               412 › │
-│ CAST                    Analyse · ~47 req │ ← accent text control; the cost
-│ Not analysed yet.                         │   IS the label
-│ SCRIPT & STORYBOARD         Coming soon   │ ← visibly listed, honestly disabled
+│ CHAPTERS                            Edit  │
+│ ┌───────────────────────────────────────┐ │
+│ │ Jump to chapter              509   ›  │ │ ← 509 chapters is a PICKER, not a
+│ └───────────────────────────────────────┘ │   section. Collapsed by default;
+│                                           │   the sheet is searchable and
+│ CHARACTERS                             ＋ │   marks ⚠ low-confidence ones
+│ ┌───────────────────────────────────────┐ │
+│ │ 沈墨                        老沈   ›  │ │ ← each opens its own profile page
+│ └───────────────────────────────────────┘ │
+│ PLACES                                 ＋ │
 │                                           │
-│ Backed up 2 hours ago · ash-lane.docx  ›  │ ← provenance + backup state, one line
+│ SECTIONS                                  │ ← named honestly as unbuilt
+│ ┌───────────────────────────────────────┐ │   rather than hidden
+│ │ Story arcs              Coming soon   │ │
+│ │ Translations            Coming soon   │ │
+│ │ Illustrations           Coming soon   │ │
+│ │ Animations              Coming soon   │ │
+│ └───────────────────────────────────────┘ │
 └───────────────────────────────────────────┘
 ```
+
+### Character / place profile
+
+One page per named thing in the story, modelled on `bring-your-own-photos`'
+person profile — because a character *is* a person as far as the interface is
+concerned.
+
+```
+┌───────────────────────────────────────────┐
+│ ‹ 《系统代理人》         沈墨              │
+│                 ╭───────╮                 │
+│                 │  沈墨  │                 │ ← initials fallback; CJK takes the
+│                 ╰───────╯                 │   first two characters, Latin the
+│                     ＋                    │   initials. Tap to set a portrait
+│                   沈墨                     │ ← name edits in place
+│ ┌───────────────────────────────────────┐ │
+│ │ Alias      老沈                        │ │
+│ │ Summary    系统绑定者，第一章出场…      │ │
+│ └───────────────────────────────────────┘ │
+│                                           │
+│ DETAILS                                ＋ │
+│ ┌───────────────────────────────────────┐ │
+│ │ 年龄    27                         ✕  │ │ ← user-defined label/value pairs
+│ │ 阵营    代理人协会                  ✕  │ │
+│ │ 能力    时间回溯                    ✕  │ │
+│ └───────────────────────────────────────┘ │
+└───────────────────────────────────────────┘
+```
+
+**Beyond name/alias/summary the schema is user-defined**, because what matters
+about a character is genre-specific — cultivation level, house, ship, species,
+rank. A fixed set of fields would be wrong for most books and padded for the
+rest. Characters and places share one table with a `kind`, since they differ
+only in what they're called.
 
 ### Reader — chrome hidden
 
