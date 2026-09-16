@@ -1,6 +1,11 @@
 {
-  "app": { "name": "小说管家" },
-  "tabs": { "shelf": "书架", "settings": "设置" },
+  "app": {
+    "name": "小说管家"
+  },
+  "tabs": {
+    "shelf": "书架",
+    "settings": "设置"
+  },
   "shelf": {
     "title": "书架",
     "empty": "还没有书。",
@@ -72,5 +77,16 @@
     "characters": "{{count}} 字",
     "readTimeHours": "约 {{hours}} 小时",
     "readTimeMinutes": "{{minutes}} 分钟"
+  },
+  "queue": {
+    "title": "队列（{{count}}）",
+    "empty": "没有正在导入的文件。",
+    "close": "关闭",
+    "clear": "清除",
+    "retry": "重试",
+    "pending": "等待中",
+    "waiting": "还有 {{count}} 个等待",
+    "failedCount": "{{count}} 个失败",
+    "doneChapters": "{{count}} 章"
   }
 }

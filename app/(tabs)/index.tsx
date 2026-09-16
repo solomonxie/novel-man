@@ -1,7 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,13 +11,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 
 import { listBooks, type BookListItem } from '../../src/db/repo';
-import { importFile, ImportError, type ImportStep } from '../../src/import/pipeline';
+import { enqueueImport, subscribeToQueue, type ImportJob } from '../../src/import/queue';
 import { pickManuscript } from '../../src/import/sources/picker';
 import { supportedExtensions } from '../../src/import/registry';
 import { Cover } from '../../src/ui/primitives';
+import { QueueSheet, QueueStrip } from '../../src/ui/ImportQueue';
 import { formatCount } from '../../src/text/counts';
 import { space, usePalette } from '../../src/theme';
 
@@ -27,8 +26,8 @@ export default function Shelf() {
   const palette = usePalette();
   const { width } = useWindowDimensions();
   const [books, setBooks] = useState<BookListItem[] | null>(null);
-  const [step, setStep] = useState<ImportStep | null>(null);
-  const [stepDetail, setStepDetail] = useState<string>();
+  const [jobs, setJobs] = useState<ImportJob[]>([]);
+  const [queueOpen, setQueueOpen] = useState(false);
 
   const refresh = useCallback(() => {
     listBooks().then(setBooks).catch(() => setBooks([]));
@@ -36,21 +35,18 @@ export default function Shelf() {
 
   useFocusEffect(refresh);
 
+  // A finished import is the only thing that changes the shelf while it is open.
+  useEffect(() => subscribeToQueue((next) => {
+    setJobs((previous) => {
+      const finished = next.filter((job) => job.status === 'done').length;
+      if (finished !== previous.filter((job) => job.status === 'done').length) refresh();
+      return next;
+    });
+  }), [refresh]);
+
   async function addBook() {
     const picked = await pickManuscript();
-    if (!picked) return;
-    try {
-      const result = await importFile(picked, (next, detail) => {
-        setStep(next);
-        setStepDetail(detail);
-      });
-      refresh();
-      router.push(`/book/${result.bookId}`);
-    } catch (error) {
-      Alert.alert(t('import.failed'), messageFor(error, t));
-    } finally {
-      setStep(null);
-    }
+    if (picked) enqueueImport(picked);
   }
 
   const columns = Math.max(2, Math.floor((width - space.lg) / 130));
@@ -67,14 +63,9 @@ export default function Shelf() {
         </Pressable>
       </View>
 
-      {step ? (
-        <View style={styles.centre}>
-          <ActivityIndicator />
-          <Text style={{ color: palette.dim, marginTop: space.md }}>
-            {t(`import.${step}`, { format: stepDetail })}
-          </Text>
-        </View>
-      ) : books === null ? (
+      <QueueStrip jobs={jobs} onPress={() => setQueueOpen(true)} />
+
+      {books === null ? (
         <View style={styles.centre}><ActivityIndicator /></View>
       ) : books.length === 0 ? (
         <View style={styles.centre}>
@@ -89,10 +80,10 @@ export default function Shelf() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl }}>
           {reading.length > 0 && (
-            <Shelf.Group title={t('shelf.sectionReading')} books={reading} width={coverWidth} />
+            <Group title={t('shelf.sectionReading')} books={reading} width={coverWidth} />
           )}
           {rest.length > 0 && (
-            <Shelf.Group
+            <Group
               title={reading.length ? t('shelf.sectionLibrary') : undefined}
               books={rest}
               width={coverWidth}
@@ -100,28 +91,20 @@ export default function Shelf() {
           )}
         </ScrollView>
       )}
+
+      <QueueSheet jobs={jobs} visible={queueOpen} onClose={() => setQueueOpen(false)} />
     </SafeAreaView>
   );
 }
 
-Shelf.Group = function Group({ title, books, width }: {
-  title?: string;
-  books: BookListItem[];
-  width: number;
-}) {
+function Group({ title, books, width }: { title?: string; books: BookListItem[]; width: number }) {
   const palette = usePalette();
   return (
     <View style={{ marginBottom: space.xl }}>
-      {title && (
-        <Text style={[styles.groupTitle, { color: palette.text }]}>{title}</Text>
-      )}
+      {title && <Text style={[styles.groupTitle, { color: palette.text }]}>{title}</Text>}
       <View style={styles.grid}>
         {books.map((book) => (
-          <Pressable
-            key={book.id}
-            onPress={() => router.push(`/book/${book.id}`)}
-            style={{ width }}
-          >
+          <Pressable key={book.id} onPress={() => router.push(`/book/${book.id}`)} style={{ width }}>
             <Cover title={book.title} hue={book.cover_hue} width={width} />
             <Text numberOfLines={2} style={{ color: palette.text, fontSize: 13, marginTop: space.xs }}>
               {book.title}
@@ -136,14 +119,6 @@ Shelf.Group = function Group({ title, books, width }: {
       </View>
     </View>
   );
-};
-
-function messageFor(error: unknown, t: TFunction) {
-  if (error instanceof ImportError) {
-    if (error.code === 'unsupported') return t('import.unsupported', { ext: `.${error.detail}` });
-    if (error.code === 'no-text') return t('import.noText');
-  }
-  return String(error);
 }
 
 const styles = StyleSheet.create({

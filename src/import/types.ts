@@ -13,10 +13,18 @@ export type ParsedSource = {
   author?: string;
 };
 
+/**
+ * Parsing a long novel takes long enough to freeze the UI, so parsers report
+ * progress and hand control back at the same time.
+ */
+export type ParseContext = {
+  onProgress?: (done: number, total: number) => void | Promise<void>;
+};
+
 export type Importer = {
   id: string;
   label: string;
   extensions: string[];
   mimeTypes: string[];
-  parse: (bytes: Uint8Array, fileName: string) => Promise<ParsedSource>;
+  parse: (bytes: Uint8Array, fileName: string, context?: ParseContext) => Promise<ParsedSource>;
 };
