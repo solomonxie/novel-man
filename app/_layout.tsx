@@ -8,8 +8,11 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="index" />
         <Stack.Screen name="book/[id]" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen name="entity/[id]" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen name="settings/index" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen name="settings/ai-keys" options={{ headerShown: true, title: '' }} />
         <Stack.Screen name="reader/[id]" options={{ animation: 'fade' }} />
       </Stack>
     </SafeAreaProvider>

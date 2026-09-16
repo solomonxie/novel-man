@@ -4,6 +4,9 @@ export type Book = {
   id: string;
   title: string;
   author: string | null;
+  year: string | null;
+  edition: string | null;
+  cover_path: string | null;
   language: string;
   source_name: string;
   source_hash: string;
@@ -24,6 +27,23 @@ export type Chapter = {
   end: number;
   confident: number;
   user_edited: number;
+};
+
+export type EntityKind = 'character' | 'place';
+
+export type CustomField = { label: string; value: string };
+
+export type Entity = {
+  id: string;
+  book_id: string;
+  kind: EntityKind;
+  name: string;
+  alias: string | null;
+  summary: string | null;
+  portrait_path: string | null;
+  fields: string;
+  sort_index: number;
+  created_at: number;
 };
 
 export type Annotation = {
@@ -72,8 +92,10 @@ export async function listChapters(bookId: string): Promise<Chapter[]> {
   );
 }
 
+export type ImportedBook = Omit<Book, 'id' | 'created_at' | 'year' | 'edition' | 'cover_path'>;
+
 export async function saveImportedBook(input: {
-  book: Omit<Book, 'id' | 'created_at'>;
+  book: ImportedBook;
   text: string;
   chapters: { title: string; start: number; end: number; confident: boolean }[];
 }): Promise<string> {
@@ -130,6 +152,88 @@ async function insertChapters(
        VALUES ${rows.join(', ')}`,
       values
     );
+  }
+}
+
+const BOOK_FIELDS = ['title', 'author', 'year', 'edition', 'cover_path'] as const;
+export type EditableBookField = (typeof BOOK_FIELDS)[number];
+
+export async function updateBook(id: string, changes: Partial<Record<EditableBookField, string | null>>) {
+  const entries = BOOK_FIELDS.filter((field) => field in changes);
+  if (!entries.length) return;
+  const database = await db();
+  await database.runAsync(
+    `UPDATE books SET ${entries.map((field) => `${field} = ?`).join(', ')} WHERE id = ?`,
+    [...entries.map((field) => changes[field] ?? null), id]
+  );
+}
+
+export async function listEntities(bookId: string, kind: EntityKind): Promise<Entity[]> {
+  const database = await db();
+  return database.getAllAsync<Entity>(
+    'SELECT * FROM entities WHERE book_id = ? AND kind = ? ORDER BY sort_index, name',
+    bookId,
+    kind
+  );
+}
+
+export async function countEntities(bookId: string, kind: EntityKind): Promise<number> {
+  const database = await db();
+  const row = await database.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM entities WHERE book_id = ? AND kind = ?',
+    bookId,
+    kind
+  );
+  return row?.n ?? 0;
+}
+
+export async function getEntity(id: string): Promise<Entity | null> {
+  const database = await db();
+  return database.getFirstAsync<Entity>('SELECT * FROM entities WHERE id = ?', id);
+}
+
+export async function createEntity(bookId: string, kind: EntityKind, name: string): Promise<string> {
+  const database = await db();
+  const id = newId();
+  await database.runAsync(
+    `INSERT INTO entities (id, book_id, kind, name, fields, sort_index, created_at)
+     VALUES (?, ?, ?, ?, '[]', 0, ?)`,
+    id,
+    bookId,
+    kind,
+    name,
+    Date.now()
+  );
+  return id;
+}
+
+const ENTITY_FIELDS = ['name', 'alias', 'summary', 'portrait_path', 'fields'] as const;
+export type EditableEntityField = (typeof ENTITY_FIELDS)[number];
+
+export async function updateEntity(
+  id: string,
+  changes: Partial<Record<EditableEntityField, string | null>>
+) {
+  const entries = ENTITY_FIELDS.filter((field) => field in changes);
+  if (!entries.length) return;
+  const database = await db();
+  await database.runAsync(
+    `UPDATE entities SET ${entries.map((field) => `${field} = ?`).join(', ')} WHERE id = ?`,
+    [...entries.map((field) => changes[field] ?? null), id]
+  );
+}
+
+export async function deleteEntity(id: string) {
+  const database = await db();
+  await database.runAsync('DELETE FROM entities WHERE id = ?', id);
+}
+
+export function parseFields(raw: string): CustomField[] {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((f) => typeof f?.label === 'string') : [];
+  } catch {
+    return [];
   }
 }
 

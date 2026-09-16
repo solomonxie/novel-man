@@ -45,4 +45,24 @@ export const migrations: string[] = [
      offset INTEGER NOT NULL DEFAULT 0,
      updated_at INTEGER NOT NULL
    );`,
+
+  // Editable book metadata, plus the named things a story is made of.
+  // Characters and places differ only in what they're called, so one table
+  // with a kind beats two that would drift apart.
+  `ALTER TABLE books ADD COLUMN year TEXT;
+   ALTER TABLE books ADD COLUMN edition TEXT;
+   ALTER TABLE books ADD COLUMN cover_path TEXT;
+   CREATE TABLE entities (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     kind TEXT NOT NULL,
+     name TEXT NOT NULL,
+     alias TEXT,
+     summary TEXT,
+     portrait_path TEXT,
+     fields TEXT NOT NULL DEFAULT '[]',
+     sort_index INTEGER NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX entities_book ON entities(book_id, kind, sort_index);`,
 ];

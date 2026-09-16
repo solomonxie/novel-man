@@ -1,22 +1,27 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 
 import {
+  countEntities,
+  createEntity,
   deleteBook,
   getBook,
   getProgress,
   listChapters,
+  listEntities,
+  updateBook,
   type Book,
   type Chapter,
+  type Entity,
+  type EntityKind,
 } from '../../src/db/repo';
 import { Cover, PrimaryAction, Row, Section } from '../../src/ui/primitives';
-import { countUnits, formatCount, formatDuration, readingMinutes } from '../../src/text/counts';
+import { EditableRow, pickImage } from '../../src/ui/fields';
+import { formatCount, formatDuration, readingMinutes } from '../../src/text/counts';
 import { space, usePalette } from '../../src/theme';
-
-const PREVIEW_CHAPTERS = 8;
 
 export default function BookPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -24,17 +29,21 @@ export default function BookPage() {
   const palette = usePalette();
   const [book, setBook] = useState<Book | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [characters, setCharacters] = useState<Entity[]>([]);
+  const [places, setPlaces] = useState<Entity[]>([]);
   const [offset, setOffset] = useState(0);
-  const [expanded, setExpanded] = useState(false);
+  const [jumpOpen, setJumpOpen] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!id) return;
-      getBook(id).then(setBook);
-      listChapters(id).then(setChapters);
-      getProgress(id).then(setOffset);
-    }, [id])
-  );
+  const load = useCallback(() => {
+    if (!id) return;
+    getBook(id).then(setBook);
+    listChapters(id).then(setChapters);
+    listEntities(id, 'character').then(setCharacters);
+    listEntities(id, 'place').then(setPlaces);
+    getProgress(id).then(setOffset);
+  }, [id]);
+
+  useFocusEffect(load);
 
   if (!book) {
     return (
@@ -44,14 +53,30 @@ export default function BookPage() {
     );
   }
 
-  const units = countUnits('', book.language);
   const current = chapters.find((chapter) => offset >= chapter.start && offset < chapter.end);
   const minutes = readingMinutes(book.word_count, book.language);
-  const visible = expanded ? chapters : chapters.slice(0, PREVIEW_CHAPTERS);
+
+  async function edit(field: 'title' | 'author' | 'year' | 'edition', value: string) {
+    await updateBook(book!.id, { [field]: value.trim() || null });
+    load();
+  }
+
+  async function pickCover() {
+    const uri = await pickImage();
+    if (!uri) return;
+    await updateBook(book!.id, { cover_path: uri });
+    load();
+  }
+
+  async function addEntity(kind: EntityKind) {
+    const name = kind === 'character' ? t('entity.newCharacter') : t('entity.newPlace');
+    const entityId = await createEntity(book!.id, kind, name);
+    router.push(`/entity/${entityId}`);
+  }
 
   function confirmDelete() {
     Alert.alert(t('book.delete'), t('book.deleteConfirm'), [
-      { text: t('import.cancel'), style: 'cancel' },
+      { text: t('settings.cancel'), style: 'cancel' },
       {
         text: t('book.delete'),
         style: 'destructive',
@@ -66,23 +91,22 @@ export default function BookPage() {
   return (
     <ScrollView
       style={{ backgroundColor: palette.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl }}
+      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
     >
       <Stack.Screen options={{ title: book.title, headerBackTitle: ' ' }} />
 
       <View style={{ flexDirection: 'row', gap: space.lg }}>
-        <Cover title={book.title} hue={book.cover_hue} width={96} />
+        <Pressable onPress={pickCover}>
+          <Cover title={book.title} hue={book.cover_hue} width={104} path={book.cover_path} />
+          <Text style={{ color: palette.accent, fontSize: 12, textAlign: 'center', marginTop: space.xs }}>
+            {book.cover_path ? '↻' : '＋'}
+          </Text>
+        </Pressable>
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <Text style={{ color: palette.text, fontSize: 22, fontWeight: '700' }}>{book.title}</Text>
-          {book.author ? (
-            <Text style={{ color: palette.dim, marginTop: 2 }}>{book.author}</Text>
-          ) : null}
+          {book.author ? <Text style={{ color: palette.dim, marginTop: 2 }}>{book.author}</Text> : null}
           <Text style={{ color: palette.dim, fontSize: 13, marginTop: space.sm }}>
-            {t('book.stats', {
-              words: `${formatCount(book.word_count, book.language)} ${units.unit === 'words' ? 'words' : ''}`.trim(),
-              chapters: chapters.length,
-              time: formatDuration(minutes),
-            })}
+            {formatCount(book.word_count, book.language)} · {chapters.length} · {formatDuration(minutes)}
           </Text>
           <Text style={{ color: palette.faint, fontSize: 12, marginTop: 2 }}>
             {t('book.importedFrom', { name: book.source_name })}
@@ -91,49 +115,137 @@ export default function BookPage() {
       </View>
 
       <PrimaryAction
-        label={current ? t('book.continue', { chapter: chapterLabel(current, t) }) : t('book.start')}
+        label={current ? t('book.continue', { chapter: label(current, t) }) : t('book.start')}
         onPress={() => router.push(`/reader/${book.id}`)}
-        style={{ marginTop: space.xl }}
+        style={{ marginTop: space.lg }}
       />
 
-      {chapters.length === 0 ? (
-        <Section title={t('book.chapters')}>
-          <Row label={t('book.noChapters')} last />
-        </Section>
-      ) : (
-        <Section title={t('book.chapters')}>
-          {visible.map((chapter, index) => (
-            <Row
-              key={chapter.id}
-              label={`${chapter.idx + 1}  ${chapterLabel(chapter, t)}${chapter.confident ? '' : '  ⚠'}`}
-              value={formatDuration(
-                readingMinutes(Math.round((chapter.end - chapter.start) / 5.5), book.language)
-              )}
-              onPress={() => router.push(`/reader/${book.id}?chapter=${chapter.idx}`)}
-              last={index === visible.length - 1 && chapters.length <= PREVIEW_CHAPTERS}
-            />
-          ))}
-          {chapters.length > PREVIEW_CHAPTERS && !expanded && (
-            <Row
-              label={t('book.showAll', { count: chapters.length })}
-              onPress={() => setExpanded(true)}
-              last
-            />
-          )}
-        </Section>
-      )}
+      <Section title={t('book.details')}>
+        <EditableRow label={t('book.title')} value={book.title} onCommit={(v) => edit('title', v)} />
+        <EditableRow label={t('book.author')} value={book.author} onCommit={(v) => edit('author', v)} />
+        <EditableRow label={t('book.year')} value={book.year} onCommit={(v) => edit('year', v)} />
+        <EditableRow label={t('book.edition')} value={book.edition} onCommit={(v) => edit('edition', v)} last />
+      </Section>
 
-      <Section title={t('book.cast')}>
-        <Row label={t('book.castEmpty')} value={t('book.comingSoon')} last />
+      <Section title={t('book.chapters')} action={{ label: t('book.edit'), onPress: () => {} }}>
+        {chapters.length === 0 ? (
+          <Row label={t('book.noChapters')} last />
+        ) : (
+          <Row
+            label={t('book.jumpTo')}
+            value={`${chapters.length}  ›`}
+            onPress={() => setJumpOpen(true)}
+            last
+          />
+        )}
+      </Section>
+
+      <EntitySection
+        title={t('book.characters')}
+        entities={characters}
+        onAdd={() => addEntity('character')}
+      />
+      <EntitySection title={t('book.places')} entities={places} onAdd={() => addEntity('place')} />
+
+      <Section title={t('book.sections')}>
+        <Row label={t('book.arcs')} value={t('book.comingSoon')} />
+        <Row label={t('book.translations')} value={t('book.comingSoon')} />
+        <Row label={t('book.illustrations')} value={t('book.comingSoon')} />
+        <Row label={t('book.animations')} value={t('book.comingSoon')} last />
       </Section>
 
       <Section>
         <Row label={t('book.delete')} onPress={confirmDelete} danger last />
       </Section>
+
+      <ChapterJump
+        visible={jumpOpen}
+        chapters={chapters}
+        currentId={current?.id}
+        onClose={() => setJumpOpen(false)}
+        onPick={(chapter) => {
+          setJumpOpen(false);
+          router.push(`/reader/${book.id}?chapter=${chapter.idx}`);
+        }}
+      />
     </ScrollView>
   );
 }
 
-function chapterLabel(chapter: Chapter, t: TFunction): string {
-  return chapter.title.trim() || t('book.chapters');
+function EntitySection({ title, entities, onAdd }: {
+  title: string;
+  entities: Entity[];
+  onAdd: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Section title={title} action={{ label: '＋', onPress: onAdd }}>
+      {entities.length === 0 ? (
+        <Row label={t('book.none')} last />
+      ) : (
+        entities.map((entity, index) => (
+          <Row
+            key={entity.id}
+            label={entity.name}
+            value={entity.alias ?? '›'}
+            onPress={() => router.push(`/entity/${entity.id}`)}
+            last={index === entities.length - 1}
+          />
+        ))
+      )}
+    </Section>
+  );
+}
+
+/** A 500-chapter list is a picker, not a page section. */
+function ChapterJump({ visible, chapters, currentId, onClose, onPick }: {
+  visible: boolean;
+  chapters: Chapter[];
+  currentId?: string;
+  onClose: () => void;
+  onPick: (chapter: Chapter) => void;
+}) {
+  const { t } = useTranslation();
+  const palette = usePalette();
+  const [query, setQuery] = useState('');
+  const shown = query.trim()
+    ? chapters.filter((chapter) =>
+        `${chapter.idx + 1} ${chapter.title}`.toLowerCase().includes(query.trim().toLowerCase())
+      )
+    : chapters;
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: space.lg }}>
+          <Pressable onPress={onClose} hitSlop={12}>
+            <Text style={{ color: palette.accent, fontSize: 16 }}>{t('settings.cancel')}</Text>
+          </Pressable>
+          <Text style={{ color: palette.text, fontSize: 16, fontWeight: '600' }}>{t('book.jumpTo')}</Text>
+          <View style={{ width: 50 }} />
+        </View>
+        <ScrollView>
+          {shown.map((chapter) => (
+            <Pressable
+              key={chapter.id}
+              onPress={() => onPick(chapter)}
+              style={{ paddingHorizontal: space.xl, paddingVertical: space.md }}
+            >
+              <Text
+                numberOfLines={1}
+                style={{ color: chapter.id === currentId ? palette.accent : palette.text, fontSize: 15 }}
+              >
+                {chapter.idx + 1}  {chapter.title.trim() || '—'}
+                {chapter.confident ? '' : '  ⚠'}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function label(chapter: Chapter, t: (key: string) => string): string {
+  return chapter.title.trim() || `${chapter.idx + 1}`;
 }
