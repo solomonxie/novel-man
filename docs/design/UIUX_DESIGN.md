@@ -23,6 +23,11 @@ patterns. Reader interaction takes 微信读书 as the reference bar.
 | Structure editor | page | Merge/split/reorder needs room and a persistent edit mode. |
 | Notes & highlights | page, pushed from Book | Per-book, searchable. |
 | Cast / relation graph | page, pushed from Book | Graph needs the full screen. |
+| Translation | page, pushed from Book | Owns the run, the unit list and the glossary entry point. |
+| Bilingual reader | the reader, in a second mode | Reading a translation is still reading; a separate screen would fork every reader feature. |
+| Unit editor | half sheet | Source above, target editable below, diff marks inline. |
+| Glossary | page, pushed from Translation | A searchable list that grows to hundreds of entries. |
+| Term editor | half sheet | Three fields and a lock. |
 | Export | full sheet | Format choice → options → destination. |
 | Settings | page (tab root) | AI keys, language, cloud, backup. |
 | Add AI key | half sheet | Two fields (`byo-ai-keys`). |
@@ -129,6 +134,37 @@ common case never touches a handle.
 
 Chrome starts hidden; entering the reader shows it for ~1.5s then fades, so the
 controls are discoverable once without being permanent.
+
+### Translating a book
+
+```
+Book ─▶ Translation ─▶ [ Target language ▾ ]
+                              │
+                              ▼
+              ┌──────────────────────────────────────────┐
+              │ Before we start                          │  ← candidate terms are
+              │ 41 names and terms appear 3+ times and   │    surfaced BEFORE the
+              │ aren't in your glossary yet.             │    run, not discovered
+              │ [ Review them ]   [ Translate anyway ]   │    on chapter 300
+              └──────────────────────────────────────────┘
+                              │
+                              ▼
+              chapters queued one by one (visible queue)
+                              │
+         ┌────────────────────┴────────────────────┐
+         │                                          │
+   aligned ✓                              count mismatch ✗
+   units stored                           retry that chapter at a
+         │                                smaller batch, then flag it
+         ▼
+   read it bilingually, edit any line
+         │
+         ▼
+   an edit is kept as a DIFF, not an overwrite
+         │
+         ├─▶ [Save as term]     ─▶ Glossary, applies to every later chapter
+         └─▶ kept as memory      ─▶ quoted to the model on nearby sentences
+```
 
 ### Export
 
@@ -293,6 +329,72 @@ Serif/sans choice is per script — a font that's right for English isn't
 necessarily right for Chinese, so the picker lists what's available for the
 manuscript's script.
 
+### Bilingual reader
+
+```
+┌───────────────────────────────────────────┐
+│ ‹     Chapter 12 · 中↔EN           Aa  ⋯ │ ← the language pair, not a flag
+├───────────────────────────────────────────┤
+│  雨已经下了三天没有停，河水涨过了        │ ← source, dimmed
+│  第二级台阶。                             │
+│  The rain had not stopped for three       │ ← target, full contrast:
+│  days, and the river had risen past       │   you are reading THIS
+│  the second step.                         │
+│                                           │
+│  她还是下去了。                           │
+│  She went down anyway. ~~˜~~              │ ← subtle underline = edited,
+│                                           │   differs from the machine output
+│  ┌─────────────────────────────────────┐ │
+│  │ Edit   Original   Term   Copy   ⋯   │ │ ← same anchored menu as the
+│  └──────────────▼──────────────────────┘ │   monolingual reader; "Original"
+│                                           │   shows what the model first said
+└───────────────────────────────────────────┘
+   ⋯ on the nav bar: Source only · Target only · Both ▸
+```
+
+Reading mode is a display choice, not a separate screen — the sentence tap,
+highlights and notes all work the same in all three.
+
+### Unit editor (half sheet)
+
+```
+┌───────────────────────────────────────────┐
+│ Cancel            Sentence          Save  │
+├───────────────────────────────────────────┤
+│ 她还是下去了。                            │ ← source, not editable
+│                                           │
+│ She went down ~~regardless~~ anyway.      │ ← diff vs. the machine output:
+│                                           │   strikethrough = removed,
+│ ┌───────────────────────────────────────┐ │   underline = added
+│ │ She went down anyway.                 │ │ ← the editable field
+│ └───────────────────────────────────────┘ │
+│                                           │
+│ [ Revert to original ]                    │
+│ [ Save “regardless → anyway” as a term ]  │ ← one tap promotes the diff into
+└───────────────────────────────────────────┘   the glossary
+```
+
+### Glossary
+
+```
+┌───────────────────────────────────────────┐
+│ ‹  Glossary · English                 ⊕   │ ← per target language
+│ 🔍 Search                                 │
+│ ( All )( Characters )( Places )( Terms )  │
+│                                           │
+│ CHARACTERS                                │
+│ ┌───────────────────────────────────────┐ │
+│ │ 沈墨          Shen Mo            🔒   │ │ ← 🔒 = locked: a hard constraint
+│ │ 老陈          Old Chen                │ │   in the prompt, not a hint
+│ ├───────────────────────────────────────┤ │
+│ │ 系统代理人    System Agent       🔒   │ │
+│ └───────────────────────────────────────┘ │
+│                                           │
+│ SUGGESTED                          41  ›  │ ← proper nouns seen 3+ times that
+│ Seen often, not in your glossary yet.     │   nobody has decided on
+└───────────────────────────────────────────┘
+```
+
 ### Notes & highlights (per book)
 
 ```
@@ -408,6 +510,8 @@ couldn't be placed.
 | Reader | empty chapter → "This chapter is empty" + [Edit structure] | first page paints from local DB; no spinner in normal use | "Couldn't open this chapter" + [Re-detect structure] | **fully offline — the point** | chrome shown ~1.5s, then fades |
 | Sentence menu | — | — | copy/share failure → toast, menu stays | full function | first tap ever: one-time hint above the menu |
 | Notes | "Highlights and notes you make while reading show up here." | — | — | full function | — |
+| Translation | "Not translated yet" + language picker + cost | per-chapter progress with Cancel; finished chapters stay readable | a chapter that fails alignment is flagged and retried alone, never rolling back the book | "Needs a connection" on the action only | candidate-term review offered once, skippable |
+| Glossary | "No terms yet. Add names you want translated consistently." | — | — | full function | seeded from the cast analysis when that has run |
 | Cast | "Not analysed yet" + cost | per-chapter progress ("Chapter 7 of 47") + Cancel; partial results kept | failed chapters listed, retried individually — never a whole-run rollback | "Needs a connection" on the action only | — |
 | Export | formats needing cast are listed disabled with why | "Building .epub…" with Cancel | inline, sheet stays open | local formats work; cloud destination disabled | — |
 | AI keys | "+ Add AI Key" only | "⟳ Testing the key…" inline | vendor's own error code verbatim + a friendly line | "Couldn't reach OpenAI" | — |
@@ -458,6 +562,11 @@ Copy — real strings, both languages (`en` is the source of truth):
 | Note sheet | `Note` / `What's worth remembering here?` | `想法` / `这里有什么值得记下来的？` |
 | Keys hint | `Used by chapter detection and analysis. Keys never leave this device, including in backups.` | `用于章节识别与分析。密钥只保存在本机，备份中也不包含。` |
 | Key billing | `Requests are billed to your own OpenAI account.` | `请求会计入你自己的 OpenAI 账户。` |
+| Translation empty | `Not translated yet.` | `尚未翻译。` |
+| Candidate terms | `41 names and terms appear 3+ times and aren't in your glossary yet.` | `有 41 个名称和术语出现了 3 次以上，还没有加入术语表。` |
+| Alignment failure | `Chapter 12 came back misaligned. Retried on its own.` | `第 12 章译文未能对齐，已单独重试。` |
+| Term saved | `Saved. Chapters translated from here on will use it.` | `已保存。之后翻译的章节都会使用它。` |
+| Re-translate cost | `Changing this term affects 38 chapters already translated. Re-translating them costs about 38 requests.` | `修改该术语会影响已翻译的 38 章。重新翻译约需 38 次请求。` |
 | Analyse confirm | `Analyse 47 chapters? This sends chapter text to OpenAI and costs about 47 requests.` | `分析 47 章？会将章节正文发送给 OpenAI，约消耗 47 次请求。` |
 | Re-detect warning | `Chapters you renamed or split by hand will be kept.` | `你手动改名或拆分过的章节会保留。` |
 | Cloud empty | `Your data stays on this device. Connect a bucket you own to sync it across devices.` | `数据只保存在本机。连接你自己的存储桶即可跨设备同步。` |
