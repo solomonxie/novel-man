@@ -66,11 +66,12 @@ The navigation spine. It comes after structure because the Book page's whole
 job is displaying what Phase 3 produces — building it earlier would mean
 designing against placeholders.
 
-- [x] T4.1 Shelf: cover grid, Reading/Library sections — `app/(tabs)/` — depends: T1.6, T1.3 (partial: no search, badges, context menu or multi-select)
-- [x] T4.2 Cover pipeline: generated (title on a hashed colour) — `src/ui/` — depends: T1.4 (partial: embedded and user-set covers not wired, so there is no fallthrough yet)
-- [x] T4.3 Book page: header, Continue action, chapter list, per-section entries, provenance/backup footer — `app/book/[id]/` — depends: T3.4, T4.1
-- [ ] T4.4 Book lifecycle: rename, delete with asset cleanup, replace source file — `src/books/` — depends: T4.3 (partial: delete cascades DB rows but leaves the stored source file behind)
-- [x] T4.5 Settings page shell + language override — `app/(tabs)/settings/` — depends: T1.2, T1.6
+- [x] T4.1 Home as one scrollable page: search, horizontal Reading and Library shelves, More-to-grid, ＋ on the Library heading, Settings section — no tab bar — `app/index.tsx` — depends: T1.6, T1.3 (partial: no badges, context menu or multi-select)
+- [x] T4.2 Cover pipeline: user-set image → generated (title on a hashed colour) → placeholder — `src/ui/` — depends: T1.4 (partial: embedded epub covers not extracted)
+- [x] T4.3 Book page as one page with clear sections: header, Continue, editable details, collapsed chapter picker, characters, places, unbuilt sections named honestly — `app/book/[id].tsx` — depends: T3.4, T4.1
+- [x] T4.4 Book metadata: editable title, author, year, edition, cover; delete — `src/db/repo.ts` — depends: T4.3 (partial: delete leaves the stored source file behind; no replace-source)
+- [x] T4.5 Settings: section on Home plus a pushed page, language override — `app/settings/` — depends: T1.2, T1.6
+- [x] T4.6 Character and place profiles: portrait with initials fallback, inline-editable name/alias/summary, user-defined label/value details — one table with a kind — `app/entity/[id].tsx` — depends: T4.3 (partial: no relations, no first/last appearance, manual entry only)
 
 ## Phase 5: Reader
 
@@ -111,10 +112,10 @@ First feature that spends money, so it lands only once the app is already
 useful without it — that ordering is what makes "degrade, never error"
 enforceable rather than aspirational.
 
-- [ ] T7.1 Vendor registry as data (display name, key hint, console URL, capabilities); one client for OpenAI-shaped APIs — `src/ai/vendors/` — depends: T1.3
-- [ ] T7.2 Key storage in expo-secure-store, this-device-only, ordered list, per-key request counts, excluded from every bundle — `src/ai/keys/` — depends: T7.1
-- [ ] T7.3 Fallback strategies (sequential / round-robin) + per-capability routing — `src/ai/` — depends: T7.2
-- [ ] T7.4 Add-AI-key sheet where Save is the test; input hardening, error codes verbatim, failed-attempt drafts — `app/settings/keys/` — depends: T7.2, T1.6
+- [x] T7.1 Vendor registry as data (7 vendors, 3 API shapes); one client for OpenAI-shaped APIs — `src/ai/vendors.ts`, `src/ai/client.ts` — depends: T1.3
+- [x] T7.2 Key storage in expo-secure-store, this-device-only, ordered list, per-key request counts — `src/ai/keys.ts` — depends: T7.1
+- [x] T7.3 Fallback strategies (sequential / round-robin) — `src/ai/keys.ts` — depends: T7.2 (partial: no per-capability routing, so image models are not yet separated from text)
+- [x] T7.4 Add-AI-key sheet where Save is the test; input hardening, vendor errors verbatim — `app/settings/ai-keys.tsx` — depends: T7.2, T1.6 (partial: no failed-attempt drafts)
 - [ ] T7.5 Request layer: cost estimation, per-run opt-in, result caching keyed by content hash, cancellation, per-unit retry — `src/ai/` — depends: T7.3
 - [ ] T7.6 AI chapter detection fallback: ToC-sized excerpt only, wired into the import flow's unsure branch — `src/structure/ai/` — depends: T7.5, T3.2
 
