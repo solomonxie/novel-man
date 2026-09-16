@@ -1,0 +1,76 @@
+{
+  "app": { "name": "Novel Man" },
+  "tabs": { "shelf": "Shelf", "settings": "Settings" },
+  "shelf": {
+    "title": "Shelf",
+    "empty": "No books yet.",
+    "emptyHint": "Import a .txt, .md, .docx or .epub to start.",
+    "sectionReading": "Reading",
+    "sectionLibrary": "Library",
+    "add": "Add a book",
+    "fromFiles": "From Files…",
+    "search": "Search books"
+  },
+  "import": {
+    "title": "Import",
+    "reading": "Reading the file…",
+    "parsing": "Reading {{format}}…",
+    "detecting": "Finding chapters…",
+    "saving": "Saving…",
+    "done": "Imported",
+    "noText": "No text found in this file. If it's a scanned PDF, the pages are images — we can't read those.",
+    "unsupported": "Can't read {{ext}} files yet.",
+    "failed": "Import failed",
+    "cancel": "Cancel",
+    "tryAnother": "Try another file"
+  },
+  "book": {
+    "continue": "Continue · {{chapter}}",
+    "start": "Start reading",
+    "chapters": "Chapters",
+    "showAll": "Show all {{count}}",
+    "edit": "Edit",
+    "notes": "Notes",
+    "cast": "Cast",
+    "castEmpty": "Not analysed yet.",
+    "comingSoon": "Coming soon",
+    "script": "Script & storyboard",
+    "importedFrom": "Imported from {{name}}",
+    "stats": "{{words}} · {{chapters}} chapters · {{time}}",
+    "delete": "Delete book",
+    "deleteConfirm": "Delete this book? Its notes and highlights go with it.",
+    "noChapters": "Couldn't split this into chapters."
+  },
+  "reader": {
+    "empty": "This chapter is empty.",
+    "chapterList": "Chapters",
+    "hint": "Tap any sentence to highlight, note or share it.",
+    "copy": "Copy",
+    "highlight": "Highlight",
+    "unhighlight": "Remove",
+    "note": "Note",
+    "share": "Share",
+    "copied": "Copied",
+    "progress": "{{percent}}%"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "languageSystem": "System",
+    "ai": "AI keys",
+    "aiHint": "Used by chapter detection and analysis. Keys never leave this device, including in backups.",
+    "addKey": "+ Add AI Key",
+    "cloud": "Cloud",
+    "cloudHint": "Storage you own. Off by default.",
+    "connect": "+ Connect a bucket",
+    "backup": "Backup",
+    "backupHint": "Survives a bad import or a corrupt database — not a lost phone. Copy the file off to keep it safe.",
+    "notBuilt": "Not built yet"
+  },
+  "units": {
+    "words": "{{count}} words",
+    "characters": "{{count}} characters",
+    "readTimeHours": "{{hours}}h read",
+    "readTimeMinutes": "{{minutes}}m"
+  }
+}
