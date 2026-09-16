@@ -8,6 +8,10 @@ expo-sqlite + Drizzle · expo-secure-store · i18next.
 **v1 = Phases 1-5.** Everything after is roadmap, built in order of how much
 it depends on the structure model being right.
 
+Phases 1-5 are runnable: import a `.txt` / `.md` / `.docx` / `.epub`, get
+chapters, read it with sentence-level highlighting. `(partial: …)` marks a
+task whose core landed but whose listed scope is not fully covered.
+
 
 ## Phase 1: Foundations
 
@@ -15,12 +19,13 @@ Nothing above this can be written twice cheaply. i18n and the DB schema in
 particular are the two things that are nearly free now and a rewrite later:
 every string and every query written before them has to be revisited.
 
-- [ ] T1.1 Expo + TypeScript project scaffold, expo-router, strict tsconfig, lint/format, EAS config — `app/`, root config — depends: none
-- [ ] T1.2 i18n layer: i18next + expo-localization, `en` and `zh-Hans` catalogues, device-locale detection, `en` fallback, a lint rule banning bare user-facing strings — `src/i18n/` — depends: none
-- [ ] T1.3 SQLite + Drizzle setup, migration runner, schema for Book / SourceFile / Document / Chapter / Scene / Annotation / ReadingState — see `docs/design/t1.3-schema.md` — depends: none
-- [ ] T1.4 App-owned file storage: sha256-named copies, path healing when a container UUID changes, temp cleanup — `src/storage/` — depends: none
-- [ ] T1.5 Theme + typography tokens, light/sepia/grey/night, per-script line-height and font stacks — `src/theme/` — depends: T1.2
-- [ ] T1.6 Design-system primitives: section list, accent text control, cost-stating action, half/full sheet, anchored popover — `src/ui/` — depends: T1.5
+- [x] T1.1 Expo + TypeScript project scaffold, expo-router, strict tsconfig — `app/`, root config — depends: none (partial: no lint/format or EAS config yet)
+- [x] T1.2 i18n layer: i18next + expo-localization, `en` and `zh-Hans` catalogues, device-locale detection, `en` fallback, in-app override — `src/i18n/` — depends: none
+- [ ] T1.2b Lint rule banning bare user-facing strings — the catalogues only stay complete if drift is caught mechanically — `src/i18n/` — depends: T1.2
+- [x] T1.3 SQLite setup, `user_version` migration runner, schema for Book / Document / Chapter / Annotation / ReadingState — `src/db/` — depends: none (partial: no Scene table; Drizzle dropped for plain `expo-sqlite`, see DESIGN)
+- [x] T1.4 App-owned file storage: sha256-named copies, path healing when a container UUID changes — `src/storage/` — depends: none (partial: no temp cleanup)
+- [x] T1.5 Theme + typography tokens, paper/sepia/grey/night, per-script line-height — `src/theme/` — depends: T1.2 (partial: no per-script font stacks)
+- [x] T1.6 Design-system primitives: section list, row, primary action, cover — `src/ui/` — depends: T1.5 (partial: no reusable sheet or cost-stating action; the reader's anchored menu is still local to it)
 
 ## Phase 2: Import pipeline
 
@@ -28,14 +33,15 @@ The app can't do anything until text is in it. Built as a registry from the
 start because Phase 2 ships four formats and the roadmap adds six more; the
 pipeline's shape is fixed here and never revisited.
 
-- [ ] T2.1 Format registry + `Importer` interface (`detect`, `extract`, capability flags), source-agnostic pipeline: fetch → store → parse → normalize — `src/import/` — depends: T1.3, T1.4
-- [ ] T2.2 Text normalization: encoding sniff (UTF-8/16, GB18030, Big5), line-ending and whitespace normalization, offset-stable output — `src/import/normalize/` — depends: T2.1
-- [ ] T2.3 `.txt` / `.md` importers — `src/import/formats/` — depends: T2.1, T2.2
-- [ ] T2.4 `.docx` importer: unzip, `word/document.xml`, paragraphs + heading styles surfaced as structure hints — `src/import/formats/` — depends: T2.1, T2.2
-- [ ] T2.5 `.epub` importer: unzip, OPF spine + nav, XHTML per item, embedded cover — `src/import/formats/` — depends: T2.1, T2.2
+- [x] T2.1 Format registry + `Importer` interface (`detect`, `extract`, capability flags), source-agnostic pipeline: fetch → store → parse → normalize — `src/import/` — depends: T1.3, T1.4
+- [x] T2.2 Text normalization: encoding sniff (UTF-8/16, GB18030, Big5), line-ending and whitespace normalization, offset-stable output — `src/import/normalize/` — depends: T2.1
+- [x] T2.3 `.txt` / `.md` importers — `src/import/formats/` — depends: T2.1, T2.2
+- [x] T2.4 `.docx` importer: unzip, `word/document.xml`, paragraphs + heading styles surfaced as structure hints — `src/import/formats/` — depends: T2.1, T2.2
+- [x] T2.5 `.epub` importer: unzip, OPF spine, XHTML per item — `src/import/formats/` — depends: T2.1, T2.2 (partial: cover not extracted)
 - [ ] T2.6 `.pdf` importer: pdf.js text extraction in a hidden WebView, with the extracted-text preview gate — see `docs/design/t2.6-pdf.md` — depends: T2.1, T2.2
-- [ ] T2.7 Sources: system document picker, share-sheet ingestion (both platforms), URL fetch with the Google Docs `export?format=docx` rewrite and sign-in-page detection — `src/import/sources/` — depends: T2.1
-- [ ] T2.8 Import sheet UI: per-step progress, preview gate, inline errors that keep the file — `app/import/` — depends: T2.1, T1.6
+- [x] T2.7a System document picker — `src/import/sources/` — depends: T2.1
+- [ ] T2.7b Share-sheet ingestion (both platforms) and URL fetch, with the Google Docs `export?format=docx` rewrite and sign-in-page detection — `src/import/sources/` — depends: T2.7a
+- [ ] T2.8 Import sheet UI: per-step progress, preview gate, inline errors that keep the file — `app/import/` — depends: T2.1, T1.6 (partial: progress and errors currently render on the shelf, with no preview gate)
 
 ## Phase 3: Structure detection
 
@@ -43,11 +49,11 @@ Chapters and scenes are the index every later feature reads from — a
 character's "first appearance" is meaningless without them. Heuristics ship
 before any AI so the app is fully useful with no key configured.
 
-- [ ] T3.1 Sentence segmenter, language-keyed rules (Latin `.!?` + abbreviation guards, CJK `。！？…「」『』`), `Intl.Segmenter` where available — `src/text/segment/` — depends: T2.2
-- [ ] T3.2 Heuristic chapter detector: heading styles, numbered patterns per language (`Chapter N`, `第N章`, `楔子`, `序章`, `番外`), confidence score per hit — see `docs/design/t3.2-heuristics.md` — depends: T2.2
+- [x] T3.1 Sentence segmenter, language-keyed rules (Latin `.!?` + abbreviation guards, CJK `。！？…「」『』`), `Intl.Segmenter` where available — `src/text/segment/` — depends: T2.2
+- [x] T3.2 Heuristic chapter detector: heading styles, numbered patterns per language (`Chapter N`, `第N章`, `楔子`, `序章`, `番外`), confidence flag per chapter — `src/structure/` — depends: T2.2
 - [ ] T3.3 Scene detector: blank-line runs, separator glyphs (`* * *`, `---`, `※`) — `src/structure/` — depends: T3.2
-- [ ] T3.4 Structure persistence as `(start, end)` offsets with a user-edited flag; re-detection merges without clobbering edited rows — `src/structure/` — depends: T1.3, T3.2
-- [ ] T3.5 Language detection per manuscript + per-language word/character counting and reading-time estimates — `src/text/` — depends: T2.2
+- [x] T3.4 Structure persistence as `(start, end)` offsets with a user-edited flag — `src/db/` — depends: T1.3, T3.2 (partial: no re-detect action yet, so the merge path is unexercised)
+- [x] T3.5 Language detection per manuscript + per-language word/character counting and reading-time estimates — `src/text/` — depends: T2.2
 - [ ] T3.6 Structure editor UI: rename, merge, split at a tap point, reorder, confidence markers — `app/book/structure/` — depends: T3.4, T1.6
 
 ## Phase 4: Shelf and Book page
@@ -56,11 +62,11 @@ The navigation spine. It comes after structure because the Book page's whole
 job is displaying what Phase 3 produces — building it earlier would mean
 designing against placeholders.
 
-- [ ] T4.1 Shelf: cover grid, Reading/Library sections, search, badges, long-press context menu, multi-select — `app/(tabs)/shelf/` — depends: T1.6, T1.3
-- [ ] T4.2 Cover pipeline: embedded → user-set → generated (title on a hashed colour) → placeholder, with fallthrough on missing files — `src/covers/` — depends: T1.4
-- [ ] T4.3 Book page: header, Continue action, chapter list, per-section entries, provenance/backup footer — `app/book/[id]/` — depends: T3.4, T4.1
-- [ ] T4.4 Book lifecycle: rename, delete with asset cleanup, replace source file — `src/books/` — depends: T4.3
-- [ ] T4.5 Settings page shell + language override — `app/(tabs)/settings/` — depends: T1.2, T1.6
+- [x] T4.1 Shelf: cover grid, Reading/Library sections — `app/(tabs)/` — depends: T1.6, T1.3 (partial: no search, badges, context menu or multi-select)
+- [x] T4.2 Cover pipeline: generated (title on a hashed colour) — `src/ui/` — depends: T1.4 (partial: embedded and user-set covers not wired, so there is no fallthrough yet)
+- [x] T4.3 Book page: header, Continue action, chapter list, per-section entries, provenance/backup footer — `app/book/[id]/` — depends: T3.4, T4.1
+- [ ] T4.4 Book lifecycle: rename, delete with asset cleanup, replace source file — `src/books/` — depends: T4.3 (partial: delete cascades DB rows but leaves the stored source file behind)
+- [x] T4.5 Settings page shell + language override — `app/(tabs)/settings/` — depends: T1.2, T1.6
 
 ## Phase 5: Reader
 
@@ -68,13 +74,13 @@ The screen the app is used in. Depends on structure for chapters and on the
 segmenter for its tap targets, so it can't precede either — but everything
 in it is v1.
 
-- [ ] T5.1 Chapter renderer: paginated and continuous modes, offset-accurate position mapping both ways — see `docs/design/t5.1-renderer.md` — depends: T3.4, T1.5
-- [ ] T5.2 `<Sentence>` component: full line-box hit testing, four visual states, no interference with OS long-press selection — `src/reader/` — depends: T3.1, T5.1
-- [ ] T5.3 Anchored action menu: above-the-sentence positioning, edge flipping, dismissal rules — `src/ui/` — depends: T5.2, T1.6
-- [ ] T5.4 Annotations: highlight (4 colours), note, bookmark; offset anchors plus a text fingerprint for re-anchoring — `src/annotations/` — depends: T1.3, T5.2
-- [ ] T5.5 Reader chrome: tap zones, auto-fade, chapter list sheet, progress scrubber — `app/reader/` — depends: T5.1
-- [ ] T5.6 Reading settings sheet with live application; per-script spacing and font stacks — `app/reader/settings/` — depends: T5.5, T1.5
-- [ ] T5.7 Reading state: per-book progress offset, resume, last-read chapter on the shelf — `src/reader/` — depends: T5.1, T1.3
+- [x] T5.1 Chapter renderer, continuous mode, offset-accurate position mapping — `src/reader/` — depends: T3.4, T1.5 (partial: paginated mode not built)
+- [x] T5.2 `<Sentence>` component: full line-box hit testing, four visual states, no interference with OS long-press selection — `src/reader/` — depends: T3.1, T5.1
+- [x] T5.3 Anchored action menu: above-the-sentence positioning, edge flipping, dismissal rules — `src/ui/` — depends: T5.2, T1.6
+- [x] T5.4 Annotations: highlight, stored on offset anchors — `src/db/`, `src/reader/` — depends: T1.3, T5.2 (partial: one colour only; notes, bookmarks and the re-anchoring fingerprint not built)
+- [ ] T5.5 Reader chrome: tap zones, auto-fade, progress scrubber — `app/reader/` — depends: T5.1 (partial: a static bar and the chapter list exist; nothing hides or scrubs)
+- [ ] T5.6 Reading settings sheet with live application; per-script spacing and font stacks — `app/reader/settings/` — depends: T5.5, T1.5 (partial: theme cycles from a chrome button; nothing else is adjustable)
+- [x] T5.7 Reading state: per-book progress offset, resume, last-read chapter on the shelf — `src/reader/` — depends: T5.1, T1.3
 - [ ] T5.8 Notes & highlights page: grouped by chapter, search, filters, jump-to with sentence flash — `app/book/[id]/notes/` — depends: T5.4
 - [ ] T5.9 Share card renderer: themed quote image + text, into the OS share sheet — `src/share/` — depends: T5.4, T1.5
 
