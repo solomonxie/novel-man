@@ -164,7 +164,11 @@ built structure-first.**
 
 ## Data & integrations
 
-**Stored on device** — SQLite (`expo-sqlite` + Drizzle):
+**Stored on device** — SQLite (`expo-sqlite`, with a `user_version` migration
+runner and a typed repository layer). Drizzle was the first choice for its
+typed queries, but its migrations need a Metro transformer and a generate
+step — setup risk bought for typing the repository layer already provides.
+Revisit if the query surface outgrows hand-written SQL.
 
 ```
 Project ──┬── SourceFile   original, copied verbatim, hash-named
