@@ -17,7 +17,7 @@ every string and every query written before them has to be revisited.
 
 - [ ] T1.1 Expo + TypeScript project scaffold, expo-router, strict tsconfig, lint/format, EAS config — `app/`, root config — depends: none
 - [ ] T1.2 i18n layer: i18next + expo-localization, `en` and `zh-Hans` catalogues, device-locale detection, `en` fallback, a lint rule banning bare user-facing strings — `src/i18n/` — depends: none
-- [ ] T1.3 SQLite + Drizzle setup, migration runner, schema for Book / SourceFile / Document / Chapter / Scene / Annotation / ReadingState — see `docs/design/novel-man/t1.3-schema.md` — depends: none
+- [ ] T1.3 SQLite + Drizzle setup, migration runner, schema for Book / SourceFile / Document / Chapter / Scene / Annotation / ReadingState — see `docs/design/t1.3-schema.md` — depends: none
 - [ ] T1.4 App-owned file storage: sha256-named copies, path healing when a container UUID changes, temp cleanup — `src/storage/` — depends: none
 - [ ] T1.5 Theme + typography tokens, light/sepia/grey/night, per-script line-height and font stacks — `src/theme/` — depends: T1.2
 - [ ] T1.6 Design-system primitives: section list, accent text control, cost-stating action, half/full sheet, anchored popover — `src/ui/` — depends: T1.5
@@ -33,7 +33,7 @@ pipeline's shape is fixed here and never revisited.
 - [ ] T2.3 `.txt` / `.md` importers — `src/import/formats/` — depends: T2.1, T2.2
 - [ ] T2.4 `.docx` importer: unzip, `word/document.xml`, paragraphs + heading styles surfaced as structure hints — `src/import/formats/` — depends: T2.1, T2.2
 - [ ] T2.5 `.epub` importer: unzip, OPF spine + nav, XHTML per item, embedded cover — `src/import/formats/` — depends: T2.1, T2.2
-- [ ] T2.6 `.pdf` importer: pdf.js text extraction in a hidden WebView, with the extracted-text preview gate — see `docs/design/novel-man/t2.6-pdf.md` — depends: T2.1, T2.2
+- [ ] T2.6 `.pdf` importer: pdf.js text extraction in a hidden WebView, with the extracted-text preview gate — see `docs/design/t2.6-pdf.md` — depends: T2.1, T2.2
 - [ ] T2.7 Sources: system document picker, share-sheet ingestion (both platforms), URL fetch with the Google Docs `export?format=docx` rewrite and sign-in-page detection — `src/import/sources/` — depends: T2.1
 - [ ] T2.8 Import sheet UI: per-step progress, preview gate, inline errors that keep the file — `app/import/` — depends: T2.1, T1.6
 
@@ -44,7 +44,7 @@ character's "first appearance" is meaningless without them. Heuristics ship
 before any AI so the app is fully useful with no key configured.
 
 - [ ] T3.1 Sentence segmenter, language-keyed rules (Latin `.!?` + abbreviation guards, CJK `。！？…「」『』`), `Intl.Segmenter` where available — `src/text/segment/` — depends: T2.2
-- [ ] T3.2 Heuristic chapter detector: heading styles, numbered patterns per language (`Chapter N`, `第N章`, `楔子`, `序章`, `番外`), confidence score per hit — see `docs/design/novel-man/t3.2-heuristics.md` — depends: T2.2
+- [ ] T3.2 Heuristic chapter detector: heading styles, numbered patterns per language (`Chapter N`, `第N章`, `楔子`, `序章`, `番外`), confidence score per hit — see `docs/design/t3.2-heuristics.md` — depends: T2.2
 - [ ] T3.3 Scene detector: blank-line runs, separator glyphs (`* * *`, `---`, `※`) — `src/structure/` — depends: T3.2
 - [ ] T3.4 Structure persistence as `(start, end)` offsets with a user-edited flag; re-detection merges without clobbering edited rows — `src/structure/` — depends: T1.3, T3.2
 - [ ] T3.5 Language detection per manuscript + per-language word/character counting and reading-time estimates — `src/text/` — depends: T2.2
@@ -68,7 +68,7 @@ The screen the app is used in. Depends on structure for chapters and on the
 segmenter for its tap targets, so it can't precede either — but everything
 in it is v1.
 
-- [ ] T5.1 Chapter renderer: paginated and continuous modes, offset-accurate position mapping both ways — see `docs/design/novel-man/t5.1-renderer.md` — depends: T3.4, T1.5
+- [ ] T5.1 Chapter renderer: paginated and continuous modes, offset-accurate position mapping both ways — see `docs/design/t5.1-renderer.md` — depends: T3.4, T1.5
 - [ ] T5.2 `<Sentence>` component: full line-box hit testing, four visual states, no interference with OS long-press selection — `src/reader/` — depends: T3.1, T5.1
 - [ ] T5.3 Anchored action menu: above-the-sentence positioning, edge flipping, dismissal rules — `src/ui/` — depends: T5.2, T1.6
 - [ ] T5.4 Annotations: highlight (4 colours), note, bookmark; offset anchors plus a text fingerprint for re-anchoring — `src/annotations/` — depends: T1.3, T5.2
@@ -90,7 +90,7 @@ can be written once rather than extended per feature.
 - [ ] T6.4 `.epub` exporter: spine, generated nav, cover — `src/export/formats/` — depends: T6.1, T4.2
 - [ ] T6.5 `.pdf` export via the platform print pipeline, typeset from the reader's themes — `src/export/formats/` — depends: T6.1, T5.1
 - [ ] T6.6 Annotation export `.md` / `.csv` — `src/export/formats/` — depends: T6.1, T5.4
-- [ ] T6.7 `.nmbak` bundle: versioned `snapshot.json` + `assets/`, per-book and whole-library, never any credential — see `docs/design/novel-man/t6.7-bundle.md` — depends: T6.1, T5.4
+- [ ] T6.7 `.nmbak` bundle: versioned `snapshot.json` + `assets/`, per-book and whole-library, never any credential — see `docs/design/t6.7-bundle.md` — depends: T6.1, T5.4
 - [ ] T6.8 Restore: confirm, create-new-never-overwrite, natural-key matching, unplaceable-item reporting, refuse newer versions — `src/backup/` — depends: T6.7
 - [ ] T6.9 Auto-snapshot on a schedule + "Restore Latest" with no file picker — `src/backup/` — depends: T6.7, T6.8
 - [ ] T6.10 Export sheet UI: format list with lossiness labels, per-format options, destination choice — `app/book/[id]/export/` — depends: T6.1, T1.6
@@ -115,7 +115,7 @@ comes after it, and why it needs no new payload format.
 
 - [ ] T8.1 S3 / S3-compatible client, scoped to one bucket + prefix, presigned reads — `src/cloud/` — depends: T1.4
 - [ ] T8.2 Connection form: per-type fields, paste-to-fill block parsing, region derivation, Save that proves access with a real list call, per-attempt drafts — `app/settings/cloud/` — depends: T8.1, T1.6
-- [ ] T8.3 Persisted job queue: own table, claim-on-dequeue in a transaction, pause/resume, bounded concurrency, stale-running requeue at launch — see `docs/design/novel-man/t8.3-queue.md` — depends: T1.3
+- [ ] T8.3 Persisted job queue: own table, claim-on-dequeue in a transaction, pause/resume, bounded concurrency, stale-running requeue at launch — see `docs/design/t8.3-queue.md` — depends: T1.3
 - [ ] T8.4 Backup upload: per-book bundles under `books/`, library bundle at the root, change detection by hash-at-last-upload — `src/cloud/` — depends: T8.3, T6.7
 - [ ] T8.5 Cloud library screen: bundle list, per-book Get, restore through the Phase 6 path — `app/settings/cloud/[id]/` — depends: T8.4, T6.8
 - [ ] T8.6 Sync frequency per connection (manual default), queue sheet, connection menu — `app/settings/cloud/` — depends: T8.3

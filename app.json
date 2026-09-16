@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Novel Man",
+    "slug": "novel-man",
+    "scheme": "novelman",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.solomonxie.novelman"
+    },
+    "android": {
+      "package": "com.solomonxie.novelman",
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": ["expo-router", "expo-sqlite", "expo-localization"],
+    "experiments": { "typedRoutes": false }
+  }
+}
