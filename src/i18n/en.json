@@ -63,7 +63,8 @@
     "addCharacter": "Add character",
     "addPlace": "Add place",
     "none": "None yet",
-    "count": "{{count}}"
+    "count": "{{count}}",
+    "notesRow": "Highlights and notes"
   },
   "reader": {
     "empty": "This chapter is empty.",
@@ -75,7 +76,20 @@
     "note": "Note",
     "share": "Share",
     "copied": "Copied",
-    "progress": "{{percent}}%"
+    "progress": "{{percent}}%",
+    "margins": "Margins",
+    "theme": "Theme",
+    "spacing": "Spacing",
+    "font": "Font",
+    "theme_paper": "Paper",
+    "theme_sepia": "Sepia",
+    "theme_grey": "Grey",
+    "theme_night": "Night",
+    "spacing_compact": "Compact",
+    "spacing_normal": "Normal",
+    "spacing_loose": "Loose",
+    "sans": "Sans",
+    "serif": "Serif"
   },
   "settings": {
     "title": "Settings",
@@ -105,7 +119,14 @@
     "aiStrategyHint": "Order is the fallback order. Sequential stays on the first key until it errors; round robin spreads every call.",
     "save": "Save",
     "cancel": "Cancel",
-    "delete": "Delete"
+    "delete": "Delete",
+    "aiSettings": "AI settings",
+    "privateCloud": "Private cloud",
+    "privateCloudHint": "Storage you own. Off by default.",
+    "connectBucket": "Connect a bucket",
+    "exportBundle": "Export bundle",
+    "importBundle": "Import bundle",
+    "restoreLatest": "Restore latest"
   },
   "units": {
     "words": "{{count}} words",
@@ -137,5 +158,15 @@
     "deleteConfirm": "Delete this profile?",
     "namePlaceholder": "Name",
     "summaryPlaceholder": "Who are they, in a line or two?"
+  },
+  "notes": {
+    "empty": "Highlights and notes you make while reading show up here.",
+    "search": "Search notes and highlights",
+    "filter_all": "All",
+    "filter_highlight": "Highlights",
+    "filter_note": "Notes",
+    "unplaced": "Unplaced",
+    "noMatches": "Nothing matches.",
+    "deleteConfirm": "Delete this highlight?"
   }
 }

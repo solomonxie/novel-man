@@ -11,6 +11,7 @@
     "check:parse": "tsc --ignoreConfig src/import/formats/docx.ts src/import/formats/epub.ts src/import/formats/plain.ts src/import/normalize.ts src/import/xml.ts src/import/decode.ts src/structure/detect.ts src/structure/patterns.ts src/text/language.ts src/text/counts.ts src/text/segment.ts src/reader/model.ts --outDir .parse-check --module nodenext --target es2022 --skipLibCheck && node tools/parse-check.mjs"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "^57.0.23",
     "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.18",
