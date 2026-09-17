@@ -45,7 +45,7 @@ import { hasAnyKey } from '../../src/ai/keys';
 import { FieldsSection } from '../../src/ui/FieldsSection';
 import { Row, Section } from '../../src/ui/primitives';
 import { EditableRow, hueFrom, pickImage, Portrait } from '../../src/ui/fields';
-import { Action, Badge, Block, Empty, Fact, Hero, Item } from '../../src/ui/detail';
+import { Action, Badge, Block, Empty, Fact, Hero, Item, Writable } from '../../src/ui/detail';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { adoptImage } from '../../src/storage/files';
 import { radius, space, usePalette } from '../../src/theme';
@@ -187,8 +187,8 @@ export default function EntityPage() {
             ? (
               <>
                 <Fact value={timeline.length} label={t('units.unit_chapters')} />
-                <Fact value={span.first + 1} label={t('entity.firstSeen')} />
-                <Fact value={span.last + 1} label={t('entity.lastSeen')} />
+                <Fact value={t('units.chapterShort', { n: span.first + 1 })} label={t('entity.firstSeen')} />
+                <Fact value={t('units.chapterShort', { n: span.last + 1 })} label={t('entity.lastSeen')} />
               </>
             )
             : undefined
@@ -215,14 +215,18 @@ export default function EntityPage() {
         />
       </Hero>
 
-      <EditableLine
-        value={entity.summary}
-        placeholder={t('entity.summaryPlaceholder')}
-        onCommit={(value) => save({ summary: value.trim() || null })}
-        style={{ color: palette.dim, fontSize: 15, lineHeight: 22, marginTop: space.lg, paddingHorizontal: space.xs }}
-        multiline
-        numberOfLines={10}
-      />
+      <View style={{ marginTop: space.lg }}>
+        <Writable empty={!entity.summary?.trim()}>
+          <EditableLine
+            value={entity.summary}
+            placeholder={t('entity.summaryPlaceholder')}
+            onCommit={(value) => save({ summary: value.trim() || null })}
+            style={{ color: palette.dim, fontSize: 15, lineHeight: 22 }}
+            multiline
+            numberOfLines={10}
+          />
+        </Writable>
+      </View>
 
       {entity.kind === 'character' && (
         <Block title={t('entity.analysis')}>

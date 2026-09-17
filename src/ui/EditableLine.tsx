@@ -8,13 +8,15 @@ import { usePalette } from '../theme';
  * and the list takes seconds to appear. Only the line being edited needs to be
  * a real input, and only one line is ever edited at a time.
  */
-export function EditableLine({ value, placeholder, onCommit, style, multiline, numberOfLines }: {
+export function EditableLine({ value, placeholder, onCommit, style, multiline, numberOfLines, solid }: {
   value: string | null;
   placeholder?: string;
   onCommit: (next: string) => void;
   style?: TextStyle | TextStyle[];
   multiline?: boolean;
   numberOfLines?: number;
+  /** The placeholder is the thing's real name, not a prompt — so it reads as one. */
+  solid?: boolean;
 }) {
   const palette = usePalette();
   const [editing, setEditing] = useState(false);
@@ -32,7 +34,7 @@ export function EditableLine({ value, placeholder, onCommit, style, multiline, n
       >
         <Text
           numberOfLines={numberOfLines ?? (multiline ? 3 : 1)}
-          style={[style, !shown && { color: palette.faint }]}
+          style={[style, !shown && !solid && { color: palette.faint }]}
         >
           {shown || placeholder}
         </Text>

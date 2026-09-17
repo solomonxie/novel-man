@@ -96,7 +96,8 @@
     "jumpSearch": "搜索章节",
     "jumpNone": "没有匹配的章节。",
     "inside": "书里有什么",
-    "addOne": "添加一个"
+    "addOne": "添加一个",
+    "notesShort": "笔记"
   },
   "reader": {
     "empty": "本章没有内容。",
@@ -188,7 +189,8 @@
     "unit_cast": "出场人物",
     "unit_places": "地点",
     "unit_chapters": "章",
-    "unit_toRead": "读完约"
+    "unit_toRead": "读完约",
+    "chapterShort": "第{{n}}章"
   },
   "queue": {
     "title": "队列（{{count}}）",
@@ -601,7 +603,8 @@
     "excerpt": "开头",
     "hint": "场景中的人物是根据本场景正文统计的，只在本章其他地方出现的名字不会列在这里。",
     "appearances": "这个场景出现的地方",
-    "thisOne": "当前"
+    "thisOne": "当前",
+    "unit": "场景"
   },
   "kind": {
     "novel": "小说",
