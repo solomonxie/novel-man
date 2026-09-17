@@ -129,3 +129,13 @@ landed and what each partial task still owes.
 Two things need a dev build rather than Expo Go: the share extension that
 puts Novel Man in another app's share sheet (the file types are declared, the
 extension is not), and moving parsing off the JS thread.
+
+
+## Screenshots
+
+| Library and settings | Book page |
+| --- | --- |
+| ![Library and settings](docs/screenshots/screenshot-library.png) | ![Book page](docs/screenshots/screenshot-book-page.png) |
+
+One page: search, the shelf, and every setting under it. A book opens to its
+cover, chapters, scenes, notes and characters.
