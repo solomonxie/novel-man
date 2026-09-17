@@ -7,7 +7,7 @@ import type { TFunction } from 'i18next';
 
 import { buildBundle, openBundle } from '../backup/bundle';
 import { restoreBundle, type RestoreReport } from '../backup/restore';
-import { BUNDLE_EXTENSION, BundleError } from '../backup/format';
+import { BundleError, isBundleName } from '../backup/format';
 import { isAuto, lastBackupAt, setAuto, useDriveStatus } from '../backup/icloud';
 import { waitingCount } from '../backup/pending';
 import { deliver } from '../export/deliver';
@@ -57,7 +57,7 @@ export function BackupSettings() {
     guard(async () => {
       const picked = await pickBackupBundle();
       if (!picked) return;
-      if (!picked.name.endsWith(BUNDLE_EXTENSION)) throw new BundleError('not-a-bundle');
+      if (!isBundleName(picked.name)) throw new BundleError('not-a-bundle');
       confirmRestore(() => openBundle(new File(picked.uri).bytesSync()));
     });
   }

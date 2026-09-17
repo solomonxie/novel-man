@@ -304,14 +304,16 @@ destination differs; the bundle is identical.
 
 ```
 bucket/<prefix>/
-├── library.nmbak            settings, shelf order, language, connection
+├── library.zip              settings, shelf order, language, connection
 │                            list — NO secrets
 └── books/
-    ├── <book-uuid>.nmbak    one bundle per book, so a single book can be
-    └── <book-uuid>.nmbak    pulled back without touching the rest
+    ├── <book-uuid>.zip      one bundle per book, so a single book can be
+    └── <book-uuid>.zip      pulled back without touching the rest
 ```
 
-A `.nmbak` is a zip:
+The bundle is a plain zip, and named one. It carried a `.nmbak` extension
+first, which bought a document type the app never registered and cost the
+reader the ability to open their own backup; a restore reads either name:
 
 ```
 snapshot.json   version · manuscript text · structure (+ which parts the user
@@ -361,7 +363,7 @@ assets/
   prompt: there is nothing to overwrite and no context yet for the question.
   Launch pulls back *before* it pushes up, or an empty shelf would overwrite
   the backup it came for. The file picker stays the only manual path.
-- **One file, always overwritten** — `novel-man.nmbak`, not a dated series.
+- **One file, always overwritten** — `novel-man.zip`, not a dated series.
   The folder exists so that deleting the app doesn't delete the work, and for
   that only the newest copy was ever the answer; a list of near-identical
   bundles would ask the reader to choose between them, which is a question
@@ -389,7 +391,7 @@ system document picker ──┐   iCloud, Google Drive, Dropbox, OneDrive and
 share sheet ("Open in…") ├──▶ every other Files provider come free here.
 paste / type a URL       │    No OAuth, no tokens, no backend.
 connected S3 bucket      ┤
-a .nmbak bundle ─────────┘   a book (or a whole library) coming back from
+a backup zip ────────────┘   a book (or a whole library) coming back from
                              a backup — file or bucket, same pipeline
 ```
 

@@ -4,7 +4,13 @@ import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router
 import { useTranslation } from 'react-i18next';
 
 import { bucketFor, listConnections, removeConnection, updateConnection } from '../../src/cloud/connections';
-import { queueBackup, queueDownload, subscribeToSync, takeLastReport } from '../../src/cloud/sync';
+import {
+  LIBRARY_KEY,
+  queueBackup,
+  queueDownload,
+  subscribeToSync,
+  takeLastReport,
+} from '../../src/cloud/sync';
 import type { RemoteObject } from '../../src/cloud/client';
 import type { Connection } from '../../src/cloud/providers';
 import type { RestoreReport } from '../../src/backup/restore';
@@ -72,7 +78,7 @@ export default function CloudLibrary() {
   }
 
   const books = (objects ?? []).filter((object) => object.key.startsWith('books/'));
-  const library = (objects ?? []).find((object) => object.key === 'library.nmbak');
+  const library = (objects ?? []).find((object) => object.key === LIBRARY_KEY);
 
   return (
     <ScrollView
@@ -125,7 +131,7 @@ export default function CloudLibrary() {
               books.map((object, index) => (
                 <Row
                   key={object.key}
-                  label={object.key.replace(/^books\//, '').replace(/\.nmbak$/, '')}
+                  label={object.key.replace(/^books\//, '').replace(/\.(zip|nmbak)$/, '')}
                   value={`${Math.round(object.size / 1024)} KB  ›`}
                   onPress={() => confirmGet(object.key)}
                   last={index === books.length - 1}
