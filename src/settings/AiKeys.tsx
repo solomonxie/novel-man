@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -24,12 +24,13 @@ import {
   setStrategy,
   type StoredKey,
   type Strategy,
-} from '../../src/ai/keys';
-import { vendorById, vendors } from '../../src/ai/vendors';
-import { Hint, Row, Section } from '../../src/ui/primitives';
-import { radius, space, usePalette } from '../../src/theme';
+} from '../ai/keys';
+import { modelFor, vendorById, vendors } from '../ai/vendors';
+import { Hint, Row, Section } from '../ui/primitives';
+import { radius, space, usePalette } from '../theme';
 
-export default function AiKeys() {
+/** Sections, not a screen: settings live on Home and nowhere else. */
+export function AiKeysSettings() {
   const { t } = useTranslation();
   const palette = usePalette();
   const [keys, setKeys] = useState<StoredKey[]>([]);
@@ -49,6 +50,7 @@ export default function AiKeys() {
     setStrategyState(next);
   }
 
+
   function confirmRemove(key: StoredKey) {
     Alert.alert(vendorById(key.vendorId)?.name ?? key.vendorId, undefined, [
       { text: t('settings.cancel'), style: 'cancel' },
@@ -64,14 +66,9 @@ export default function AiKeys() {
   }
 
   return (
-    <ScrollView
-      style={{ backgroundColor: palette.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl }}
-    >
-      <Stack.Screen options={{ title: t('settings.ai'), headerBackTitle: ' ' }} />
-
+    <>
       <Section
-        title={t('settings.ai')}
+        title={t('settings.aiSettings')}
         action={{
           label: strategy === 'sequential' ? t('settings.aiSequential') : t('settings.aiRoundRobin'),
           onPress: toggleStrategy,
@@ -91,14 +88,20 @@ export default function AiKeys() {
                 },
               ]}
             >
-              <View style={{ flex: 1 }}>
+              <Pressable
+                style={{ flex: 1 }}
+                onPress={() => router.push(`/ai-key/${key.id}?vendor=${key.vendorId}`)}
+              >
                 <Text style={{ color: palette.text, fontSize: 16 }}>
                   {vendorById(key.vendorId)?.name ?? key.vendorId}
                 </Text>
-                <Text style={{ color: palette.dim, fontSize: 12 }}>
-                  {t('settings.aiRequests', { count: key.requests })}
+                <Text style={{ color: palette.accent, fontSize: 12 }}>
+                  {t('settings.aiRequestsOn', {
+                    count: key.requests,
+                    model: modelName(key),
+                  })}  ›
                 </Text>
-              </View>
+              </Pressable>
               <Pressable onPress={() => moveKey(key.id, -1).then(load)} hitSlop={8} disabled={index === 0}>
                 <Text style={{ color: index === 0 ? palette.faint : palette.accent, fontSize: 18 }}>↑</Text>
               </Pressable>
@@ -125,9 +128,16 @@ export default function AiKeys() {
       <Hint>{t('settings.aiHint')}</Hint>
       {keys.length > 1 && <Hint>{t('settings.aiStrategyHint')}</Hint>}
 
+
       <AddKeySheet visible={adding} onClose={() => setAdding(false)} onAdded={() => { setAdding(false); load(); }} />
-    </ScrollView>
+    </>
   );
+}
+
+/** Which model a key runs on belongs on its row: it is what the next run costs. */
+function modelName(key: StoredKey): string {
+  const vendor = vendorById(key.vendorId);
+  return vendor ? modelFor(vendor, key.model).name : (key.model ?? '');
 }
 
 /** Save is the test: one real cheap request, nothing stored unless it succeeds. */
@@ -193,7 +203,7 @@ function AddKeySheet({ visible, onClose, onAdded }: {
                   },
                 ]}
               >
-                <Text style={{ color: entry.id === vendorId ? '#FFFFFF' : palette.text, fontSize: 14 }}>
+                <Text style={{ color: entry.id === vendorId ? palette.onAccent : palette.text, fontSize: 14 }}>
                   {entry.name}
                 </Text>
               </Pressable>

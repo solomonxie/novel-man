@@ -26,5 +26,10 @@ export type Importer = {
   label: string;
   extensions: string[];
   mimeTypes: string[];
+  /**
+   * Formats whose extraction can silently come out wrong — a scanned PDF, a
+   * page saved as HTML — show what they got before it becomes a book.
+   */
+  needsPreview?: boolean;
   parse: (bytes: Uint8Array, fileName: string, context?: ParseContext) => Promise<ParsedSource>;
 };

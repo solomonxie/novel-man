@@ -2,8 +2,10 @@ import { yieldToUI } from '../async/yield';
 import { adoptSourceFile, extensionOf } from '../storage/files';
 import { saveImportedBook } from '../db/repo';
 import { detectChapters } from '../structure/detect';
+import { hintsOf } from '../structure/document';
 import { countUnits } from '../text/counts';
 import { detectLanguage } from '../text/language';
+import { DEFAULT_KIND } from '../books/kinds';
 import { normalize } from './normalize';
 import { importerFor } from './registry';
 
@@ -11,10 +13,22 @@ export type ImportStage = 'reading' | 'parsing' | 'detecting' | 'saving';
 export type ImportProgress = { stage: ImportStage; fraction: number; detail?: string };
 
 export class ImportError extends Error {
-  constructor(public code: 'unsupported' | 'no-text' | 'unreadable', public detail?: string) {
+  constructor(
+    public code: 'unsupported' | 'no-text' | 'unreadable' | 'rejected',
+    public detail?: string
+  ) {
     super(code);
   }
 }
+
+/** What the reader is shown before an uncertain extraction becomes a book. */
+export type ImportPreview = {
+  sample: string;
+  characters: number;
+  chapters: number;
+  language: string;
+  format: string;
+};
 
 export type ImportResult = { bookId: string; chapters: number; confident: boolean };
 
@@ -27,8 +41,9 @@ const WEIGHTS: Record<ImportStage, [number, number]> = {
 };
 
 export async function importFile(
-  input: { uri: string; name: string },
-  onProgress?: (progress: ImportProgress) => void
+  input: { uri: string; name: string; kind?: string },
+  onProgress?: (progress: ImportProgress) => void,
+  confirm?: (preview: ImportPreview) => Promise<boolean>
 ): Promise<ImportResult> {
   const extension = extensionOf(input.name);
   const importer = importerFor(extension);
@@ -64,8 +79,24 @@ export async function importFile(
   report('detecting');
   const { language } = detectLanguage(doc.text);
   const detection = detectChapters(doc, language);
+  // Import no longer guesses at scenes. A chapter arrives sceneless and stays
+  // that way until a reader marks one or an analysis reads for them.
+  const scenes: { chapterIndex: number; start: number; end: number }[] = [];
   const counts = countUnits(doc.text, language);
   await yieldToUI();
+
+  if (importer.needsPreview && confirm) {
+    const accepted = await confirm({
+      sample: doc.text.slice(0, 1200),
+      characters: doc.text.length,
+      chapters: detection.chapters.length,
+      language,
+      format: importer.label,
+    });
+    // The stored source file stays either way: rejecting is a judgement about
+    // this extraction, not a reason to make the user find the file again.
+    if (!accepted) throw new ImportError('rejected', input.name);
+  }
 
   report('saving');
   const bookId = await saveImportedBook({
@@ -73,6 +104,7 @@ export async function importFile(
       title: parsed.title?.trim() || input.name.replace(/\.[^.]+$/, ''),
       author: parsed.author?.trim() || null,
       language,
+      kind: input.kind ?? DEFAULT_KIND,
       source_name: input.name,
       source_hash: stored.hash,
       source_path: stored.path,
@@ -82,7 +114,9 @@ export async function importFile(
       cover_hue: hueFromTitle(input.name),
     },
     text: doc.text,
+    hints: hintsOf(doc),
     chapters: detection.chapters,
+    scenes,
   });
   report('saving', 1);
 

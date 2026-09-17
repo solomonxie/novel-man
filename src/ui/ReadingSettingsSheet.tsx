@@ -4,17 +4,24 @@ import { useTranslation } from 'react-i18next';
 import {
   FONT_RANGE,
   MARGIN_RANGE,
+  type Bilingual,
   type ReadingSettings,
 } from '../reader/settings';
+import { labelFor } from '../translate/languages';
 import { radius, readingThemes, space, type ReadingTheme } from '../theme';
 
 const THEMES: ReadingTheme[] = ['paper', 'sepia', 'grey', 'night'];
 const SPACINGS: ReadingSettings['spacing'][] = ['compact', 'normal', 'loose'];
+const BILINGUAL: Bilingual[] = ['off', 'target', 'both'];
 
 /** Applies live to the page behind it — you judge type by reading it, not by a number. */
-export function ReadingSettingsSheet({ visible, settings, onChange, onClose }: {
+export function ReadingSettingsSheet({ visible, settings, targets, target, onTarget, onChange, onClose }: {
   visible: boolean;
   settings: ReadingSettings;
+  /** Only offered when this book has a translation to show. */
+  targets?: string[];
+  target?: string | null;
+  onTarget?: (code: string) => void;
   onChange: (next: ReadingSettings) => void;
   onClose: () => void;
 }) {
@@ -57,7 +64,7 @@ export function ReadingSettingsSheet({ visible, settings, onChange, onClose }: {
                   styles.swatch,
                   {
                     backgroundColor: readingThemes[theme].bg,
-                    borderColor: theme === settings.theme ? '#2F6FEB' : readingThemes[theme].dim,
+                    borderColor: theme === settings.theme ? palette.accent : readingThemes[theme].dim,
                     borderWidth: theme === settings.theme ? 2 : StyleSheet.hairlineWidth,
                   },
                 ]}
@@ -77,6 +84,7 @@ export function ReadingSettingsSheet({ visible, settings, onChange, onClose }: {
                 label={t(`reader.spacing_${spacing}`)}
                 active={spacing === settings.spacing}
                 ink={ink}
+                accent={palette.accent}
                 onPress={() => onChange({ ...settings, spacing })}
               />
             ))}
@@ -85,10 +93,44 @@ export function ReadingSettingsSheet({ visible, settings, onChange, onClose }: {
           <Text style={[styles.label, { color: palette.dim }]}>{t('reader.font')}</Text>
           <View style={styles.row}>
             <Segment label={t('reader.sans')} active={!settings.serif} ink={ink}
+                accent={palette.accent}
               onPress={() => onChange({ ...settings, serif: false })} />
             <Segment label={t('reader.serif')} active={settings.serif} ink={ink}
+                accent={palette.accent}
               onPress={() => onChange({ ...settings, serif: true })} />
           </View>
+
+          {targets && targets.length > 0 && (
+            <>
+              <Text style={[styles.label, { color: palette.dim }]}>{t('reader.bilingual')}</Text>
+              <View style={styles.row}>
+                {BILINGUAL.map((mode) => (
+                  <Segment
+                    key={mode}
+                    label={t(`reader.bilingual_${mode}`)}
+                    active={mode === settings.bilingual}
+                    ink={ink}
+                accent={palette.accent}
+                    onPress={() => onChange({ ...settings, bilingual: mode })}
+                  />
+                ))}
+              </View>
+              {settings.bilingual !== 'off' && targets.length > 1 && (
+                <View style={[styles.row, { marginTop: space.sm }]}>
+                  {targets.map((code) => (
+                    <Segment
+                      key={code}
+                      label={labelFor(code)}
+                      active={code === target}
+                      ink={ink}
+                accent={palette.accent}
+                      onPress={() => onTarget?.(code)}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
+          )}
         </Pressable>
       </Pressable>
     </Modal>
@@ -113,16 +155,17 @@ function Stepper({ label, ink, onStep }: {
   );
 }
 
-function Segment({ label, active, ink, onPress }: {
+function Segment({ label, active, ink, accent, onPress }: {
   label: string;
   active: boolean;
   ink: string;
+  accent: string;
   onPress: () => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.segment, { borderColor: active ? '#2F6FEB' : ink + '33', borderWidth: active ? 2 : 1 }]}
+      style={[styles.segment, { borderColor: active ? accent : ink + '33', borderWidth: active ? 2 : 1 }]}
     >
       <Text style={{ color: ink, fontSize: 13 }}>{label}</Text>
     </Pressable>

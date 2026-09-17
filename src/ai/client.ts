@@ -1,26 +1,56 @@
-import { vendorById, type Vendor } from './vendors';
+import { modelFor, vendorById, type Vendor } from './vendors';
 
 export type ChatMessage = { role: 'system' | 'user'; content: string };
 
+/**
+ * `maxTokens` defaults to a key test's worth. Anything that wants a real answer
+ * says how long it may be, and can hand in a signal to stop paying for it.
+ * `model` defaults to the vendor's cheapest, which is what an unconfigured key
+ * runs on.
+ */
+export type ChatOptions = { maxTokens?: number; model?: string; signal?: AbortSignal };
+
+const TEST_TOKENS = 64;
+
 /** One request shape per API family, not per vendor. */
-export async function chat(vendor: Vendor, apiKey: string, messages: ChatMessage[]): Promise<string> {
-  if (vendor.api === 'anthropic') return anthropic(vendor, apiKey, messages);
-  if (vendor.api === 'google') return google(vendor, apiKey, messages);
-  return openAICompatible(vendor, apiKey, messages);
+export async function chat(
+  vendor: Vendor,
+  apiKey: string,
+  messages: ChatMessage[],
+  options: ChatOptions = {}
+): Promise<string> {
+  if (vendor.api === 'anthropic') return anthropic(vendor, apiKey, messages, options);
+  if (vendor.api === 'google') return google(vendor, apiKey, messages, options);
+  return openAICompatible(vendor, apiKey, messages, options);
 }
 
-async function openAICompatible(vendor: Vendor, apiKey: string, messages: ChatMessage[]) {
+async function openAICompatible(
+  vendor: Vendor,
+  apiKey: string,
+  messages: ChatMessage[],
+  options: ChatOptions
+) {
   const response = await fetch(`${vendor.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: vendor.cheapModel, max_tokens: 64, messages }),
+    signal: options.signal,
+    body: JSON.stringify({
+      model: modelFor(vendor, options.model).id,
+      max_tokens: options.maxTokens ?? TEST_TOKENS,
+      messages,
+    }),
   });
   const body = await response.json();
   if (!response.ok) throw new AiError(body?.error?.message ?? response.status, body?.error?.code);
   return body?.choices?.[0]?.message?.content ?? '';
 }
 
-async function anthropic(vendor: Vendor, apiKey: string, messages: ChatMessage[]) {
+async function anthropic(
+  vendor: Vendor,
+  apiKey: string,
+  messages: ChatMessage[],
+  options: ChatOptions
+) {
   const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
   const response = await fetch(`${vendor.baseUrl}/messages`, {
     method: 'POST',
@@ -29,9 +59,10 @@ async function anthropic(vendor: Vendor, apiKey: string, messages: ChatMessage[]
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
+    signal: options.signal,
     body: JSON.stringify({
-      model: vendor.cheapModel,
-      max_tokens: 64,
+      model: modelFor(vendor, options.model).id,
+      max_tokens: options.maxTokens ?? TEST_TOKENS,
       system: system || undefined,
       messages: messages.filter((m) => m.role !== 'system'),
     }),
@@ -41,15 +72,21 @@ async function anthropic(vendor: Vendor, apiKey: string, messages: ChatMessage[]
   return body?.content?.[0]?.text ?? '';
 }
 
-async function google(vendor: Vendor, apiKey: string, messages: ChatMessage[]) {
+async function google(
+  vendor: Vendor,
+  apiKey: string,
+  messages: ChatMessage[],
+  options: ChatOptions
+) {
   const response = await fetch(
-    `${vendor.baseUrl}/models/${vendor.cheapModel}:generateContent?key=${apiKey}`,
+    `${vendor.baseUrl}/models/${modelFor(vendor, options.model).id}:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: options.signal,
       body: JSON.stringify({
         contents: messages.map((m) => ({ role: 'user', parts: [{ text: m.content }] })),
-        generationConfig: { maxOutputTokens: 64 },
+        generationConfig: { maxOutputTokens: options.maxTokens ?? TEST_TOKENS },
       }),
     }
   );

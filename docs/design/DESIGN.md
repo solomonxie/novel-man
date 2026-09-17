@@ -25,7 +25,7 @@ scattered across hundreds of pages.
 - Take an existing manuscript as-is, from wherever it already lives — local
   file, cloud drive, a link — and in whatever format it's already in.
 - Give every book one page that is the whole app for that book: read, edit
-  structure, analyse, translate, export. No hunting across tabs for a book's
+  structure, analyze, translate, export. No hunting across tabs for a book's
   own things.
 - Make translation improve with use: every correction the user makes is
   context for the next chapter, not a one-off fix.
@@ -50,7 +50,7 @@ scattered across hundreds of pages.
   written *well* on-device; a half-working importer is worse than a missing one.
 - No hosted service, no subscription, no auth — at least not in v1.
 - Not a bookstore or a general e-reader. Reading is first-class, but only for
-  manuscripts the user imported — no catalogue, no store, no DRM formats.
+  manuscripts the user imported — no catalog, no store, no DRM formats.
 - No social layer. Sharing produces a shareable artifact (image/text); it does
   not post anywhere or show other readers' notes.
 
@@ -133,6 +133,14 @@ language is detected per project from the text and overridable.
 | AI-only | Every import becomes a paid multi-call pass over the full text, and a nondeterministic one. Wrong on cost and on trust. |
 | Manual only | Honest but useless — it's the whole job. |
 
+**Scene boundaries out of a chapter pass**
+
+| Option | Deciding factor |
+|---|---|
+| **Numbered paragraphs, model answers with numbers (chosen)** | Same trick as translation alignment. A break can only fall at a paragraph, an integer needs no matching back, and an out-of-range number is obviously wrong. |
+| Model quotes the opening words of each scene | Tried first; failed. Models re-wrap and re-punctuate what they quote, so the quote has to be found again by fuzzy prefix search — most scenes were lost, and the ones found landed off. |
+| Separate scene-only pass | Reliable but doubles the per-chapter bill for something the chapter pass is already reading the whole chapter for. |
+
 
 ## Decision
 
@@ -156,13 +164,13 @@ built structure-first.**
   and a 300k-word novel doesn't get stored three times.
 - *Annotations anchor to the same offsets*, not to chapter ids. A highlight
   made before re-splitting chapters still points at the same words afterwards
-  — which is the entire reason structure is modelled as ranges rather than as
+  — which is the entire reason structure is modeled as ranges rather than as
   copied chunks. Re-importing a *revised* manuscript is the case this doesn't
   cover; see risks.
 - *A book is the unit, and it gets a real home.* Everything the app knows
   about a manuscript hangs off one page — reading, structure, cast, notes,
   export. The shelf exists to get you there, and nothing else about a book
-  lives anywhere else. The alternative, feature-first tabs (`Read` / `Analyse`
+  lives anywhere else. The alternative, feature-first tabs (`Read` / `Analyze`
   / `Export`) with a book picker inside each, is how a tool with six features
   becomes unnavigable.
 - *Import and export are one registry each, not a pile of special cases.* A
@@ -182,7 +190,7 @@ built structure-first.**
   is the whole reason diffs are stored rather than just applied.
 - *Locale is infrastructure, not a feature.* Every user-facing string goes
   through the i18n layer from the first screen, with `en` and `zh-Hans`
-  catalogues in the repo. Two languages from the start is what keeps the
+  catalogs in the repo. Two languages from the start is what keeps the
   third cheap; it also forces the layout to survive text that is ~40% shorter
   in Chinese and can be much longer in English.
 - *Reading is a first-class surface, not a preview.* Structure detection is
@@ -217,14 +225,14 @@ later:    Character ── Mention ── Relationship ── Portrait
 - Generated images and export bundles are app-owned files referenced by name,
   never base64'd into the DB.
 
-**Localisation** — `i18next` + `expo-localization`. Catalogues `en` (source of
+**Localisation** — `i18next` + `expo-localization`. Catalogs `en` (source of
 truth) and `zh-Hans` as JSON under `src/i18n/`. Device locale on first launch,
 overridable in Settings, falls back to `en` for any unmatched locale or missing
 key. Numbers, dates and durations go through `Intl`, never hand-formatted.
 Language-dependent *logic* — chapter heading patterns, sentence segmentation
 rules, word-count method (words vs. characters) — is keyed by the **manuscript**
 language, not the UI language, and lives beside the parsers rather than in the
-string catalogues.
+string catalogs.
 
 **Translation** — three tables, all anchored to the same offsets as the rest:
 
@@ -255,12 +263,24 @@ Memory            source sentence · accepted target · why (the diff that made 
 this-device-only. Never in the DB, never in an export or a sync payload.
 
 **AI vendors** — vendor list is data (display name, key-format hint, console
-URL, capabilities), not branching code; OpenAI-shaped APIs share one client.
-Several keys, ordered; order is the fallback order. Only vendors that can do
+URL, capabilities, models with prices), not branching code; OpenAI-shaped APIs
+share one client. Model is picked per key, not per vendor, defaulting to the
+vendor's cheapest — one account sweeps 500 chapters cheaply and re-reads the
+few that came back wrong on something stronger; an unlisted model id can be
+typed, priced as an estimate. Several keys, ordered; order is the fallback
+order. Only vendors that can do
 the requested job are offered for it (image generation routes separately from
 text).
 
-**Cost shape** — the thing to control, and why the UI has an explicit "analyse"
+**Book kinds** — what a book *is* decides what it gets. Kinds are data
+(`novel`, `scripture`, `nonfiction`, `tutorial`, `textbook`), each carrying a
+feature set and how a pass should read it. Scripture and nonfiction keep people
+and places but lose scenes, screenplay and generated art; instruction books lose
+those too. The analysis prompt is built from the kind, so a non-fiction pass is
+never asked to invent a motive or an arc. Asked once when adding, editable on
+the book page, defaulting to `novel` — a share-sheet import has nobody to ask.
+
+**Cost shape** — the thing to control, and why the UI has an explicit "analyze"
 action rather than an automatic one:
 
 ```
@@ -470,5 +490,5 @@ chapter corrections.
   boundary genuinely differs. Count validation catches it; what to do when a
   language legitimately needs two sentences for one is an open question.
 - **Open**: does a project ever hold more than one source file (a series, or a
-  manuscript split across files)? Modelled as one-to-many already; the UI
+  manuscript split across files)? Modeled as one-to-many already; the UI
   assumes one until there's demand.

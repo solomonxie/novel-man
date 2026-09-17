@@ -38,7 +38,7 @@ export function EditableRow({ label, value, placeholder, onCommit, multiline, la
   );
 }
 
-/** Never blank: a picked image, else initials on a colour derived from the name. */
+/** Never blank: a picked image, else initials on a color derived from the name. */
 export function Portrait({ name, path, hue, size, onPick }: {
   name: string;
   path: string | null;
