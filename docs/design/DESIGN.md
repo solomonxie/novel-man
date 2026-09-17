@@ -296,10 +296,11 @@ translation                  O(chapters)  BOTH directions -- whole book in and
 script / storyboard          O(scenes)    per-scene, opt-in
 ```
 
-**Backup, restore and cloud** — per `backup-restore.md` and
-`cloud-bucket-sync.md`. **One payload format, two front ends** — local file
-export/import (user picks the file) and cloud bucket backup/restore (fixed
-keys, no picker). Only the destination differs; the bundle is identical.
+**Backup, restore and cloud** — per `backup-restore.md`, `cloud-bucket-sync.md`
+and `platform-cloud-drive.md`. **One payload format, three front ends** — local
+file export/import (user picks the file), cloud bucket backup/restore (fixed
+keys, no picker) and iCloud Drive (one switch, no picker either). Only the
+destination differs; the bundle is identical.
 
 ```
 bucket/<prefix>/
@@ -335,6 +336,29 @@ assets/
 - **"Restore Latest" must not depend on a file picker**, so a local auto-snapshot
   is written on a schedule and is directly restorable. Its hint states the real
   protection scope: survives a bad import or a corrupt DB, *not* a lost phone.
+- **iCloud Drive is the default off-device destination**, because it is the
+  only one with no account to make, no key to paste and no bucket to
+  provision. One switch: on means every launch and every backgrounding writes
+  there, off means nothing does. Flipping it on syncs at once, which answers
+  "did that work" without a Sync Now button beside it.
+- **iCloud carries no manuscripts.** The books came from files the user still
+  has and are ~100× the rest of the payload; what a reinstall would actually
+  destroy is the work *around* them. So the bundle is built with the text
+  left out, marked `contentOmitted`, and restore holds the text-less books
+  until the matching file is imported again — matched on source hash, which is
+  also why the chapter offsets still line up.
+- **Restore from the drive is automatic, once, on a fresh install** — no
+  prompt: there is nothing to overwrite and no context yet for the question.
+  Launch pulls back *before* it pushes up, or an empty shelf would overwrite
+  the backup it came for. The file picker stays the only manual path.
+- **The container is document-scope public** (`NSUbiquitousContainers`), so
+  the folder is reachable in Files under the app's name. A backup the user
+  can't open is worse than a local file.
+- **Five states, not two.** Unsupported (Android, Expo Go) hides the row;
+  unentitled build states the reason with no instruction; iCloud Drive off
+  gets the full Settings path; not-ready says try again shortly. The
+  entitlement is checked *before* `ubiquityIdentityToken`, which itself needs
+  the entitlement and would otherwise report a signed-in user as signed out.
 - **Cloud is a backup target, not browsable content** — so one provider
   (S3 / S3-compatible), one connection = one bucket + prefix, non-interactive
   credentials, **manual sync by default**, and a real persisted job queue

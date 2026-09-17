@@ -1,4 +1,4 @@
-import { buildBundle, openBundle } from '../backup/bundle';
+import { buildBundle, fingerprint, openBundle } from '../backup/bundle';
 import { restoreBundle, type RestoreReport } from '../backup/restore';
 import { contentHash } from '../ai/cache';
 import {
@@ -97,19 +97,11 @@ async function run(job: CloudJob) {
   const bundle = await buildBundle(isBook ? [job.book_id!] : undefined);
   const body = bundle.body as Uint8Array;
   // Re-uploading an unchanged bundle costs bandwidth and buys nothing.
-  const hash = contentHash(String(body.length), fingerprint(body));
+  const hash = contentHash('bundle', fingerprint(body));
   if ((await lastUploadHash(job.connection_id, key)) === hash) return;
 
   await bucket.put(key, body, 'application/zip');
   await recordUpload(job.connection_id, key, hash);
-}
-
-/** Sampling the zip is enough to notice a change; hashing all of it is not free. */
-function fingerprint(bytes: Uint8Array): string {
-  const stride = Math.max(1, Math.floor(bytes.length / 2048));
-  let out = '';
-  for (let i = 0; i < bytes.length; i += stride) out += bytes[i].toString(36);
-  return out;
 }
 
 const DAY = 24 * 60 * 60 * 1000;

@@ -42,10 +42,19 @@ or bilingual, and the screenplay as `.fountain`/`.fdx`. Every format states
 what it drops before you pick it, and is rendered from the current structure
 — so what comes out matches what you were reading.
 
-**Backup** — one bundle format, two destinations: a file you keep, or a cloud
-bucket you own. Per book, so a single book can come back without touching the
-rest. Restore never overwrites — it creates something new and tells you what
-it couldn't place.
+**Backup** — one bundle format, three destinations: iCloud Drive, a file you
+keep, or a cloud bucket you own. Per book, so a single book can come back
+without touching the rest. Restore never overwrites — it creates something new
+and tells you what it couldn't place.
+
+**iCloud, one switch** — turn it on and everything you made — notes,
+characters, structure, progress, settings — is copied into the app's own
+iCloud Drive folder (Files → iCloud Drive → Novel Man), on every launch and
+every time you leave the app. Manuscripts stay out of it: they came from files
+you still have, and they'd cost a hundred times more to store. Delete the app,
+reinstall it, and the copy comes back on first launch with no prompt; import a
+book file again and its notes, profiles and chapter fixes land back on it,
+matched on the file's own hash.
 
 **Translation that gets better as you use it** — translate into your chosen
 languages with a glossary the model must obey: character names,
@@ -74,6 +83,11 @@ React Native + Expo + TypeScript, one codebase for iOS and Android.
   live in on-device SQLite. No account, no server, no sign-up.
 - **Optional sync.** Opt in to a private S3-compatible bucket *you own*. Off
   by default; manual by default.
+- **iCloud needs a signed build.** The switch reads the container itself and
+  hides the row where it could never work (Android, Expo Go). A build signed
+  without the iCloud capability says so rather than telling you to sign in —
+  shipping it means a paid Apple developer account, which changes how every
+  build is signed, not just this feature.
 - **Bring your own AI key.** OpenAI, Anthropic, Gemini and friends — usage
   bills to your account, keys stay in the device keychain and never appear in
   a backup or a sync payload. With no key configured the app degrades to its
@@ -101,6 +115,7 @@ your back.
 ```
 npm install
 npx expo start --ios     # or --android
+npx expo run:ios         # dev build — the iCloud switch needs one
 ```
 
 Opens in Expo Go — no native build needed. Import a `.txt`, `.md`, `.docx`,
@@ -126,9 +141,11 @@ Everything above runs. What is not built: parsing on a background thread
 / `.fb2` import. The [plan](docs/design/IMPLEMENT_PLAN.md) marks exactly what
 landed and what each partial task still owes.
 
-Two things need a dev build rather than Expo Go: the share extension that
-puts Novel Man in another app's share sheet (the file types are declared, the
-extension is not), and moving parsing off the JS thread.
+Three things need a dev build rather than Expo Go: the iCloud switch (its
+native module lives in `modules/icloud/`, and the row hides itself where it
+could never work), the share extension that puts Novel Man in another app's
+share sheet (the file types are declared, the extension is not), and moving
+parsing off the JS thread.
 
 
 ## Screenshots

@@ -35,6 +35,7 @@ import { bookKinds } from '../src/books/kinds';
 import { formatCount } from '../src/text/counts';
 import { matchesBook, searchContent, type ContentHit } from '../src/search/library';
 import { snapshotIfDue } from '../src/backup/snapshots';
+import { backUpIfAuto, restoreOnLaunch } from '../src/backup/icloud';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { radius, space, usePalette } from '../src/theme';
 import { appearances, setAppearance, useAppearance, type Appearance } from '../src/theme/appearance';
@@ -76,10 +77,17 @@ export default function Home() {
   // A snapshot is only due when the app is actually open, so launch is the
   // only honest place to take one.
   useEffect(() => {
+    void (async () => {
+      // Pull back before pushing up. Backing an empty shelf over a good
+      // backup is exactly how a reinstall would lose what it came for.
+      const restored = await restoreOnLaunch().catch(() => null);
+      if (restored) refresh();
+      await backUpIfAuto().catch(() => undefined);
+    })();
     snapshotIfDue().catch(() => undefined);
     syncOnLaunch().catch(() => undefined);
     resumeWorkOnLaunch().catch(() => undefined);
-  }, []);
+  }, [refresh]);
 
   // A finished run usually changed something on the shelf.
   useEffect(
