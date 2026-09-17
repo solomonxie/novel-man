@@ -96,7 +96,8 @@
     "jumpSearch": "Search chapters",
     "jumpNone": "No chapter matches that.",
     "inside": "Inside",
-    "addOne": "Add one"
+    "addOne": "Add one",
+    "notesShort": "Notes"
   },
   "reader": {
     "empty": "This chapter is empty.",
@@ -188,7 +189,8 @@
     "unit_cast": "in the cast",
     "unit_places": "places",
     "unit_chapters": "chapters",
-    "unit_toRead": "to read"
+    "unit_toRead": "to read",
+    "chapterShort": "ch. {{n}}"
   },
   "queue": {
     "title": "Queue ({{count}})",
@@ -601,7 +603,8 @@
     "excerpt": "How it starts",
     "hint": "Who is in a scene is counted from the scene's own words, so a name only mentioned elsewhere in the chapter does not appear here.",
     "appearances": "Where this scene appears",
-    "thisOne": "this one"
+    "thisOne": "this one",
+    "unit": "scene"
   },
   "kind": {
     "novel": "Novel",

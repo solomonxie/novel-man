@@ -83,7 +83,9 @@ export default function ChapterPage() {
       <Stack.Screen options={{ title: t('chapter.title'), headerBackTitle: ' ' }} />
 
       <Hero
-        eyebrow={t('chapter.number', { index: chapter.idx + 1 })}
+        // A title that already names the chapter makes the eyebrow an argument:
+        // "CHAPTER 3" over "第2章 新手武器" reads as a bug, not as context.
+        eyebrow={namesItself(chapter.title) ? undefined : t('chapter.number', { index: chapter.idx + 1 })}
         facts={
           <>
             <Fact value={formatCount(chapter.end - chapter.start, language)} label={t('units.unit_long')} />
@@ -193,6 +195,11 @@ export default function ChapterPage() {
       <Hint>{t('chapter.hint')}</Hint>
     </ScrollView>
   );
+}
+
+/** `第12章`, `Chapter 12`, `12.` — a title that carries its own number. */
+function namesItself(title: string): boolean {
+  return /^\s*(第\s*[0-9零一二三四五六七八九十百千两]+\s*[章回节卷篇]|chapter\s*\d+|ch\.?\s*\d+|\d+[.、])/i.test(title);
 }
 
 const styles = StyleSheet.create({
