@@ -25,7 +25,10 @@ const light = {
   accent: '#2F6FEB',
   danger: '#D9342B',
   border: '#E3E3E8',
-  /** Behind a sheet. Darker in dark mode, where a light scrim reads as fog. */
+  /** Accent at a weight that can sit behind text: chips, badges, tinted bands. */
+  soft: 'rgba(47,111,235,0.10)',
+  /** A well inside a card — an excerpt, a quote, anything quoted rather than said. */
+  sunken: '#F7F7FA',
   scrim: 'rgba(0,0,0,0.35)',
   /** Text that sits on `accent` — the one color that must not follow scheme. */
   onAccent: '#FFFFFF',
@@ -41,6 +44,8 @@ const dark: typeof light = {
   accent: '#6FA0FF',
   danger: '#FF6961',
   border: '#2C2C2E',
+  soft: 'rgba(111,160,255,0.16)',
+  sunken: '#161618',
   scrim: 'rgba(0,0,0,0.6)',
   onAccent: '#0B1220',
 };
@@ -48,7 +53,7 @@ const dark: typeof light = {
 export type Palette = typeof light;
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
-export const radius = { sm: 8, md: 12, lg: 16 };
+export const radius = { sm: 8, md: 12, lg: 16, xl: 22, pill: 999 };
 
 /** CJK needs looser leading than Latin at the same point size. */
 export const lineHeightFor = (script: 'latin' | 'cjk', fontSize: number) =>

@@ -1,14 +1,16 @@
 import { Image, Pressable, StyleSheet, Switch, Text, View, type ViewStyle } from 'react-native';
 import { radius, space, usePalette } from '../theme';
 
-export function Section({ title, action, children }: {
+export function Section({ title, action, flush, children }: {
   title?: string;
   action?: { label: string; onPress: () => void };
+  /** Already inside something that spaced it — don't space it twice. */
+  flush?: boolean;
   children: React.ReactNode;
 }) {
   const palette = usePalette();
   return (
-    <View style={{ marginTop: space.xl }}>
+    <View style={{ marginTop: flush ? 0 : space.xl }}>
       {(title || action) && (
         <View style={styles.sectionHead}>
           <Text style={[styles.sectionTitle, { color: palette.dim }]}>{title?.toUpperCase()}</Text>

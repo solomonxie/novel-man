@@ -23,8 +23,10 @@ import { AiRunSheet } from '../../src/ui/AiRunSheet';
 import { queuePlacePolish } from '../../src/analysis/runs';
 import { hasAnyKey } from '../../src/ai/keys';
 import { useWorkRefresh } from '../../src/work/refresh';
-import { EditableRow } from '../../src/ui/fields';
+import { hueFrom } from '../../src/ui/fields';
+import { EditableLine } from '../../src/ui/EditableLine';
 import { FieldsSection } from '../../src/ui/FieldsSection';
+import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item } from '../../src/ui/detail';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { space, usePalette } from '../../src/theme';
 
@@ -117,95 +119,99 @@ export default function PlacePage() {
     >
       <Stack.Screen options={{ title: place.name, headerBackTitle: ' ' }} />
 
-      <Section
-        action={
-          visits.length ? { label: t('place.polish'), onPress: () => setPolishOpen(true) } : undefined
+      <Hero
+        eyebrow={t('place.eyebrow')}
+        facts={
+          span
+            ? (
+              <>
+                <Fact value={span.first + 1} label={t('place.firstSeen')} />
+                <Fact value={span.last + 1} label={t('place.lastSeen')} />
+                <Fact value={visits.length} label={t('units.unit_chapters')} />
+              </>
+            )
+            : undefined
+        }
+        actions={
+          visits.length ? <Action label={t('place.polish')} onPress={() => setPolishOpen(true)} /> : undefined
         }
       >
-        <EditableRow
-          label={t('place.name')}
+        <EditableLine
           value={place.name}
+          placeholder={t('place.name')}
           onCommit={(value) => value.trim() && save({ name: value.trim() })}
+          style={{ color: palette.text, fontSize: 26, fontWeight: '700', lineHeight: 32 }}
         />
-        <EditableRow
-          label={t('place.alias')}
+        <EditableLine
           value={place.alias}
           placeholder={t('place.aliasPlaceholder')}
           onCommit={(value) => save({ alias: value.trim() || null })}
+          style={{ color: palette.faint, fontSize: 14, marginTop: 2 }}
         />
-        <EditableRow
-          label={t('place.summary')}
+        <EditableLine
           value={place.summary}
           placeholder={t('place.summaryPlaceholder')}
           onCommit={(value) => save({ summary: value.trim() || null })}
+          style={{ color: palette.dim, fontSize: 15, lineHeight: 22, marginTop: space.sm }}
           multiline
-          last
+          numberOfLines={8}
         />
-      </Section>
+      </Hero>
 
-      {span ? (
-        <Section title={t('place.where')}>
-          <Row label={t('place.firstSeen')} value={chapterOf(span.first)} />
-          <Row label={t('place.lastSeen')} value={chapterOf(span.last)} />
-          <Row label={t('place.chapterCount')} value={`${visits.length}`} last />
-        </Section>
-      ) : null}
-
-      <Section title={t('place.scenes')}>
+      <Block title={t('place.scenes')} count={scenes.length || undefined}>
         {scenes.length === 0 ? (
-          <Row label={t('place.noScenes')} last />
+          <Empty text={t('place.noScenes')} />
         ) : (
-          scenes.map((scene, index) => {
+          scenes.map((scene) => {
             const chapter = chapterById(scene.chapter_id);
             return (
-              <Row
+              <Item
                 key={scene.id}
-                label={scene.title?.trim() || t('chapter.scenePlaceholder', { index: scene.idx + 1 })}
+                badge={<Badge n={(chapter?.idx ?? 0) + 1} />}
+                title={scene.title?.trim() || t('chapter.scenePlaceholder', { index: scene.idx + 1 })}
                 detail={[chapter ? chapterOf(chapter.idx) : null, scene.summary?.trim()]
                   .filter(Boolean)
                   .join(' · ')}
-                value="›"
                 onPress={() => router.push(`/scene/${scene.id}`)}
-                last={index === scenes.length - 1}
               />
             );
           })
         )}
-      </Section>
+      </Block>
 
-      <Section title={t('place.company')}>
+      <Block title={t('place.company')} count={company.length || undefined}>
         {company.length === 0 ? (
-          <Row label={t('place.noCompany')} last />
+          <Empty text={t('place.noCompany')} />
         ) : (
-          company.map((person, index) => (
-            <Row
-              key={person.id}
-              label={person.name}
-              detail={person.role ?? undefined}
-              value={`${t('place.sharedChapters', { count: person.shared })}  ›`}
-              onPress={() => router.push(`/entity/${person.id}`)}
-              last={index === company.length - 1}
-            />
-          ))
+          <ChipRow>
+            {company.map((person) => (
+              <Chip
+                key={person.id}
+                label={person.name}
+                detail={t('place.sharedChapters', { count: person.shared })}
+                hue={hueFrom(person.name)}
+                onPress={() => router.push(`/entity/${person.id}`)}
+              />
+            ))}
+          </ChipRow>
         )}
-      </Section>
+      </Block>
 
-      <Section title={t('place.mentions')}>
+      <Block title={t('place.mentions')} count={visits.length || undefined}>
         {visits.length === 0 ? (
-          <Row label={t('place.noMentions')} last />
+          <Empty text={t('place.noMentions')} />
         ) : (
-          visits.map((visit, index) => (
-            <Row
+          visits.map((visit) => (
+            <Item
               key={`${visit.chapter_idx}`}
-              label={chapterOf(visit.chapter_idx)}
+              badge={<Badge n={visit.chapter_idx + 1} tone="quiet" />}
+              title={chapterOf(visit.chapter_idx)}
               detail={visit.note ?? undefined}
-              value="›"
               onPress={() => router.push(`/reader/${place.book_id}?chapter=${visit.chapter_idx}`)}
-              last={index === visits.length - 1}
             />
           ))
         )}
-      </Section>
+      </Block>
 
       <FieldsSection
         title={t('place.fields')}

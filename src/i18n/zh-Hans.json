@@ -94,7 +94,9 @@
     "kindRow": "类别",
     "jumpCount": "共 {{count}} 章",
     "jumpSearch": "搜索章节",
-    "jumpNone": "没有匹配的章节。"
+    "jumpNone": "没有匹配的章节。",
+    "inside": "书里有什么",
+    "addOne": "添加一个"
   },
   "reader": {
     "empty": "本章没有内容。",
@@ -180,7 +182,13 @@
     "words": "{{count}} 词",
     "characters": "{{count}} 字",
     "readTimeHours": "约 {{hours}} 小时",
-    "readTimeMinutes": "{{minutes}} 分钟"
+    "readTimeMinutes": "{{minutes}} 分钟",
+    "unit_long": "篇幅",
+    "unit_scenes": "场景",
+    "unit_cast": "出场人物",
+    "unit_places": "地点",
+    "unit_chapters": "章",
+    "unit_toRead": "读完约"
   },
   "queue": {
     "title": "队列（{{count}}）",
@@ -227,7 +235,12 @@
     "relationEmpty": "这本书还没有其他人物。",
     "byAi": "AI 找到的",
     "openGraph": "查看关系图 →",
-    "export": "导出这份档案"
+    "export": "导出这份档案",
+    "kind_character": "人物",
+    "kind_place": "地点",
+    "firstSeen": "首次出现",
+    "lastSeen": "最后出现",
+    "noRelations": "还没有关联的人物。"
   },
   "notes": {
     "empty": "阅读时做的标注和想法会显示在这里。",
@@ -562,7 +575,6 @@
     "where": "在书中的位置",
     "firstSeen": "首次出现",
     "lastSeen": "最后出现",
-    "chapterCount": "涉及章节",
     "scenes": "这里发生的场景",
     "noScenes": "还没有记录这里发生的场景。",
     "company": "谁在这里",
@@ -574,7 +586,8 @@
     "hint": "分析相关章节会填充这个地方的信息。这里的内容都可以手动编辑或添加。",
     "deleteConfirm": "删除这个地点？",
     "polish": "用 AI 归纳",
-    "polishWhat": "把关于这个地点的 {{count}} 条章节记录归纳成简介：它是什么、是什么样子、在这里发生过什么。下面的逐章记录会原样保留，可以重新运行，也可以查看依据。"
+    "polishWhat": "把关于这个地点的 {{count}} 条章节记录归纳成简介：它是什么、是什么样子、在这里发生过什么。下面的逐章记录会原样保留，可以重新运行，也可以查看依据。",
+    "eyebrow": "地点"
   },
   "scene": {
     "title": "场景",

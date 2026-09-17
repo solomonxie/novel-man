@@ -45,6 +45,8 @@ import { hasAnyKey } from '../../src/ai/keys';
 import { FieldsSection } from '../../src/ui/FieldsSection';
 import { Row, Section } from '../../src/ui/primitives';
 import { EditableRow, hueFrom, pickImage, Portrait } from '../../src/ui/fields';
+import { Action, Badge, Block, Empty, Fact, Hero, Item } from '../../src/ui/detail';
+import { EditableLine } from '../../src/ui/EditableLine';
 import { adoptImage } from '../../src/storage/files';
 import { radius, space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
@@ -169,46 +171,62 @@ export default function EntityPage() {
     >
       <Stack.Screen options={{ title: entity.name, headerBackTitle: ' ' }} />
 
-      <View style={{ alignItems: 'center', marginTop: space.md }}>
-        <Portrait
-          name={entity.name}
-          path={entity.portrait_path}
-          hue={hueFrom(entity.name)}
-          size={96}
-          onPick={(uri) => save({ portrait_path: adoptImage(uri, 'portrait') })}
-        />
+      <Hero
+        eyebrow={t(`entity.kind_${entity.kind}`)}
+        avatar={
+          <Portrait
+            name={entity.name}
+            path={entity.portrait_path}
+            hue={hueFrom(entity.name)}
+            size={72}
+            onPick={(uri) => save({ portrait_path: adoptImage(uri, 'portrait') })}
+          />
+        }
+        facts={
+          span
+            ? (
+              <>
+                <Fact value={timeline.length} label={t('units.unit_chapters')} />
+                <Fact value={span.first + 1} label={t('entity.firstSeen')} />
+                <Fact value={span.last + 1} label={t('entity.lastSeen')} />
+              </>
+            )
+            : undefined
+        }
+        actions={
+          <>
+            {observations.length > 0 && entity.kind === 'character' ? (
+              <Action label={t('entity.polish')} tone="loud" onPress={() => setPolishOpen(true)} />
+            ) : null}
+            <Action label={t('entity.export')} onPress={() => setExporting(true)} />
+          </>
+        }
+      >
         <NameField
           value={entity.name}
           autoFocus={!entity.name}
           onCommit={(next) => next !== entity.name && save({ name: next })}
         />
-      </View>
-
-      <Section>
-        <EditableRow
-          label={t('entity.alias')}
+        <EditableLine
           value={entity.alias}
+          placeholder={t('entity.alias')}
           onCommit={(value) => save({ alias: value.trim() || null })}
+          style={{ color: palette.faint, fontSize: 14, marginTop: 2 }}
         />
-        <EditableRow
-          label={t('entity.summary')}
-          value={entity.summary}
-          placeholder={t('entity.summaryPlaceholder')}
-          onCommit={(value) => save({ summary: value.trim() || null })}
-          multiline
-          last
-        />
-      </Section>
+      </Hero>
+
+      <EditableLine
+        value={entity.summary}
+        placeholder={t('entity.summaryPlaceholder')}
+        onCommit={(value) => save({ summary: value.trim() || null })}
+        style={{ color: palette.dim, fontSize: 15, lineHeight: 22, marginTop: space.lg, paddingHorizontal: space.xs }}
+        multiline
+        numberOfLines={10}
+      />
 
       {entity.kind === 'character' && (
-        <Section
-          title={t('entity.analysis')}
-          action={
-            observations.length
-              ? { label: t('entity.polish'), onPress: () => setPolishOpen(true) }
-              : undefined
-          }
-        >
+        <Block title={t('entity.analysis')}>
+          <Section flush>
           <EditableRow
             label={t('entity.role')}
             value={entity.role}
@@ -243,12 +261,13 @@ export default function EntityPage() {
             multiline
             last
           />
-        </Section>
+          </Section>
+        </Block>
       )}
 
       {timeline.length > 0 && span ? (
-        <Section title={t('entity.timeline')}>
-          <View style={{ padding: space.lg }}>
+        <Block title={t('entity.timeline')}>
+          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             <Sparkline
               bars={bars}
               tint={palette.accent}
@@ -278,60 +297,58 @@ export default function EntityPage() {
               </Text>
             )}
           </View>
-        </Section>
+        </Block>
       ) : null}
 
       {observations.length > 0 && (
-        <Section title={t('entity.perChapter')}>
-          {observations.map((observation, index) => (
-            <View
+        <Block title={t('entity.perChapter')} count={observations.length}>
+          {observations.map((observation) => (
+            <Item
               key={observation.id}
-              style={[
-                { paddingHorizontal: space.lg, paddingVertical: space.md },
-                index < observations.length - 1 && {
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderColor: palette.border,
-                },
-              ]}
-            >
-              <Text style={{ color: palette.dim, fontSize: 12 }}>
-                {chapterLabel(chapters, observation.chapter_idx)}
-              </Text>
-              <Text style={{ color: palette.text, fontSize: 14, marginTop: 2 }}>
-                {[observation.appearance, observation.voice, observation.note]
+              badge={<Badge n={observation.chapter_idx + 1} tone="quiet" />}
+              title={chapterLabel(chapters, observation.chapter_idx)}
+              detail={
+                [observation.appearance, observation.voice, observation.note]
                   .filter(Boolean)
-                  .join(' · ')}
-              </Text>
-            </View>
+                  .join(' · ') || undefined
+              }
+            />
           ))}
-        </Section>
+        </Block>
       )}
 
       {entity.kind === 'character' && (
-        <Section
+        <Block
           title={t('entity.relations')}
+          count={relations.length || undefined}
           action={{ label: '＋', onPress: () => setLinking(true) }}
         >
           {relations.length === 0 ? (
-            <Row label={t('entity.addRelation')} onPress={() => setLinking(true)} last />
+            <Empty
+              text={t('entity.noRelations')}
+              action={{ label: t('entity.addRelation'), onPress: () => setLinking(true) }}
+            />
           ) : (
-            relations.map((relation, index) => (
-              <RelationRow
-                key={relation.id}
-                relation={relation}
-                last={index === relations.length - 1}
-                onOpen={() => router.push(`/entity/${relation.other_id}`)}
-                onLabel={(label) => updateRelation(relation.id, { label }).then(load)}
-                onRemove={() => deleteRelation(relation.id).then(load)}
-              />
-            ))
+            <Section flush>
+              {relations.map((relation, index) => (
+                <RelationRow
+                  key={relation.id}
+                  relation={relation}
+                  last={index === relations.length - 1}
+                  onOpen={() => router.push(`/entity/${relation.other_id}`)}
+                  onLabel={(label) => updateRelation(relation.id, { label }).then(load)}
+                  onRemove={() => deleteRelation(relation.id).then(load)}
+                />
+              ))}
+            </Section>
           )}
           <Row
             label={t('entity.openGraph')}
+            value="›"
             onPress={() => router.push(`/book/${entity.book_id}/graph`)}
             last
           />
-        </Section>
+        </Block>
       )}
 
       <FieldsSection
@@ -341,7 +358,6 @@ export default function EntityPage() {
       />
 
       <Section>
-        <Row label={t('entity.export')} value="›" onPress={() => setExporting(true)} />
         <Row label={t('settings.delete')} onPress={confirmDelete} danger last />
       </Section>
 
@@ -413,7 +429,6 @@ function NameField({ value, autoFocus, onCommit }: {
       placeholder={t('entity.namePlaceholder')}
       placeholderTextColor={palette.faint}
       style={[styles.name, { color: palette.text }]}
-      textAlign="center"
     />
   );
 }
@@ -533,7 +548,12 @@ function LinkSheet({ visible, cast, onClose, onPick }: {
 }
 
 const styles = StyleSheet.create({
-  name: { fontSize: 24, fontWeight: '700', marginTop: space.md, minWidth: 160 },
+  card: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: space.lg,
+  },
+  name: { fontSize: 24, fontWeight: '700', padding: 0 },
   scrim: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: radius.lg,
