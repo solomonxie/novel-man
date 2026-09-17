@@ -34,9 +34,9 @@ export async function buildBundle(
   const books: BundledBook[] = [];
 
   for (const id of ids) {
-    const record = await readBookRecord(id);
+    const record = await readBookRecord(id, { text: includeText });
     if (!record) continue;
-    books.push(withAssets(includeText ? record : { ...record, text: '', hints: [] }, assets));
+    books.push(withAssets(record, assets));
   }
 
   const snapshot: Snapshot = {

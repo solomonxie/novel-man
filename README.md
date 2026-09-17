@@ -49,12 +49,12 @@ and tells you what it couldn't place.
 
 **iCloud, one switch** — turn it on and everything you made — notes,
 characters, structure, progress, settings — is copied into the app's own
-iCloud Drive folder (Files → iCloud Drive → Novel Man), on every launch and
-every time you leave the app. Manuscripts stay out of it: they came from files
-you still have, and they'd cost a hundred times more to store. Delete the app,
-reinstall it, and the copy comes back on first launch with no prompt; import a
-book file again and its notes, profiles and chapter fixes land back on it,
-matched on the file's own hash.
+iCloud Drive folder (Files → iCloud Drive → Novel Man) whenever any of it
+changes, a few seconds after you stop typing. Nothing waits on it. Manuscripts
+stay out: they came from files you still have, and they'd cost a hundred times
+more to store. Delete the app, reinstall it, and the copy comes back on first
+launch with no prompt; import a book file again and its notes, profiles and
+chapter fixes land back on it, matched on the file's own hash.
 
 **Translation that gets better as you use it** — translate into your chosen
 languages with a glossary the model must obey: character names,
