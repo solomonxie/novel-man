@@ -198,7 +198,7 @@ export default function EntityPage() {
             {observations.length > 0 && entity.kind === 'character' ? (
               <Action label={t('entity.polish')} tone="loud" onPress={() => setPolishOpen(true)} />
             ) : null}
-            <Action label={t('entity.export')} onPress={() => setExporting(true)} />
+            <Action label={t('entity.exportShort')} onPress={() => setExporting(true)} />
           </>
         }
       >

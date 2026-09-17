@@ -130,7 +130,6 @@ export default function ScenePage() {
             />
             <Action
               label={t('scene.openChapter')}
-              detail={chapter?.title.trim() || undefined}
               onPress={() => chapter && router.push(`/chapter/${chapter.id}`)}
             />
           </>

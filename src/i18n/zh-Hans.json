@@ -47,7 +47,7 @@
     "discarded": "你丢弃了这次提取结果。"
   },
   "book": {
-    "continue": "继续 · {{chapter}}",
+    "continue": "继续阅读",
     "start": "开始阅读",
     "chapters": "章节",
     "showAll": "查看全部 {{count}} 章",
@@ -97,7 +97,8 @@
     "jumpNone": "没有匹配的章节。",
     "inside": "书里有什么",
     "addOne": "添加一个",
-    "notesShort": "笔记"
+    "notesShort": "笔记",
+    "analyzeShort": "分析"
   },
   "reader": {
     "empty": "本章没有内容。",
@@ -242,7 +243,8 @@
     "kind_place": "地点",
     "firstSeen": "首次出现",
     "lastSeen": "最后出现",
-    "noRelations": "还没有关联的人物。"
+    "noRelations": "还没有关联的人物。",
+    "exportShort": "导出"
   },
   "notes": {
     "empty": "阅读时做的标注和想法会显示在这里。",
@@ -518,7 +520,6 @@
     "title": "章节",
     "number": "第 {{index}} 章",
     "read": "从这里开始读 →",
-    "analyze": "用 AI 分析本章",
     "scenes": "场景",
     "noScenes": "还没有场景 — 手动标记，或让 AI 分析识别。",
     "scenePlaceholder": "场景 {{index}}",
@@ -528,7 +529,8 @@
     "noCast": "还没有记录人物。",
     "places": "发生地点",
     "noPlaces": "还没有记录地点。",
-    "hint": "点名字可进入对应档案。分析本章会填充场景、人物和地点。"
+    "hint": "点名字可进入对应档案。分析本章会填充场景、人物和地点。",
+    "analyzeShort": "分析"
   },
   "keyLog": {
     "title": "AI 密钥",
