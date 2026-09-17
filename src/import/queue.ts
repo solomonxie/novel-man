@@ -1,7 +1,7 @@
 import { newId } from '../db';
-import { importFile, type ImportProgress } from './pipeline';
+import { importFile, type ImportPreview, type ImportProgress } from './pipeline';
 
-export type JobStatus = 'pending' | 'running' | 'done' | 'failed';
+export type JobStatus = 'pending' | 'running' | 'awaiting' | 'done' | 'failed';
 
 export type ImportJob = {
   id: string;
@@ -11,13 +11,15 @@ export type ImportJob = {
   fraction: number;
   bookId?: string;
   chapters?: number;
+  preview?: ImportPreview;
   error?: unknown;
 };
 
 type Listener = (jobs: ImportJob[]) => void;
 
 const jobs: ImportJob[] = [];
-const sources = new Map<string, { uri: string; name: string }>();
+const sources = new Map<string, { uri: string; name: string; kind?: string }>();
+const gates = new Map<string, (accepted: boolean) => void>();
 const listeners = new Set<Listener>();
 let running = false;
 
@@ -32,10 +34,22 @@ export function snapshot(): ImportJob[] {
 }
 
 export function activeCount(): number {
-  return jobs.filter((job) => job.status === 'pending' || job.status === 'running').length;
+  return jobs.filter((job) => job.status !== 'done' && job.status !== 'failed').length;
 }
 
-export function enqueueImport(input: { uri: string; name: string }): string {
+/**
+ * The queue is sequential, so a job waiting on a person blocks the rest — but
+ * an extraction the reader hasn't seen is exactly what shouldn't be committed
+ * behind their back, and the answer is one tap away in the visible strip.
+ */
+export function answerPreview(id: string, accepted: boolean) {
+  const gate = gates.get(id);
+  if (!gate) return;
+  gates.delete(id);
+  gate(accepted);
+}
+
+export function enqueueImport(input: { uri: string; name: string; kind?: string }): string {
   const id = newId();
   jobs.unshift({ id, name: input.name, status: 'pending', stage: null, fraction: 0 });
   sources.set(id, input);
@@ -82,11 +96,26 @@ async function drain() {
       job.status = 'running';
       publish();
       try {
-        const result = await importFile(source, (progress) => {
-          job.stage = progress.stage;
-          job.fraction = progress.fraction;
-          publish();
-        });
+        const result = await importFile(
+          source,
+          (progress) => {
+            job.stage = progress.stage;
+            job.fraction = progress.fraction;
+            publish();
+          },
+          (preview) =>
+            new Promise<boolean>((resolve) => {
+              job.status = 'awaiting';
+              job.preview = preview;
+              publish();
+              gates.set(job.id, (accepted) => {
+                job.status = 'running';
+                job.preview = undefined;
+                publish();
+                resolve(accepted);
+              });
+            })
+        );
         job.status = 'done';
         job.fraction = 1;
         job.bookId = result.bookId;
@@ -94,6 +123,7 @@ async function drain() {
       } catch (error) {
         job.status = 'failed';
         job.error = error;
+        gates.delete(job.id);
       }
       publish();
     }

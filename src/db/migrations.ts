@@ -65,4 +65,261 @@ export const migrations: string[] = [
      created_at INTEGER NOT NULL
    );
    CREATE INDEX entities_book ON entities(book_id, kind, sort_index);`,
+
+  // Scenes are what every later analysis indexes by. Re-detection needs the
+  // structure hints the parser found, so the document keeps them too — only
+  // the hint-bearing blocks, since paragraph bounds are recoverable from text.
+  `CREATE TABLE scenes (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+     idx INTEGER NOT NULL,
+     start INTEGER NOT NULL,
+     end INTEGER NOT NULL
+   );
+   CREATE INDEX scenes_chapter ON scenes(chapter_id, idx);
+   ALTER TABLE documents ADD COLUMN hints TEXT NOT NULL DEFAULT '[]';`,
+
+  // An annotation that only knows its offsets is lost the moment the text is
+  // re-imported or re-split; its surrounding words are what find it again.
+  `ALTER TABLE annotations ADD COLUMN prefix TEXT NOT NULL DEFAULT '';
+   ALTER TABLE annotations ADD COLUMN suffix TEXT NOT NULL DEFAULT '';`,
+
+  // An AI answer is bought once. Keyed by the hash of what was asked, so the
+  // same chapter re-analyzed after an edit elsewhere costs nothing.
+  `CREATE TABLE ai_cache (
+     hash TEXT PRIMARY KEY NOT NULL,
+     kind TEXT NOT NULL,
+     response TEXT NOT NULL,
+     created_at INTEGER NOT NULL
+   );`,
+
+  // The cast, as the analysis actually produces it: one row per character,
+  // one observation per chapter it was seen in, and a mention count computed
+  // locally. Keeping observations separate is what makes a continuity check
+  // possible — a merged profile has already thrown away the disagreement.
+  `ALTER TABLE entities ADD COLUMN role TEXT;
+   ALTER TABLE entities ADD COLUMN appearance TEXT;
+   ALTER TABLE entities ADD COLUMN voice TEXT;
+   ALTER TABLE entities ADD COLUMN arc TEXT;
+   ALTER TABLE entities ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
+   CREATE TABLE observations (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+     chapter_idx INTEGER NOT NULL,
+     appearance TEXT,
+     voice TEXT,
+     note TEXT
+   );
+   CREATE INDEX observations_entity ON observations(entity_id, chapter_idx);
+   CREATE TABLE mentions (
+     entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     chapter_idx INTEGER NOT NULL,
+     count INTEGER NOT NULL,
+     PRIMARY KEY (entity_id, chapter_idx)
+   );
+   CREATE TABLE relations (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     from_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+     to_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+     label TEXT NOT NULL,
+     first_chapter INTEGER NOT NULL,
+     last_chapter INTEGER NOT NULL
+   );
+   CREATE INDEX relations_book ON relations(book_id);
+   CREATE TABLE continuity_flags (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+     kind TEXT NOT NULL,
+     detail TEXT NOT NULL,
+     status TEXT NOT NULL DEFAULT 'open',
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX flags_book ON continuity_flags(book_id, status);`,
+
+  // Translation keeps machine output and the human edit in separate columns so
+  // a re-run never destroys an edit, and a diff between them is always
+  // available — which is what makes the post-edit memory possible. Units are
+  // (start, end) into the same document text everything else addresses.
+  `CREATE TABLE translation_units (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     target TEXT NOT NULL,
+     chapter_idx INTEGER NOT NULL,
+     start INTEGER NOT NULL,
+     end INTEGER NOT NULL,
+     source TEXT NOT NULL,
+     machine TEXT,
+     edited TEXT,
+     stale INTEGER NOT NULL DEFAULT 0,
+     updated_at INTEGER NOT NULL
+   );
+   CREATE UNIQUE INDEX translation_units_span
+     ON translation_units(book_id, target, start, end);
+   CREATE INDEX translation_units_chapter
+     ON translation_units(book_id, target, chapter_idx);
+   CREATE TABLE terms (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     target TEXT NOT NULL,
+     source TEXT NOT NULL,
+     translation TEXT NOT NULL,
+     locked INTEGER NOT NULL DEFAULT 0,
+     note TEXT,
+     entity_id TEXT,
+     created_at INTEGER NOT NULL
+   );
+   CREATE UNIQUE INDEX terms_unique ON terms(book_id, target, source);
+   CREATE TABLE translation_memory (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     target TEXT NOT NULL,
+     source TEXT NOT NULL,
+     machine TEXT NOT NULL,
+     edited TEXT NOT NULL,
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX memory_book ON translation_memory(book_id, target);`,
+
+  // Cloud work outlives the screen that started it, so the queue is a table
+  // rather than an array. A job is claimed inside a transaction, which is what
+  // stops two drains doing the same upload, and anything left 'running' at
+  // launch was killed mid-flight and is requeued.
+  `CREATE TABLE cloud_jobs (
+     id TEXT PRIMARY KEY NOT NULL,
+     connection_id TEXT NOT NULL,
+     kind TEXT NOT NULL,
+     book_id TEXT,
+     payload TEXT NOT NULL DEFAULT '{}',
+     status TEXT NOT NULL DEFAULT 'pending',
+     attempts INTEGER NOT NULL DEFAULT 0,
+     error TEXT,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   );
+   CREATE INDEX cloud_jobs_status ON cloud_jobs(status, created_at);
+   CREATE TABLE cloud_uploads (
+     connection_id TEXT NOT NULL,
+     key TEXT NOT NULL,
+     hash TEXT NOT NULL,
+     uploaded_at INTEGER NOT NULL,
+     PRIMARY KEY (connection_id, key)
+   );`,
+
+  // A screenplay is a different shape from a novel — headings, action, cues,
+  // dialogue — so it is stored as typed elements per scene rather than as text
+  // that would have to be re-parsed to export it twice.
+  `CREATE TABLE script_elements (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     chapter_idx INTEGER NOT NULL,
+     scene_idx INTEGER NOT NULL,
+     position INTEGER NOT NULL,
+     type TEXT NOT NULL,
+     text TEXT NOT NULL
+   );
+   CREATE INDEX script_book ON script_elements(book_id, chapter_idx, scene_idx, position);`,
+
+  // Long work is a table, not a promise chain. A 500-chapter analysis outlives
+  // the screen that started it, so each chapter is its own row with its own
+  // status — which is what makes progress visible, failure survivable, and a
+  // resume free. `engine` records whether a unit cost money or not.
+  // 
+  // Summaries live beside what they summarize: a book has one, a chapter has a
+  // brief, and both are what a later pass is given as context.
+  `ALTER TABLE books ADD COLUMN summary TEXT;
+   ALTER TABLE chapters ADD COLUMN brief TEXT;
+   CREATE TABLE work_jobs (
+     id TEXT PRIMARY KEY NOT NULL,
+     run_id TEXT NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     kind TEXT NOT NULL,
+     engine TEXT NOT NULL DEFAULT 'ai',
+     label TEXT NOT NULL,
+     chapter_idx INTEGER,
+     payload TEXT NOT NULL DEFAULT '{}',
+     status TEXT NOT NULL DEFAULT 'pending',
+     attempts INTEGER NOT NULL DEFAULT 0,
+     error TEXT,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   );
+   CREATE INDEX work_jobs_run ON work_jobs(run_id, chapter_idx);
+   CREATE INDEX work_jobs_status ON work_jobs(status, created_at);`,
+
+  // Scene detection used to call a chapter with no separator "one scene",
+  // which made the scene count equal the chapter count and told nobody
+  // anything. Those rows are artefacts, not data: a scene break always
+  // produces two or more, so a scene spanning its whole chapter can only have
+  // come from the old fallback.
+  `DELETE FROM scenes WHERE id IN (
+     SELECT s.id FROM scenes s JOIN chapters c ON c.id = s.chapter_id
+     WHERE s.start = c.start AND s.end = c.end
+   );`,
+
+  // Indexes for the lookups that had none. Every one of these filters by book,
+  // and without them SQLite reads the whole table — which on a 500-chapter book
+  // with a cast of eighty is the difference between instant and noticeable.
+  `CREATE INDEX IF NOT EXISTS scenes_book ON scenes(book_id);
+   CREATE INDEX IF NOT EXISTS mentions_book ON mentions(book_id, chapter_idx);
+   CREATE INDEX IF NOT EXISTS observations_book ON observations(book_id);
+   CREATE INDEX IF NOT EXISTS flags_entity ON continuity_flags(entity_id);
+   CREATE INDEX IF NOT EXISTS ai_cache_created ON ai_cache(created_at);`,
+
+  // Re-reading a chapter used to append a second observation beside the first
+  // instead of correcting it, so a profile built by joining them read as its
+  // own text stuttered back twice. Keep the newest row per chapter.
+  `DELETE FROM observations WHERE rowid NOT IN (
+     SELECT MAX(rowid) FROM observations GROUP BY entity_id, chapter_idx
+   );
+   CREATE UNIQUE INDEX IF NOT EXISTS observations_once ON observations(entity_id, chapter_idx);`,
+
+  // Age and gender are near-universal and worth sorting and filtering by, so
+  // they are columns. Everything else a genre cares about — cultivation level,
+  // house, ship, rank — stays in the free-form `fields` list.
+  `ALTER TABLE entities ADD COLUMN age TEXT;
+   ALTER TABLE entities ADD COLUMN gender TEXT;`,
+
+  // Relations used to be wholly AI-owned, so re-extracting them wiped the
+  // table. A relation the reader wrote is not the model's to delete.
+  `ALTER TABLE relations ADD COLUMN source TEXT NOT NULL DEFAULT 'ai';
+   ALTER TABLE relations ADD COLUMN note TEXT;`,
+
+  // Scenes are no longer guessed at import. A separator run is a real mark, but
+  // a chapter without one is not sceneless — it just wasn't typeset that way —
+  // so the honest default is empty until someone or something reads it. What a
+  // scene is *about* is the point of having it, hence title and summary.
+  `ALTER TABLE scenes ADD COLUMN title TEXT;
+   ALTER TABLE scenes ADD COLUMN summary TEXT;
+   ALTER TABLE scenes ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';`,
+
+  // The job status is a stored string, and the codebase moved to American
+  // spelling — rows written before that would otherwise stop matching.
+  `UPDATE work_jobs SET status = 'canceled' WHERE status = 'cancelled';`,
+
+  // What was actually sent, so a bill can be traced back to a prompt. The key
+  // itself is never here — only which stored key was used.
+  `CREATE TABLE ai_requests (
+     id TEXT PRIMARY KEY NOT NULL,
+     key_id TEXT NOT NULL,
+     vendor_id TEXT NOT NULL,
+     model TEXT NOT NULL,
+     prompt TEXT NOT NULL,
+     response TEXT,
+     error TEXT,
+     input_tokens INTEGER NOT NULL DEFAULT 0,
+     output_tokens INTEGER NOT NULL DEFAULT 0,
+     usd REAL NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX ai_requests_key ON ai_requests(key_id, created_at);`,
+
+  // What a book *is* decides what the app offers for it. Existing books were
+  // all imported as novels, which is also the only honest default for one that
+  // arrives through the share sheet with nobody to ask.
+  `ALTER TABLE books ADD COLUMN kind TEXT NOT NULL DEFAULT 'novel';`,
 ];

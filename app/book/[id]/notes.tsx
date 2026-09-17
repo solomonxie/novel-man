@@ -5,15 +5,18 @@ import { useTranslation } from 'react-i18next';
 import * as Clipboard from 'expo-clipboard';
 
 import {
+  getBook,
   listAnnotations,
   listChapters,
   removeAnnotation,
   type Annotation,
+  type Book,
   type Chapter,
 } from '../../../src/db/repo';
+import { shareQuoteText } from '../../../src/share/quote';
 import { radius, space, usePalette } from '../../../src/theme';
 
-type Filter = 'all' | 'highlight' | 'note';
+type Filter = 'all' | 'highlight' | 'note' | 'bookmark';
 
 export default function Notes() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -21,6 +24,7 @@ export default function Notes() {
   const palette = usePalette();
   const [annotations, setAnnotations] = useState<Annotation[] | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [book, setBook] = useState<Book | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -28,6 +32,7 @@ export default function Notes() {
     if (!id) return;
     listAnnotations(id).then(setAnnotations);
     listChapters(id).then(setChapters);
+    getBook(id).then(setBook);
   }, [id]);
 
   useFocusEffect(load);
@@ -103,7 +108,7 @@ export default function Notes() {
           </View>
 
           <View style={styles.filters}>
-            {(['all', 'highlight', 'note'] as Filter[]).map((option) => (
+            {(['all', 'highlight', 'note', 'bookmark'] as Filter[]).map((option) => (
               <Pressable
                 key={option}
                 onPress={() => setFilter(option)}
@@ -115,7 +120,7 @@ export default function Notes() {
                   },
                 ]}
               >
-                <Text style={{ color: option === filter ? '#FFFFFF' : palette.text, fontSize: 13 }}>
+                <Text style={{ color: option === filter ? palette.onAccent : palette.text, fontSize: 13 }}>
                   {t(`notes.filter_${option}`)}
                 </Text>
               </Pressable>
@@ -147,9 +152,25 @@ export default function Notes() {
                     <Text style={{ color: palette.faint, fontSize: 11 }}>
                       {new Date(entry.created_at).toLocaleDateString()}
                     </Text>
-                    <Pressable onPress={() => Clipboard.setStringAsync(entry.quote)} hitSlop={8}>
-                      <Text style={{ color: palette.accent, fontSize: 12 }}>{t('reader.copy')}</Text>
-                    </Pressable>
+                    <View style={{ flexDirection: 'row', gap: space.lg }}>
+                      <Pressable onPress={() => Clipboard.setStringAsync(entry.quote)} hitSlop={8}>
+                        <Text style={{ color: palette.accent, fontSize: 12 }}>{t('reader.copy')}</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() =>
+                          shareQuoteText({
+                            text: entry.quote,
+                            title: book?.title ?? '',
+                            author: book?.author,
+                            chapter: chapter?.title.trim() || null,
+                            note: entry.note,
+                          })
+                        }
+                        hitSlop={8}
+                      >
+                        <Text style={{ color: palette.accent, fontSize: 12 }}>{t('reader.share')}</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 </Pressable>
               ))}

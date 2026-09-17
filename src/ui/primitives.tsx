@@ -26,9 +26,11 @@ export function Section({ title, action, children }: {
   );
 }
 
-export function Row({ label, value, onPress, danger, last }: {
+export function Row({ label, value, detail, onPress, danger, last }: {
   label: string;
   value?: string;
+  /** A second line under the label, for what the row is rather than where it goes. */
+  detail?: string;
   onPress?: () => void;
   danger?: boolean;
   last?: boolean;
@@ -40,9 +42,14 @@ export function Row({ label, value, onPress, danger, last }: {
       disabled={!onPress}
       style={[styles.row, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.border }]}
     >
-      <Text style={{ color: danger ? palette.danger : palette.text, fontSize: 16, flexShrink: 1 }}>
-        {label}
-      </Text>
+      <View style={{ flexShrink: 1, flex: 1 }}>
+        <Text style={{ color: danger ? palette.danger : palette.text, fontSize: 16 }}>{label}</Text>
+        {detail ? (
+          <Text numberOfLines={2} style={{ color: palette.dim, fontSize: 13, marginTop: 2 }}>
+            {detail}
+          </Text>
+        ) : null}
+      </View>
       {value ? <Text style={{ color: palette.dim, fontSize: 15 }}>{value}</Text> : null}
     </Pressable>
   );
@@ -72,7 +79,7 @@ export function PrimaryAction({ label, onPress, style }: {
         style,
       ]}
     >
-      <Text style={styles.primaryLabel}>{label}</Text>
+      <Text style={[styles.primaryLabel, { color: palette.onAccent }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -118,7 +125,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.md + 2,
     alignItems: 'center',
   },
-  primaryLabel: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  primaryLabel: { fontSize: 17, fontWeight: '600' },
   cover: {
     borderRadius: radius.sm,
     padding: space.sm,

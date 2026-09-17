@@ -1,8 +1,10 @@
 import * as SecureStore from 'expo-secure-store';
-import { chat, type ChatMessage } from './client';
-import { vendorById } from './vendors';
+import { chat, type ChatMessage, type ChatOptions } from './client';
+import { modelFor, vendorById } from './vendors';
+import { recordRequest } from '../db/requests';
 
-export type StoredKey = { id: string; vendorId: string; requests: number };
+/** `model` is unset until someone picks one: the vendor's cheapest is the default. */
+export type StoredKey = { id: string; vendorId: string; requests: number; model?: string };
 export type Strategy = 'sequential' | 'round-robin';
 
 const INDEX = 'ai.keys.index';
@@ -69,6 +71,19 @@ export async function moveKey(id: string, direction: -1 | 1) {
   await writeIndex(keys);
 }
 
+/**
+ * Which model a key runs on is per key, not per vendor: the same account pays
+ * for a cheap model to sweep 500 chapters and a stronger one to read the few
+ * that came back wrong.
+ */
+export async function setKeyModel(id: string, model: string) {
+  const keys = await listKeys();
+  const entry = keys.find((key) => key.id === id);
+  if (!entry) return;
+  entry.model = model.trim() || undefined;
+  await writeIndex(keys);
+}
+
 let roundRobinCursor = 0;
 
 /**
@@ -76,7 +91,7 @@ let roundRobinCursor = 0;
  * down. Sequential is sticky — it stays on the first key until that key itself
  * errors. Round-robin advances every call, win or lose, to spread load.
  */
-export async function runChat(messages: ChatMessage[]): Promise<string> {
+export async function runChat(messages: ChatMessage[], options: ChatOptions = {}): Promise<string> {
   const keys = await listKeys();
   if (!keys.length) throw new Error('no-keys');
   const strategy = await getStrategy();
@@ -88,13 +103,28 @@ export async function runChat(messages: ChatMessage[]): Promise<string> {
     const vendor = vendorById(entry.vendorId);
     const secret = await SecureStore.getItemAsync(secretKey(entry.id));
     if (!vendor || !secret) continue;
+    // Logged either way: a request that failed still explains a bill, and a
+    // refused prompt is the one most worth reading back.
+    const model = modelFor(vendor, entry.model);
+    const log = (result: { response?: string; error?: string }) =>
+      recordRequest({
+        keyId: entry.id,
+        vendorId: entry.vendorId,
+        model: model.id,
+        messages,
+        price: model.price,
+        ...result,
+      }).catch(() => undefined);
+
     try {
-      const answer = await chat(vendor, secret, messages);
+      const answer = await chat(vendor, secret, messages, { ...options, model: model.id });
       entry.requests += 1;
       await writeIndex(keys);
+      await log({ response: answer });
       return answer;
     } catch (error) {
       lastError = error;
+      await log({ error: String(error) });
     }
   }
   throw lastError ?? new Error('no-usable-key');

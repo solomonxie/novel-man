@@ -2,8 +2,15 @@ import type { Importer } from './types';
 import { txtImporter, markdownImporter } from './formats/plain';
 import { docxImporter } from './formats/docx';
 import { epubImporter } from './formats/epub';
+import { pdfImporter } from './formats/pdf';
 
-export const importers: Importer[] = [txtImporter, markdownImporter, docxImporter, epubImporter];
+export const importers: Importer[] = [
+  txtImporter,
+  markdownImporter,
+  docxImporter,
+  epubImporter,
+  pdfImporter,
+];
 
 /** Formats the picker offers — and the ones the empty state promises. */
 export const supportedExtensions = importers.flatMap((importer) => importer.extensions);

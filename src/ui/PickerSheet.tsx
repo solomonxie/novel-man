@@ -4,23 +4,31 @@ import { radius, space, usePalette } from '../theme';
 export type PickerOption = { id: string; label: string; detail?: string };
 
 /** Choosing one value out of a list is a sheet over the page, never a push. */
-export function PickerSheet({ visible, title, options, selectedId, onPick, onClose }: {
+export function PickerSheet({ visible, title, options, selectedId, onPick, onClose, onDismiss }: {
   visible: boolean;
   title: string;
   options: PickerOption[];
   selectedId?: string;
   onPick: (id: string) => void;
   onClose: () => void;
+  /** iOS only: after the sheet has finished animating away. */
+  onDismiss?: () => void;
 }) {
   const palette = usePalette();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.scrim} onPress={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      onDismiss={onDismiss}
+    >
+      <Pressable style={[styles.scrim, { backgroundColor: palette.scrim }]} onPress={onClose}>
         <Pressable
-          style={[styles.sheet, { backgroundColor: palette.surface }]}
+          style={[styles.sheet, { backgroundColor: palette.surface, borderColor: palette.border }]}
           onPress={(event) => event.stopPropagation()}
         >
-          <View style={styles.grabber} />
+          <View style={[styles.grabber, { backgroundColor: palette.faint }]} />
           <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
           {options.map((option, index) => (
             <Pressable
@@ -52,10 +60,12 @@ export function PickerSheet({ visible, title, options, selectedId, onPick, onClo
 }
 
 const styles = StyleSheet.create({
-  scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  scrim: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
+    // In dark, a surface on a black page needs an edge to read as raised.
+    borderTopWidth: StyleSheet.hairlineWidth,
     paddingBottom: space.xxl,
     paddingHorizontal: space.lg,
   },
@@ -63,7 +73,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#C7C7CC',
     alignSelf: 'center',
     marginTop: space.sm,
   },
