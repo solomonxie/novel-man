@@ -680,12 +680,20 @@ export type BookRecord = {
   offset: number;
 };
 
-export async function readBookRecord(bookId: string): Promise<BookRecord | null> {
+/**
+ * `text: false` skips the manuscript entirely rather than reading a megabyte
+ * out of SQLite to throw it away — which is what makes a content-free backup
+ * cheap enough to run on every change.
+ */
+export async function readBookRecord(
+  bookId: string,
+  { text = true }: { text?: boolean } = {}
+): Promise<BookRecord | null> {
   const book = await getBook(bookId);
   if (!book) return null;
   const database = await db();
   const [document, chapters, annotations, offset] = await Promise.all([
-    getDocument(bookId),
+    text ? getDocument(bookId) : Promise.resolve({ text: '', hints: [] as StructureHint[] }),
     listChapters(bookId),
     listAnnotations(bookId),
     getProgress(bookId),

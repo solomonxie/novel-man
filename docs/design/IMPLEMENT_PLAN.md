@@ -11,8 +11,8 @@ it depends on the structure model being right.
 
 Phases 1-11 are implemented except the four tasks still unticked below.
 `(partial: …)` marks a task whose core landed but whose listed scope is not
-fully covered — those notes are the honest remainder, not a to-do list that
-was forgotten.
+fully covered, and `(removed: …)` one that shipped and was then taken out —
+those notes are the honest remainder, not a to-do list that was forgotten.
 
 
 ## Phase 1: Foundations
@@ -105,7 +105,7 @@ can be written once rather than extended per feature.
 - [x] T6.6 Annotation export `.md` / `.csv` — `src/export/formats/` — depends: T6.1, T5.4
 - [x] T6.7 `.nmbak` bundle: versioned `snapshot.json` + `assets/`, per-book and whole-library, never any credential — depends: T6.1, T5.4
 - [x] T6.8 Restore: confirm, create-new-never-overwrite, natural-key matching, unplaceable-item reporting, refuse newer versions — `src/backup/` — depends: T6.7
-- [x] T6.9 Auto-snapshot on a schedule + "Restore Latest" with no file picker — `src/backup/` — depends: T6.7, T6.8
+- [x] T6.9 Auto-snapshot on a schedule + "Restore Latest" with no file picker — `src/backup/` — depends: T6.7, T6.8 (removed: an on-device snapshot dies in the sandbox it protects, and T8.8's switch is the automatic restore it was standing in for)
 - [x] T6.10 Export sheet UI: format list with lossiness labels, per-format options, destination choice — `app/book/[id]/export/` — depends: T6.1, T1.6
 
 ## Phase 7: AI layer
@@ -134,7 +134,8 @@ comes after it, and why it needs no new payload format.
 - [x] T8.6 Sync frequency per connection (manual default), queue sheet, connection menu — `app/settings/cloud/` — depends: T8.3
 - [x] T8.7 iCloud Drive native module: ubiquity container, five-state availability (entitlement read from the embedded profile *before* the account token), document-scope-public folder, copy in/out with placeholder download — `modules/icloud/` — depends: T1.4
 - [x] T8.8 iCloud auto-sync switch: one row, flip-on syncs at once, blocked states replace the location line and only `driveOff` gets directions, re-checked on foreground — `src/settings/Backup.tsx` — depends: T8.7
-- [x] T8.9 Content-free bundle (`includeText: false` + app preferences) and automatic first-install restore before the shelf loads, with text-less books held and re-attached on re-import by source hash — `src/backup/` — depends: T8.7, T6.8
+- [x] T8.9 Change-driven sync: one change signal raised by the single SQLite write path and by the preference stores, debounced, flushed on backgrounding, guarded against its own upload record, awaited by nothing — `src/backup/changes.ts`, `src/backup/icloud.ts` — depends: T8.8
+- [x] T8.10 Content-free bundle (`includeText: false` + app preferences) and automatic first-install restore before the shelf loads, with text-less books held and re-attached on re-import by source hash — `src/backup/` — depends: T8.7, T6.8
 
 ## Phase 9: Cast and relations
 

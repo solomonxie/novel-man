@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { noticeChange } from '../backup/changes';
 import type { ReadingTheme, Scheme } from '../theme';
 
 export type Bilingual = 'off' | 'target' | 'both';
@@ -45,6 +46,7 @@ export async function loadSettings(scheme: Scheme = 'light'): Promise<ReadingSet
 export async function saveSettings(settings: ReadingSettings) {
   try {
     await AsyncStorage.setItem(KEY, JSON.stringify(settings));
+    noticeChange();
   } catch {
     // A lost preference is not worth interrupting reading for.
   }

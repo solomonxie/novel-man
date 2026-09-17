@@ -7,40 +7,19 @@ import type { TFunction } from 'i18next';
 
 import { buildBundle, openBundle } from '../backup/bundle';
 import { restoreBundle, type RestoreReport } from '../backup/restore';
-import {
-  getFrequency,
-  latestSnapshot,
-  listSnapshots,
-  setFrequency,
-  takeSnapshot,
-  type Frequency,
-} from '../backup/snapshots';
 import { BUNDLE_EXTENSION, BundleError } from '../backup/format';
 import { isAuto, lastBackupAt, setAuto, useDriveStatus } from '../backup/icloud';
 import { waitingCount } from '../backup/pending';
 import { deliver } from '../export/deliver';
 import { pickBackupBundle } from '../import/sources/picker';
 import { Hint, Row, Section, Toggle } from '../ui/primitives';
-import { PickerSheet } from '../ui/PickerSheet';
 import { space, usePalette } from '../theme';
-
-const FREQUENCIES: Frequency[] = ['off', 'daily', 'weekly'];
 
 export function BackupSettings() {
   const { t } = useTranslation();
   const palette = usePalette();
-  const [frequency, setStoredFrequency] = useState<Frequency>('off');
-  const [snapshots, setSnapshots] = useState(() => [] as ReturnType<typeof listSnapshots>);
-  const [frequencyOpen, setFrequencyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<RestoreReport | null>(null);
-
-  const load = useCallback(() => {
-    getFrequency().then(setStoredFrequency);
-    setSnapshots(listSnapshots());
-  }, []);
-
-  useFocusEffect(load);
 
   async function guard(work: () => Promise<void>) {
     setBusy(true);
@@ -51,18 +30,12 @@ export function BackupSettings() {
       Alert.alert(t('backup.failed'), describe(error, t));
     } finally {
       setBusy(false);
-      load();
     }
   }
 
   const exportLibrary = () =>
     guard(async () => {
       await deliver(await buildBundle(), 'share');
-    });
-
-  const snapshotNow = () =>
-    guard(async () => {
-      await takeSnapshot();
     });
 
   function confirmRestore(open: () => ReturnType<typeof openBundle> | null) {
@@ -99,23 +72,6 @@ export function BackupSettings() {
       </Section>
       <Hint>{t('backup.fileHint')}</Hint>
 
-      <Section title={t('backup.onDevice')}>
-        <Row
-          label={t('backup.frequency')}
-          value={t(`backup.freq_${frequency}`)}
-          onPress={() => setFrequencyOpen(true)}
-        />
-        <Row label={t('backup.snapshotNow')} onPress={snapshotNow} />
-        <Row
-          label={t('backup.restoreLatest')}
-          value={snapshots[0] ? new Date(snapshots[0].at).toLocaleString() : t('backup.none')}
-          onPress={snapshots[0] ? () => confirmRestore(latestSnapshot) : undefined}
-          last
-        />
-      </Section>
-      <Hint>{t('backup.deviceHint')}</Hint>
-
-
       {busy ? <ActivityIndicator style={{ marginTop: space.xl }} /> : null}
 
       {report ? (
@@ -140,26 +96,13 @@ export function BackupSettings() {
           ))}
         </View>
       ) : null}
-
-      <PickerSheet
-        visible={frequencyOpen}
-        title={t('backup.frequency')}
-        options={FREQUENCIES.map((option) => ({ id: option, label: t(`backup.freq_${option}`) }))}
-        selectedId={frequency}
-        onPick={async (option) => {
-          await setFrequency(option as Frequency);
-          setStoredFrequency(option as Frequency);
-          setFrequencyOpen(false);
-        }}
-        onClose={() => setFrequencyOpen(false)}
-      />
     </>
   );
 }
 
 /**
  * The one destination that outlives the app, so it sits first — and it is one
- * switch, not a menu: on means every launch ends up there, off means nothing
+ * switch, not a menu: on means every change ends up there, off means nothing
  * does. A state the user cannot fix gets a reason and no instruction; an
  * imperative they can't carry out is worse than silence, because they try it.
  */

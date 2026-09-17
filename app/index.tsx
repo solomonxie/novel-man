@@ -34,7 +34,6 @@ import { PickerSheet } from '../src/ui/PickerSheet';
 import { bookKinds } from '../src/books/kinds';
 import { formatCount } from '../src/text/counts';
 import { matchesBook, searchContent, type ContentHit } from '../src/search/library';
-import { snapshotIfDue } from '../src/backup/snapshots';
 import { backUpIfAuto, restoreOnLaunch } from '../src/backup/icloud';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { radius, space, usePalette } from '../src/theme';
@@ -74,8 +73,6 @@ export default function Home() {
 
   useFocusEffect(refresh);
 
-  // A snapshot is only due when the app is actually open, so launch is the
-  // only honest place to take one.
   useEffect(() => {
     void (async () => {
       // Pull back before pushing up. Backing an empty shelf over a good
@@ -84,7 +81,6 @@ export default function Home() {
       if (restored) refresh();
       await backUpIfAuto().catch(() => undefined);
     })();
-    snapshotIfDue().catch(() => undefined);
     syncOnLaunch().catch(() => undefined);
     resumeWorkOnLaunch().catch(() => undefined);
   }, [refresh]);
