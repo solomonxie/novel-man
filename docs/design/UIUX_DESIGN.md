@@ -250,6 +250,33 @@ with it, matched on the file's hash.
 ```
 
 
+### One shape for every detail page
+
+A book, a chapter, a scene, a character and a place all used to open with the
+same grey card of grey rows, so nothing on any of them said which part was the
+point, and the five pages were indistinguishable at a glance.
+
+```
+ HERO          what it is    eyebrow · big editable title · summary
+               what is true  fact pills: 2,359 long · 2 scenes · 2 in the cast
+               what you can  ( Read from here )( Analyze · $0.004 )
+                  do to it   loud first, then quiet — not list rows
+ BLOCK         Scenes   2                                  Jump to…
+               ┌───────────────────────────────────────┐
+               │ (1) 武器选择                       ›  │  badge = position
+               │     summary in dim                    │
+               └───────────────────────────────────────┘
+ CHIPS         people and places scroll sideways: a cast is a set of faces
+               to recognize, not a list to read down
+ EMPTY         a dashed well saying what is missing and offering the fix —
+               never a row reading "None", which is a dead end dressed as a link
+```
+
+Rules that fall out of it: a fact pill holds a short value (a chapter *number*,
+never a chapter title), a pill that would read `0 places` is not shown at all,
+and quoted material from the book sits in a sunken well with an accent rule so
+the book's own words are never confused with what was written about them.
+
 ## Layout sketches
 
 ### Home — one page
@@ -264,7 +291,7 @@ with it, matched on the file's hash.
 │ ┌───────┐ ┌───────┐ ┌───────┐             │   what it adds to
 │ │ cover │ │ cover │ │ cover │             │
 │ └───────┘ └───────┘ └───────┘             │   three across, two rows, most
-│ 《系统…》  Ash Lane   The Sec…             │   recently read first
+│ 《长夜…》  Ash Lane   The Sec…             │   recently read first
 │ 14%       138.1万字   2%                   │
 │ ┌───────┐ ┌───────┐ ┌───────┐             │
 │ │ cover │ │ cover │ │ cover │             │
@@ -347,7 +374,7 @@ placeholder. Never blank.
 │                                           │
 │ CHARACTERS                             ＋ │
 │ ┌───────────────────────────────────────┐ │
-│ │ 沈墨                        老沈   ›  │ │ ← each opens its own profile page
+│ │ 林小满                        小满   ›  │ │ ← each opens its own profile page
 │ └───────────────────────────────────────┘ │
 │ PLACES                                 ＋ │
 │                                           │
@@ -379,23 +406,29 @@ concerned.
 
 ```
 ┌───────────────────────────────────────────┐
-│ ‹ 《系统代理人》         沈墨              │
-│                 ╭───────╮                 │
-│                 │  沈墨  │                 │ ← initials fallback; CJK takes the
-│                 ╰───────╯                 │   first two characters, Latin the
-│                     ＋                    │   initials. Tap to set a portrait
-│                   沈墨                     │ ← name edits in place
-│ ┌───────────────────────────────────────┐ │
-│ │ Alias      老沈                        │ │
-│ │ Summary    系统绑定者，第一章出场…      │ │
-│ └───────────────────────────────────────┘ │
+│ ‹ 《长夜纪》                  林小满      │
+│ ┌─────────────────────────────────┐       │
+│ │ CHARACTER                       │       │ ← the eyebrow says what kind
+│ │ ╭────╮ 林小满                   │       │   of page this is
+│ │ │ 林小 │ 小满                   │       │ ← the face leads the line rather
+│ │ ╰────╯                          │       │   than floating centred above it
+│ │ [12] [ch.1] [ch.40]             │       │ ← facts as pills: how many
+│ │  chapters first  last           │       │   chapters, first seen, last
+│ │ ( Polish with AI )( Export )    │       │ ← what you can do, as buttons —
+│ └─────────────────────────────────┘       │   a list row would say "over here"
+│ 灯塔守夜人，第一章出场…                   │ ← summary edits in place
 │                                           │
-│ DETAILS                                ＋ │
-│ ┌───────────────────────────────────────┐ │
-│ │ 年龄    27                         ✕  │ │ ← user-defined label/value pairs
-│ │ 阵营    代理人协会                  ✕  │ │
-│ │ 能力    时间回溯                    ✕  │ │
-│ └───────────────────────────────────────┘ │
+│ Profile                                   │
+│ ┌─────────────────────────────────┐       │
+│ │ Role      守夜人                │       │
+│ │ Age       27                    │       │
+│ └─────────────────────────────────┘       │
+│                                           │
+│ Per chapter                      12       │
+│ ┌─────────────────────────────────┐       │
+│ │ (1) 第一章 灯灭                 │       │ ← the badge is the chapter number:
+│ │     青衫，声音很轻              │       │   an index means position
+│ └─────────────────────────────────┘       │
 └───────────────────────────────────────────┘
 ```
 
@@ -511,19 +544,18 @@ highlights and notes all work the same in all three.
 
 ```
 ┌───────────────────────────────────────────┐
-│ ‹  Glossary · English                 ⊕   │ ← per target language
 │ 🔍 Search                                 │
 │ ( All )( Characters )( Places )( Terms )  │
 │                                           │
 │ CHARACTERS                                │
-│ ┌───────────────────────────────────────┐ │
-│ │ 沈墨          Shen Mo            🔒   │ │ ← 🔒 = locked: a hard constraint
-│ │ 老陈          Old Chen                │ │   in the prompt, not a hint
-│ ├───────────────────────────────────────┤ │
-│ │ 系统代理人    System Agent       🔒   │ │
-│ └───────────────────────────────────────┘ │
+│ ┌─────────────────────────────────┐       │
+│ │ 林小满        Lin Xiaoman   🔒  │       │ ← 🔒 = locked: a hard constraint
+│ │ 老陈          Old Chen          │       │   in the prompt, not a hint
+│ ├─────────────────────────────────┤       │
+│ │ 长夜纪        The Long Night🔒  │       │
+│ └─────────────────────────────────┘       │
 │                                           │
-│ SUGGESTED                          41  ›  │ ← proper nouns seen 3+ times that
+│ SUGGESTED                     41  ›       │ ← proper nouns seen 3+ times that
 │ Seen often, not in your glossary yet.     │   nobody has decided on
 └───────────────────────────────────────────┘
 ```

@@ -38,6 +38,8 @@ import {
   type Relation,
 } from '../../src/db/repo';
 import { Cover, PrimaryAction, Row, Section } from '../../src/ui/primitives';
+import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item } from '../../src/ui/detail';
+import { hueFrom } from '../../src/ui/fields';
 import { ExportSheet } from '../../src/ui/ExportSheet';
 import { byFrequency } from '../../src/cast/mentions';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
@@ -168,100 +170,103 @@ export default function BookPage() {
     >
       <Stack.Screen options={{ title: book.title, headerBackTitle: ' ' }} />
 
-      <View style={{ flexDirection: 'row', gap: space.lg }}>
-        <Pressable onPress={pickCover}>
-          <Cover title={book.title} hue={book.cover_hue} width={104} path={book.cover_path} />
-          <View style={[styles.coverBadge, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-            <Text style={{ fontSize: 11 }}>✎</Text>
-          </View>
-        </Pressable>
-        <View style={{ flex: 1, justifyContent: 'center' }}>
-          <InlineText
-            value={book.title}
-            placeholder={t('book.title')}
-            onCommit={(value) => edit('title', value)}
-            style={{ color: palette.text, fontSize: 21, fontWeight: '700' }}
-            multiline
-          />
-          <InlineText
-            value={book.author}
-            placeholder={t('book.author')}
-            onCommit={(value) => edit('author', value)}
-            style={{ color: palette.dim, fontSize: 15, marginTop: 2 }}
-          />
-          <View style={{ flexDirection: 'row', gap: space.lg, marginTop: 2 }}>
-            <InlineText
-              value={book.year}
-              placeholder={t('book.year')}
-              onCommit={(value) => edit('year', value)}
-              style={{ color: palette.dim, fontSize: 14 }}
-            />
-            <InlineText
-              value={book.edition}
-              placeholder={t('book.edition')}
-              onCommit={(value) => edit('edition', value)}
-              style={{ color: palette.dim, fontSize: 14 }}
-            />
-          </View>
-          <Text style={{ color: palette.dim, fontSize: 13, marginTop: space.sm }}>
-            {formatCount(book.word_count, book.language)} · {chapters.length} · {formatDuration(minutes)}
-          </Text>
-          <Text style={{ color: palette.faint, fontSize: 12, marginTop: 2 }}>
-            {t('book.importedFrom', { name: book.source_name })}
-          </Text>
-          <Pressable onPress={openAnalyze} hitSlop={8} style={{ paddingVertical: space.xs }}>
-            <Text style={{ color: palette.accent, fontSize: 13 }}>{t('book.analyze')}</Text>
+      <Hero
+        avatar={
+          <Pressable onPress={pickCover}>
+            <Cover title={book.title} hue={book.cover_hue} width={92} path={book.cover_path} />
+            <View style={[styles.coverBadge, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+              <Text style={{ fontSize: 11 }}>✎</Text>
+            </View>
           </Pressable>
-        </View>
-      </View>
-
-      <View style={{ marginTop: space.md }}>
+        }
+        facts={
+          <>
+            <Fact value={formatCount(book.word_count, book.language)} label={t('units.unit_long')} />
+            <Fact value={chapters.length} label={t('units.unit_chapters')} />
+            <Fact value={formatDuration(minutes)} label={t('units.unit_toRead')} />
+          </>
+        }
+        actions={
+          <>
+            <Action
+              label={current ? t('book.continue', { chapter: label(current, t) }) : t('book.start')}
+              tone="loud"
+              onPress={() => router.push(`/reader/${book.id}`)}
+            />
+            <Action label={t('book.analyze')} onPress={openAnalyze} />
+          </>
+        }
+      >
         <InlineText
-          value={book.summary}
-          placeholder={t('book.summaryPlaceholder')}
-          onCommit={(value) => edit('summary', value)}
-          style={{ color: palette.dim, fontSize: 14, lineHeight: 20 }}
+          value={book.title}
+          placeholder={t('book.title')}
+          onCommit={(value) => edit('title', value)}
+          style={{ color: palette.text, fontSize: 22, fontWeight: '700' }}
           multiline
         />
-      </View>
+        <InlineText
+          value={book.author}
+          placeholder={t('book.author')}
+          onCommit={(value) => edit('author', value)}
+          style={{ color: palette.dim, fontSize: 15, marginTop: 2 }}
+        />
+        <View style={{ flexDirection: 'row', gap: space.lg, marginTop: 2 }}>
+          <InlineText
+            value={book.year}
+            placeholder={t('book.year')}
+            onCommit={(value) => edit('year', value)}
+            style={{ color: palette.dim, fontSize: 14 }}
+          />
+          <InlineText
+            value={book.edition}
+            placeholder={t('book.edition')}
+            onCommit={(value) => edit('edition', value)}
+            style={{ color: palette.dim, fontSize: 14 }}
+          />
+        </View>
+        <Text style={{ color: palette.faint, fontSize: 12, marginTop: space.xs }}>
+          {t('book.importedFrom', { name: book.source_name })}
+        </Text>
+      </Hero>
 
-      <PrimaryAction
-        label={current ? t('book.continue', { chapter: label(current, t) }) : t('book.start')}
-        onPress={() => router.push(`/reader/${book.id}`)}
-        style={{ marginTop: space.lg }}
+      <InlineText
+        value={book.summary}
+        placeholder={t('book.summaryPlaceholder')}
+        onCommit={(value) => edit('summary', value)}
+        style={{ color: palette.dim, fontSize: 15, lineHeight: 22, marginTop: space.lg, paddingHorizontal: space.xs }}
+        multiline
       />
 
-      <Section
-        title={t('book.chapters')}
+      <Block
+        title={t('book.inside')}
         action={
           chapters.length ? { label: t('book.jumpShort'), onPress: () => setJumpOpen(true) } : undefined
         }
       >
         {chapters.length === 0 ? (
-          <Row label={t('book.noChapters')} last />
+          <Empty text={t('book.noChapters')} />
         ) : (
           <>
-            <Row
-              label={t('book.chapters')}
-              value={`${chapters.length}  ›`}
+            <Item
+              title={t('book.chapters')}
+              meta={`${chapters.length}`}
               onPress={() => router.push(`/book/${book.id}/structure`)}
             />
             {supports(book.kind, 'scenes') && (
-              <Row
-                label={t('book.scenesRow')}
-                value={`${scenes.length}  ›`}
+              <Item
+                title={t('book.scenesRow')}
+                meta={`${scenes.length}`}
                 onPress={() => router.push(`/book/${book.id}/scenes`)}
               />
             )}
           </>
         )}
-        <Row
-          label={t('book.notesRow')}
-          value={`${noteCount}  ›`}
+        <Item
+          title={t('book.notesRow')}
+          meta={`${noteCount}`}
           onPress={() => router.push(`/book/${book.id}/notes`)}
-          last
         />
-      </Section>
+      </Block>
 
       {supports(book.kind, 'cast') && (
         <>
@@ -283,7 +288,8 @@ export default function BookPage() {
         </>
       )}
 
-      <Section title={t('book.utilities')}>
+      <Block title={t('book.utilities')}>
+        <Section>
         <Row
           label={t('book.translations')}
           value="›"
@@ -309,7 +315,8 @@ export default function BookPage() {
           onPress={() => setKindOpen(true)}
           last
         />
-      </Section>
+        </Section>
+      </Block>
 
       <Section>
         <Row
@@ -393,26 +400,37 @@ function EntitySection({ title, entities, onAdd, extra }: {
   extra?: { label: string; value: string; onPress: () => void };
 }) {
   const { t } = useTranslation();
-  const shown = entities.slice(0, 6);
+  // Sideways, because a cast is a set of faces to recognize rather than a list
+  // to read down — and because six names down the page pushed everything else
+  // below the fold.
+  const shown = entities.slice(0, 10);
   return (
-    <Section title={title} action={{ label: '＋', onPress: onAdd }}>
+    <Block
+      title={title}
+      count={entities.length || undefined}
+      action={{ label: '＋', onPress: onAdd }}
+    >
       {entities.length === 0 ? (
-        <Row label={t('book.none')} last={!extra} />
+        <Empty text={t('book.none')} action={{ label: t('book.addOne'), onPress: onAdd }} />
       ) : (
-        shown.map((entity, index) => (
-          <Row
-            key={entity.id}
-            label={entity.name}
-            value={entity.alias ?? '›'}
-            onPress={() =>
-              router.push(entity.kind === 'place' ? `/place/${entity.id}` : `/entity/${entity.id}`)
-            }
-            last={!extra && index === shown.length - 1}
-          />
-        ))
+        <ChipRow>
+          {shown.map((entity) => (
+            <Chip
+              key={entity.id}
+              label={entity.name}
+              detail={entity.alias ?? undefined}
+              hue={hueFrom(entity.name)}
+              onPress={() =>
+                router.push(entity.kind === 'place' ? `/place/${entity.id}` : `/entity/${entity.id}`)
+              }
+            />
+          ))}
+        </ChipRow>
       )}
-      {extra ? <Row label={extra.label} value={extra.value} onPress={extra.onPress} last /> : null}
-    </Section>
+      {extra ? (
+        <Item title={extra.label} meta={`${entities.length}`} onPress={extra.onPress} />
+      ) : null}
+    </Block>
   );
 }
 
