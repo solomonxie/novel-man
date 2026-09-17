@@ -366,6 +366,10 @@ export default function Reader() {
     return (
       <Text
         key={span.start}
+        // iOS paints its own grey box under a pressed Text. On a page made of
+        // sentences that reads as a highlight the reader didn't ask for, and
+        // in select mode as a second, competing selection colour.
+        suppressHighlighting
         onLongPress={(event) => beginSelect(span, event)}
         onPress={(event) =>
           selection ? extendSelect(span, event) : setChrome(!chromeShown.current)

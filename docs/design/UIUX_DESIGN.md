@@ -41,6 +41,7 @@ reachable only through a tab.
 | Cloud connection | form inside the Cloud section | Variable fields, paste mode, save-time verification (`cloud-bucket-sync`). Inline rather than in a sheet so a failed save keeps the draft on screen next to the bucket list that explains it. |
 | Cloud library | page, pushed from Settings | Lists the bundles in the bucket so one book can be pulled back. |
 | Sync queue | part of the Cloud section | Global across connections, surfaced once (`cloud-bucket-sync`). Not a sheet: it is only ever read from where the work is started. |
+| Task queue | sheet, from Settings or the strip | One line per task, named for what it does to this book — `Summarize 第3章`, not `Briefing each chapter`. A grouped view answered how far along a run was and hid what it was doing. |
 | Screenplay | page, pushed from Book | A formatted script needs the full width, and its exports are its own. |
 | Paid run | dialog | Every AI pass wears the same one: what it does, what it is estimated to cost, Run, and a Stop that cancels the requests. |
 
@@ -227,7 +228,7 @@ re-import the same file and its notes, profiles and chapter fixes come back
 with it, matched on the file's hash.
 
 ```
- SURVIVES A REINSTALL
+ CLOUD BACKUP
  ┌─────────────────────────────────────────────────┐
  │ iCloud Drive                            ●──     │ ← the row IS the switch:
  │ Files → iCloud Drive → Novel Man · 4m ago       │   no ⋯ menu, no Sync Now,
@@ -274,6 +275,9 @@ with it, matched on the file's hash.
 │ │ Language                    English   │ │   page exists at all
 │ │ Appearance                   System   │ │ ← picking a value opens a sheet
 │ └───────────────────────────────────────┘ │   over the page, never a push
+│                                           │
+│ Task queue          3 running         ›   │ ← always in the same place; the
+│                                           │   strip only exists mid-run
 │                                           │
 │ AI KEYS                      Sequential   │ ← the fallback strategy is the
 │ ┌───────────────────────────────────────┐ │   section's own action
@@ -584,12 +588,15 @@ never gets retyped.
 ### Settings — backup & cloud
 
 ```
-SURVIVES A REINSTALL                               ← first: the only
-┌─────────────────────────────────────────────────┐  destination with zero
-│ iCloud Drive                            ●──     │  setup, and the only one
-└─────────────────────────────────────────────────┘  that outlives the app
-Your notes, characters, structure, progress and
-settings — not the books themselves.
+CLOUD BACKUP                                  ＋   ← one section, two answers
+┌─────────────────────────────────────────────────┐  to the same question.
+│ iCloud Drive                            ●──     │  iCloud first: zero setup,
+│ Files → iCloud Drive → Novel Man · 4m ago       │  and the only destination
+├─────────────────────────────────────────────────┤  that outlives the app
+│ my-manuscripts          bucket/prefix       ›   │
+└─────────────────────────────────────────────────┘
+iCloud keeps what you made, not the books. A bucket
+you own keeps everything, and only when you ask.
 
 A FILE YOU KEEP                                    ← the manual escape hatch;
 ┌─────────────────────────────────────────────────┐  the automatic one is the

@@ -1,27 +1,32 @@
 import {
   activeUnits,
-  cancelRun,
+  cancelAllJobs,
+  cancelJob,
   claimNext,
-  clearSettledRuns,
+  clearSettledUnits,
+  countUnits,
   enqueueRun,
   finishJob,
-  listRuns,
+  listUnits,
   requeueInterrupted,
-  retryRun,
+  retryJob,
   type NewUnit,
-  type RunSummary,
+  type WorkCounts,
   type WorkKind,
+  type WorkUnit,
 } from '../db/work';
 import { handlers } from './handlers';
 
-type Listener = (runs: RunSummary[]) => void;
+export type WorkFeed = { units: WorkUnit[]; counts: WorkCounts };
+
+type Listener = (feed: WorkFeed) => void;
 
 const listeners = new Set<Listener>();
 let draining = false;
 let paused = false;
 let controller: AbortController | null = null;
-/** Runs the user canceled while a unit of theirs was already in flight. */
-const canceled = new Set<string>();
+/** The task in flight, so canceling any other one doesn't abort it. */
+let runningId: string | null = null;
 
 export function subscribeToWork(listener: Listener): () => void {
   listeners.add(listener);
@@ -31,8 +36,8 @@ export function subscribeToWork(listener: Listener): () => void {
 
 async function publish() {
   if (!listeners.size) return;
-  const runs = await listRuns();
-  for (const listener of listeners) listener(runs);
+  const feed = { units: await listUnits(), counts: await countUnits() };
+  for (const listener of listeners) listener(feed);
 }
 
 export async function queueWork(input: {
@@ -58,23 +63,27 @@ export async function setWorkPaused(next: boolean) {
   await publish();
 }
 
-export async function cancelWorkRun(runId: string) {
-  canceled.add(runId);
-  await cancelRun(runId);
-  // The in-flight unit belongs to some run; only abort if it's this one.
+export async function cancelWorkUnit(id: string) {
+  await cancelJob(id);
+  // Only the task actually in flight has anything to abort.
+  if (runningId === id) controller?.abort();
+  await publish();
+}
+
+export async function cancelAllWork() {
+  await cancelAllJobs();
   controller?.abort();
   await publish();
 }
 
-export async function retryWorkRun(runId: string) {
-  canceled.delete(runId);
-  await retryRun(runId);
+export async function retryWorkUnit(id: string) {
+  await retryJob(id);
   await publish();
   void drain();
 }
 
 export async function clearFinishedWork() {
-  await clearSettledRuns();
+  await clearSettledUnits();
   await publish();
 }
 
@@ -90,21 +99,18 @@ export async function drain(): Promise<void> {
     while (!paused) {
       const job = await claimNext();
       if (!job) return;
-      if (canceled.has(job.run_id)) {
-        await finishJob(job.id, 'canceled');
-        continue;
-      }
 
       await publish();
       controller = new AbortController();
+      runningId = job.id;
       try {
         await handlers[job.kind](job, controller.signal);
         await finishJob(job.id, 'done');
       } catch (error) {
-        const stopped = canceled.has(job.run_id) || controller.signal.aborted;
-        await finishJob(job.id, stopped ? 'canceled' : 'failed', String(error));
+        await finishJob(job.id, controller.signal.aborted ? 'canceled' : 'failed', String(error));
       } finally {
         controller = null;
+        runningId = null;
       }
       await publish();
     }

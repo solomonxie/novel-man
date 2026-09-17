@@ -1,18 +1,15 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Alert, Text, View } from 'react-native';
 import { File } from 'expo-file-system';
-import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { buildBundle, openBundle } from '../backup/bundle';
 import { restoreBundle, type RestoreReport } from '../backup/restore';
 import { BundleError, isBundleName } from '../backup/format';
-import { isAuto, lastBackupAt, setAuto, useDriveStatus } from '../backup/icloud';
-import { waitingCount } from '../backup/pending';
 import { deliver } from '../export/deliver';
 import { pickBackupBundle } from '../import/sources/picker';
-import { Hint, Row, Section, Toggle } from '../ui/primitives';
+import { Hint, Row, Section } from '../ui/primitives';
 import { space, usePalette } from '../theme';
 
 export function BackupSettings() {
@@ -64,8 +61,6 @@ export function BackupSettings() {
 
   return (
     <>
-      <IcloudSection />
-
       <Section title={t('backup.file')}>
         <Row label={t('backup.exportLibrary')} onPress={exportLibrary} />
         <Row label={t('backup.restoreFromFile')} onPress={restoreFromFile} last />
@@ -96,78 +91,6 @@ export function BackupSettings() {
           ))}
         </View>
       ) : null}
-    </>
-  );
-}
-
-/**
- * The one destination that outlives the app, so it sits first — and it is one
- * switch, not a menu: on means every change ends up there, off means nothing
- * does. A state the user cannot fix gets a reason and no instruction; an
- * imperative they can't carry out is worse than silence, because they try it.
- */
-function IcloudSection() {
-  const { t } = useTranslation();
-  const status = useDriveStatus();
-  const [auto, setAutoState] = useState(false);
-  const [at, setAt] = useState<number | null>(null);
-  const [waiting, setWaiting] = useState(0);
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(() => {
-    isAuto().then(setAutoState);
-    lastBackupAt().then(setAt);
-    waitingCount().then(setWaiting);
-  }, []);
-
-  useFocusEffect(load);
-
-  // Hidden rather than disabled: on Android, or in Expo Go where the native
-  // module isn't built in, this row could never work at all.
-  if (!status || status === 'unsupported') return null;
-
-  const blocked = status !== 'available';
-  const where = t('backup.icloudWhere');
-  const detail =
-    status === 'driveOff'
-      ? t('backup.icloudOff')
-      : status === 'notEntitled'
-        ? t('backup.icloudUnsigned')
-        : status === 'notReady'
-          ? t('backup.icloudNotReady')
-          : at
-            ? `${where} · ${new Date(at).toLocaleString()}`
-            : where;
-
-  async function toggle(next: boolean) {
-    setAutoState(next);
-    setBusy(true);
-    try {
-      await setAuto(next);
-    } finally {
-      setBusy(false);
-      load();
-    }
-  }
-
-  return (
-    <>
-      <Section title={t('backup.survives')}>
-        <Toggle
-          label={t('backup.icloud')}
-          detail={detail}
-          directions={status === 'driveOff' ? t('backup.icloudDirections') : undefined}
-          value={auto}
-          onChange={toggle}
-          disabled={blocked || busy}
-          last={waiting === 0}
-        />
-        {waiting > 0 ? (
-          <Row label={t('backup.waiting', { count: waiting })} detail={t('backup.waitingDetail')} last />
-        ) : null}
-      </Section>
-      {/* A blocked row has already said what is wrong; saying it twice reads as two faults. */}
-      {blocked ? null : <Hint>{t('backup.icloudHint')}</Hint>}
     </>
   );
 }
