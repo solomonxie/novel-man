@@ -135,6 +135,7 @@ comes after it, and why it needs no new payload format.
 - [x] T8.7 iCloud Drive native module: ubiquity container, five-state availability (entitlement read from the embedded profile *before* the account token), document-scope-public folder, copy in/out with placeholder download — `modules/icloud/` — depends: T1.4
 - [x] T8.8 iCloud auto-sync switch: one row, flip-on syncs at once, blocked states replace the location line and only `driveOff` gets directions, re-checked on foreground — `src/settings/Backup.tsx` — depends: T8.7
 - [x] T8.9 Change-driven sync: one change signal raised by the single SQLite write path and by the preference stores, debounced, flushed on backgrounding, guarded against its own upload record, awaited by nothing — `src/backup/changes.ts`, `src/backup/icloud.ts` — depends: T8.8
+- [x] T8.11 Flat task queue: one row per unit named for the work itself, per-task stop and retry, stop-everything at the foot, opened from Settings as well as the strip — `src/ui/WorkQueue.tsx`, `src/db/work.ts` — depends: T7.5
 - [x] T8.10 Content-free bundle (`includeText: false` + app preferences) and automatic first-install restore before the shelf loads, with text-less books held and re-attached on re-import by source hash — `src/backup/` — depends: T8.7, T6.8
 
 ## Phase 9: Cast and relations

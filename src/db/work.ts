@@ -34,19 +34,10 @@ export type WorkJob = {
   updated_at: number;
 };
 
-export type RunSummary = {
-  run_id: string;
-  book_id: string;
-  kind: WorkKind;
-  engine: Engine;
-  title: string;
-  total: number;
-  done: number;
-  failed: number;
-  running: number;
-  pending: number;
-  updated_at: number;
-};
+/** A job plus the book it belongs to, which is what a row has to say. */
+export type WorkUnit = WorkJob & { title: string | null };
+
+export type WorkCounts = { pending: number; running: number; failed: number; done: number };
 
 export type NewUnit = {
   label: string;
@@ -129,26 +120,41 @@ export async function finishJob(id: string, status: WorkStatus, error?: string) 
   );
 }
 
-/** The queue is read as runs; a 500-row list of chapters is not progress. */
-export async function listRuns(bookId?: string): Promise<RunSummary[]> {
+/**
+ * One row per task, in the order they will actually run — what is working
+ * first, then what is waiting behind it, then what went wrong. A grouped view
+ * answered "how far along is the analysis" and nothing else; the question
+ * underneath it, "what is it doing to my book right now", needs the tasks
+ * themselves.
+ */
+export async function listUnits(limit = 200): Promise<WorkUnit[]> {
   const database = await db();
-  const where = bookId ? 'WHERE w.book_id = ?' : '';
-  const rows = await database.getAllAsync<RunSummary>(
-    `SELECT w.run_id, w.book_id, w.kind, w.engine, b.title,
-            COUNT(*) AS total,
-            SUM(w.status = 'done') AS done,
-            SUM(w.status = 'failed') AS failed,
-            SUM(w.status = 'running') AS running,
-            SUM(w.status = 'pending') AS pending,
-            MAX(w.updated_at) AS updated_at
+  return database.getAllAsync<WorkUnit>(
+    `SELECT w.*, b.title
      FROM work_jobs w LEFT JOIN books b ON b.id = w.book_id
-     ${where}
-     GROUP BY w.run_id
-     ORDER BY MAX(w.updated_at) DESC
-     LIMIT 40`,
-    bookId ? [bookId] : []
+     ORDER BY CASE w.status
+                WHEN 'running' THEN 0 WHEN 'pending' THEN 1 WHEN 'failed' THEN 2 ELSE 3
+              END,
+              w.created_at, w.chapter_idx, w.rowid
+     LIMIT ?`,
+    limit
   );
-  return rows;
+}
+
+/** Counted in SQL rather than from the capped list, which would undercount. */
+export async function countUnits(): Promise<WorkCounts> {
+  const database = await db();
+  const row = await database.getFirstAsync<Partial<WorkCounts>>(
+    `SELECT SUM(status = 'pending') AS pending, SUM(status = 'running') AS running,
+            SUM(status = 'failed') AS failed, SUM(status = 'done') AS done
+     FROM work_jobs`
+  );
+  return {
+    pending: row?.pending ?? 0,
+    running: row?.running ?? 0,
+    failed: row?.failed ?? 0,
+    done: row?.done ?? 0,
+  };
 }
 
 export async function activeUnits(): Promise<number> {
@@ -159,45 +165,40 @@ export async function activeUnits(): Promise<number> {
   return row?.n ?? 0;
 }
 
-export async function failedJobs(runId: string): Promise<WorkJob[]> {
-  const database = await db();
-  return database.getAllAsync<WorkJob>(
-    `SELECT * FROM work_jobs WHERE run_id = ? AND status = 'failed' ORDER BY chapter_idx`,
-    runId
-  );
-}
-
-export async function retryRun(runId: string) {
+export async function retryJob(id: string) {
   const database = await db();
   await database.runAsync(
     `UPDATE work_jobs SET status = 'pending', error = NULL, updated_at = ?
-     WHERE run_id = ? AND status IN ('failed', 'canceled')`,
+     WHERE id = ? AND status IN ('failed', 'canceled')`,
     Date.now(),
-    runId
+    id
   );
 }
 
 /** Canceling stops what hasn't started. What finished stays finished. */
-export async function cancelRun(runId: string) {
+export async function cancelJob(id: string) {
   const database = await db();
   await database.runAsync(
     `UPDATE work_jobs SET status = 'canceled', updated_at = ?
-     WHERE run_id = ? AND status IN ('pending', 'running')`,
+     WHERE id = ? AND status IN ('pending', 'running')`,
     Date.now(),
-    runId
+    id
   );
 }
 
-export async function clearRun(runId: string) {
-  const database = await db();
-  await database.runAsync('DELETE FROM work_jobs WHERE run_id = ?', runId);
-}
-
-export async function clearSettledRuns() {
+export async function cancelAllJobs() {
   const database = await db();
   await database.runAsync(
-    `DELETE FROM work_jobs WHERE run_id NOT IN (
-       SELECT run_id FROM work_jobs WHERE status IN ('pending', 'running'))`
+    `UPDATE work_jobs SET status = 'canceled', updated_at = ?
+     WHERE status IN ('pending', 'running')`,
+    Date.now()
+  );
+}
+
+export async function clearSettledUnits() {
+  const database = await db();
+  await database.runAsync(
+    `DELETE FROM work_jobs WHERE status IN ('done', 'failed', 'canceled')`
   );
 }
 
