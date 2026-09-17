@@ -8,6 +8,7 @@ import { contentHash } from '../ai/cache';
 import { lastUploadedAt, lastUploadHash, recordUpload } from '../db/jobs';
 import { listBookIds } from '../db/repo';
 import { buildBundle, fingerprint, openBundle } from './bundle';
+import { subscribeToChanges } from './changes';
 import { restoreBundle, type RestoreReport } from './restore';
 
 const AUTO = 'icloud.auto';
@@ -15,6 +16,8 @@ const RESTORED = 'icloud.restoredAt';
 /** Reuses the upload ledger the bucket sync already keeps; there is no bucket. */
 const LEDGER = { connection: 'icloud', key: 'library' };
 const STAGED = 'icloud-upload.nmbak';
+
+let running = false;
 
 export type { DriveStatus };
 
@@ -83,24 +86,31 @@ function keyFor(at = new Date()): string {
  * lose; the books themselves came from files they still have.
  */
 export async function backUp(): Promise<boolean> {
+  // Recording the upload is itself a write, so without this the backup would
+  // schedule the next one forever. It also keeps two from overlapping.
+  if (running) return false;
   if (!drive || (await refreshDriveStatus()) !== 'available') return false;
-
-  const bundle = await buildBundle(undefined, { includeText: false });
-  const body = bundle.body as Uint8Array;
-  const hash = contentHash('icloud', fingerprint(body));
-  if ((await lastUploadHash(LEDGER.connection, LEDGER.key)) === hash) return false;
-
-  const staged = new File(Paths.cache, STAGED);
-  if (staged.exists) staged.delete();
-  staged.create();
-  staged.write(body);
+  running = true;
   try {
-    await drive.copyIn(nativePath(staged), keyFor());
+    const bundle = await buildBundle(undefined, { includeText: false });
+    const body = bundle.body as Uint8Array;
+    const hash = contentHash('icloud', fingerprint(body));
+    if ((await lastUploadHash(LEDGER.connection, LEDGER.key)) === hash) return false;
+
+    const staged = new File(Paths.cache, STAGED);
+    if (staged.exists) staged.delete();
+    staged.create();
+    staged.write(body);
+    try {
+      await drive.copyIn(nativePath(staged), keyFor());
+    } finally {
+      staged.delete();
+    }
+    await recordUpload(LEDGER.connection, LEDGER.key, hash);
+    return true;
   } finally {
-    staged.delete();
+    running = false;
   }
-  await recordUpload(LEDGER.connection, LEDGER.key, hash);
-  return true;
 }
 
 export async function backUpIfAuto(): Promise<void> {
@@ -109,15 +119,41 @@ export async function backUpIfAuto(): Promise<void> {
 }
 
 /**
- * Leaving the app is the other honest moment: a launch-only backup would
- * always be one session behind, and a real background task would need a
- * permission this feature hasn't earned.
+ * A change is a write, and the wait is what makes that affordable: importing a
+ * novel is thousands of writes, and typing a note is one every keystroke, so
+ * the backup runs once the writing has stopped rather than once per row.
  */
-export function backUpWhenLeaving(): () => void {
+const QUIET = 8000;
+let pending: ReturnType<typeof setTimeout> | null = null;
+
+function schedule() {
+  if (running) return;
+  if (pending) clearTimeout(pending);
+  // Nothing is awaited anywhere in here: a backup never makes anyone wait,
+  // and a failed one is answered by the next change, not by an alert.
+  pending = setTimeout(() => {
+    pending = null;
+    backUpIfAuto().catch(() => undefined);
+  }, QUIET);
+}
+
+/**
+ * Backs up whenever the data changes, and again on the way out — leaving the
+ * app is the one moment a pending wait would otherwise be lost, and a real
+ * background task would need a permission this feature hasn't earned.
+ */
+export function watchForChanges(): () => void {
+  const unsubscribe = subscribeToChanges(schedule);
   const subscription = AppState.addEventListener('change', (next) => {
-    if (next === 'background') void backUpIfAuto();
+    if (next !== 'background') return;
+    if (pending) clearTimeout(pending);
+    pending = null;
+    backUpIfAuto().catch(() => undefined);
   });
-  return () => subscription.remove();
+  return () => {
+    unsubscribe();
+    subscription.remove();
+  };
 }
 
 /**

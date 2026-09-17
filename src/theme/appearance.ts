@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { noticeChange } from '../backup/changes';
 
 export type Appearance = 'system' | 'light' | 'dark';
 export const appearances: Appearance[] = ['system', 'light', 'dark'];
@@ -37,6 +38,7 @@ export async function setAppearance(next: Appearance) {
   notify();
   try {
     await AsyncStorage.setItem(KEY, next);
+    noticeChange();
   } catch {
     // A lost preference is not worth interrupting anything for.
   }

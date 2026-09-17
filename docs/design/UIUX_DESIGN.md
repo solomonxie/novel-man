@@ -201,10 +201,10 @@ so hand-made chapter fixes are in every output.
 
 ```
   ICLOUD                           LOCAL
-  one switch ─▶ launch + leaving   Export bundle ─▶ Files/Share
+  one switch ─▶ on every change    Export bundle ─▶ Files/Share
   fresh install ─▶ restore, no     Import bundle ─▶ file picker
-     prompt, before the shelf      Restore Latest ─▶ auto-snapshot
-     loads                            (never needs a picker)
+     prompt, before the shelf
+     loads
 
                                    CLOUD (same bundle, different destination)
                                    Back Up Now ─▶ queue ─▶ bucket/<prefix>/
@@ -230,7 +230,8 @@ with it, matched on the file's hash.
  SURVIVES A REINSTALL
  ┌─────────────────────────────────────────────────┐
  │ iCloud Drive                            ●──     │ ← the row IS the switch:
- │ Files → iCloud Drive → Novel Man · 4m ago       │   no ⋯ menu, no Sync Now
+ │ Files → iCloud Drive → Novel Man · 4m ago       │   no ⋯ menu, no Sync Now,
+                                                  │   no frequency to pick
  ├─────────────────────────────────────────────────┤
  │ 3 books are waiting for their file              │ ← only after a restore
  │ Import the same file again and its notes…       │   that had books in it
@@ -590,13 +591,10 @@ SURVIVES A REINSTALL                               ← first: the only
 Your notes, characters, structure, progress and
 settings — not the books themselves.
 
-BACKUP
-Survives a bad import or a corrupt database —      ← states the REAL protection
-not a lost phone. Copy the file off to keep it safe.  scope, not a reassurance
-┌─────────────────────────────────────────────────┐
-│ Export bundle…                              ›   │
-│ Import bundle…                              ›   │
-│ Restore Latest        auto-snapshot, 4h ago ›   │ ← never needs a file picker
+A FILE YOU KEEP                                    ← the manual escape hatch;
+┌─────────────────────────────────────────────────┐  the automatic one is the
+│ Export the whole library                    ›   │  switch above it
+│ Restore from a file…                        ›   │
 └─────────────────────────────────────────────────┘
 
 CLOUD                                              ← "Private Cloud": storage

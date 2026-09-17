@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { noticeChange } from '../backup/changes';
 import { migrations } from './migrations';
 
 let handle: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -18,6 +19,23 @@ async function open() {
     version += 1;
     await database.execAsync(`PRAGMA user_version = ${version}`);
   }
+  return announceWrites(database);
+}
+
+/**
+ * Everything the app stores goes through this one connection, so raising the
+ * change signal here is what keeps it from being forgotten at the next new
+ * call site. Patched after the migrations, which nobody backs up.
+ */
+function announceWrites(database: SQLite.SQLiteDatabase): SQLite.SQLiteDatabase {
+  // Cast past the overloads: every one of them is a write, which is all this
+  // wrapper cares about.
+  const runAsync = database.runAsync.bind(database) as (...args: never[]) => Promise<unknown>;
+  database.runAsync = ((...args: never[]) => {
+    const result = runAsync(...args);
+    noticeChange();
+    return result;
+  }) as typeof database.runAsync;
   return database;
 }
 

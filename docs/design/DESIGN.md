@@ -333,14 +333,24 @@ assets/
 - **Never credentials.** API keys and bucket secrets live in the keychain only
   and are absent from every bundle, local or cloud — and the UI says so where
   the user taps Export.
-- **"Restore Latest" must not depend on a file picker**, so a local auto-snapshot
-  is written on a schedule and is directly restorable. Its hint states the real
-  protection scope: survives a bad import or a corrupt DB, *not* a lost phone.
+- **No on-device snapshot destination.** One was built and then removed: it
+  lives in the sandbox it is protecting, so uninstalling takes it and the data
+  together, and offering it beside real destinations reads as protection it
+  can't give. Restore is automatic from the drive, or a file the user picked —
+  nothing in between.
 - **iCloud Drive is the default off-device destination**, because it is the
   only one with no account to make, no key to paste and no bucket to
-  provision. One switch: on means every launch and every backgrounding writes
-  there, off means nothing does. Flipping it on syncs at once, which answers
-  "did that work" without a Sync Now button beside it.
+  provision. One switch: on means every change is written there, off means
+  nothing is. Flipping it on syncs at once, which answers "did that work"
+  without a Sync Now button beside it.
+- **The trigger is the database write itself**, debounced a few seconds, so no
+  future query has to remember to mark anything dirty; the two preference
+  stores, which are not in the database, raise the same signal by hand.
+  Importing a novel is thousands of writes and typing a note is one per
+  keystroke, hence the wait; backgrounding flushes it. Nothing awaits the
+  backup, and a failed one is answered by the next change rather than by an
+  alert. Leaving the manuscripts out is what makes this affordable — the
+  bundle never reads a document row.
 - **iCloud carries no manuscripts.** The books came from files the user still
   has and are ~100× the rest of the payload; what a reinstall would actually
   destroy is the work *around* them. So the bundle is built with the text
