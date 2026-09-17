@@ -28,8 +28,9 @@ import { BackupSettings } from '../src/settings/Backup';
 import { CloudSettings } from '../src/settings/Cloud';
 import { setUiLanguage, SUPPORTED, type UiLanguage } from '../src/i18n';
 import { QueueSheet, QueueStrip } from '../src/ui/ImportQueue';
-import { resumeWorkOnLaunch, subscribeToWork } from '../src/work/queue';
-import type { RunSummary } from '../src/db/work';
+import { openWorkQueue, useWorkFeed } from '../src/ui/WorkQueue';
+import { resumeWorkOnLaunch } from '../src/work/queue';
+import { useWorkRefresh } from '../src/work/refresh';
 import { PickerSheet } from '../src/ui/PickerSheet';
 import { bookKinds } from '../src/books/kinds';
 import { formatCount } from '../src/text/counts';
@@ -65,7 +66,7 @@ export default function Home() {
   /** A picked file waiting on the one question only a person can answer. */
   const [pendingBook, setPendingBook] = useState<{ uri: string; name: string } | null>(null);
   const [hits, setHits] = useState<ContentHit[]>([]);
-  const [runs, setRuns] = useState<RunSummary[]>([]);
+  const work = useWorkFeed();
 
   const refresh = useCallback(() => {
     listBooks().then(setBooks).catch(() => setBooks([]));
@@ -85,18 +86,8 @@ export default function Home() {
     resumeWorkOnLaunch().catch(() => undefined);
   }, [refresh]);
 
-  // A finished run usually changed something on the shelf.
-  useEffect(
-    () =>
-      subscribeToWork((next) => {
-        setRuns((previous) => {
-          const settled = next.reduce((total, run) => total + run.done, 0);
-          if (settled !== previous.reduce((total, run) => total + run.done, 0)) refresh();
-          return next;
-        });
-      }),
-    [refresh]
-  );
+  // A finished task usually changed something on the shelf.
+  useWorkRefresh(refresh);
 
   useEffect(() => subscribeToQueue((next) => {
     setJobs((previous) => {
@@ -271,13 +262,25 @@ export default function Home() {
                   label={t('settings.appearance')}
                   value={t(`settings.appearance_${appearance}`)}
                   onPress={() => setAppearanceOpen(true)}
+                />
+                {/* Work is started from a book's own pages and then watched
+                    from wherever you are — so it needs a door that is always
+                    in the same place, not only a strip that appears mid-run. */}
+                <Row
+                  label={t('work.open')}
+                  value={
+                    work.counts.pending + work.counts.running > 0
+                      ? t('work.busy', { count: work.counts.pending + work.counts.running })
+                      : t('work.idle')
+                  }
+                  onPress={openWorkQueue}
                   last
                 />
               </Section>
 
               <AiKeysSettings />
-              <BackupSettings />
               <CloudSettings />
+              <BackupSettings />
             </View>
           </>
         )}

@@ -17,8 +17,8 @@ export function useWorkRefresh(reload: () => void, quietMs = 1200) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const unsubscribe = subscribeToWork((runs) => {
-      const done = runs.reduce((total, run) => total + run.done, 0);
+    const unsubscribe = subscribeToWork(({ counts }) => {
+      const done = counts.done;
       // The first publish is the baseline, not a change: subscribing would
       // otherwise reload every page the moment it mounts.
       const changed = settled.current !== null && done !== settled.current;

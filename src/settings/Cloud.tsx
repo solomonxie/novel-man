@@ -30,6 +30,7 @@ import {
   type Connection,
 } from '../cloud/providers';
 import { Hint, PrimaryAction, Row, Section } from '../ui/primitives';
+import { IcloudRows } from './Icloud';
 import { PickerSheet } from '../ui/PickerSheet';
 import { radius, space, usePalette } from '../theme';
 
@@ -120,9 +121,10 @@ export function CloudSettings() {
   return (
     <>
       <Section
-        title={t('cloud.connections')}
+        title={t('cloud.title')}
         action={adding ? undefined : { label: '＋', onPress: () => setAdding(true) }}
       >
+        <IcloudRows />
         {connections.length === 0 ? (
           <Row label={t('cloud.none')} last />
         ) : (
