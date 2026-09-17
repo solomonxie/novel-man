@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ReadingTheme } from '../theme';
+import type { ReadingTheme, Scheme } from '../theme';
+
+export type Bilingual = 'off' | 'target' | 'both';
 
 export type ReadingSettings = {
   theme: ReadingTheme;
@@ -7,6 +9,8 @@ export type ReadingSettings = {
   spacing: 'compact' | 'normal' | 'loose';
   margin: number;
   serif: boolean;
+  /** Which language the page shows. The target itself is chosen per book. */
+  bilingual: Bilingual;
 };
 
 export const defaultSettings: ReadingSettings = {
@@ -15,6 +19,7 @@ export const defaultSettings: ReadingSettings = {
   spacing: 'normal',
   margin: 24,
   serif: false,
+  bilingual: 'off',
 };
 
 export const FONT_RANGE = { min: 13, max: 28, step: 1 };
@@ -22,13 +27,19 @@ export const MARGIN_RANGE = { min: 8, max: 48, step: 4 };
 
 const KEY = 'reader.settings';
 
-export async function loadSettings(): Promise<ReadingSettings> {
+/**
+ * On a first read the page follows the app's appearance: opening a dark app
+ * onto a white page is a flash in the eyes, and Paper is only a sensible
+ * default for someone already in the light.
+ */
+export async function loadSettings(scheme: Scheme = 'light'): Promise<ReadingSettings> {
   try {
     const raw = await AsyncStorage.getItem(KEY);
-    return raw ? { ...defaultSettings, ...JSON.parse(raw) } : defaultSettings;
+    if (raw) return { ...defaultSettings, ...JSON.parse(raw) };
   } catch {
-    return defaultSettings;
+    // Fall through to the default for this appearance.
   }
+  return { ...defaultSettings, theme: scheme === 'dark' ? 'night' : 'paper' };
 }
 
 export async function saveSettings(settings: ReadingSettings) {

@@ -1,5 +1,8 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
+import { extensionOf } from './paths';
+
+export { extensionOf };
 
 const SOURCES = 'sources';
 
@@ -7,11 +10,6 @@ function sourcesDir(): Directory {
   const dir = new Directory(Paths.document, SOURCES);
   if (!dir.exists) dir.create({ intermediates: true });
   return dir;
-}
-
-export function extensionOf(name: string): string {
-  const match = /\.([a-z0-9]+)$/i.exec(name.trim());
-  return match ? match[1].toLowerCase() : '';
 }
 
 /**
@@ -50,4 +48,39 @@ function bytesFingerprint(bytes: Uint8Array): string {
   let out = `${bytes.length}:`;
   for (let i = 0; i < bytes.length; i += stride) out += bytes[i].toString(36);
   return out;
+}
+
+const IMAGES = 'images';
+
+function imagesDir(): Directory {
+  const dir = new Directory(Paths.document, IMAGES);
+  if (!dir.exists) dir.create({ intermediates: true });
+  return dir;
+}
+
+/**
+ * A picked image lives in a cache the OS may empty, so a cover or portrait is
+ * copied into app storage before its path is written to the database — and
+ * that copy is also what a backup bundle can carry.
+ */
+export function adoptImage(uri: string, hint = 'img'): string {
+  const source = new File(uri);
+  if (!source.exists) return uri;
+  const ext = extensionOf(uri) || 'jpg';
+  const target = new File(imagesDir(), `${hint}-${Date.now().toString(36)}.${ext}`);
+  source.copy(target);
+  return target.uri;
+}
+
+export function readImage(path: string): Uint8Array | null {
+  const file = new File(path);
+  return file.exists ? file.bytesSync() : null;
+}
+
+export function writeImage(name: string, bytes: Uint8Array): string {
+  const target = new File(imagesDir(), name);
+  if (target.exists) target.delete();
+  target.create();
+  target.write(bytes);
+  return target.uri;
 }

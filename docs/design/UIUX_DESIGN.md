@@ -21,7 +21,7 @@ reachable only through a tab.
 |---|---|---|
 | **Home** | one scrollable page | Search · Reading · Library · Settings. No tabs. |
 | Add book | menu → sheet per source | The source choice is one tap from ⊕; each source then gets the sheet it needs. |
-| Import | full sheet | Multi-step (fetch → parse → preview → detect), cancellable without losing the fetched file. |
+| Import | the queue sheet | Multi-step (fetch → parse → preview → detect) and cancellable without losing the fetched file. Built as the queue sheet rather than a second surface: imports run in the background, so the list of them *is* the import screen. |
 | **Book** | page | The hub. Everything about one book lives here and nowhere else. |
 | **Reader** | page, chrome-hidden | The screen the app is used in. Full bleed, no tab bar. |
 | Sentence actions | popover anchored to the sentence | Must not cover what it acts on. Never a bottom sheet. |
@@ -34,13 +34,15 @@ reachable only through a tab.
 | Bilingual reader | the reader, in a second mode | Reading a translation is still reading; a separate screen would fork every reader feature. |
 | Unit editor | half sheet | Source above, target editable below, diff marks inline. |
 | Glossary | page, pushed from Translation | A searchable list that grows to hundreds of entries. |
-| Term editor | half sheet | Three fields and a lock. |
+| Term editor | inline on the Glossary row | Built inline rather than as a sheet: three fields is less than the sheet that would frame them, and editing in place keeps the surrounding terms visible for consistency. |
 | Export | full sheet | Format choice → options → destination. |
-| Settings | section on Home + pushed page | The common rows sit on Home; the rest is one page behind them. |
-| Add AI key | half sheet | Two fields (`byo-ai-keys`). |
-| Cloud connection | full sheet | Variable fields, paste mode, save-time verification (`cloud-bucket-sync`). |
+| Settings | sections on Home | Every one, including AI keys, backup and cloud. Nothing pushes to a settings page, because there isn't one. |
+| Add AI key | full sheet | Two fields plus a vendor list and a save that makes a real request (`byo-ai-keys`). |
+| Cloud connection | form inside the Cloud section | Variable fields, paste mode, save-time verification (`cloud-bucket-sync`). Inline rather than in a sheet so a failed save keeps the draft on screen next to the bucket list that explains it. |
 | Cloud library | page, pushed from Settings | Lists the bundles in the bucket so one book can be pulled back. |
-| Sync queue | sheet | Global across connections, surfaced once (`cloud-bucket-sync`). |
+| Sync queue | part of the Cloud section | Global across connections, surfaced once (`cloud-bucket-sync`). Not a sheet: it is only ever read from where the work is started. |
+| Screenplay | page, pushed from Book | A formatted script needs the full width, and its exports are its own. |
+| Paid run | dialog | Every AI pass wears the same one: what it does, what it is estimated to cost, Run, and a Stop that cancels the requests. |
 
 No tabs at all. Notes, Cast, Places, Translation and Export are *per book*, so
 they live on the Book page — a top-level "Notes" tab would force a book picker
@@ -98,7 +100,7 @@ Shelf  ⊕
           └──────▶ Book page, chapters ready ──▶ [Start reading]
 ```
 
-A `.nmbak` bundle entering by any of these doors is recognised and routed to
+A `.nmbak` bundle entering by any of these doors is recognized and routed to
 restore instead of parse — same door, different handler.
 
 ### Reading → sentence action
@@ -118,8 +120,8 @@ The core interaction. One tap, no drag handles, menu never covers the target:
         the sentence being acted on              Never a bottom sheet — that
         │                                        hides the text
         ├─ Copy       ─▶ dismiss + brief toast
-        ├─ Highlight ─▶ default colour instantly; ▾ or long-press for the
-        │                colour row. Tapping an existing highlight reopens
+        ├─ Highlight ─▶ default color instantly; ▾ or long-press for the
+        │                color row. Tapping an existing highlight reopens
         │                this menu with Remove in place of Highlight
         ├─ Note      ─▶ half sheet, sentence quoted above the field
         ├─ Share     ─▶ rendered quote card
@@ -133,7 +135,7 @@ common case never touches a handle.
 ### Reading chrome
 
 ```
-  tap the CENTRE of the page (not a sentence)  ─▶ toggle chrome
+  tap the CENTER of the page (not a sentence)  ─▶ toggle chrome
   tap left / right third                       ─▶ page back / forward (paginated)
   swipe                                        ─▶ page (paginated) / scroll
   swipe down from the top                      ─▶ chapter list
@@ -226,46 +228,64 @@ so hand-made chapter fixes are in every output.
 ├───────────────────────────────────────────┤   not behind a nav-bar icon
 │ Importing · big.docx        47%       ›   │ ← queue strip, only while active
 │                                           │
-│ Reading                                   │ ← in-progress books, one row,
-│ ┌───────┐ ┌───────┐ ┌───────┐ →           │   scrolls sideways
+│ Library           Show 4 more          ＋ │ ← ＋ sits on the row that names
+│ ┌───────┐ ┌───────┐ ┌───────┐             │   what it adds to
+│ │ cover │ │ cover │ │ cover │             │
+│ └───────┘ └───────┘ └───────┘             │   three across, two rows, most
+│ 《系统…》  Ash Lane   The Sec…             │   recently read first
+│ 14%       138.1万字   2%                   │
+│ ┌───────┐ ┌───────┐ ┌───────┐             │
 │ │ cover │ │ cover │ │ cover │             │
 │ └───────┘ └───────┘ └───────┘             │
-│ 《系统…》  Ash Lane   The Sec…             │
-│ 14%       37%        2%                   │
 │                                           │
-│ Library                      More      ＋ │ ← ＋ sits on the row that names
-│ ┌───────┐ ┌───────┐ ┌───────┐ →           │   what it adds to. "More"
-│ │ cover │ │ cover │ │ cover │             │   expands into a grid below
-│ └───────┘ └───────┘ └───────┘             │
+│ SETTINGS                                  │ ← a section, not a tab, and flat
+│ ┌───────────────────────────────────────┐ │   all the way down: no settings
+│ │ Language                    English   │ │   page exists at all
+│ │ Appearance                   System   │ │ ← picking a value opens a sheet
+│ └───────────────────────────────────────┘ │   over the page, never a push
 │                                           │
-│ SETTINGS                                  │ ← a section, not a tab, and flat:
-│ ┌───────────────────────────────────────┐ │   no "More settings" page whose
-│ │ AI settings                        ›  │ │   only job is holding four rows
-│ │ Language                    English   │ │ ← picking a value opens a sheet
-│ │ Export bundle          Not built yet  │ │   over the page, never a push
-│ │ Restore latest         Not built yet  │ │
+│ AI KEYS                      Sequential   │ ← the fallback strategy is the
+│ ┌───────────────────────────────────────┐ │   section's own action
+│ │ OpenAI              12 requests ↑↓ ⋯  │ │
+│ │ ＋ Add AI Key                         │ │
+│ └───────────────────────────────────────┘ │
+│                                           │
+│ BACKUP                                    │
+│ ┌───────────────────────────────────────┐ │
+│ │ Export the whole library              │ │
+│ │ Restore from a file…                  │ │
 │ └───────────────────────────────────────┘ │
 │                                           │
 │ PRIVATE CLOUD                             │ ← its own section: storage you
 │ ┌───────────────────────────────────────┐ │   own, named as the user thinks
-│ │ Connect a bucket       Not built yet  │ │   of it
-│ └───────────────────────────────────────┘ │
+│ │ my-manuscripts    bucket/prefix    ›  │ │   of it. The › goes to what's
+│ │ Connect a bucket                      │ │   *in* the bucket — a different
+│ └───────────────────────────────────────┘ │   place, not a settings page
 │ Storage you own. Off by default.          │
 └───────────────────────────────────────────┘
 ```
 
 **A page whose only job is holding links gets deleted.** Settings had exactly
-that shape — one row on Home pushing a page of four rows — so the four rows
-moved to Home and the page went away.
+that shape twice over: a row pushing a page of four rows, three of which
+pushed pages of their own. Every one of those pages is now a section here, and
+`app/settings/` holds a single screen — the cloud library, which browses what
+is *in* a bucket rather than configuring it.
 
-**Library holds every book; Reading is a shortcut into it, not a slice out of
-it.** Slicing them apart leaves Library an empty heading the moment the only
-book is in progress — and a library that hides what you're reading isn't one.
+The only rows left that push are the ones that lead somewhere genuinely else.
+A row that leads to more settings is a row that shouldn't exist.
 
-A shelf reads *across*, so both are single horizontal rows rather than a grid
-that pushes Settings off the page. Cover falls through: user-set image →
-generated (title on a colour derived from the title) → placeholder. Never
-blank.
+**One shelf, not two.** Reading and Library were separate rows, with Library
+holding everything — which meant that with one book in progress the same cover
+appeared twice, one above the other, and the second row said nothing the first
+hadn't. Sorting by last-read gives what the Reading shelf was for: the book you
+had open is first. A tile shows how far in you are if you've started it, and
+how long it is if you haven't.
+
+The grid is three across and two rows deep — six covers, which is as much as
+fits before Settings is pushed off the page. Past that, **Show N more**; the
+count is in the label so the tap is a known quantity. Cover falls through:
+user-set image → generated (title on a color derived from the title) →
+placeholder. Never blank.
 
 ### Book — the hub, as one page with clear sections
 
@@ -318,7 +338,7 @@ control is worse than a missing one; it was removed until T3.6 lands.
 
 ### Character / place profile
 
-One page per named thing in the story, modelled on `bring-your-own-photos`'
+One page per named thing in the story, modeled on `bring-your-own-photos`'
 person profile — because a character *is* a person as far as the interface is
 concerned.
 
@@ -377,7 +397,7 @@ only in what they're called.
 ```
 ┌───────────────────────────────────────────┐
 │ ‹        Chapter 12 · The Second Step   ⋯ │ ← ⋯ : Bookmark · Notes in this
-├───────────────────────────────────────────┤      chapter · Analyse chapter ·
+├───────────────────────────────────────────┤      chapter · Analyze chapter ·
 │   The rain had not stopped for three      │      Edit structure · Export chapter
 │   days. …                                 │
 ├───────────────────────────────────────────┤
@@ -484,7 +504,7 @@ highlights and notes all work the same in all three.
 │ Chapter 3                                 │ ← grouped by chapter in reading
 │ ┌───────────────────────────────────────┐ │   order, not by date
 │ │ ▌"…the river had risen past the       │ │
-│ │ ▌ second step."                       │ │ ← ▌ carries the highlight colour
+│ │ ▌ second step."                       │ │ ← ▌ carries the highlight color
 │ │   check this against ch.20            │ │
 │ │   Sep 14                          ⋯   │ │ ← ⋯ : Jump to · Edit · Share · Delete
 │ └───────────────────────────────────────┘ │
@@ -590,7 +610,7 @@ couldn't be placed.
 | Notes | "Highlights and notes you make while reading show up here." | — | — | full function | — |
 | Translation | "Not translated yet" + language picker + cost | per-chapter progress with Cancel; finished chapters stay readable | a chapter that fails alignment is flagged and retried alone, never rolling back the book | "Needs a connection" on the action only | candidate-term review offered once, skippable |
 | Glossary | "No terms yet. Add names you want translated consistently." | — | — | full function | seeded from the cast analysis when that has run |
-| Cast | "Not analysed yet" + cost | per-chapter progress ("Chapter 7 of 47") + Cancel; partial results kept | failed chapters listed, retried individually — never a whole-run rollback | "Needs a connection" on the action only | — |
+| Cast | "Not analyzed yet" + cost | per-chapter progress ("Chapter 7 of 47") + Cancel; partial results kept | failed chapters listed, retried individually — never a whole-run rollback | "Needs a connection" on the action only | — |
 | Export | formats needing cast are listed disabled with why | "Building .epub…" with Cancel | inline, sheet stays open | local formats work; cloud destination disabled | — |
 | AI keys | "+ Add AI Key" only | "⟳ Testing the key…" inline | vendor's own error code verbatim + a friendly line | "Couldn't reach OpenAI" | — |
 | Cloud | "Your data stays on this device." + Connect | "Checking bucket access…" | `AccessDenied: …` verbatim; sheet open, nothing stored | queue holds and resumes; "Manual" fetches nothing | — |
@@ -598,11 +618,45 @@ couldn't be placed.
 
 Two partial states that matter:
 
-- A book **detected but not analysed** is the normal, permanent state for most
+- A book **detected but not analyzed** is the normal, permanent state for most
   users. It must never look unfinished — no "complete setup" banner, no
   progress ring stuck at 1/3.
 - A book **in the cloud but not on device** is a first-class shelf state (☁),
   not an error. Tapping it offers to pull it down.
+
+
+## Light and dark
+
+Two separate things, and conflating them is the mistake to avoid:
+
+- **Appearance** (System · Light · Dark) themes the *interface* — shelf, book
+  page, sheets, settings. System is the default and what most people leave it
+  on; the override exists for the same reason the language override does, and
+  sits beside it.
+- **Reading theme** (Paper · Sepia · Grey · Night) themes the *page*, and is
+  picked while reading, in the sheet that applies it live. It is not a
+  light/dark switch — Sepia and Grey are neither.
+
+They meet exactly once: on a first read, the page opens in Night when the
+appearance is dark. After that the reading theme is whatever you last chose,
+and appearance never touches it again — a reader who sets Sepia means Sepia at
+2am too.
+
+Color rules that fall out of this:
+
+- Nothing hard-codes a background, a border or a scrim. The three that used to
+  (sheet scrims, the grabber, the selected-swatch ring) are palette tokens now.
+- `onAccent` is its own token, not white. The dark accent is a lighter blue, so
+  white-on-accent loses contrast exactly where the light scheme had it.
+- The scrim is deeper in dark: a 35% black veil over a black page separates
+  nothing.
+- Every sheet carries a hairline border. In light the shadow does that work; on
+  a black page there is no shadow to see.
+- The navigator is themed from the same palette, or the header is one white and
+  the page under it another.
+- White text stays white on a *fixed* fill — covers, portrait initials, graph
+  nodes, the sentence menu. Those are colored slabs, not surfaces, and they do
+  not follow the scheme.
 
 
 ## Components & copy
@@ -610,19 +664,19 @@ Two partial states that matter:
 New or non-standard:
 
 - **`<Sentence>`** — the atom of the reader. A tappable span with four visual
-  states: plain · tinted (acted on) · highlighted (4 colours) · highlighted +
+  states: plain · tinted (acted on) · highlighted (4 colors) · highlighted +
   noted (superscript). Must hit-test the full line-box including trailing
   space, or short sentences become unhittable.
 - **Anchored action menu** — positions above the target span, flips below near
   the top edge, clamps to the margin horizontally, dismisses on tap-elsewhere
   and on page turn.
 - **Cost-stating action** — an accent *text* control whose label carries the
-  price (`Analyse · ~47 requests`). Used wherever an AI call is spent. Never a
+  price (`Analyze · ~47 requests`). Used wherever an AI call is spent. Never a
   filled button: spending money is not the primary action on any screen.
 - **Confidence marker `⚠`** — on a chapter row the heuristics were unsure
   about. Tapping explains why and offers the fix.
 - **Cover** — falls through embedded → user-set → generated (title typeset on a
-  colour derived from the title hash) → placeholder. Never blank.
+  color derived from the title hash) → placeholder. Never blank.
 
 Copy — real strings, both languages (`en` is the source of truth):
 
@@ -645,7 +699,7 @@ Copy — real strings, both languages (`en` is the source of truth):
 | Alignment failure | `Chapter 12 came back misaligned. Retried on its own.` | `第 12 章译文未能对齐，已单独重试。` |
 | Term saved | `Saved. Chapters translated from here on will use it.` | `已保存。之后翻译的章节都会使用它。` |
 | Re-translate cost | `Changing this term affects 38 chapters already translated. Re-translating them costs about 38 requests.` | `修改该术语会影响已翻译的 38 章。重新翻译约需 38 次请求。` |
-| Analyse confirm | `Analyse 47 chapters? This sends chapter text to OpenAI and costs about 47 requests.` | `分析 47 章？会将章节正文发送给 OpenAI，约消耗 47 次请求。` |
+| Analyze confirm | `Analyze 47 chapters? This sends chapter text to OpenAI and costs about 47 requests.` | `分析 47 章？会将章节正文发送给 OpenAI，约消耗 47 次请求。` |
 | Re-detect warning | `Chapters you renamed or split by hand will be kept.` | `你手动改名或拆分过的章节会保留。` |
 | Cloud empty | `Your data stays on this device. Connect a bucket you own to sync it across devices.` | `数据只保存在本机。连接你自己的存储桶即可跨设备同步。` |
 | Backup scope | `An on-device snapshot survives a bad import — not a lost phone. Copy the file off to keep it safe.` | `本机快照能应对导入出错，但手机丢了就没了。请把文件另存一份。` |
@@ -677,7 +731,7 @@ translated — it should read as if drafted in Chinese.
 ## Platform notes
 
 - Sentence tap must not fight OS selection: long-press falls through to native
-  selection deliberately, so the behaviour people know still exists.
+  selection deliberately, so the behavior people know still exists.
 - iOS back-swipe is disabled in the reader's paginated mode (it conflicts with
   page-back on the left third); `‹` in the chrome is the way back, one tap away.
 - Android hardware back leaves the reader rather than paging back.
@@ -696,7 +750,7 @@ translated — it should read as if drafted in Chinese.
   the library is one section of a page here rather than the whole screen — a
   grid would push Settings off the bottom. The grid returns behind "More".
 - `references/foundations.md` and `references/mobile.md` are currently
-  unfilled (all TODO), so layout, type, colour and gesture decisions here are
+  unfilled (all TODO), so layout, type, color and gesture decisions here are
   local and should be re-checked against those files once written.
 - `my-mobile-design-guideline.md`, referenced by several pattern files, doesn't
   exist in the skill; section anatomy follows the ASCII layouts in

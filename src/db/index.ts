@@ -21,6 +21,31 @@ async function open() {
   return database;
 }
 
+let tail: Promise<unknown> = Promise.resolve();
+
+/**
+ * expo-sqlite's `withTransactionAsync` runs BEGIN/COMMIT on the one shared
+ * connection, so two overlapping calls — a drain claiming a job while the
+ * caller queues the next run — make the second BEGIN throw. Transactions queue
+ * here instead. Never call this from inside another one.
+ */
+export function transaction<T>(work: () => Promise<T>): Promise<T> {
+  const run = tail.then(async () => {
+    const database = await db();
+    await database.execAsync('BEGIN');
+    try {
+      const value = await work();
+      await database.execAsync('COMMIT');
+      return value;
+    } catch (error) {
+      await database.execAsync('ROLLBACK');
+      throw error;
+    }
+  });
+  tail = run.catch(() => undefined);
+  return run;
+}
+
 export function newId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
