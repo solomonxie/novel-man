@@ -47,7 +47,7 @@
     "discarded": "You discarded this extraction."
   },
   "book": {
-    "continue": "Continue · {{chapter}}",
+    "continue": "Continue",
     "start": "Start reading",
     "chapters": "Chapters",
     "showAll": "Show all {{count}}",
@@ -97,7 +97,8 @@
     "jumpNone": "No chapter matches that.",
     "inside": "Inside",
     "addOne": "Add one",
-    "notesShort": "Notes"
+    "notesShort": "Notes",
+    "analyzeShort": "Analyze"
   },
   "reader": {
     "empty": "This chapter is empty.",
@@ -242,7 +243,8 @@
     "kind_place": "Place",
     "firstSeen": "first seen",
     "lastSeen": "last seen",
-    "noRelations": "Nobody linked to them yet."
+    "noRelations": "Nobody linked to them yet.",
+    "exportShort": "Export"
   },
   "notes": {
     "empty": "Highlights and notes you make while reading show up here.",
@@ -518,7 +520,6 @@
     "title": "Chapter",
     "number": "Chapter {{index}}",
     "read": "Read from here →",
-    "analyze": "Analyze this chapter with AI",
     "scenes": "Scenes",
     "noScenes": "No scenes yet — mark one, or let an analysis read for them.",
     "scenePlaceholder": "Scene {{index}}",
@@ -528,7 +529,8 @@
     "noCast": "Nobody recorded yet.",
     "places": "Where it happens",
     "noPlaces": "No places recorded yet.",
-    "hint": "Names here open that profile. Analyzing the chapter fills the scenes, the cast and the places."
+    "hint": "Names here open that profile. Analyzing the chapter fills the scenes, the cast and the places.",
+    "analyzeShort": "Analyze"
   },
   "keyLog": {
     "title": "AI key",

@@ -189,13 +189,15 @@ export default function BookPage() {
         actions={
           <>
             <Action
-              label={current ? t('book.continue', { chapter: label(current, t) }) : t('book.start')}
+              label={current ? t('book.continue') : t('book.start')}
               tone="loud"
               onPress={() => router.push(`/reader/${book.id}`)}
             />
-            <Action label={t('book.analyze')} onPress={openAnalyze} />
+            <Action label={t('book.analyzeShort')} onPress={openAnalyze} />
           </>
         }
+        // Which chapter Continue resumes at is context, not an action.
+        note={current ? label(current, t) : undefined}
       >
         <InlineText
           value={book.title}
