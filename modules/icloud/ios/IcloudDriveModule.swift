@@ -27,8 +27,8 @@ public class IcloudDriveModule: Module {
       try FileManager.default.createDirectory(
         at: target.deletingLastPathComponent(), withIntermediateDirectories: true
       )
-      // One bundle per day: replacing today's file keeps the folder a history
-      // rather than a pile of near-identical zips.
+      // Always overwritten: the folder holds the current backup, not a
+      // history of them.
       if FileManager.default.fileExists(atPath: target.path) {
         try FileManager.default.removeItem(at: target)
       }

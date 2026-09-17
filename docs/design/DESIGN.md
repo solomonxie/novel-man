@@ -361,6 +361,11 @@ assets/
   prompt: there is nothing to overwrite and no context yet for the question.
   Launch pulls back *before* it pushes up, or an empty shelf would overwrite
   the backup it came for. The file picker stays the only manual path.
+- **One file, always overwritten** — `novel-man.nmbak`, not a dated series.
+  The folder exists so that deleting the app doesn't delete the work, and for
+  that only the newest copy was ever the answer; a list of near-identical
+  bundles would ask the reader to choose between them, which is a question
+  they cannot answer. iCloud keeps its own file versions underneath.
 - **The container is document-scope public** (`NSUbiquitousContainers`), so
   the folder is reachable in Files under the app's name. A backup the user
   can't open is worse than a local file.
