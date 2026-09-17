@@ -109,9 +109,12 @@ export default function ScenePage() {
       <Stack.Screen options={{ title: t('scene.title'), headerBackTitle: ' ' }} />
 
       <Hero
-        eyebrow={t('scene.position', { index: position.index, total: position.total })}
+        // The chapter, not the position: "Scene 1 of 2" over a title reading
+        // "Scene 1" said the same thing twice and neither said where you are.
+        eyebrow={chapter?.title.trim() || undefined}
         facts={
           <>
+            <Fact value={`${position.index}/${position.total}`} label={t('scene.unit')} />
             <Fact value={formatCount(body.length, language)} label={t('units.unit_long')} />
             {scene.source === 'ai' ? <Fact value={'✦'} label={t('scene.byAi')} /> : null}
           </>
@@ -136,6 +139,7 @@ export default function ScenePage() {
         <EditableLine
           value={scene.title}
           placeholder={label}
+          solid
           onCommit={(value) => updateScene(scene.id, { title: value || null }).then(load)}
           style={{ color: palette.text, fontSize: 26, fontWeight: '700', lineHeight: 32 }}
         />

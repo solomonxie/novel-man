@@ -38,7 +38,7 @@ import {
   type Relation,
 } from '../../src/db/repo';
 import { Cover, PrimaryAction, Row, Section } from '../../src/ui/primitives';
-import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item } from '../../src/ui/detail';
+import { Action, Block, Chip, ChipRow, Empty, Fact, Hero, Item, Tile, Tiles, Writable } from '../../src/ui/detail';
 import { hueFrom } from '../../src/ui/fields';
 import { ExportSheet } from '../../src/ui/ExportSheet';
 import { byFrequency } from '../../src/cast/mentions';
@@ -229,13 +229,17 @@ export default function BookPage() {
         </Text>
       </Hero>
 
-      <InlineText
-        value={book.summary}
-        placeholder={t('book.summaryPlaceholder')}
-        onCommit={(value) => edit('summary', value)}
-        style={{ color: palette.dim, fontSize: 15, lineHeight: 22, marginTop: space.lg, paddingHorizontal: space.xs }}
-        multiline
-      />
+      <View style={{ marginTop: space.lg }}>
+        <Writable empty={!book.summary?.trim()}>
+          <InlineText
+            value={book.summary}
+            placeholder={t('book.summaryPlaceholder')}
+            onCommit={(value) => edit('summary', value)}
+            style={{ color: palette.dim, fontSize: 15, lineHeight: 22 }}
+            multiline
+          />
+        </Writable>
+      </View>
 
       <Block
         title={t('book.inside')}
@@ -245,27 +249,28 @@ export default function BookPage() {
       >
         {chapters.length === 0 ? (
           <Empty text={t('book.noChapters')} />
-        ) : (
-          <>
-            <Item
-              title={t('book.chapters')}
-              meta={`${chapters.length}`}
+        ) : null}
+        <Tiles>
+          {chapters.length > 0 && (
+            <Tile
+              value={chapters.length}
+              label={t('book.chapters')}
               onPress={() => router.push(`/book/${book.id}/structure`)}
             />
-            {supports(book.kind, 'scenes') && (
-              <Item
-                title={t('book.scenesRow')}
-                meta={`${scenes.length}`}
-                onPress={() => router.push(`/book/${book.id}/scenes`)}
-              />
-            )}
-          </>
-        )}
-        <Item
-          title={t('book.notesRow')}
-          meta={`${noteCount}`}
-          onPress={() => router.push(`/book/${book.id}/notes`)}
-        />
+          )}
+          {chapters.length > 0 && supports(book.kind, 'scenes') && (
+            <Tile
+              value={scenes.length}
+              label={t('book.scenesRow')}
+              onPress={() => router.push(`/book/${book.id}/scenes`)}
+            />
+          )}
+          <Tile
+            value={noteCount}
+            label={t('book.notesShort')}
+            onPress={() => router.push(`/book/${book.id}/notes`)}
+          />
+        </Tiles>
       </Block>
 
       {supports(book.kind, 'cast') && (
@@ -408,6 +413,7 @@ function EntitySection({ title, entities, onAdd, extra }: {
     <Block
       title={title}
       count={entities.length || undefined}
+      onOpen={extra?.onPress}
       action={{ label: '＋', onPress: onAdd }}
     >
       {entities.length === 0 ? (
@@ -427,9 +433,6 @@ function EntitySection({ title, entities, onAdd, extra }: {
           ))}
         </ChipRow>
       )}
-      {extra ? (
-        <Item title={extra.label} meta={`${entities.length}`} onPress={extra.onPress} />
-      ) : null}
     </Block>
   );
 }

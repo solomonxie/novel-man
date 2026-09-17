@@ -77,8 +77,13 @@ export function Action({ label, detail, onPress, tone = 'quiet' }: {
       ]}
     >
       <Text
-        numberOfLines={1}
-        style={{ color: loud ? palette.onAccent : palette.accent, fontSize: 15, fontWeight: '600' }}
+        numberOfLines={2}
+        style={{
+          color: loud ? palette.onAccent : palette.accent,
+          fontSize: 15,
+          fontWeight: '600',
+          textAlign: 'center',
+        }}
       >
         {label}
       </Text>
@@ -99,20 +104,30 @@ export function Action({ label, detail, onPress, tone = 'quiet' }: {
  * case rather than the uppercase grey label a settings screen uses: this is a
  * page about a story, not a preferences list.
  */
-export function Block({ title, count, action, children }: {
+export function Block({ title, count, action, onOpen, children }: {
   title: string;
   count?: number;
   action?: { label: string; onPress: () => void };
+  /** The heading is the way to the full list — a row repeating the count isn't. */
+  onOpen?: () => void;
   children: React.ReactNode;
 }) {
   const palette = usePalette();
   return (
     <View style={{ marginTop: space.xl }}>
       <View style={styles.blockHead}>
-        <Text style={{ color: palette.text, fontSize: 17, fontWeight: '700' }}>{title}</Text>
-        {count !== undefined && (
-          <Text style={{ color: palette.faint, fontSize: 15 }}>{count}</Text>
-        )}
+        <Pressable
+          onPress={onOpen}
+          disabled={!onOpen}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}
+          hitSlop={6}
+        >
+          <Text style={{ color: palette.text, fontSize: 17, fontWeight: '700' }}>{title}</Text>
+          {count !== undefined && (
+            <Text style={{ color: palette.faint, fontSize: 15 }}>{count}</Text>
+          )}
+          {onOpen ? <Text style={{ color: palette.faint, fontSize: 15 }}>›</Text> : null}
+        </Pressable>
         <View style={{ flex: 1 }} />
         {action && (
           <Pressable onPress={action.onPress} hitSlop={8}>
@@ -239,6 +254,53 @@ export function Empty({ text, action }: { text: string; action?: { label: string
   );
 }
 
+/**
+ * A row of counts that are also doors. Three full-width rows saying
+ * `Chapters  508  ›` is a third of a screen spent on three numbers.
+ */
+export function Tiles({ children }: { children: React.ReactNode }) {
+  return <View style={styles.tiles}>{children}</View>;
+}
+
+export function Tile({ value, label, onPress }: {
+  value: string | number;
+  label: string;
+  onPress: () => void;
+}) {
+  const palette = usePalette();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.tile,
+        { backgroundColor: palette.surface, borderColor: palette.border, opacity: pressed ? 0.7 : 1 },
+      ]}
+    >
+      <Text style={{ color: palette.text, fontSize: 22, fontWeight: '700' }}>{value}</Text>
+      <Text numberOfLines={2} style={{ color: palette.dim, fontSize: 12, marginTop: 2 }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * Something the reader is meant to write. Empty, it says so with a dashed
+ * outline — grey text alone on a grey page reads as missing content rather
+ * than as an invitation.
+ */
+export function Writable({ empty, children }: { empty: boolean; children: React.ReactNode }) {
+  const palette = usePalette();
+  return (
+    <View
+      style={[
+        styles.writable,
+        empty && { borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border },
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
 /** Quoted material: the book's own words, set apart from anything written about them. */
 export function Quote({ children }: { children: React.ReactNode }) {
   const palette = usePalette();
@@ -265,9 +327,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     minWidth: 76,
   },
-  actions: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
+  // Wraps rather than truncates: the most important button on the page is the
+  // one whose label was getting cut in half.
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md },
   action: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 150,
     borderRadius: radius.md,
     paddingVertical: space.md,
     paddingHorizontal: space.md,
@@ -317,6 +382,20 @@ const styles = StyleSheet.create({
     paddingVertical: space.xl,
     paddingHorizontal: space.lg,
     alignItems: 'center',
+  },
+  tiles: { flexDirection: 'row', gap: space.sm },
+  tile: {
+    flex: 1,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: space.md,
+    paddingHorizontal: space.md,
+  },
+  writable: {
+    borderRadius: radius.lg,
+    borderStyle: 'dashed',
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
   },
   quote: {
     borderRadius: radius.md,
