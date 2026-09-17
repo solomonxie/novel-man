@@ -99,23 +99,23 @@ export default function ChapterPage() {
           <>
             <Action label={t('chapter.read')} onPress={() => read()} tone="loud" />
             <Action
-              label={t('chapter.analyze')}
-              detail={
-                queued
-                  ? t('work.queued', { count: 1 })
-                  : cost
-                    ? t('ai.estimateLine', {
-                        tokens: cost.inputTokens.toLocaleString(),
-                        cost: formatUsd(cost.usd),
-                      })
-                    : t('ai.estimateNoKey')
-              }
+              label={t('chapter.analyzeShort')}
               onPress={async () => {
                 await queueChapterRun(chapter.book_id, 'deep-analyze', [chapter]);
                 setQueued(true);
               }}
             />
           </>
+        }
+        note={
+          queued
+            ? t('work.queued', { count: 1 })
+            : cost
+              ? t('ai.estimateLine', {
+                  tokens: cost.inputTokens.toLocaleString(),
+                  cost: formatUsd(cost.usd),
+                })
+              : t('ai.estimateNoKey')
         }
       >
         <EditableLine

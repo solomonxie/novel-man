@@ -9,13 +9,15 @@ import { radius, space, usePalette } from '../theme';
  * it, and what you can do to it — in that order, and in three different
  * weights.
  */
-export function Hero({ eyebrow, avatar, children, facts, actions }: {
+export function Hero({ eyebrow, avatar, children, facts, actions, note }: {
   eyebrow?: string;
   /** A face, when the page is about someone. It leads the line rather than floating above it. */
   avatar?: React.ReactNode;
   children: React.ReactNode;
   facts?: React.ReactNode;
   actions?: React.ReactNode;
+  /** What a button would have had to wrap to say: where Continue resumes, what a pass costs. */
+  note?: string;
 }) {
   const palette = usePalette();
   const head = (
@@ -38,6 +40,11 @@ export function Hero({ eyebrow, avatar, children, facts, actions }: {
       )}
       {facts ? <View style={styles.facts}>{facts}</View> : null}
       {actions ? <View style={styles.actions}>{actions}</View> : null}
+      {note ? (
+        <Text numberOfLines={2} style={{ color: palette.dim, fontSize: 12, marginTop: space.sm }}>
+          {note}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -56,10 +63,13 @@ export function Fact({ value, label }: { value: string | number; label: string }
 /**
  * What a page is for, as a button rather than a row. A list row says "there is
  * more over here"; reading a chapter is not somewhere else, it is the thing.
+ *
+ * One line, always. A label that needs two rows is a label carrying something
+ * that is not the action — which chapter you would resume at, what a pass
+ * costs — and that belongs under the buttons, not inside one.
  */
-export function Action({ label, detail, onPress, tone = 'quiet' }: {
+export function Action({ label, onPress, tone = 'quiet' }: {
   label: string;
-  detail?: string;
   onPress: () => void;
   tone?: 'loud' | 'quiet';
 }) {
@@ -77,24 +87,11 @@ export function Action({ label, detail, onPress, tone = 'quiet' }: {
       ]}
     >
       <Text
-        numberOfLines={2}
-        style={{
-          color: loud ? palette.onAccent : palette.accent,
-          fontSize: 15,
-          fontWeight: '600',
-          textAlign: 'center',
-        }}
+        numberOfLines={1}
+        style={{ color: loud ? palette.onAccent : palette.accent, fontSize: 15, fontWeight: '600' }}
       >
         {label}
       </Text>
-      {detail ? (
-        <Text
-          numberOfLines={1}
-          style={{ color: loud ? palette.onAccent : palette.dim, fontSize: 11, opacity: loud ? 0.9 : 1 }}
-        >
-          {detail}
-        </Text>
-      ) : null}
     </Pressable>
   );
 }
@@ -329,15 +326,13 @@ const styles = StyleSheet.create({
   },
   // Wraps rather than truncates: the most important button on the page is the
   // one whose label was getting cut in half.
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md },
+  actions: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
   action: {
-    flexGrow: 1,
-    flexBasis: 150,
+    flex: 1,
     borderRadius: radius.md,
     paddingVertical: space.md,
     paddingHorizontal: space.md,
     alignItems: 'center',
-    gap: 2,
   },
   blockHead: {
     flexDirection: 'row',

@@ -259,8 +259,9 @@ point, and the five pages were indistinguishable at a glance.
 ```
  HERO          what it is    eyebrow · big editable title · summary
                what is true  fact pills: 2,359 long · 2 scenes · 2 in the cast
-               what you can  ( Read from here )( Analyze · $0.004 )
+               what you can  ( Read from here )( Analyze )
                   do to it   loud first, then quiet — not list rows
+                             est. 2,375 tokens · $0.0005   ← under them
  BLOCK         Scenes   2                                  Jump to…
                ┌───────────────────────────────────────┐
                │ (1) 武器选择                       ›  │  badge = position
@@ -271,6 +272,11 @@ point, and the five pages were indistinguishable at a glance.
  EMPTY         a dashed well saying what is missing and offering the fix —
                never a row reading "None", which is a dead end dressed as a link
 ```
+
+**A button label is one line, always.** A label that needs two rows is carrying
+something that is not the action — which chapter Continue resumes at, what a
+pass costs — and that goes on a note line under the row, never inside a button.
+`Continue · 第3章 新手任务` became `Continue` with the chapter beneath it.
 
 Rules that fall out of it: a fact pill holds a short value (a chapter *number*,
 never a chapter title), a pill that would read `0 places` is not shown at all,
