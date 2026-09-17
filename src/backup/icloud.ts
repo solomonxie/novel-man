@@ -16,6 +16,14 @@ const RESTORED = 'icloud.restoredAt';
 /** Reuses the upload ledger the bucket sync already keeps; there is no bucket. */
 const LEDGER = { connection: 'icloud', key: 'library' };
 const STAGED = 'icloud-upload.nmbak';
+/**
+ * One file, always overwritten. This is not an archive — it exists so that
+ * deleting the app doesn't delete the work, and for that only the newest copy
+ * has ever been the answer. A folder of dated bundles would ask the reader to
+ * choose between them, which is a question they can't answer and shouldn't be
+ * shown. iCloud keeps its own versions of it.
+ */
+const BACKUP = 'novel-man.nmbak';
 
 let running = false;
 
@@ -74,11 +82,6 @@ function nativePath(file: File): string {
   return decodeURIComponent(file.uri.replace('file://', ''));
 }
 
-/** Month folders and a dated name, because this folder is one the user opens. */
-function keyFor(at = new Date()): string {
-  const day = at.toISOString().slice(0, 10);
-  return `${day.slice(0, 7)}/novel-man-${day}.nmbak`;
-}
 
 /**
  * The manuscripts stay out of it. Notes, profiles, structure, progress and
@@ -102,7 +105,7 @@ export async function backUp(): Promise<boolean> {
     staged.create();
     staged.write(body);
     try {
-      await drive.copyIn(nativePath(staged), keyFor());
+      await drive.copyIn(nativePath(staged), BACKUP);
     } finally {
       staged.delete();
     }
