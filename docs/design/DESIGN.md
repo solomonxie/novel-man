@@ -244,7 +244,7 @@ Memory            source sentence · accepted target · why (the diff that made 
 ```
 
 - **`Term` is per target language**, manually editable, and seeded from the
-  cast analysis where that has run — a character named 沈墨 should be 「Shen Mo」
+  cast analysis where that has run — a character named 林小满 should be 「Lin Xiaoman」
   everywhere or 「Chen Mo」 everywhere, and that is the user's call, not the
   model's. A locked term is a hard constraint stated in the prompt, not a hint.
 - **Context is assembled per request, not globally**: the terms whose source

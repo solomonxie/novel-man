@@ -94,7 +94,9 @@
     "kindRow": "Category",
     "jumpCount": "{{count}} chapters",
     "jumpSearch": "Search chapters",
-    "jumpNone": "No chapter matches that."
+    "jumpNone": "No chapter matches that.",
+    "inside": "Inside",
+    "addOne": "Add one"
   },
   "reader": {
     "empty": "This chapter is empty.",
@@ -180,7 +182,13 @@
     "words": "{{count}} words",
     "characters": "{{count}} characters",
     "readTimeHours": "{{hours}}h read",
-    "readTimeMinutes": "{{minutes}}m"
+    "readTimeMinutes": "{{minutes}}m",
+    "unit_long": "long",
+    "unit_scenes": "scenes",
+    "unit_cast": "in the cast",
+    "unit_places": "places",
+    "unit_chapters": "chapters",
+    "unit_toRead": "to read"
   },
   "queue": {
     "title": "Queue ({{count}})",
@@ -227,7 +235,12 @@
     "relationEmpty": "Nobody else in this book yet.",
     "byAi": "found by AI",
     "openGraph": "See the relationship graph →",
-    "export": "Export this profile"
+    "export": "Export this profile",
+    "kind_character": "Character",
+    "kind_place": "Place",
+    "firstSeen": "first seen",
+    "lastSeen": "last seen",
+    "noRelations": "Nobody linked to them yet."
   },
   "notes": {
     "empty": "Highlights and notes you make while reading show up here.",
@@ -562,7 +575,6 @@
     "where": "Where in the book",
     "firstSeen": "First appears",
     "lastSeen": "Last appears",
-    "chapterCount": "Chapters",
     "scenes": "Scenes here",
     "noScenes": "No scenes recorded here yet.",
     "company": "Who is here",
@@ -574,7 +586,8 @@
     "hint": "A place is filled in by analyzing the chapters it appears in. Everything here can be edited or added by hand.",
     "deleteConfirm": "Delete this place?",
     "polish": "Polish with AI",
-    "polishWhat": "Turns {{count}} chapter notes about this place into a profile: what it is, what it is like, and what happens there. The per-chapter notes stay as they are underneath, so you can run it again or check what it drew on."
+    "polishWhat": "Turns {{count}} chapter notes about this place into a profile: what it is, what it is like, and what happens there. The per-chapter notes stay as they are underneath, so you can run it again or check what it drew on.",
+    "eyebrow": "Place"
   },
   "scene": {
     "title": "Scene",

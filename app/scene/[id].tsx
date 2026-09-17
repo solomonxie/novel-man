@@ -20,7 +20,9 @@ import {
 import { namesOf } from '../../src/cast/mentions';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { useWorkRefresh } from '../../src/work/refresh';
-import { Hint, Row, Section } from '../../src/ui/primitives';
+import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item, Quote } from '../../src/ui/detail';
+import { Hint } from '../../src/ui/primitives';
+import { hueFrom } from '../../src/ui/fields';
 import { formatCount } from '../../src/text/counts';
 import { space, usePalette } from '../../src/theme';
 
@@ -106,95 +108,93 @@ export default function ScenePage() {
     >
       <Stack.Screen options={{ title: t('scene.title'), headerBackTitle: ' ' }} />
 
-      <Section>
-        <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md }}>
-          <Text style={{ color: palette.faint, fontSize: 12 }}>
-            {t('scene.position', { index: position.index, total: position.total })}
-          </Text>
-          <EditableLine
-            value={scene.title}
-            placeholder={label}
-            onCommit={(value) => updateScene(scene.id, { title: value || null }).then(load)}
-            style={{ color: palette.text, fontSize: 20, fontWeight: '700', marginTop: 2 }}
-          />
-          <EditableLine
-            value={scene.summary}
-            placeholder={t('chapter.sceneSummaryPlaceholder')}
-            onCommit={(value) => updateScene(scene.id, { summary: value || null }).then(load)}
-            style={{ color: palette.dim, fontSize: 14, lineHeight: 20, marginTop: space.sm }}
-            multiline
-            numberOfLines={8}
-          />
-          <Text style={{ color: palette.faint, fontSize: 12, marginTop: space.sm }}>
-            {formatCount(body.length, language)}
-            {scene.source === 'ai' ? `  ·  ${t('scene.byAi')}` : ''}
-          </Text>
-        </View>
-      </Section>
+      <Hero
+        eyebrow={t('scene.position', { index: position.index, total: position.total })}
+        facts={
+          <>
+            <Fact value={formatCount(body.length, language)} label={t('units.unit_long')} />
+            {scene.source === 'ai' ? <Fact value={'✦'} label={t('scene.byAi')} /> : null}
+          </>
+        }
+        actions={
+          <>
+            <Action
+              label={t('scene.read')}
+              tone="loud"
+              onPress={() =>
+                router.push(`/reader/${scene.book_id}?chapter=${chapter?.idx ?? 0}&at=${scene.start}`)
+              }
+            />
+            <Action
+              label={t('scene.openChapter')}
+              detail={chapter?.title.trim() || undefined}
+              onPress={() => chapter && router.push(`/chapter/${chapter.id}`)}
+            />
+          </>
+        }
+      >
+        <EditableLine
+          value={scene.title}
+          placeholder={label}
+          onCommit={(value) => updateScene(scene.id, { title: value || null }).then(load)}
+          style={{ color: palette.text, fontSize: 26, fontWeight: '700', lineHeight: 32 }}
+        />
+        <EditableLine
+          value={scene.summary}
+          placeholder={t('chapter.sceneSummaryPlaceholder')}
+          onCommit={(value) => updateScene(scene.id, { summary: value || null }).then(load)}
+          style={{ color: palette.dim, fontSize: 15, lineHeight: 22, marginTop: space.sm }}
+          multiline
+          numberOfLines={8}
+        />
+      </Hero>
 
-      <Section>
-        <Row
-          label={t('scene.read')}
-          onPress={() =>
-            router.push(`/reader/${scene.book_id}?chapter=${chapter?.idx ?? 0}&at=${scene.start}`)
-          }
-        />
-        <Row
-          label={t('scene.openChapter')}
-          detail={chapter?.title.trim() || undefined}
-          value="›"
-          onPress={() => chapter && router.push(`/chapter/${chapter.id}`)}
-          last
-        />
-      </Section>
+      <Block title={t('scene.present')} count={present.length || undefined}>
+        {present.length === 0 ? (
+          <Empty text={t('scene.nonePresent')} />
+        ) : (
+          <ChipRow>
+            {present.map((entity) => (
+              <Chip
+                key={entity.id}
+                label={entity.name}
+                detail={entity.kind === 'place' ? t('scene.aPlace') : entity.role ?? undefined}
+                hue={hueFrom(entity.name)}
+                onPress={() =>
+                  router.push(entity.kind === 'place' ? `/place/${entity.id}` : `/entity/${entity.id}`)
+                }
+              />
+            ))}
+          </ChipRow>
+        )}
+      </Block>
 
       {appearances.length > 1 && (
-        <Section title={t('scene.appearances')}>
-          {appearances.map((entry, index) => {
+        <Block title={t('scene.appearances')} count={appearances.length}>
+          {appearances.map((entry) => {
             const here = entry.scene.id === scene.id;
             return (
-              <Row
+              <Item
                 key={entry.scene.id}
-                label={
-                  entry.chapter
-                    ? `${entry.chapter.idx + 1}. ${entry.chapter.title.trim()}`.trim()
-                    : '—'
-                }
+                badge={<Badge n={(entry.chapter?.idx ?? 0) + 1} tone={here ? 'quiet' : undefined} />}
+                title={entry.chapter?.title.trim() || t('chapter.number', { index: (entry.chapter?.idx ?? 0) + 1 })}
                 detail={entry.scene.summary?.trim() || t('scenes.noSummary')}
-                value={here ? t('scene.thisOne') : '›'}
+                meta={here ? t('scene.thisOne') : undefined}
                 onPress={here ? undefined : () => router.push(`/scene/${entry.scene.id}`)}
-                last={index === appearances.length - 1}
               />
             );
           })}
-        </Section>
+        </Block>
       )}
 
-      <Section title={t('scene.present')}>
-        {present.length === 0 ? (
-          <Row label={t('scene.nonePresent')} last />
-        ) : (
-          present.map((entity, index) => (
-            <Row
-              key={entity.id}
-              label={entity.name}
-              detail={entity.kind === 'place' ? t('scene.aPlace') : entity.role ?? undefined}
-              value="›"
-              onPress={() =>
-                router.push(entity.kind === 'place' ? `/place/${entity.id}` : `/entity/${entity.id}`)
-              }
-              last={index === present.length - 1}
-            />
-          ))
-        )}
-      </Section>
-
-      <Section title={t('scene.excerpt')}>
-        <Text selectable style={[styles.body, { color: palette.text }]}>
-          {body.slice(0, EXCERPT).trim()}
-          {body.length > EXCERPT ? '…' : ''}
-        </Text>
-      </Section>
+      <Block title={t('scene.excerpt')}>
+        <Quote>
+          <Text selectable style={[styles.body, { color: palette.text }]}>
+            {body.slice(0, EXCERPT).trim()}
+            {body.length > EXCERPT ? '…' : ''}
+          </Text>
+        </Quote>
+      </Block>
 
       <Hint>{t('scene.hint')}</Hint>
     </ScrollView>
@@ -203,5 +203,5 @@ export default function ScenePage() {
 
 const styles = StyleSheet.create({
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  body: { fontSize: 15, lineHeight: 24, paddingHorizontal: space.lg, paddingBottom: space.md },
+  body: { fontSize: 15, lineHeight: 24 },
 });
