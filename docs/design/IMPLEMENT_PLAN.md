@@ -132,6 +132,9 @@ comes after it, and why it needs no new payload format.
 - [x] T8.4 Backup upload: per-book bundles under `books/`, library bundle at the root, change detection by hash-at-last-upload — `src/cloud/` — depends: T8.3, T6.7
 - [x] T8.5 Cloud library screen: bundle list, per-book Get, restore through the Phase 6 path — `app/settings/cloud/[id]/` — depends: T8.4, T6.8
 - [x] T8.6 Sync frequency per connection (manual default), queue sheet, connection menu — `app/settings/cloud/` — depends: T8.3
+- [x] T8.7 iCloud Drive native module: ubiquity container, five-state availability (entitlement read from the embedded profile *before* the account token), document-scope-public folder, copy in/out with placeholder download — `modules/icloud/` — depends: T1.4
+- [x] T8.8 iCloud auto-sync switch: one row, flip-on syncs at once, blocked states replace the location line and only `driveOff` gets directions, re-checked on foreground — `src/settings/Backup.tsx` — depends: T8.7
+- [x] T8.9 Content-free bundle (`includeText: false` + app preferences) and automatic first-install restore before the shelf loads, with text-less books held and re-attached on re-import by source hash — `src/backup/` — depends: T8.7, T6.8
 
 ## Phase 9: Cast and relations
 

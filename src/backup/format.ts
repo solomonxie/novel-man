@@ -1,7 +1,7 @@
 import type { BookRecord } from '../db/repo';
 
 export const BUNDLE_FORMAT = 'novel-man-bundle';
-export const BUNDLE_VERSION = 1;
+export const BUNDLE_VERSION = 2;
 export const BUNDLE_EXTENSION = 'nmbak';
 
 /**
@@ -16,6 +16,14 @@ export type Snapshot = {
   createdAt: number;
   app: string;
   books: BundledBook[];
+  /** App preferences. Never a credential: those live in the keychain. */
+  settings?: Record<string, string>;
+  /**
+   * The manuscripts were left out. Everything the reader made — notes,
+   * profiles, structure, progress — still travels, and re-importing the same
+   * file puts it back on the book it belongs to.
+   */
+  contentOmitted?: boolean;
 };
 
 export type BundledBook = BookRecord & {

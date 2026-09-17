@@ -4,8 +4,8 @@ Interface only. Product reasoning in [DESIGN.md](DESIGN.md).
 
 Written against the `uiux` skill: `references/foundations.md`,
 `references/mobile.md`, and the `media-library`, `byo-ai-keys`,
-`credentials`, `cloud-bucket-sync`, `backup-restore`, `paste-to-fill`
-patterns. Reader interaction takes 微信读书 as the reference bar;
+`credentials`, `cloud-bucket-sync`, `backup-restore`, `platform-cloud-drive`,
+`paste-to-fill` patterns. Reader interaction takes 微信读书 as the reference bar;
 information architecture follows `bring-your-own-photos`, and AI settings
 follow `bring-your-own-podcasts`.
 
@@ -197,14 +197,18 @@ Book  ⋯  ─▶ Export
 Export always renders from the normalized text plus the **current** structure,
 so hand-made chapter fixes are in every output.
 
-### Backup and restore (`backup-restore`)
+### Backup and restore (`backup-restore`, `platform-cloud-drive`)
 
 ```
-  LOCAL                            CLOUD (same bundle, different destination)
-  Export bundle ─▶ Files/Share     Back Up Now ─▶ queue ─▶ bucket/<prefix>/
-  Import bundle ─▶ file picker     Cloud Library ─▶ pick a bundle ─▶ restore
-  Restore Latest ─▶ auto-snapshot
-     (never needs a picker)
+  ICLOUD                           LOCAL
+  one switch ─▶ launch + leaving   Export bundle ─▶ Files/Share
+  fresh install ─▶ restore, no     Import bundle ─▶ file picker
+     prompt, before the shelf      Restore Latest ─▶ auto-snapshot
+     loads                            (never needs a picker)
+
+                                   CLOUD (same bundle, different destination)
+                                   Back Up Now ─▶ queue ─▶ bucket/<prefix>/
+                                   Cloud Library ─▶ pick a bundle ─▶ restore
 
   RESTORE, either source:
     confirm, restating what it does
@@ -215,6 +219,32 @@ so hand-made chapter fixes are in every output.
         ▼
     result screen: "Restored 1 book · 412 annotations · 3 couldn't be placed"
                                                         ▲ reported, not dropped
+```
+
+The iCloud bundle leaves the manuscripts out, so its restore has a fourth
+outcome: books that are waiting. They are not lost and not on the shelf —
+re-import the same file and its notes, profiles and chapter fixes come back
+with it, matched on the file's hash.
+
+```
+ SURVIVES A REINSTALL
+ ┌─────────────────────────────────────────────────┐
+ │ iCloud Drive                            ●──     │ ← the row IS the switch:
+ │ Files → iCloud Drive → Novel Man · 4m ago       │   no ⋯ menu, no Sync Now
+ ├─────────────────────────────────────────────────┤
+ │ 3 books are waiting for their file              │ ← only after a restore
+ │ Import the same file again and its notes…       │   that had books in it
+ └─────────────────────────────────────────────────┘
+ Your notes, characters, structure, progress and settings — not the books.
+
+ ┌─────────────────────────────────────────────────┐   blocked: the reason
+ │ iCloud Drive                            ○──     │   REPLACES the location
+ │ iCloud Drive is off on this device              │   line, and directions
+ │ Settings → your name → iCloud → iCloud Drive…   │   appear only where the
+ └─────────────────────────────────────────────────┘   user can act. An
+ ← the hint above is suppressed: the row already answered it   unentitled build
+                                                               gets a reason
+                                                               and NO fix line.
 ```
 
 
@@ -553,6 +583,13 @@ never gets retyped.
 ### Settings — backup & cloud
 
 ```
+SURVIVES A REINSTALL                               ← first: the only
+┌─────────────────────────────────────────────────┐  destination with zero
+│ iCloud Drive                            ●──     │  setup, and the only one
+└─────────────────────────────────────────────────┘  that outlives the app
+Your notes, characters, structure, progress and
+settings — not the books themselves.
+
 BACKUP
 Survives a bad import or a corrupt database —      ← states the REAL protection
 not a lost phone. Copy the file off to keep it safe.  scope, not a reassurance

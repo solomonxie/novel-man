@@ -771,6 +771,70 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
   return id;
 }
 
+/**
+ * Puts a backed-up book's own work back onto a freshly imported copy of the
+ * same file. The manuscript came from the file; everything here — corrected
+ * chapters, notes, profiles, where they had got to — came from the reader,
+ * and offsets line up because the source hash matching this record guarantees
+ * the same normalized text.
+ */
+export async function attachBookRecord(bookId: string, record: BookRecord) {
+  const database = await db();
+  await transaction(async () => {
+    const book = record.book;
+    await database.runAsync(
+      `UPDATE books SET title = ?, author = ?, year = ?, edition = ?, cover_path = ?,
+                        kind = ?, cover_hue = ?, summary = ? WHERE id = ?`,
+      book.title, book.author, book.year, book.edition, book.cover_path,
+      book.kind ?? DEFAULT_KIND, book.cover_hue, book.summary, bookId
+    );
+    await database.runAsync('DELETE FROM scenes WHERE book_id = ?', bookId);
+    await database.runAsync('DELETE FROM chapters WHERE book_id = ?', bookId);
+    await database.runAsync('DELETE FROM annotations WHERE book_id = ?', bookId);
+    await database.runAsync('DELETE FROM entities WHERE book_id = ?', bookId);
+
+    const chapterIds = await insertChapters(
+      database,
+      bookId,
+      record.chapters.map((chapter) => ({
+        title: chapter.title,
+        start: chapter.start,
+        end: chapter.end,
+        confident: !!chapter.confident,
+        userEdited: !!chapter.user_edited,
+        brief: chapter.brief,
+      }))
+    );
+    await insertScenes(
+      database,
+      bookId,
+      chapterIds,
+      record.scenes.map((scene) => ({ chapterIndex: scene.chapter_index, start: scene.start, end: scene.end }))
+    );
+    for (const annotation of record.annotations) {
+      await database.runAsync(
+        `INSERT INTO annotations (id, book_id, kind, color, start, end, quote, note, prefix, suffix, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        newId(), bookId, annotation.kind, annotation.color, annotation.start, annotation.end,
+        annotation.quote, annotation.note, annotation.prefix ?? '', annotation.suffix ?? '',
+        annotation.created_at
+      );
+    }
+    for (const entity of record.entities) {
+      await database.runAsync(
+        `INSERT INTO entities (id, book_id, kind, name, alias, summary, portrait_path, fields, sort_index, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        newId(), bookId, entity.kind, entity.name, entity.alias, entity.summary,
+        entity.portrait_path, entity.fields, entity.sort_index, entity.created_at
+      );
+    }
+    await database.runAsync(
+      'INSERT OR REPLACE INTO reading_state (book_id, offset, updated_at) VALUES (?, ?, ?)',
+      bookId, record.offset, Date.now()
+    );
+  });
+}
+
 export async function listBookIds(): Promise<string[]> {
   const database = await db();
   const rows = await database.getAllAsync<{ id: string }>('SELECT id FROM books ORDER BY created_at');
