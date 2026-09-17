@@ -5,7 +5,7 @@ web-build/
 *.tsbuildinfo
 .env
 .env.local
-ios/
+/ios/
 android/
 *.log
 .DS_Store

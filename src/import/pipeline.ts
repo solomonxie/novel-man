@@ -1,6 +1,7 @@
 import { yieldToUI } from '../async/yield';
 import { adoptSourceFile, extensionOf } from '../storage/files';
 import { saveImportedBook } from '../db/repo';
+import { applyToImport } from '../backup/pending';
 import { detectChapters } from '../structure/detect';
 import { hintsOf } from '../structure/document';
 import { countUnits } from '../text/counts';
@@ -118,6 +119,9 @@ export async function importFile(
     chapters: detection.chapters,
     scenes,
   });
+  // A backup without manuscripts left this book's own work waiting for the
+  // file; the file has just arrived, so it goes back on now.
+  await applyToImport(bookId, stored.hash);
   report('saving', 1);
 
   return { bookId, chapters: detection.chapters.length, confident: detection.method !== 'none' };

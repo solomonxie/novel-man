@@ -7,6 +7,7 @@ import { Extractor } from '../src/import/extractor';
 import { WorkOverlay } from '../src/ui/WorkQueue';
 import { listenForIncoming } from '../src/import/sources/incoming';
 import { loadAppearance } from '../src/theme/appearance';
+import { backUpWhenLeaving } from '../src/backup/icloud';
 import { palettes, usePalette, useScheme, type Palette, type Scheme } from '../src/theme';
 
 export default function RootLayout() {
@@ -15,6 +16,7 @@ export default function RootLayout() {
   useEffect(() => {
     loadAppearance();
   }, []);
+  useEffect(backUpWhenLeaving, []);
 
   const scheme = useScheme();
   const palette = usePalette();

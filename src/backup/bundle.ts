@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { listBookIds, readBookRecord, type BookRecord } from '../db/repo';
 import { readImage } from '../storage/files';
+import { readPrefs } from './prefs';
 import type { ExportFile } from '../export/types';
 import {
   BUNDLE_FORMAT,
@@ -14,8 +15,20 @@ import {
 
 const SNAPSHOT = 'snapshot.json';
 
+export type BundleOptions = {
+  /**
+   * Off leaves the manuscripts out. What the reader made is small and theirs;
+   * the books are large and came from a file they still have, so a destination
+   * that should stay cheap and quiet backs up the first without the second.
+   */
+  includeText?: boolean;
+};
+
 /** Per book or whole library — the same payload, so one restore path serves both. */
-export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
+export async function buildBundle(
+  bookIds?: string[],
+  { includeText = true }: BundleOptions = {}
+): Promise<ExportFile> {
   const ids = bookIds ?? (await listBookIds());
   const assets: Record<string, Uint8Array> = {};
   const books: BundledBook[] = [];
@@ -23,7 +36,7 @@ export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
   for (const id of ids) {
     const record = await readBookRecord(id);
     if (!record) continue;
-    books.push(withAssets(record, assets));
+    books.push(withAssets(includeText ? record : { ...record, text: '', hints: [] }, assets));
   }
 
   const snapshot: Snapshot = {
@@ -32,6 +45,8 @@ export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
     createdAt: Date.now(),
     app: 'novel-man',
     books,
+    settings: await readPrefs(),
+    contentOmitted: includeText ? undefined : true,
   };
 
   const files: Record<string, Uint8Array> = { [SNAPSHOT]: strToU8(JSON.stringify(snapshot)) };
@@ -68,7 +83,23 @@ function stash(uri: string, assets: Record<string, Uint8Array>, name: string) {
   return path;
 }
 
-export type OpenedBundle = { snapshot: Snapshot; assets: Record<string, Uint8Array> };
+/**
+ * Sampling the zip is enough to notice a change; hashing all of it is not
+ * free, and the question being asked is only "is this the same backup again".
+ */
+export function fingerprint(bytes: Uint8Array): string {
+  const stride = Math.max(1, Math.floor(bytes.length / 2048));
+  let out = '';
+  for (let i = 0; i < bytes.length; i += stride) out += bytes[i].toString(36);
+  return `${bytes.length}:${out}`;
+}
+
+export type OpenedBundle = {
+  snapshot: Snapshot;
+  assets: Record<string, Uint8Array>;
+  /** Kept so a restore that can't place everything can hold the bundle itself. */
+  bytes: Uint8Array;
+};
 
 export function openBundle(bytes: Uint8Array): OpenedBundle {
   let entries: Record<string, Uint8Array>;
@@ -89,5 +120,5 @@ export function openBundle(bytes: Uint8Array): OpenedBundle {
   for (const [path, content] of Object.entries(entries)) {
     if (path.startsWith('assets/')) assets[path] = content;
   }
-  return { snapshot: validate(parsed), assets };
+  return { snapshot: validate(parsed), assets, bytes };
 }

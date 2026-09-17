@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Image, Pressable, StyleSheet, Switch, Text, View, type ViewStyle } from 'react-native';
 import { radius, space, usePalette } from '../theme';
 
 export function Section({ title, action, children }: {
@@ -52,6 +52,43 @@ export function Row({ label, value, detail, onPress, danger, last }: {
       </View>
       {value ? <Text style={{ color: palette.dim, fontSize: 15 }}>{value}</Text> : null}
     </Pressable>
+  );
+}
+
+/**
+ * A destination is a switch and nothing else. The moment "back up here" and
+ * "do it automatically" are two controls, nobody can predict what any
+ * combination of them does.
+ */
+export function Toggle({ label, detail, directions, value, onChange, disabled, last }: {
+  label: string;
+  detail?: string;
+  /** Shown accented under the detail, and only where the user can act on it. */
+  directions?: string;
+  value: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
+  last?: boolean;
+}) {
+  const palette = usePalette();
+  return (
+    <View
+      style={[
+        styles.row,
+        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.border },
+      ]}
+    >
+      <View style={{ flexShrink: 1, flex: 1 }}>
+        <Text style={{ color: disabled ? palette.dim : palette.text, fontSize: 16 }}>{label}</Text>
+        {detail ? (
+          <Text style={{ color: palette.dim, fontSize: 13, marginTop: 2 }}>{detail}</Text>
+        ) : null}
+        {directions ? (
+          <Text style={{ color: palette.accent, fontSize: 13, marginTop: 2 }}>{directions}</Text>
+        ) : null}
+      </View>
+      <Switch value={value} onValueChange={onChange} disabled={disabled} />
+    </View>
   );
 }
 
