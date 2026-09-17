@@ -16,8 +16,8 @@ import { getBook, listBookIds } from '../db/repo';
 import { bucketFor, listConnections } from './connections';
 
 /** Per book under `books/`, the whole library at the root. Nothing else. */
-export const LIBRARY_KEY = 'library.nmbak';
-export const bookKey = (bookId: string) => `books/${bookId}.nmbak`;
+export const LIBRARY_KEY = 'library.zip';
+export const bookKey = (bookId: string) => `books/${bookId}.zip`;
 
 type Listener = () => void;
 const listeners = new Set<Listener>();

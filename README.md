@@ -42,8 +42,9 @@ or bilingual, and the screenplay as `.fountain`/`.fdx`. Every format states
 what it drops before you pick it, and is rendered from the current structure
 — so what comes out matches what you were reading.
 
-**Backup** — one bundle format, three destinations: iCloud Drive, a file you
-keep, or a cloud bucket you own. Per book, so a single book can come back
+**Backup** — one bundle format — a plain `.zip` of `snapshot.json` plus your
+covers and portraits, openable anywhere — and three destinations: iCloud
+Drive, a file you keep, or a cloud bucket you own. Per book, so a single book can come back
 without touching the rest. Restore never overwrites — it creates something new
 and tells you what it couldn't place.
 

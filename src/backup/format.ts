@@ -2,7 +2,14 @@ import type { BookRecord } from '../db/repo';
 
 export const BUNDLE_FORMAT = 'novel-man-bundle';
 export const BUNDLE_VERSION = 2;
-export const BUNDLE_EXTENSION = 'nmbak';
+export const BUNDLE_EXTENSION = 'zip';
+/** What the bundle was called before it was named for what it already was. */
+export const LEGACY_EXTENSION = 'nmbak';
+
+/** Either name opens: a backup taken by an older build is still a backup. */
+export function isBundleName(name: string): boolean {
+  return name.endsWith(`.${BUNDLE_EXTENSION}`) || name.endsWith(`.${LEGACY_EXTENSION}`);
+}
 
 /**
  * One versioned shape for every destination — a file you keep and a bucket you

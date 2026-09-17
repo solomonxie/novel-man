@@ -13,9 +13,7 @@ import { restoreBundle, type RestoreReport } from './restore';
 
 const AUTO = 'icloud.auto';
 const RESTORED = 'icloud.restoredAt';
-/** Reuses the upload ledger the bucket sync already keeps; there is no bucket. */
-const LEDGER = { connection: 'icloud', key: 'library' };
-const STAGED = 'icloud-upload.nmbak';
+const STAGED = 'icloud-upload.zip';
 /**
  * One file, always overwritten. This is not an archive — it exists so that
  * deleting the app doesn't delete the work, and for that only the newest copy
@@ -23,7 +21,13 @@ const STAGED = 'icloud-upload.nmbak';
  * choose between them, which is a question they can't answer and shouldn't be
  * shown. iCloud keeps its own versions of it.
  */
-const BACKUP = 'novel-man.nmbak';
+const BACKUP = 'novel-man.zip';
+/**
+ * Reuses the upload ledger the bucket sync already keeps; there is no bucket.
+ * Keyed by the file name, so renaming the destination is itself a reason to
+ * write — otherwise an unchanged library would leave the new name unwritten.
+ */
+const LEDGER = { connection: 'icloud', key: BACKUP };
 
 let running = false;
 
