@@ -100,7 +100,7 @@ Shelf  ⊕
           └──────▶ Book page, chapters ready ──▶ [Start reading]
 ```
 
-A `.nmbak` bundle entering by any of these doors is recognized and routed to
+A backup zip entering by any of these doors is recognized and routed to
 restore instead of parse — same door, different handler.
 
 ### Reading → sentence action
@@ -186,7 +186,7 @@ Book  ⋯  ─▶ Export
 │  Manuscript      .txt .md .docx .epub .pdf   │ ← one-way formats carry the
 │  Annotations     .md  .csv                   │   label, not a warning icon
 │  Character bible .md  .docx      (needs cast)│
-│  Backup bundle   .nmbak                      │
+│  Backup bundle   .zip                        │
 └──────────────────────────────────────────────┘
    │
    ▼  options for that format (include annotations? cover? chapter numbering?)

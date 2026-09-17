@@ -317,7 +317,7 @@
     "file": "一个你自己保管的文件",
     "exportLibrary": "导出整个书库",
     "restoreFromFile": "从文件恢复…",
-    "fileHint": "一个 .nmbak 文件装下你的书、结构、笔记和资料，绝不包含 AI 密钥。",
+    "fileHint": "一个 .zip 文件装下你的书、结构、笔记和资料，在哪都能打开，绝不包含 AI 密钥。",
     "freq_off": "关闭",
     "freq_daily": "每天",
     "freq_weekly": "每周",

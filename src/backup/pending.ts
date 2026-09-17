@@ -5,7 +5,7 @@ import { writeImage } from '../storage/files';
 import { openBundle } from './bundle';
 import type { BundledBook } from './format';
 
-const HELD = 'pending-restore.nmbak';
+const HELD = 'pending-restore.zip';
 const APPLIED = 'icloud.pendingApplied';
 
 /**

@@ -116,11 +116,12 @@ public class IcloudDriveModule: Module {
 
     var newest: (name: String, at: Date)?
     for case let url as URL in walker {
-      // A bundle not yet pulled down is listed as `.name.nmbak.icloud`, and
-      // its real name is what a later copyOut has to ask for.
+      // A bundle not yet pulled down is listed as `.name.zip.icloud`, and its
+      // real name is what a later copyOut has to ask for. `.nmbak` is what
+      // the bundle was called before it was named for the zip it always was.
       let placeholder = url.lastPathComponent.hasPrefix(".")
         && url.pathExtension == "icloud"
-      guard url.pathExtension == "nmbak" || placeholder else { continue }
+      guard ["zip", "nmbak"].contains(url.pathExtension) || placeholder else { continue }
 
       let name = placeholder
         ? String(url.lastPathComponent.dropFirst().dropLast(".icloud".count))

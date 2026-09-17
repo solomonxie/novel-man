@@ -103,7 +103,7 @@ can be written once rather than extended per feature.
 - [x] T6.4 `.epub` exporter: spine, generated nav, cover — `src/export/formats/` — depends: T6.1, T4.2 (partial: cover not embedded)
 - [x] T6.5 `.pdf` export via the platform print pipeline, typeset from the reader's themes — `src/export/formats/` — depends: T6.1, T5.1
 - [x] T6.6 Annotation export `.md` / `.csv` — `src/export/formats/` — depends: T6.1, T5.4
-- [x] T6.7 `.nmbak` bundle: versioned `snapshot.json` + `assets/`, per-book and whole-library, never any credential — depends: T6.1, T5.4
+- [x] T6.7 Backup bundle: a plain `.zip` of versioned `snapshot.json` + `assets/`, per-book and whole-library, never any credential; reads the older `.nmbak` name too — depends: T6.1, T5.4
 - [x] T6.8 Restore: confirm, create-new-never-overwrite, natural-key matching, unplaceable-item reporting, refuse newer versions — `src/backup/` — depends: T6.7
 - [x] T6.9 Auto-snapshot on a schedule + "Restore Latest" with no file picker — `src/backup/` — depends: T6.7, T6.8 (removed: an on-device snapshot dies in the sandbox it protects, and T8.8's switch is the automatic restore it was standing in for)
 - [x] T6.10 Export sheet UI: format list with lossiness labels, per-format options, destination choice — `app/book/[id]/export/` — depends: T6.1, T1.6

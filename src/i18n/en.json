@@ -317,7 +317,7 @@
     "file": "A file you keep",
     "exportLibrary": "Export the whole library",
     "restoreFromFile": "Restore from a file…",
-    "fileHint": "One .nmbak file holds your books, structure, notes and profiles. It never contains an AI key.",
+    "fileHint": "One .zip file holds your books, structure, notes and profiles — open it anywhere. It never contains an AI key.",
     "freq_off": "Off",
     "freq_daily": "Daily",
     "freq_weekly": "Weekly",
