@@ -125,7 +125,7 @@ back by opening with Novel already chosen and the sources on the same page, so
 
 | Option | Deciding factor |
 |---|---|
-| **Named sources with fetched indexes, apt-style (chosen)** | The user types a name, not a URL. A source is a row of data — an index URL, a licence, an option schema — so the catalog grows by adding a row, the way formats and vendors already do. Same model people already understand from a package manager: known sources, `update` refreshes the lists, install pulls one thing. |
+| **Named sources with fetched indexes, apt-style (chosen)** | The user types a name, not a URL. A source is a row of data — an index URL, a licence, an option schema — so the catalog grows by adding a row, the way formats and vendors already do. Same model people already understand from a package manager: known sources, `update` refreshes the lists, one command pulls one thing. The word on the button is Download, though — nothing here is installed into anything. |
 | A paste-a-URL box and nothing else | Already built, and it fails the actual request: nobody knows the direct URL of a good KJV `.epub`, and finding one is the work. |
 | Search the open web from the app | Needs a search backend or a scraper per site, returns results nobody can vouch for, and puts the app in the business of judging whether a hit is legal. |
 | Bundle the texts in the app | A bible is 4–5 MB; ten public-domain classics blow the binary up for books most users don't want, and shipping a text means shipping its licence review. |
@@ -136,6 +136,47 @@ field per work and the app offers nothing without one. Public domain and
 freely-licensed editions are plenty for what this is for; a source that points
 at anything else is not one we ship, and a user-added source says on its face
 that its files come from wherever it points.
+
+**Where a novel's text comes from**
+
+| Option | Deciding factor |
+|---|---|
+| **Project Gutenberg over its own OPDS search (chosen)** | First-party, and already an index this app can parse: Atom, one entry per book, and on the book's feed an acquisition link per format with its type, byte length and rights line. A two-word query answers in 0.4s. |
+| Gutendex, the JSON mirror | The obvious first reach, and it took 39 seconds on `pride prejudice` and answered 400 to a Chinese query. A bilingual app cannot ship a search that rejects half its readers. |
+| The Gutenberg catalog file, cached like eBible's | 79,000 rows and ~25 MB compressed, to make a list nobody scrolls. A search belongs to the source when the source has one. |
+| Scraping the search page | The same data, one redesign away from breaking, with no licence field. |
+
+**Where a paper comes from**
+
+| Option | Deciding factor |
+|---|---|
+| **arXiv, over its own fielded API (chosen)** | Atom again, so no new parser; and its query language has the fields the reader actually wants — `au:` for an author, `cat:` for a category, `ti:` for a title. That makes "by author" the source's own search rather than a filter over 30 results. It states the abstract, the date, the category and the DOI, which is the whole paper page. |
+| Semantic Scholar / OpenAlex / Crossref | Better coverage of published work, but they are indexes: most records point at a paywall. A source that finds books you cannot open is a worse experience than a smaller one that always can. |
+| A PDF the reader already has | Still the fallback, and still how a paper from anywhere else arrives. |
+
+**Pictures in a book**
+
+| Option | Deciding factor |
+|---|---|
+| **A paragraph whose text is `![alt](uri)` (chosen)** | Offsets, highlights, notes, search, re-anchoring and export all keep working, because it is text like everything else. A reader that fails to load the file shows the caption instead of a blank. The importer writes the file beside the book and the reader draws it in place of the line. |
+| A second kind of block in the document model | Every offset-based feature in the app — annotations, verses, scenes, export — would have to learn that some blocks are not text. |
+| Drop them, as before | Fine for a novel, wrong for a paper: a figure is often the result. |
+
+**Where a technical book's text comes from**
+
+| Option | Deciding factor |
+|---|---|
+| **The link box, with a GitHub page rewritten to its raw file (chosen)** | A book written in a repository is already at a url, and the reader knows which file they mean. Pasting the page they were reading is the whole interaction; `github.com/o/r/blob/main/ch01.md` becomes `raw.githubusercontent.com/…` the way a Google Doc link already becomes a `.docx`. No search, no API budget, no licence field to interpret. |
+| A GitHub source with repo search | Built, then removed. It bought a search nobody needed — the reader already has the url — at the cost of an API with a 10-searches-a-minute limit, a licence rule that hid unlicensed repos people meant to read, and a guess at which `SUMMARY.md` was the current edition. |
+| Release assets (epub/pdf) | Most such books never cut a release; the ones that do are served by the same link box. |
+
+**What a pass is given to read**
+
+| Option | Deciding factor |
+|---|---|
+| **The chapter's text, except for scripture, which is cited (chosen)** | A manuscript is unknown to the model and must be sent. A bible is the opposite: every edition of it is already in the weights, so `Edition: KJV / Passage: Genesis 5:1-32` buys the same answer for a few dozen tokens instead of a few thousand. The edition is named and the model is told to flag a wording it does not recognise, because versification and phrasing differ between editions. |
+| Send the bible's text like any other book | Correct, and pays ~4,000 tokens a chapter, 1,189 times, for text the model can already recite. |
+| Cite every book, not just scripture | A model has not read this manuscript, and would confabulate one. The line is drawn at the kind that addresses itself by verse — a canonical text, not a private one. |
 
 **A bible in a model built for novels**
 
@@ -153,6 +194,14 @@ that its files come from wherever it points.
 | A bible bundled in the app | One translation for everyone, ~3 MB of binary for users who don't want it, and a licence review shipped with every release. |
 | The same edition as epub or plain text | 11.5 MB against USFM's 2.9 MB for the identical text, arriving as prose with verse numbers glued into the words — re-guessing a structure the source already knew. |
 | A verse API per request (bible-api, getbible) | Reading offline is the whole app. Fine as a lookup, useless as a book. |
+
+**Which translations are offered**
+
+| Option | Deciding factor |
+|---|---|
+| **A chosen list of eleven, searched by nobody (chosen)** | The list is short enough to be the whole answer: KJV, ASV, WEB, BSB, NET, YLT, 和合本 简/繁, 当代译本 简/繁, 世界中文. It also disposes of the RTL problem and of 1,400 rows in languages this app has no reader for, without a filter rule per language. |
+| The whole redistributable catalog, with search | 1,412 rows, mostly minority-language editions nobody browsing this app is looking for, and a search box to make the list bearable — a question added to hide a list nobody wanted. |
+| A curated list hard-coded with its own metadata | Then the counts and the licence line are our claim rather than the publisher's, and they go stale silently. The list picks ids; the catalog still supplies everything about them. |
 
 **Translation granularity**
 
@@ -244,7 +293,7 @@ built structure-first.**
   `\toc3` state what that book is called and abbreviated in the edition's own
   language, which is what makes `John 3:16`, `约 3:16` and `1 Cor 13` all
   resolve without a hardcoded book list per language.
-- *Two questions at install; everything else is a reading setting.* Translation
+- *Two questions at download; everything else is a reading setting.* Translation
   and canon decide which bytes are fetched. Verse numbers, one-verse-per-line
   against flowing paragraphs, section headings, poetry indents, footnotes,
   cross-references and red letter are all render choices over the same text —
@@ -361,7 +410,7 @@ text).
 Source    id · name · index URL · licence policy · trust (bundled | yours) · fetched_at
 Work      source · slug · title · author · language · kind · licence · options
 Edition   the fetchable thing: format · URL · bytes · sha256 · structure map?
-Install   book ← source · work · the option values that produced it
+Download  book ← source · work · the option values that produced it
 ```
 
 - **The app ships the source list, never the books.** Indexes are names and
@@ -372,7 +421,7 @@ Install   book ← source · work · the option values that produced it
   toggle or free text, each with a default, and a one-line "what you get" built
   from the current values. The bible's translation / canon / verse layout and
   Gutenberg's file format go through the same renderer.
-- **An install is recorded**, so the same edition can be recognized ("you
+- **A download is recorded**, so the same edition can be recognized ("you
   already have this"), re-fetched after a delete, and re-requested with one
   option changed without retyping the rest.
 - **Fetching reuses the import pipeline** — the same queue, the same preview
@@ -380,7 +429,7 @@ Install   book ← source · work · the option values that produced it
   where the edition carries one, its structure map.
 - **Sources are managed in Settings**, listed with when each was last
   refreshed; a user can add an index URL of their own or remove any source.
-  A removed source doesn't touch the books it installed.
+  A removed source doesn't touch the books it brought in.
 
 **Scripture** — three additions, all offsets over the same Document:
 
@@ -456,15 +505,31 @@ file export/import (user picks the file), cloud bucket backup/restore (fixed
 keys, no picker) and iCloud Drive (one switch, no picker either). Only the
 destination differs; the bundle is identical.
 
+**Three tiers, each answering a failure the others don't.**
+
+| Tier | Answers | Survives deletion | Cadence | Retention |
+|---|---|---|---|---|
+| **1. App container** (`Documents/Backups`, visible in Files) | data still there but now *wrong*: a bad re-detect, a bad restore, a bad migration | No | rolling zip + `.db` copy on background, at most daily; an extra zip before any bulk rewrite | **7 days by age** |
+| **2. iCloud Drive** | phone lost, app reinstalled, "let me see the file myself" | Yes | every change, 8s quiet window | **latest 10**, older pruned |
+| **3. Object bucket** | everything else, plus "what did this look like in March" | Yes | daily, only if changed | **never deleted** |
+
+Tier 1 not surviving deletion is not a weakness, it is a different job: it is
+the only copy that is instant, offline and fine-grained. Most real data loss is
+not a lost phone — it is an operation that did exactly what you asked to data
+you did not mean.
+
 ```
-bucket/<prefix>/
-├── 202609-library.zip       settings, shelf order, language, connection
-├── 202610-library.zip       list — NO secrets. A file per month, the
-│                            current one overwritten all month long
+Documents/Backups/               tier 1 — never offered as a destination
+├── novel-man-daily.zip          rolling, overwritten, at most daily
+├── novel-man.db                 raw copy, WAL checkpointed first
+└── novel-man-before-restructure-2026-09-18-…zip   kept apart, pruned at 7 days
+
+bucket/<prefix>/                 tier 3 — nothing here is ever deleted
+├── library-2026-09-17.zip       settings, shelf order, language, connection
+├── library-2026-09-18.zip       list — NO secrets. One file per day.
 └── books/
-    ├── 202609-<book-uuid>.zip   one bundle per book per month, so a single
-    └── 202610-<book-uuid>.zip   book can be pulled back without touching
-                                 the rest — and from before last month
+    ├── <book-uuid>-2026-09-17.zip   one bundle per book per day, so a single
+    └── <book-uuid>-2026-09-18.zip   book can be pulled back on its own
 ```
 
 The bundle is a plain zip, and named one. It carried a `.nmbak` extension
@@ -519,14 +584,28 @@ assets/
   prompt: there is nothing to overwrite and no context yet for the question.
   Launch pulls back *before* it pushes up, or an empty shelf would overwrite
   the backup it came for. The file picker stays the only manual path.
-- **One file per month, overwritten all month long** — `202609-library.zip`.
-  Backups are written on every change, so a file per write is a wall of
-  near-identical bundles nobody can choose between, and a single file forever
-  means a mistake noticed in April has nothing behind it. A month is the unit
-  someone means by "before I broke it", it caps a year at twelve files, and
-  the month leads the name so any folder sorts itself. Restore-on-install
-  takes the newest and never asks. iCloud keeps its own file versions
-  underneath that.
+- **One file per day, and retention decides the count** — `library-2026-09-18.zip`.
+  A name overwritten all month cannot answer "what did this look like in
+  March", because by the time anyone asks, March has written over itself
+  thirty times. So the name states the day and sorts itself, and each tier
+  bounds its own list: iCloud keeps the latest ten because the user pays for
+  it and a count is what bounds a bill; the bucket deletes nothing, because
+  write-only credentials are the common case and a bucket that cannot delete
+  cannot be wiped by a bug in this app. Restore-on-install takes the newest
+  and never asks.
+- **A large operation earns its own file, out of band** — before a restore or
+  a re-detect, tier 1 writes `novel-man-before-<what>-<stamp>.zip` under a name
+  the daily roll cannot eat. This is the copy that actually gets used: the bad
+  operation happens minutes after the day's rolling copy captured the good
+  state, or hours after, having captured nothing.
+- **Pruned by age, not by count, in tier 1** — seven days. Once an operation
+  can add files, a count silently caps how many of them you get before
+  yesterday is gone; "anything from the last week" is a promise that stays
+  legible. Tier 2 inverts it, because there a count is what bounds the bill.
+- **The dangerous direction is a bad local state overwriting a good remote
+  copy**, not the other way round. Which is why tier 1 makes "undo the bad
+  thing" possible without touching a remote copy at all, tier 3 cannot delete,
+  and a restore creates rows beside what is there rather than merging into it.
 - **The container is document-scope public** (`NSUbiquitousContainers`), so
   the folder is reachable in Files under the app's name. A backup the user
   can't open is worse than a local file.
@@ -714,12 +793,13 @@ chapter corrections.
   ask which book, and quietly bills for the whole thing.
 - **eBible's catalog is 731 KB and its ids are not promised forever.** Cached
   with its date like any other index, and a translation that has moved fails
-  by name. Rows marked `Redistributable = False` never reach the list.
-- **Right-to-left editions are in that catalog** (Hebrew, Arabic) and the
-  reader has no RTL mode. They are listed today and would read wrongly, so
-  either the reader learns direction or the source filters them out; filtering
-  is the honest short-term answer and is recorded as such rather than being
-  discovered by a user.
+  by name — with a chosen list, loudly: an id that vanishes upstream drops a
+  row people expect to see.
+- **The translations people ask for by name are the ones no source may
+  serve.** NIV, NKJV, NASB, 吕振中 — all `Redistributable = False`, all
+  unavailable at any price. Naming them in the list as "unavailable" would be
+  an ad for a disappointment; they are simply absent, and the absence is
+  documented here.
 - **Open**: two translations side by side is the bilingual reader's shape, not
   the translation feature's — same screen, different pairing. Worth reusing,
   not worth forcing before someone asks.

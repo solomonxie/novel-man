@@ -117,18 +117,65 @@ export async function getDocumentText(bookId: string): Promise<string> {
 }
 
 /** One row per part, in reading order, with how many chapters sit under it. */
-export type Part = { idx: number; title: string; chapters: number; start: number; end: number };
+export type Part = {
+  idx: number;
+  title: string;
+  chapters: number;
+  start: number;
+  end: number;
+  summary: string | null;
+  image_path: string | null;
+};
+
+/** The chapters are the part; only what someone wrote about it is stored apart. */
+const PART_SELECT = `
+  SELECT c.part_idx AS idx, c.part_title AS title, COUNT(*) AS chapters,
+         MIN(c.start) AS start, MAX(c.end) AS end,
+         d.summary AS summary, d.image_path AS image_path
+    FROM chapters c
+    LEFT JOIN part_details d ON d.book_id = c.book_id AND d.idx = c.part_idx
+   WHERE c.book_id = ? AND c.part_idx IS NOT NULL`;
+const PART_GROUP = ' GROUP BY c.part_idx, c.part_title ORDER BY c.part_idx';
 
 export async function listParts(bookId: string): Promise<Part[]> {
   const database = await db();
-  return database.getAllAsync<Part>(
-    `SELECT part_idx AS idx, part_title AS title, COUNT(*) AS chapters,
-            MIN(start) AS start, MAX(end) AS end
-       FROM chapters
-      WHERE book_id = ? AND part_idx IS NOT NULL
-      GROUP BY part_idx, part_title
-      ORDER BY part_idx`,
-    bookId
+  return database.getAllAsync<Part>(PART_SELECT + PART_GROUP, bookId);
+}
+
+export async function getPart(bookId: string, idx: number): Promise<Part | null> {
+  const database = await db();
+  const row = await database.getFirstAsync<Part>(
+    `${PART_SELECT} AND c.part_idx = ?${PART_GROUP}`,
+    bookId, idx
+  );
+  return row ?? null;
+}
+
+/** The title lives on the chapters, so renaming one is renaming all of them. */
+export async function renamePart(bookId: string, idx: number, title: string) {
+  const database = await db();
+  await database.runAsync(
+    'UPDATE chapters SET part_title = ? WHERE book_id = ? AND part_idx = ?',
+    title.trim(), bookId, idx
+  );
+}
+
+export async function setPartDetail(
+  bookId: string,
+  idx: number,
+  changes: { summary?: string | null; image_path?: string | null }
+) {
+  const database = await db();
+  await database.runAsync(
+    'INSERT OR IGNORE INTO part_details (book_id, idx) VALUES (?, ?)',
+    bookId, idx
+  );
+  const fields = (['summary', 'image_path'] as const).filter((field) => field in changes);
+  if (!fields.length) return;
+  await database.runAsync(
+    `UPDATE part_details SET ${fields.map((field) => `${field} = ?`).join(', ')}
+      WHERE book_id = ? AND idx = ?`,
+    [...fields.map((field) => changes[field] ?? null), bookId, idx]
   );
 }
 
@@ -138,6 +185,16 @@ export async function listPartChapters(bookId: string, partIdx: number): Promise
     'SELECT * FROM chapters WHERE book_id = ? AND part_idx = ? ORDER BY idx',
     bookId, partIdx
   );
+}
+
+/** The verses inside one range of the book — a part's, on its own page. */
+export async function countVersesIn(bookId: string, start: number, end: number): Promise<number> {
+  const database = await db();
+  const row = await database.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM verses WHERE book_id = ? AND start >= ? AND start < ?',
+    bookId, start, end
+  );
+  return row?.n ?? 0;
 }
 
 export async function countVerses(bookId: string): Promise<number> {

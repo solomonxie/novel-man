@@ -46,6 +46,7 @@ annotation · `!` destructive · `·` disabled · `[brackets]` = sheet.
 | `cast.md` | cast, character/place profiles, relationship graph |
 | `translation.md` | translation, glossary, sentence editor, screenplay |
 | `notes.md` | notes and highlights |
-| `scripture.md` | a bible: installing one, parts and verses, references |
+| `scripture.md` | a bible: downloading one, parts and verses, references |
+| `sources.md` | the public sources: eBible, Gutenberg, arXiv, and the rules they follow |
 | `cloud.md` | AI keys, cloud backup, work queue, cloud library, restore |
 | `components.md` | the shared primitives every page is built from |

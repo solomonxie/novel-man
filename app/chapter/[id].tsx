@@ -57,7 +57,7 @@ export default function ChapterPage() {
       setLanguage(book?.language ?? 'en');
       const body = await getDocumentText(found.book_id);
       setText(body);
-      setCost(await estimateDeep(body, [found], book?.language ?? 'en'));
+      if (book) setCost(await estimateDeep(body, [found], book));
     });
   }, [id]);
 
