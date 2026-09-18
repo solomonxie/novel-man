@@ -86,7 +86,7 @@ export default function Cast() {
     if (which === 'extract' || which === 'deep') {
       const { text } = await document.read();
       const price = await (which === 'deep'
-        ? estimateDeep(text, chapters, book.language)
+        ? estimateDeep(text, chapters, book)
         : estimateCast(text, chapters, book.language));
       setEstimates((was) => ({ ...was, [which]: price }));
       return;

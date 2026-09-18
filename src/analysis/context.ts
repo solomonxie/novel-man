@@ -1,6 +1,7 @@
 import type { Book, Chapter, Entity, Scene } from '../db/repo';
 import { formatCount } from '../text/counts';
 import { namesOf } from '../cast/mentions';
+import { supports } from '../books/kinds';
 
 /**
  * What a chapter pass is allowed to know. Everything here is cheap next to the
@@ -32,10 +33,55 @@ export type ChapterContext = {
   previousScenes?: Scene[];
   /** Present when the pass asks for scenes: the chapter goes out numbered. */
   paragraphs?: ChapterParagraph[];
+  /** Present for scripture: what is cited in place of the text. */
+  passage?: Passage;
 };
 
 export function chapterBody(text: string, chapter: Chapter): string {
   return text.slice(chapter.start, Math.min(chapter.end, chapter.start + CAPS.chapter));
+}
+
+/** The verses a scripture chapter covers, for citing it instead of sending it. */
+export type Passage = { first: number; last: number };
+
+/**
+ * A book every model has already read, in every edition. Scripture is the only
+ * one — a kind that addresses itself by verse is a canonical text, not a
+ * manuscript this app has to teach anyone.
+ */
+export function citedNotSent(book: Pick<Book, 'kind'>): boolean {
+  return supports(book.kind, 'verses');
+}
+
+/**
+ * The passage, named rather than sent. Genesis 5 is ~4,000 tokens of text this
+ * app would otherwise pay to hand a model that can already recite it. The
+ * edition is named because the wording is not the same in all of them, and the
+ * model is told to say so rather than quietly answer about a different one.
+ */
+export function passageBody(book: Book, chapter: Chapter, passage?: Passage): string {
+  const reference = chapter.title.trim() || `${chapter.idx + 1}`;
+  const verses = passage ? `${reference}:${passage.first}-${passage.last}` : reference;
+  return [
+    `Edition: ${book.title}`,
+    `Passage: ${verses}`,
+    passage ? `Verses: ${passage.last - passage.first + 1}` : '',
+    'The text of this passage is not included. Read it from your own knowledge of this ' +
+      'edition. Where your memory of the wording differs from this edition, say so ' +
+      'rather than smoothing it over, and never supply a verse you are unsure of.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** What the pass is given to read: the chapter itself, or the reference to it. */
+export function chapterMaterial(
+  book: Book,
+  chapter: Chapter,
+  text: string,
+  passage?: Passage
+): string {
+  return citedNotSent(book) ? passageBody(book, chapter, passage) : chapterBody(text, chapter);
 }
 
 export type ChapterParagraph = { index: number; offset: number; text: string };
@@ -141,7 +187,7 @@ export function assemble(context: ChapterContext): string {
       })`,
       context.paragraphs
         ? numberedBody(context.paragraphs)
-        : chapterBody(context.text, context.chapter),
+        : chapterMaterial(context.book, context.chapter, context.text, context.passage),
     ],
   ];
   return sections

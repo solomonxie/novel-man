@@ -60,14 +60,14 @@ sections it has and in what order, and this page renders that list. A kind
 nobody has built a section for still gets a readable book — title, chapters,
 notes, export — because those belong to every kind.
 
-| section | novel | scripture | nonfiction | how-to | textbook |
-|---|---|---|---|---|---|
-| the facts pill row | words · chapters · hours | books · chapters · verses | words · parts | steps · modules | units · terms |
-| Inside | Chapters · Scenes · Notes | **Books** · Notes | Parts · Notes | Modules · Notes | Units · Notes |
-| People | Characters · Places | **Who and where**, as record | same | — | — |
-| Utilities | Translations · Screenplay · Illustrations · Animations | Translations | Translations | Translations | Translations |
-| its own thing | — | **go to a reference** | the index | the step list | figures · key terms |
-| Analyze | the book, or a chapter | **one bible book at a time** | one part | one module | one unit |
+| section | novel | scripture | paper | nonfiction | how-to | textbook |
+|---|---|---|---|---|---|---|
+| the facts pill row | words · chapters · hours | books · chapters · verses | words · **sections** · hours | words · parts | steps · modules | units · terms |
+| Inside | Chapters · Scenes · Notes | **Books** · Notes | **Sections** · Notes | Parts · Notes | Modules · Notes | Units · Notes |
+| People | Characters · Places | **Who and where**, as record | — the people are the authors | same | — | — |
+| Utilities | Translations · Screenplay · Illustrations · Animations | Translations | Translations | Translations | Translations | Translations |
+| its own thing | — | **go to a reference** | **authors · arXiv id · category, from the source** | the index | the step list | figures · key terms |
+| Analyze | the book, or a chapter | **one bible book at a time** | **what it claims and what it rests on** | one part | one module | one unit |
 
 Two rules the table encodes:
 
@@ -75,6 +75,9 @@ Two rules the table encodes:
   row does not appear greyed on a bible; it is not part of that page. What is
   built-but-unbuilt (`Illustrations · Coming soon`) still shows, because that
   is a promise about this app, not a feature this book lacks.
+- **A kind says what reading it is for.** A story is followed, an argument is
+  weighed: the same pass over a paper asks what the section claims and on what
+  evidence, and the book summary it writes is an abstract rather than a blurb.
 - **Analysis is scoped by the unit above the chapter.** "Analyze" on a novel
   means the book; on a bible it means Genesis, because 1,189 chapters is a bill
   nobody meant to agree to. The button's label says which.

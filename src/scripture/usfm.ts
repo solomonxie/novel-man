@@ -38,6 +38,14 @@ const DROPPED = /\\(f|fe|x)\s.*?\\\1\*/g;
 /** `\w word|strong="G1722"\w*` is a word with a dictionary key stapled to it. */
 const ATTRIBUTED = /\\\+?(\w+)\s([^\\|]*?)(\|[^\\]*?)?\\\+?\1\*/g;
 const REMAINING = /\\[a-z]+\d*\*?\s?/gi;
+/**
+ * The KJV prints a pilcrow where a paragraph begins, and eBible's edition
+ * carries 2,970 of them as literal text rather than markup. The `\p` that
+ * precedes them says the same thing in the markup, and a reader that already
+ * puts each verse on its own line says it in the layout — so on the page it is
+ * a character with nothing left to mean.
+ */
+const PILCROW = /¶\s*/g;
 
 export function cleanLine(line: string): string {
   let text = line;
@@ -47,8 +55,20 @@ export function cleanLine(line: string): string {
     if (next === text) break;
     text = next;
   }
-  return text.replace(REMAINING, '').replace(/\s+/g, ' ').trim();
+  return text.replace(REMAINING, '').replace(PILCROW, '').replace(/\s+/g, ' ').trim();
 }
+
+/**
+ * Markers whose content is a heading about the text rather than the text: a
+ * section title, its cross-reference line, a speaker, Psalm 119's `ב BETH.`.
+ * They are not verse text and they are not the next verse's either, so they
+ * are dropped — appending them put the next section's title on the end of the
+ * verse before it.
+ */
+const HEADINGS = new Set([
+  's', 's1', 's2', 's3', 's4', 'ms', 'ms1', 'ms2', 'ms3',
+  'mr', 'sr', 'r', 'sp', 'qa', 'd', 'cl', 'cp', 'ca', 'va', 'vp', 'rem',
+]);
 
 /** One file. Returns null for front matter, glossaries and anything chapterless. */
 export function parseUsfm(source: string): UsfmBook | null {
@@ -85,6 +105,8 @@ export function parseUsfm(source: string): UsfmBook | null {
       if (!split || !chapter) continue;
       verse = { number: Number.parseInt(split[1], 10), text: cleanLine(split[2]) };
       chapter.verses.push(verse);
+    } else if (HEADINGS.has(tag)) {
+      continue;
     } else if (verse) {
       // A poetry line or a paragraph break inside a verse is still that verse.
       const text = cleanLine(rest);

@@ -11,7 +11,7 @@ it depends on the structure model being right.
 
 Phases 1-11 are implemented except the four tasks still unticked below;
 Phase 12 is designed and not started. Phases 13 and 14 are partly built: a
-bible installs from eBible.org with its structure, and the Add page asks the
+bible is downloaded from eBible.org with its structure, and the Add page asks the
 kind first — what each phase still owes is unticked below.
 `(partial: …)` marks a task whose core landed but whose listed scope is not
 fully covered, and `(removed: …)` one that shipped and was then taken out —
@@ -194,12 +194,15 @@ map — no new import path, no screen that knows what a bible is.
 - [ ] T12.2 Index fetch + cache: refresh one source or all, keep the last good index, record its date, work offline off the cache — `src/sources/index.ts` — depends: T12.1
 - [ ] T12.3 Search across cached indexes: title, author, alias, in both scripts, ranked, grouped by subject — `src/sources/search.ts` — depends: T12.2
 - [ ] T12.4 Option schema + resolver: pick-one / toggle / text with defaults, "what you'll get" line, option values → a concrete `Edition` — `src/sources/options.ts` — depends: T12.1
-- [ ] T12.5 Install: fetch the edition through the import queue, verify size/sha256, record the install (source, work, options) on the book — `src/sources/install.ts` — depends: T12.2, T12.4, T2.10
+- [x] T12.4b Project Gutenberg source: its own OPDS search, the smallest EPUB off the book's feed, terms and size quoted from it — `src/sources/gutenberg.ts`, `app/source/gutenberg.tsx` — depends: T12.1
+- [x] T12.4c A GitHub page url is rewritten to its raw file, so a book written in a repository arrives through the link box rather than through a source of its own — `src/import/sources/links.ts` — depends: T2.10
+- [x] T12.4d Sources are a row of data a kind lists, and each has one find page of the same shape — `src/sources/registry.ts`, `src/ui/FindPage.tsx`, `app/add.tsx` — depends: T12.4b, T12.4c
+- [ ] T12.5 Download: fetch the edition through the import queue, verify size/sha256, record it (source, work, options) on the book — `src/sources/download.ts` — depends: T12.2, T12.4, T2.10
 - [ ] T12.6 Structure map: an edition that publishes its own book/chapter map skips detection and writes those ranges directly — `src/sources/structure.ts` — depends: T12.5, T3.1
 - [ ] T12.7 Find-a-book page and request page, generated from the schema, with the licence and source on every row — `app/source/` — depends: T12.3, T12.4
 - [ ] T12.8 Public sources settings section: list, per-source refresh, add an index URL of your own (validated before it is added), remove — `app/index.tsx`, `app/settings/source/[id].tsx` — depends: T12.2
 - [ ] T12.9 Bundled source adapters and their catalogs: Project Gutenberg, a bible source (translation / canon / verse layout / plates), Chinese public domain (简繁, punctuation, edition) — `src/sources/catalog/` — depends: T12.1, T12.4
-- [ ] T12.10 Failure copy, all of it naming the source: unreachable, moved, stale index, already installed, no licence stated — `src/i18n/` — depends: T12.5
+- [ ] T12.10 Failure copy, all of it naming the source: unreachable, moved, stale index, already on the shelf, no licence stated — `src/i18n/` — depends: T12.5
 
 ## Phase 13: Scripture
 
@@ -211,13 +214,26 @@ a source that already publishes its catalog.
 - [x] T13.2 `verses` table `(book_id, chapter_id, number, start, end)` and the per-edition book-name table from `\toc1`/`\toc2`/`\toc3` — `src/db/migrations.ts`, `src/scripture/` — depends: T13.1 (partial: the `verses` table and per-edition names are written and counted; nothing reads the names back yet — that is T13.5)
 - [x] T13.3 USFM importer: one file per book, `\c`/`\v` marks, `\w …|strong=…\w*` collapsed, `\s1`/`\q1`/`\q2`/`\wj`/`\f`/`\x` kept as switchable marks, never baked into the text — `src/import/formats/usfm.ts` — depends: T2.1, T13.2
 - [x] T13.4 eBible.org source adapter: `translations.csv` as the index (licence from `Redistributable`, counts from OT/NT/DC columns), `<id>_usfm.zip` as the edition, canon as the one option — `src/sources/catalog/ebible.ts` — depends: T12.1, T12.4, T13.3
+- [x] T13.16 Scripture is analyzed by citation, not by text: the pass is given edition, book, chapter and verse range, and the estimate falls with it — `src/analysis/context.ts`, `src/work/handlers.ts` — depends: T13.2
 - [ ] T13.5 Reference parser and jump: `John 3:16`, `约 3:16`, `1 Cor 13`, resolved against the installed edition; wired into shelf search and the chapter sheet — `src/scripture/reference.ts` — depends: T13.2
 - [ ] T13.6 Scripture reader: verse numbers as marks, the verse as the tap unit, reference as the chrome title, share attributed `John 3:16 (WEB)` — `app/reader/[id].tsx`, `src/reader/` — depends: T13.2
 - [ ] T13.7 Scripture reading settings: numbers, one verse per line, headings, poetry, red letter, footnotes — render-only, never a re-download — `src/reader/settings.ts`, `src/ui/ReadingSettingsSheet.tsx` — depends: T13.6
 - [ ] T13.8 Chapter sheet grouped by book, chapter numbers as a grid, OT/NT split — `src/ui/ChapterSheet.tsx` — depends: T13.1
 - [x] T13.9 Book page for scripture: parts where chapters were, analysis scoped and priced per book — `app/book/[id].tsx`, `src/analysis/runs.ts` — depends: T13.1, T7.3 (partial: parts lead the book page and a bible counts books and verses; per-book analysis scoping is still T14.6)
 - [x] T13.10 `scripture` kind gains `parts` and `verses` features and keeps losing scenes, screenplay and art — `src/books/kinds.ts` — depends: T13.1
-- [x] T13.11 RTL editions are filtered out of the catalog until the reader has a direction — recorded in the source adapter, not discovered by a user — `src/sources/catalog/ebible.ts` — depends: T13.4
+- [x] T13.11 Only a chosen list of editions is offered — KJV, ASV, WEB, BSB, NET, YLT, 和合本 简/繁, 当代译本 简/繁, 世界中文 — in list order, with the catalog still supplying counts and licence; no search box, and RTL editions fall out for free — `src/scripture/ebible.ts`, `app/scripture/translations.tsx` — depends: T13.4
+
+- [x] T13.12 A part gets its own page: title, picture and summary it can be given, its chapters, the notes that fall inside it, and analysis scoped and priced to it — `app/book/[id]/part/[idx].tsx`, `part_details` — depends: T13.1, T13.9
+- [x] T13.13 The reader stops being a dead end: `⋯` folds the chapter sheet, select mode, this chapter's page, its part, its book and a per-chapter analysis into one button — `app/reader/[id].tsx` — depends: T13.12
+- [x] T13.14 The reader draws its chrome before the manuscript arrives — book, chapters and progress first, text second, re-anchored annotations third — and seeds its theme from the appearance so there is no white frame — `app/reader/[id].tsx` — depends: T6.1
+- [x] T13.15 Search on the lists long enough to need one: the chapter list and the parts list, sharing one field — `src/ui/primitives.tsx`, `app/book/[id]/structure.tsx`, `app/book/[id]/parts.tsx` — depends: T13.1
+
+- [x] T15.1 `paper` kind: sections rather than chapters, no cast or scenes, and a pass that weighs an argument instead of following a story — `src/books/kinds.ts`, `src/work/handlers.ts` — depends: T14.1
+- [x] T15.2 arXiv source: fielded search (everything, title, author) and a category picker that browses newest-first; the metadata it states is written onto the book after import — `src/sources/arxiv.ts`, `app/source/arxiv.tsx` — depends: T12.4d
+- [x] T15.3 Pictures: a paragraph that links to a file, pulled out of an EPUB at import and drawn by the reader in place of the line — `src/reader/images.ts`, `src/ui/ReaderImage.tsx`, `src/import/formats/epub.ts` — depends: T6.1
+- [x] T15.4 arXiv's own HTML rendering is preferred over the PDF: headings, figures and `alttext` TeX, with relative figure links made absolute while the base is known — `src/import/formats/html.ts`, `src/sources/arxiv.ts` — depends: T15.2
+- [x] T15.5 Displayed formulas drawn through MathJax in the extractor WebView and kept as tinted PNGs; inline maths stays as its TeX — `src/import/extractor.tsx`, `src/import/formats/html.ts` — depends: T15.4
+- [ ] T15.6 Figures out of a PDF: pdf.js renders them, the extractor bridge does not yet pass them back — `src/import/extractor.tsx` — depends: T15.3
 
 ## Phase 14: Kind first
 

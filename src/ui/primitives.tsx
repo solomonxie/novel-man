@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, Switch, Text, View, type ViewStyle } from 'react-native';
+import { Image, Pressable, StyleSheet, Switch, Text, TextInput, View, type ViewStyle } from 'react-native';
 import { radius, space, usePalette } from '../theme';
 
 export function Section({ title, action, flush, children }: {
@@ -103,6 +103,40 @@ export function Hint({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * One field, on every list long enough to need one. A list you can scroll in a
+ * flick doesn't get it: the box would cost more attention than the scroll.
+ */
+export function Search({ value, onChange, placeholder, onSubmit }: {
+  value: string;
+  onChange: (next: string) => void;
+  placeholder: string;
+  /** Set when the list is somebody else's catalog: the return key runs it. */
+  onSubmit?: () => void;
+}) {
+  const palette = usePalette();
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChange}
+      placeholder={placeholder}
+      placeholderTextColor={palette.faint}
+      autoCapitalize="none"
+      autoCorrect={false}
+      clearButtonMode="while-editing"
+      returnKeyType={onSubmit ? 'search' : 'done'}
+      onSubmitEditing={onSubmit}
+      style={[
+        styles.search,
+        { color: palette.text, backgroundColor: palette.surface, borderColor: palette.border },
+      ]}
+    />
+  );
+}
+
+/** Past this many rows, finding one by eye is slower than typing its name. */
+export const SEARCHABLE_FROM = 8;
+
 export function PrimaryAction({ label, onPress, style }: {
   label: string;
   onPress: () => void;
@@ -158,6 +192,13 @@ const styles = StyleSheet.create({
     gap: space.md,
     paddingHorizontal: space.lg,
     paddingVertical: space.md + 2,
+  },
+  search: {
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    fontSize: 15,
   },
   primary: {
     borderRadius: radius.md,

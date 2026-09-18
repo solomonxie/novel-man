@@ -14,6 +14,9 @@ const { normalize } = await import(join(build, 'import/normalize.js'));
 const { detectChapters } = await import(join(build, 'structure/detect.js'));
 const { detectLanguage } = await import(join(build, 'text/language.js'));
 const { layoutChapter, annotationAt } = await import(join(build, 'reader/model.js'));
+const { imageIn, imageMarker } = await import(join(build, 'reader/images.js'));
+const { sentenceAtLine } = await import(join(build, 'reader/lines.js'));
+const { runsIn, codeBlockIn } = await import(join(build, 'reader/rich.js'));
 const { detectScenes, scenesFromBreaks } = await import(join(build, 'structure/scenes.js'));
 const { reanchor } = await import(join(build, 'reader/anchor.js'));
 const { txtExporter, markdownExporter } = await import(join(build, 'export/formats/text.js'));
@@ -22,7 +25,7 @@ const { epubExporter } = await import(join(build, 'export/formats/epub.js'));
 const { parseNumbered, AlignmentError } = await import(join(build, 'translate/context.js'));
 const { candidateTerms, termsIn } = await import(join(build, 'translate/terms.js'));
 const { diffWords } = await import(join(build, 'translate/diff.js'));
-const { countMentions } = await import(join(build, 'cast/mentions.js'));
+const { countMentions, appearancesIn } = await import(join(build, 'cast/mentions.js'));
 const { layoutGraph, withinRange } = await import(join(build, 'cast/graph.js'));
 const { sha256Hex, hmacSha256, utf8, hex } = await import(join(build, 'cloud/sha256.js'));
 const { signRequest, parseUrl } = await import(join(build, 'cloud/sign.js'));
@@ -30,10 +33,18 @@ const { parseListing, extractMessage } = await import(join(build, 'cloud/client.
 const { parsePasted, regionFromEndpoint } = await import(join(build, 'cloud/providers.js'));
 const { rewrite, nameFor, looksLikeSignIn } = await import(join(build, 'import/sources/links.js'));
 const { fountainExporter, finalDraftExporter } = await import(join(build, 'export/formats/screenplay.js'));
-const { bundleName, monthOf, isBundleName } = await import(join(build, 'backup/format.js'));
+const { bundleName, dateOf, isBundleName } = await import(join(build, 'backup/format.js'));
 const { parseUsfm, layoutBible, cleanLine } = await import(join(build, 'scripture/usfm.js'));
+const { booksFrom, editionFrom, fileNameFor } = await import(join(build, 'sources/gutenberg.js'));
+const { chapterMaterial } = await import(join(build, 'analysis/context.js'));
+const { blocksFromHtml, bytesFromBase64 } = await import(join(build, 'import/formats/html.js'));
+const { papersFrom, queryFor, authorLine, fileNameFor: paperFileName, absolute } =
+  await import(join(build, 'sources/arxiv.js'));
 const { quoteWithVerses, referenceOf, versesIn } = await import(join(build, 'scripture/reference.js'));
-const { parseCsv } = await import(join(build, 'scripture/csv.js'));
+const { escapeLike, looseLike, score } = await import(join(build, 'sources/matching.js'));
+const { passageFrom, retryDelay } = await import(join(build, 'sources/esv.js'));
+const { parseChapterRef, neighbouringChapters } = await import(join(build, 'scripture/canon.js'));
+const { parseCsv, forEachCsvRow } = await import(join(build, 'sources/csv.js'));
 
 let failures = 0;
 
@@ -327,6 +338,9 @@ console.log('links');
     'https://docs.google.com/document/d/1AbC_dEf-123/export?format=docx');
   check('an ordinary link is left alone',
     rewrite('https://example.com/book.epub').url, 'https://example.com/book.epub');
+  check('a github page becomes the file it was showing',
+    rewrite('https://github.com/owner/repo/blob/main/docs/ch01.md'),
+    { url: 'https://raw.githubusercontent.com/owner/repo/main/docs/ch01.md', name: 'ch01.md' });
   check('a filename comes from the path',
     nameFor('https://example.com/a/book.epub', 'application/epub+zip', null), 'book.epub');
   check('content-disposition wins over the path',
@@ -372,14 +386,18 @@ console.log('screenplay');
 console.log('backup names');
 {
   const march = new Date(2026, 2, 9, 4, 30);
-  check('a bundle is named for its month', bundleName('library', march), '202603-library.zip');
-  check('every write in a month is the same file', bundleName('library', new Date(2026, 2, 28)), bundleName('library', march));
-  check('a new month is a new file', bundleName('library', new Date(2026, 3, 1)), '202604-library.zip');
-  check('the month reads back off the name', monthOf('202603-library.zip')?.getMonth(), 2);
-  check('and off a key under a folder', monthOf('books/202612-abc.zip')?.getFullYear(), 2026);
-  check('a bundle from before this stays a bundle', monthOf('library-2026-03-09-04-30.zip'), null);
+  check('a bundle is named for its day', bundleName('library', march), 'library-2026-03-09.zip');
+  check('every write that day is the same file',
+    bundleName('library', new Date(2026, 2, 9, 23, 59)), bundleName('library', march));
+  check('a new day is a new file', bundleName('library', new Date(2026, 2, 10)), 'library-2026-03-10.zip');
+  check('names sort into date order',
+    ['library-2026-03-10.zip', 'library-2026-03-09.zip'].sort(),
+    ['library-2026-03-09.zip', 'library-2026-03-10.zip']);
+  check('the day reads back off the name', dateOf('library-2026-03-09.zip')?.getDate(), 9);
+  check('a bundle named for its month still reads', dateOf('books/202612-abc.zip')?.getFullYear(), 2026);
   check('and still opens', isBundleName('library-2026-03-09-04-30.zip'), true);
-  check('13 is not a month', monthOf('202613-library.zip'), null);
+  check('13 is not a month', dateOf('202613-library.zip'), null);
+  check('nor is a 13th month in a day stamp', dateOf('library-2026-13-09.zip'), null);
 }
 
 console.log('usfm');
@@ -416,7 +434,24 @@ console.log('usfm');
   check('the part is the bible book', laid.parts[0].name, 'John');
   check('a marker with no content leaves nothing behind', cleanLine(String.raw`\p`), '');
 
-  // The install reads a chapter's offsets off the block it starts on, by index
+  // Two things the KJV carries that are not its words: Psalm 119's acrostic
+  // headings, and the pilcrow it prints where a paragraph begins.
+  const psalm = parseUsfm([
+    String.raw`\id PSA`,
+    String.raw`\h Psalms`,
+    String.raw`\c 119`,
+    String.raw`\q1`,
+    String.raw`\v 8 I will keep thy statutes.`,
+    String.raw`\s1 \tl  ב BETH.\tl*`,
+    String.raw`\q1`,
+    String.raw`\v 9 ¶ Wherewithal shall a young man cleanse his way?`,
+  ].join('\n'));
+  check('a section heading is not the end of the verse above it',
+    psalm.chapters[0].verses[0].text, 'I will keep thy statutes.');
+  check('the pilcrow the KJV prints is not a word',
+    psalm.chapters[0].verses[1].text, 'Wherewithal shall a young man cleanse his way?');
+
+  // The download reads a chapter's offsets off the block it starts on, by index
   // into what was handed to normalize. Without that index every chapter began
   // at 0 and ran to the end of the bible.
   const placed = normalize(laid.blocks);
@@ -426,6 +461,270 @@ console.log('usfm');
     chapterStarts, [0, placed.text.indexOf('Therefore.')]);
   check('every verse finds its block',
     laid.verses.every((verse) => placed.blocks.some((block) => block.source === verse.block)), true);
+}
+
+console.log('markup a book is written in');
+{
+  check('plain prose is one run', runsIn('She went down anyway.'),
+    [{ text: 'She went down anyway.' }]);
+  check('bold loses its asterisks', runsIn('a **firm** answer'),
+    [{ text: 'a ' }, { text: 'firm', bold: true }, { text: ' answer' }]);
+  check('italic too', runsIn('an *aside* here'),
+    [{ text: 'an ' }, { text: 'aside', italic: true }, { text: ' here' }]);
+  check('code keeps its spacing but not its backticks',
+    runsIn('call `npm run check` first').map((run) => run.text),
+    ['call ', 'npm run check', ' first']);
+  check('and is marked as code', runsIn('`x`')[0].code, true);
+  check('a marked phrase is a highlight', runsIn('==this==')[0].mark, true);
+  check('struck through', runsIn('~~no~~')[0].strike, true);
+  check('an unpaired marker is just a character',
+    runsIn('2 * 3 = 6'), [{ text: '2 * 3 = 6' }]);
+
+  check('a fenced block is code', codeBlockIn('```js\nconst a = 1;\n```'), 'const a = 1;');
+  check('so is an indented one', codeBlockIn('    const a = 1;\n    const b = 2;'),
+    'const a = 1;\nconst b = 2;');
+  check('a paragraph is not', codeBlockIn('She went down anyway.'), null);
+}
+
+console.log('a tap that missed the words');
+{
+  //           line 0: 0-9   line 1: 10-19   line 2: 20-25
+  const lines = [
+    { y: 0, height: 20, length: 10 },
+    { y: 20, height: 20, length: 10 },
+    { y: 40, height: 20, length: 6 },
+  ];
+  const spans = [{ start: 100, end: 112 }, { start: 112, end: 126 }];
+  const at = (y) => sentenceAtLine(lines, spans, 100, y);
+  check('the first line belongs to the first sentence', at(5), spans[0]);
+  check('a later line to the sentence it is inside', at(45), spans[1]);
+  check('the gap under the last line is still that line', at(200), spans[1]);
+  check('above the first line is the first line', at(-10), spans[0]);
+  check('no lines measured yet still answers', sentenceAtLine([], spans, 100, 30), spans[1]);
+  check('a paragraph with no sentences answers nothing',
+    sentenceAtLine(lines, [], 100, 30), null);
+}
+
+console.log('a picture on the page');
+{
+  const marker = imageMarker('file:///images/epub-1.jpg', 'Figure 2');
+  check('a picture is a paragraph that links to it', marker, '![Figure 2](file:///images/epub-1.jpg)');
+  check('and reads back as one', imageIn(marker), {
+    uri: 'file:///images/epub-1.jpg',
+    alt: 'Figure 2',
+  });
+  check('a caption is optional', imageIn('![](https://x/y.png)').alt, '');
+  check('an ordinary paragraph is not a picture', imageIn('She went down anyway.'), null);
+  check('nor is a sentence that merely mentions one',
+    imageIn('see ![this](file:///a.png) here'), null);
+  // Relative to what? The book is text by the time anyone reads it.
+  check('a path with nothing to resolve against is left as text',
+    imageIn('![fig](images/fig1.png)'), null);
+}
+
+console.log('the chapter either side of this one');
+{
+  check('a chapter is a book and a number', parseChapterRef('John 3'), { book: 'John', chapter: 3 });
+  check('a verse is not a chapter', parseChapterRef('John 3:16'), null);
+  check('a book that does not exist is not a book', parseChapterRef('Hezekiah 3'), null);
+  check('nor is a chapter it does not have', parseChapterRef('John 22'), null);
+  check('Psalm and Psalms are one book', parseChapterRef('Psalm 23').book, 'Psalms');
+  check('a numbered book keeps its number', parseChapterRef('1 Corinthians 13').chapter, 13);
+
+  check('both neighbours, inside the book',
+    neighbouringChapters('John 3'), ['John 2', 'John 4']);
+  check('the first chapter has only one', neighbouringChapters('John 1'), ['John 2']);
+  check('and so does the last', neighbouringChapters('John 21'), ['John 20']);
+  check('a one-chapter book has none', neighbouringChapters('Jude 1'), []);
+  check('a verse asks for nothing', neighbouringChapters('John 3:16'), []);
+}
+
+console.log('a passage asked for, not owned');
+{
+  check('the reply is the reference it understood and the words it found',
+    passageFrom({ canonical: 'John 3:16', passages: ['[16] Verse text.\n'] }),
+    { reference: 'John 3:16', text: '[16] Verse text.' });
+  check('two passages come back as two paragraphs',
+    passageFrom({ canonical: 'A 1; B 2', passages: ['one', 'two'] }).text, 'one\n\ntwo');
+  check('nothing found is nothing returned', passageFrom({ canonical: 'X', passages: [] }), null);
+  check('and neither is an answer with no passages at all', passageFrom({}), null);
+
+  // Told to slow down: wait longer each time, never forever, never in step
+  // with every other phone that was told the same thing.
+  check('the wait doubles', retryDelay(0, () => 1) < retryDelay(1, () => 1), true);
+  check('and is capped', retryDelay(20, () => 1) <= 8000, true);
+  check('jitter keeps two of them apart', retryDelay(2, () => 0) < retryDelay(2, () => 1), true);
+  check('a wait is never nothing', retryDelay(0, () => 0) > 0, true);
+}
+
+console.log('finding a book in a kept list');
+{
+  check('a wildcard in a query is a character, not a wildcard',
+    escapeLike('50%_off'), '50\\%\\_off');
+  check('a loose match is the letters in order', looseLike('austn'), '%a%u%s%t%n%');
+
+  const emma = { title: 'Emma', author: 'Austen, Jane' };
+  const letters = { title: 'The Letters of Jane Austen, Volume II', author: 'Austen, Jane' };
+  check('a title that starts with the word beats one that merely contains it',
+    score(emma, ['emma']) > score(letters, ['emma']), true);
+  check('a word found whole beats a word only spelled out across the row',
+    score(emma, ['austen']) > score(emma, ['zzz']), true);
+  check('every word counts', score(letters, ['jane', 'austen']) > score(letters, ['jane']), true);
+  check('nothing typed, nothing to rank', score(emma, []), 0);
+}
+
+console.log('a catalog read one row at a time');
+{
+  const csv = ['Text#,Title,Authors', '1,"A, B",Someone', '2,"Say ""hi""",Nobody'].join('\n');
+  const seen = [];
+  forEachCsvRow(csv, (row) => seen.push(row));
+  check('every row but the header', seen.length, 2);
+  check('a comma inside quotes is still one cell', seen[0].Title, 'A, B');
+  check('and a doubled quote is one quote', seen[1].Title, 'Say "hi"');
+  check('the streaming read and the array read agree', parseCsv(csv), seen);
+}
+
+console.log('a paper read from its own html');
+{
+  const html = [
+    '<body>',
+    '<h2 class="ltx_title">First Section</h2>',
+    '<p>Prose with <math alttext="x^2" display="inline">x2</math> inside it.</p>',
+    '<p><math alttext="E = mc^2" display="block">E=mc2</math></p>',
+    '<figure><img src="https://arxiv.org/html/1/x1.png" alt="Figure 1"></figure>',
+    '<script>ignored()</script>',
+    '</body>',
+  ].join('\n');
+  const blocks = await blocksFromHtml(html);
+  const texts = blocks.map((block) => block.text);
+  check('a heading keeps its level', blocks[0].heading, 2);
+  check('an inline formula stays in its sentence, as its own TeX',
+    texts[1], 'Prose with `x^2` inside it.');
+  check('a displayed one is a paragraph of its own', texts[2], '`E = mc^2`');
+  check('a figure is a picture', texts[3], '![Figure 1](https://arxiv.org/html/1/x1.png)');
+  check('a script is not a paragraph', texts.some((text) => text.includes('ignored')), false);
+
+  check('base64 comes back as the bytes that went in',
+    Array.from(bytesFromBase64('SGVsbG8=')), [72, 101, 108, 108, 111]);
+}
+
+console.log('arxiv');
+{
+  const feed = [
+    '<feed>',
+    '<entry>',
+    '<id>http://arxiv.org/abs/2310.17688v3</id>',
+    '<published>2023-10-26T17:59:06Z</published>',
+    '<title>Managing extreme AI\n  risks amid rapid progress</title>',
+    '<summary>Artificial Intelligence is\n  progressing rapidly.</summary>',
+    '<author><name>Yoshua Bengio</name></author>',
+    '<author><name>Geoffrey Hinton</name></author>',
+    '<author><name>Andrew Yao</name></author>',
+    '<author><name>Dawn Song</name></author>',
+    '<arxiv:primary_category term="cs.CY"/>',
+    '<category term="cs.AI"/>',
+    '<link href="https://arxiv.org/abs/2310.17688v3" rel="alternate" type="text/html"/>',
+    '<link href="https://arxiv.org/pdf/2310.17688v3" rel="related" type="application/pdf" title="pdf"/>',
+    '</entry>',
+    '</feed>',
+  ].join('\n');
+  const [paper] = papersFrom(feed);
+  check('the id carries its version', paper.id, '2310.17688v3');
+  check('a title wrapped by the feed is unwrapped',
+    paper.title, 'Managing extreme AI risks amid rapid progress');
+  check('every author is kept', paper.authors.length, 4);
+  check('the category it was filed under first', paper.category, 'cs.CY');
+  check('the pdf link is the one marked pdf', paper.pdf, 'https://arxiv.org/pdf/2310.17688v3');
+  check('an author line names three and counts the rest',
+    authorLine(paper), 'Yoshua Bengio, Geoffrey Hinton, Andrew Yao +1');
+  check('the file is named for the paper, not its id',
+    paperFileName(paper), 'Managing extreme AI risks amid rapid progress.pdf');
+  check('and takes the format it arrived in',
+    paperFileName(paper, 'html'), 'Managing extreme AI risks amid rapid progress.html');
+  check('a figure beside the page becomes a figure with an address',
+    absolute('<img src="x1.png">', 'https://arxiv.org/html/1706.03762/'),
+    '<img src="https://arxiv.org/html/1706.03762/x1.png">');
+  check('one that already has an address is left alone',
+    absolute('<img src="https://x/y.png">', 'https://arxiv.org/html/1/'),
+    '<img src="https://x/y.png">');
+
+  check('a category is browsed newest first',
+    queryFor('cs.CL', 'cat'), { search: 'cat:cs.CL', newestFirst: true });
+  check('an author is a phrase, so two names are one person',
+    queryFor('Geoffrey Hinton', 'au'), { search: 'au:"Geoffrey Hinton"', newestFirst: false });
+  check('anything else is ranked by relevance',
+    queryFor('attention', 'all'), { search: 'all:attention', newestFirst: false });
+}
+
+console.log('an appearance under the finger');
+{
+  const text = 'One. Ada walked in. Two. Nobody here. Three. Ada again, and Ada once more.';
+  const chapters = [
+    { idx: 0, start: 0, end: 20 },
+    { idx: 1, start: 20, end: 38 },
+    { idx: 2, start: 38, end: text.length },
+  ];
+  const found = appearancesIn(text, chapters, ['Ada'], { from: 0, to: 2 });
+  check('every occurrence in the range is found', found.length, 3);
+  check('in reading order', found.map((entry) => entry.offset).every((offset, at, all) =>
+    at === 0 || offset > all[at - 1]), true);
+  check('each one knows its chapter', found.map((entry) => entry.chapterIdx), [0, 2, 2]);
+  check('and carries enough around it to recognise',
+    found[0].quote.includes('Ada walked in'), true);
+  check('a chapter outside the range is not searched',
+    appearancesIn(text, chapters, ['Ada'], { from: 1, to: 1 }).length, 0);
+  check('a cap is a cap', appearancesIn(text, chapters, ['Ada'], { from: 0, to: 2 }, 2).length, 2);
+}
+
+console.log('what a pass is given to read');
+{
+  const text = 'In the beginning. And the earth was without form.';
+  const chapter = { idx: 4, title: 'Genesis 5', start: 0, end: text.length };
+  const passage = { first: 1, last: 32 };
+  const bible = { kind: 'scripture', title: 'King James Version + Apocrypha', language: 'en' };
+  const cited = chapterMaterial(bible, chapter, text, passage);
+  check('a bible chapter goes out as a reference', cited.includes('Genesis 5:1-32'), true);
+  check('naming the edition it is to be read in',
+    cited.includes('King James Version + Apocrypha'), true);
+  check('and its verse count', cited.includes('Verses: 32'), true);
+  check('the text itself stays on the device', cited.includes('In the beginning'), false);
+
+  const novel = { kind: 'novel', title: 'A Novel', language: 'en' };
+  check('a novel is still sent, because nobody has read it',
+    chapterMaterial(novel, chapter, text, undefined), text);
+}
+
+console.log('gutenberg');
+{
+  const feed = [
+    '<feed>',
+    '<entry><id>https://www.gutenberg.org/ebooks/search.opds/?sort_order=title</id>',
+    '<title>Sort Alphabetically</title></entry>',
+    '<entry><id>https://www.gutenberg.org/ebooks/1342.opds</id>',
+    '<title>A Book</title><content type="text">Someone, A.</content></entry>',
+    '</feed>',
+  ].join('\n');
+  const books = booksFrom(feed);
+  check('a sort link is not a book', books.length, 1);
+  check('the id comes off its own feed url', books[0].id, '1342');
+  check('and the author out of the content line', books[0].author, 'Someone, A.');
+
+  const book = { id: '1342', title: 'A Book', author: 'Someone, A.' };
+  const detail = [
+    '<feed>',
+    '<entry><dcterms:language>en</dcterms:language><rights>Public domain in the USA.</rights>',
+    '<link type="application/epub+zip" rel="http://opds-spec.org/acquisition" length="24835578" href="https://x/big.epub"/>',
+    '<link type="application/x-mobipocket-ebook" rel="http://opds-spec.org/acquisition" length="1" href="https://x/kindle"/>',
+    '<link type="application/epub+zip" rel="http://opds-spec.org/acquisition" length="558381" href="https://x/small.epub"/>',
+    '</entry></feed>',
+  ].join('\n');
+  const edition = editionFrom(detail, book);
+  check('the same book without the plates is the one taken', edition.url, 'https://x/small.epub');
+  check('with the length the source stated', edition.bytes, 558381);
+  check('its terms are quoted, not assumed', edition.rights, 'Public domain in the USA.');
+  check('and its language', edition.language, 'en');
+  check('the title names the file, because the url does not', fileNameFor(book), 'A Book.epub');
+  check('a book with no epub is not an edition', editionFrom('<feed></feed>', book), null);
 }
 
 console.log('citing a passage');

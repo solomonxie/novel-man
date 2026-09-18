@@ -9,8 +9,9 @@ import { countUnits } from '../text/counts';
 import { detectLanguage } from '../text/language';
 import { storeSourceBytes } from '../storage/files';
 import { yieldToUI } from '../async/yield';
-import { inCanonOrder, layoutBible, parseUsfm, type UsfmBook } from './usfm';
+import { inCanonOrder, layoutBible, parseUsfm, type UsfmBook } from '../scripture/usfm';
 import { parseCsv } from './csv';
+import { replaceIndex } from './catalog';
 
 /**
  * eBible.org publishes a catalog that is already an index: every translation
@@ -25,6 +26,8 @@ const CACHE = 'ebible-catalog.json';
 export type Translation = {
   id: string;
   title: string;
+  /** What people call it — the name they'd type, not the catalog's id. */
+  abbr: string;
   language: string;
   languageCode: string;
   copyright: string;
@@ -38,16 +41,34 @@ export type Translation = {
 export type Catalog = { fetchedAt: number; translations: Translation[] };
 
 /**
- * The reader has no right-to-left mode yet, and Hebrew and Arabic editions are
- * in this catalog. Listing them would be offering a book this app renders
- * backwards, so they are filtered here rather than discovered by a reader.
+ * The editions offered, in the order they are offered. The catalog carries
+ * 1,550; a list that long is a search problem nobody wanted, and it is mostly
+ * languages this app has no reader for — right-to-left among them. So the
+ * shelf is a chosen list.
+ *
+ * The ones asked for by name and missing here are missing for one reason: NIV,
+ * NKJV, NASB and 吕振中 are licensed so that no one may redistribute them, and
+ * the catalog's `Redistributable` flag says so. They cannot be downloaded from
+ * here at any price, and offering a row that always fails would be worse than
+ * the absence.
  */
-const RTL = new Set([
-  'heb', 'hbo', 'arb', 'arz', 'apc', 'acm', 'aeb', 'ary', 'ars', 'arq', 'acx',
-  'pes', 'prs', 'urd', 'ckb', 'div', 'syr', 'yid', 'snd', 'uig', 'pbu', 'pes',
-]);
+const EDITIONS: { id: string; abbr: string }[] = [
+  { id: 'eng-kjv', abbr: 'KJV' },
+  { id: 'eng-asv', abbr: 'ASV' },
+  { id: 'engwebp', abbr: 'WEB' },
+  { id: 'engbsb', abbr: 'BSB' },
+  { id: 'engnet', abbr: 'NET' },
+  { id: 'engylt', abbr: 'YLT' },
+  { id: 'cmn-cu89s', abbr: '和合本 简' },
+  { id: 'cmn-cu89t', abbr: '和合本 繁' },
+  { id: 'cmncbs', abbr: '当代译本' },
+  { id: 'cmncbt', abbr: '當代譯本' },
+  { id: 'cmnswcb', abbr: '世界中文' },
+];
 
-/** Books beyond the 66 — the canon question, and the only install option. */
+const offered = new Map(EDITIONS.map((edition, order) => [edition.id, { ...edition, order }]));
+
+/** Books beyond the 66 — the canon question, and the only download option. */
 const DEUTEROCANON = new Set([
   'TOB', 'JDT', 'ESG', 'WIS', 'SIR', 'BAR', 'LJE', 'S3Y', 'SUS', 'BEL', '1MA',
   '2MA', '3MA', '4MA', 'MAN', '1ES', '2ES', 'PS2', 'ODA', 'PSS', 'EZA', '5EZ',
@@ -84,30 +105,47 @@ export async function refreshCatalog(): Promise<Catalog> {
   if (file.exists) file.delete();
   file.create();
   file.write(JSON.stringify(catalog));
+  // The same rows go into the shared index, so one search covers every source
+  // rather than each one being searched in its own corner of the app.
+  await replaceIndex(
+    'ebible',
+    catalog.translations.map((translation) => ({
+      extId: translation.id,
+      title: translation.title,
+      author: translation.abbr,
+      language: translation.language,
+      extra: `${translation.abbr} ${translation.languageCode}`,
+    }))
+  );
   return catalog;
 }
 
 export function translationsFrom(csv: string): Translation[] {
   const rows = parseCsv(csv);
-  const found: Translation[] = [];
+  const found: { order: number; translation: Translation }[] = [];
   for (const row of rows) {
+    const edition = offered.get(row.translationId ?? '');
+    if (!edition) continue;
     if ((row.Redistributable ?? '').toLowerCase() !== 'true') continue;
-    if (RTL.has((row.languageCode ?? '').toLowerCase())) continue;
     const books = number(row.OTbooks) + number(row.NTbooks) + number(row.DCbooks);
     if (!books) continue;
     found.push({
-      id: row.translationId ?? '',
-      title: row.title?.trim() || row.translationId || '',
-      language: row.languageNameInEnglish?.trim() || row.languageName?.trim() || '',
-      languageCode: row.languageCode ?? '',
-      copyright: row.Copyright?.trim() || '',
-      books,
-      chapters: number(row.OTchapters) + number(row.NTchapters) + number(row.DCchapters),
-      verses: number(row.OTverses) + number(row.NTverses) + number(row.DCverses),
-      extraBooks: number(row.DCbooks),
+      order: edition.order,
+      translation: {
+        id: edition.id,
+        title: row.title?.trim() || edition.abbr,
+        abbr: edition.abbr,
+        language: row.languageNameInEnglish?.trim() || row.languageName?.trim() || '',
+        languageCode: row.languageCode ?? '',
+        copyright: row.Copyright?.trim() || '',
+        books,
+        chapters: number(row.OTchapters) + number(row.NTchapters) + number(row.DCchapters),
+        verses: number(row.OTverses) + number(row.NTverses) + number(row.DCverses),
+        extraBooks: number(row.DCbooks),
+      },
     });
   }
-  return found.filter((entry) => entry.id).sort((a, b) => a.title.localeCompare(b.title));
+  return found.sort((a, b) => a.order - b.order).map((entry) => entry.translation);
 }
 
 function number(value: string | undefined): number {
@@ -115,25 +153,17 @@ function number(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function search(translations: Translation[], query: string): Translation[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return translations;
-  return translations.filter((entry) =>
-    `${entry.title} ${entry.language} ${entry.id}`.toLowerCase().includes(needle)
-  );
-}
-
-export type InstallStage = 'fetching' | 'reading' | 'saving';
+export type DownloadStage = 'fetching' | 'reading' | 'saving';
 
 /**
  * The edition arrives as USFM, which states its books, chapters and verses —
  * so this never detects anything. What it does is the ordinary import with the
  * detection step removed: fetch, read, normalize to one text with offsets, save.
  */
-export async function installTranslation(
+export async function downloadTranslation(
   translation: Translation,
   options: { apocrypha: boolean },
-  onProgress?: (stage: InstallStage, fraction: number) => void
+  onProgress?: (stage: DownloadStage, fraction: number) => void
 ): Promise<{ bookId: string; chapters: number }> {
   onProgress?.('fetching', 0);
   const response = await fetch(editionUrl(translation.id), { headers: { accept: '*/*' } });
