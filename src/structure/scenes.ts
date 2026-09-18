@@ -79,3 +79,13 @@ function nextContent(text: string, from: number, end: number): number {
   while (at < end && /\s/.test(text[at])) at += 1;
   return at;
 }
+
+/**
+ * How an untitled scene is shown. A scene nobody has named yet is shown by the
+ * words it starts with — a fact from the book — rather than by "Scene 2", which
+ * is the badge beside it said again in words.
+ */
+export function sceneOpening(text: string, scene: { start: number; end: number }, limit = 48): string {
+  const body = text.slice(scene.start, scene.end).replace(/\s+/g, ' ').trim();
+  return body.length > limit ? `${body.slice(0, limit).trimEnd()}…` : body;
+}

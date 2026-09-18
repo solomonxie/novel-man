@@ -27,8 +27,8 @@ public class IcloudDriveModule: Module {
       try FileManager.default.createDirectory(
         at: target.deletingLastPathComponent(), withIntermediateDirectories: true
       )
-      // Always overwritten: the folder holds the current backup, not a
-      // history of them.
+      // Overwritten in place: the JS side names the file for its month, so
+      // this replaces the current month's copy and leaves the ones before it.
       if FileManager.default.fileExists(atPath: target.path) {
         try FileManager.default.removeItem(at: target)
       }

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { bucketFor, listConnections, removeConnection, updateConnection } from '../../src/cloud/connections';
 import {
-  LIBRARY_KEY,
+  isBookKey,
   queueBackup,
   queueDownload,
   subscribeToSync,
@@ -14,6 +14,7 @@ import {
 import type { RemoteObject } from '../../src/cloud/client';
 import type { Connection } from '../../src/cloud/providers';
 import type { RestoreReport } from '../../src/backup/restore';
+import { monthOf } from '../../src/backup/format';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { PickerSheet } from '../../src/ui/PickerSheet';
 import { space, usePalette } from '../../src/theme';
@@ -22,7 +23,7 @@ const FREQUENCIES: Connection['frequency'][] = ['manual', 'daily', 'weekly'];
 
 export default function CloudLibrary() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const palette = usePalette();
   const [connection, setConnection] = useState<Connection | null>(null);
   const [objects, setObjects] = useState<RemoteObject[] | null>(null);
@@ -77,8 +78,21 @@ export default function CloudLibrary() {
     ]);
   }
 
-  const books = (objects ?? []).filter((object) => object.key.startsWith('books/'));
-  const library = (objects ?? []).find((object) => object.key === LIBRARY_KEY);
+  // One bundle per month in each section, newest first — which is the one
+  // anybody wants, with the months before it still there if they don't.
+  const newestFirst = (rows: RemoteObject[]) => [...rows].sort((a, b) => b.modified - a.modified);
+  const books = newestFirst((objects ?? []).filter((object) => isBookKey(object.key)));
+  const library = newestFirst((objects ?? []).filter((object) => !isBookKey(object.key)));
+
+  /** A bundle from before backups were named for their month keeps its name. */
+  const monthLabel = (key: string) => {
+    const month = monthOf(key);
+    return month
+      ? month.toLocaleDateString(i18n.language, { year: 'numeric', month: 'long' })
+      : key.replace(/^books\//, '').replace(/\.(zip|nmbak)$/, '');
+  };
+  const bookLabel = (key: string) =>
+    key.replace(/^books\//, '').replace(/^\d{6}-/, '').replace(/\.(zip|nmbak)$/, '');
 
   return (
     <ScrollView
@@ -112,15 +126,19 @@ export default function CloudLibrary() {
       ) : (
         <>
           <Section title={t('cloud.whole')}>
-            {library ? (
-              <Row
-                label={new Date(library.modified).toLocaleString()}
-                value={`${Math.round(library.size / 1024)} KB  ›`}
-                onPress={() => confirmGet(library.key)}
-                last
-              />
-            ) : (
+            {library.length === 0 ? (
               <Row label={t('cloud.nothingYet')} last />
+            ) : (
+              library.map((object, index) => (
+                <Row
+                  key={object.key}
+                  label={monthLabel(object.key)}
+                  detail={new Date(object.modified).toLocaleString()}
+                  value={`${Math.round(object.size / 1024)} KB  ›`}
+                  onPress={() => confirmGet(object.key)}
+                  last={index === library.length - 1}
+                />
+              ))
             )}
           </Section>
 
@@ -131,7 +149,8 @@ export default function CloudLibrary() {
               books.map((object, index) => (
                 <Row
                   key={object.key}
-                  label={object.key.replace(/^books\//, '').replace(/\.(zip|nmbak)$/, '')}
+                  label={bookLabel(object.key)}
+                  detail={monthLabel(object.key)}
                   value={`${Math.round(object.size / 1024)} KB  ›`}
                   onPress={() => confirmGet(object.key)}
                   last={index === books.length - 1}

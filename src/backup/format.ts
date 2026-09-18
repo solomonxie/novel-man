@@ -53,7 +53,32 @@ export function validate(snapshot: unknown): Snapshot {
   return candidate;
 }
 
+/**
+ * A month per file, and the month leads the name so a folder sorts itself.
+ * Backups are written constantly — every note, every import, every chapter
+ * that finishes analyzing — and a stamp to the minute turned any destination
+ * into a wall of files nobody could pick from. A month is the unit someone
+ * actually means by "the copy from before I broke it", and it caps a year at
+ * twelve. The current month's file is overwritten in place; the months before
+ * it stay as they were.
+ *
+ * Local time, because the month someone means is the one on their calendar.
+ */
+export function monthStamp(at = new Date()): string {
+  return `${at.getFullYear()}${String(at.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export function bundleName(label: string, at = new Date()): string {
-  const stamp = at.toISOString().slice(0, 16).replace(/[:T]/g, '-');
-  return `${label}-${stamp}.${BUNDLE_EXTENSION}`;
+  return `${monthStamp(at)}-${label}.${BUNDLE_EXTENSION}`;
+}
+
+/**
+ * The month a bundle is for, read back off its name — the first of that month,
+ * so it can be formatted in whatever language is on. Null for a bundle from
+ * before backups were named this way, which is still a bundle.
+ */
+export function monthOf(name: string): Date | null {
+  const match = /(?:^|\/)(\d{4})(0[1-9]|1[0-2])-/.exec(name);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, 1);
 }

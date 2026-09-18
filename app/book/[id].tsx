@@ -17,7 +17,9 @@ import { useTranslation } from 'react-i18next';
 
 import {
   countEntities,
+  listParts,
   listScenes,
+  countVerses,
   createEntity,
   deleteBook,
   getBook,
@@ -31,6 +33,7 @@ import {
   type Annotation,
   type Book,
   type Chapter,
+  type Part,
   type Scene,
   type Entity,
   type EntityKind,
@@ -54,7 +57,7 @@ import { formatCount, formatDuration, readingMinutes } from '../../src/text/coun
 import { radius, space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { PickerSheet } from '../../src/ui/PickerSheet';
-import { bookKinds, supports } from '../../src/books/kinds';
+import { bookKinds, castNoun, kindOf, shows, supports } from '../../src/books/kinds';
 
 export default function BookPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -67,6 +70,8 @@ export default function BookPage() {
   const [offset, setOffset] = useState(0);
   const [noteCount, setNoteCount] = useState(0);
   const [scenes, setScenes] = useState<Scene[]>([]);
+  const [parts, setParts] = useState<Part[]>([]);
+  const [verses, setVerses] = useState(0);
   const [jumpOpen, setJumpOpen] = useState(false);
   const [kindOpen, setKindOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -93,6 +98,8 @@ export default function BookPage() {
     listMentions(id).then(setMentions);
     listRelations(id).then(setRelations);
     listScenes(id).then(setScenes);
+    listParts(id).then(setParts);
+    countVerses(id).then(setVerses);
   }, [id]);
 
   useFocusEffect(load);
@@ -181,9 +188,17 @@ export default function BookPage() {
         }
         facts={
           <>
-            <Fact value={formatCount(book.word_count, book.language)} label={t('units.unit_long')} />
+            {parts.length > 0 ? (
+              <Fact value={parts.length} label={t(`units.unit_${kindOf(book.kind).part ?? 'volume'}s`)} />
+            ) : (
+              <Fact value={formatCount(book.word_count, book.language)} label={t('units.unit_long')} />
+            )}
             <Fact value={chapters.length} label={t('units.unit_chapters')} />
-            <Fact value={formatDuration(minutes)} label={t('units.unit_toRead')} />
+            {verses > 0 ? (
+              <Fact value={formatCount(verses, 'en')} label={t('units.unit_verses')} />
+            ) : (
+              <Fact value={formatDuration(minutes)} label={t('units.unit_toRead')} />
+            )}
           </>
         }
         actions={
@@ -253,6 +268,15 @@ export default function BookPage() {
           <Empty text={t('book.noChapters')} />
         ) : null}
         <Tiles>
+          {/* The level a reader of this kind actually navigates by. A bible
+              opens at Genesis, not at a list of 1,189 chapters. */}
+          {shows(book.kind, 'parts') && parts.length > 0 && (
+            <Tile
+              value={parts.length}
+              label={t(`book.parts_${kindOf(book.kind).part ?? 'volume'}`)}
+              onPress={() => router.push(`/book/${book.id}/parts`)}
+            />
+          )}
           {chapters.length > 0 && (
             <Tile
               value={chapters.length}
@@ -278,11 +302,11 @@ export default function BookPage() {
       {supports(book.kind, 'cast') && (
         <>
           <EntitySection
-            title={t('book.characters')}
+            title={t(`book.${castNoun(book.kind)}`)}
             entities={byFrequency(characters, mentions)}
             onAdd={() => addEntity('character')}
             extra={{
-              label: t('book.cast'),
+              label: t(`book.${castNoun(book.kind)}All`),
               value: `${characters.length}  ›`,
               onPress: () => router.push(`/book/${book.id}/cast`),
             }}
@@ -297,11 +321,13 @@ export default function BookPage() {
 
       <Block title={t('book.utilities')}>
         <Section>
-        <Row
-          label={t('book.translations')}
-          value="›"
-          onPress={() => router.push(`/book/${book.id}/translation`)}
-        />
+        {shows(book.kind, 'translations') && (
+          <Row
+            label={t('book.translations')}
+            value="›"
+            onPress={() => router.push(`/book/${book.id}/translation`)}
+          />
+        )}
         {supports(book.kind, 'script') && (
           <Row
             label={t('book.script')}
