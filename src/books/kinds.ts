@@ -10,8 +10,14 @@
  */
 export type BookFeature = 'cast' | 'scenes' | 'script' | 'visuals' | 'verses';
 
-/** A door on the Add page. `scripture` is a preset source, not a file picker. */
-export type BookSource = 'files' | 'link' | 'scripture';
+/**
+ * A door on the Add page. Beside the two the reader brings something to —
+ * a file, a link — a kind lists the public sources that carry books of that
+ * kind: a bible from eBible, a novel from Gutenberg, a paper from arXiv. A
+ * technical book written in a repository needs no source of its own: its url
+ * is the book.
+ */
+export type BookSource = 'files' | 'link' | 'ebible' | 'gutenberg' | 'arxiv';
 
 /** A section of the book page, in the order the kind lists them. */
 export type BookSection =
@@ -31,6 +37,14 @@ export type BookKind = {
   subject: string;
   /** Invented people or real ones — the difference a profile must not blur. */
   fiction: boolean;
+  /**
+   * What reading it is for. A story is followed; an argument is weighed — so a
+   * pass over a paper asks what is claimed and on what evidence, where a pass
+   * over a novel asks who was there and what changed.
+   */
+  reads?: 'story' | 'argument';
+  /** What this kind calls the level the reader turns. A paper has sections. */
+  unit?: 'chapter' | 'section';
   features: BookFeature[];
   /** What sits above a chapter, when this kind has such a thing. */
   part?: 'book' | 'volume';
@@ -52,7 +66,7 @@ export const bookKinds: BookKind[] = [
     fiction: true,
     features: ['cast', 'scenes', 'script', 'visuals'],
     part: 'volume',
-    sources: ['files', 'link'],
+    sources: ['gutenberg', 'files', 'link'],
     sections: ['chapters', 'scenes', 'notes', 'cast', 'places', 'translations', 'script', 'visuals'],
   },
   {
@@ -60,11 +74,14 @@ export const bookKinds: BookKind[] = [
     subject: 'a work of nonfiction',
     fiction: false,
     features: ['cast'],
-    sources: ['files', 'link'],
+    sources: ['gutenberg', 'files', 'link'],
     sections: ['chapters', 'notes', 'cast', 'places', 'translations'],
   },
   {
-    id: 'tutorial',
+    // A tutorial and a textbook were two rows for one book: something you read
+    // to learn from, with sections and notes and no cast. Gutenberg is not
+    // offered for it — what it has of the genre is a century old.
+    id: 'textbook',
     subject: 'an instructional book',
     fiction: false,
     features: [],
@@ -72,11 +89,15 @@ export const bookKinds: BookKind[] = [
     sections: ['chapters', 'notes', 'translations'],
   },
   {
-    id: 'textbook',
-    subject: 'a textbook',
+    id: 'paper',
+    subject: 'an academic paper',
     fiction: false,
+    reads: 'argument',
+    unit: 'section',
+    // No cast, no scenes: the people in a paper are its authors, and they are
+    // on the cover rather than in the text.
     features: [],
-    sources: ['files', 'link'],
+    sources: ['arxiv', 'files', 'link'],
     sections: ['chapters', 'notes', 'translations'],
   },
   {
@@ -87,8 +108,8 @@ export const bookKinds: BookKind[] = [
     part: 'book',
     // The file picker still works for a bible someone already has; the preset
     // source leads because nobody has a USFM zip lying around.
-    sources: ['scripture', 'files', 'link'],
-    // A bible is read in the edition it was installed as; retranslating one
+    sources: ['ebible', 'files', 'link'],
+    // A bible is read in the edition it was downloaded as; retranslating one
     // is not what this app is for.
     sections: ['parts', 'chapters', 'notes', 'cast', 'places'],
   },
@@ -111,6 +132,11 @@ export function castNoun(kind: string | null | undefined): 'characters' | 'peopl
 
 export function supports(kind: string | null | undefined, feature: BookFeature): boolean {
   return kindOf(kind).features.includes(feature);
+}
+
+/** `chapter` unless the kind says otherwise — a paper turns sections. */
+export function unitOf(kind: string | null | undefined): 'chapter' | 'section' {
+  return kindOf(kind).unit ?? 'chapter';
 }
 
 export function shows(kind: string | null | undefined, section: BookSection): boolean {

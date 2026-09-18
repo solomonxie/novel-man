@@ -108,28 +108,47 @@ page will be. Rows appear as they become answerable — no steps, no Next.
 └───────────────────────────────────────────┘
 ```
 
-Choosing **Scripture** rewrites the two lower sections in place — the source is
-a preset one, so it shows itself rather than asking:
+The kind decides which public sources are on the page. Each is a door to its
+own search — see [sources.md](sources.md):
+
+```
+│ WHERE FROM                        novel   │
+│ ┌───────────────────────────────────────┐ │
+│ │ Project Gutenberg          Search  ›  │ │ ← 79,000 books out of copyright
+│ │ From your files      .txt .md .epub…  │ │
+│ │ From a link                           │ │
+│ └───────────────────────────────────────┘ │
+│ WHERE FROM                      tutorial  │
+│ ┌───────────────────────────────────────┐ │
+│ │ From your files                       │ │ ← a kind with no public source
+│ │ From a link                           │ │   still has the two every kind
+│ └───────────────────────────────────────┘ │   has
+```
+
+Choosing **Scripture** puts eBible in the same place, and it is the one source
+with a list worth keeping: eleven editions, cached with their date.
 
 ```
 │ WHERE FROM                                │
-│ eBible.org · 1,412 translations · 3 Mar ⟳ │ ← the only source that carries a
-│                                           │   bible, so it is stated, not
-│ ABOUT THIS BOOK                           │   offered as a choice
+│ eBible.org · 11 translations   Search  ›  │ ← the only source that carries a
+│ Update the list of bibles         ⟳       │   bible
+│ ABOUT THIS BOOK                           │
 │ ┌───────────────────────────────────────┐ │
-│ │ Translation   World English Bible  ›  │ │ ← pushes the searchable list
+│ │ Translation                   WEB  ›  │ │ ← pushes the chosen list; eleven
+│ │                                       │ │   editions, no search box
 │ │ Canon         66 books             ▾  │ │ ← only when the edition has
 │ └───────────────────────────────────────┘ │   deuterocanonical books
 │ 66 books · 1,189 chapters · 31,102 verses │
 │ · 2.9 MB · structure included             │
-│            [[ Install ]]                  │
+│            [[ Download ]]                 │
 ```
 
 - **The kind's chips never disappear.** Changing your mind re-renders the rows
   under them; nothing is lost that still applies, and a file already chosen
   stays chosen if the new kind can take it.
-- **Sources filter by kind, and say so when empty**: "No source carries a
-  textbook yet — add one from a file."
+- **Sources belong to kinds.** A novel is offered Gutenberg, a tutorial is
+  offered GitHub, a bible eBible; a kind with no public source shows the file
+  picker and the link box, which every kind has."
 - **Detected values are shown as detected** (`Auto — 中文`, `第N章 found`), so
   the reader overrides a fact rather than filling a blank.
 - **`Add it` is the first moment anything is fetched.** Everything above it is

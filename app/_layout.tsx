@@ -8,6 +8,7 @@ import { WorkOverlay } from '../src/ui/WorkQueue';
 import { listenForIncoming } from '../src/import/sources/incoming';
 import { loadAppearance } from '../src/theme/appearance';
 import { watchForChanges } from '../src/backup/icloud';
+import { watchForLocalBackup } from '../src/backup/local';
 import { palettes, usePalette, useScheme, type Palette, type Scheme } from '../src/theme';
 
 export default function RootLayout() {
@@ -17,6 +18,7 @@ export default function RootLayout() {
     loadAppearance();
   }, []);
   useEffect(watchForChanges, []);
+  useEffect(watchForLocalBackup, []);
 
   const scheme = useScheme();
   const palette = usePalette();
@@ -38,7 +40,11 @@ export default function RootLayout() {
         >
           <Stack.Screen name="index" />
           <Stack.Screen name="add" options={{ headerShown: true, title: '' }} />
-          <Stack.Screen name="scripture/translations" options={{ headerShown: true, title: '' }} />
+          <Stack.Screen name="job/[id]" options={{ headerShown: true, title: '' }} />
+          <Stack.Screen name="lookup" options={{ headerShown: true, title: '' }} />
+          <Stack.Screen name="source/find" options={{ headerShown: true, title: '' }} />
+          <Stack.Screen name="source/ebible" options={{ headerShown: true, title: '' }} />
+          <Stack.Screen name="source/arxiv" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="entity/[id]" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="chapter/[id]" options={{ headerShown: true, title: '' }} />
@@ -52,6 +58,7 @@ export default function RootLayout() {
           <Stack.Screen name="book/[id]/cast" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]/scenes" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]/parts" options={{ headerShown: true, title: '' }} />
+          <Stack.Screen name="book/[id]/part/[idx]" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]/graph" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]/translation" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]/terms" options={{ headerShown: true, title: '' }} />

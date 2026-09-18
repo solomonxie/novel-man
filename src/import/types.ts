@@ -19,6 +19,14 @@ export type ParsedSource = {
  */
 export type ParseContext = {
   onProgress?: (done: number, total: number) => void | Promise<void>;
+  /**
+   * Where a picture found inside the source goes. Handed in rather than
+   * imported so a parser stays a pure function of its bytes — which is what
+   * lets the fixture tests run these outside the app.
+   */
+  saveImage?: (name: string, bytes: Uint8Array) => string;
+  /** LaTeX in, a base64 PNG per formula out. Absent outside the app. */
+  renderMath?: (latex: string[]) => Promise<string[]>;
 };
 
 export type Importer = {
