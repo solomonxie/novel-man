@@ -106,7 +106,7 @@ React Native + Expo + TypeScript, one codebase for iOS and Android.
 - **Optional sync.** Opt in to a private S3-compatible bucket *you own*. Off
   by default; manual by default.
 - **iCloud needs a signed build.** The switch reads the container itself and
-  hides the row where it could never work (Android, Expo Go). A build signed
+  hides the row where it could never work (Android). A build signed
   without the iCloud capability says so rather than telling you to sign in —
   shipping it means a paid Apple developer account, which changes how every
   build is signed, not just this feature.
@@ -136,14 +136,16 @@ your back.
 
 ```
 npm install
-npx expo start --ios     # or --android
-npx expo run:ios         # dev build — the iCloud switch needs one
+npm run ios             # or: npm run android
 ```
 
-Opens in Expo Go — no native build needed. Import a `.txt`, `.md`, `.docx`,
-`.epub` or `.pdf` from Files and it lands on the shelf with its chapters
-detected. Imports run through a visible queue, so the app stays usable while
-a long novel is being read in.
+One command: it compiles the native project, installs it on the simulator or
+a connected device, and starts the bundler. There is no second, lighter way to
+run it — see [Design](docs/design/DESIGN.md#no-sandbox-runtime) for why.
+
+Import a `.txt`, `.md`, `.docx`, `.epub` or `.pdf` from Files and it lands on
+the shelf with its chapters detected. Imports run through a visible queue, so
+the app stays usable while a long novel is being read in.
 
 ```
 npm run check           # typecheck + parsers + catalogs, all of it
@@ -158,16 +160,16 @@ carry the same keys and that no visible string is hard-coded in a screen.
 
 ## Status
 
-Everything above runs. What is not built: parsing on a background thread
-(needs a dev build), generated portraits and storyboards, and `.rtf` / `.odt`
-/ `.fb2` import. The [plan](docs/design/IMPLEMENT_PLAN.md) marks exactly what
-landed and what each partial task still owes.
+Everything above runs. What is not built: parsing on a background thread,
+generated portraits and storyboards, and `.rtf` / `.odt` / `.fb2` import. The
+[plan](docs/design/IMPLEMENT_PLAN.md) marks exactly what landed and what each
+partial task still owes.
 
-Three things need a dev build rather than Expo Go: the iCloud switch (its
-native module lives in `modules/icloud/`, and the row hides itself where it
-could never work), the share extension that puts Novel Man in another app's
-share sheet (the file types are declared, the extension is not), and moving
-parsing off the JS thread.
+Two of those reach into native code and are unbuilt rather than unavailable:
+the share extension that puts Novel Man in another app's share sheet (the file
+types are declared in `app.json`, the extension is not written), and moving
+parsing off the JS thread. The iCloud switch is the one native module that is
+built — it lives in `modules/icloud/`.
 
 
 ## Screenshots
