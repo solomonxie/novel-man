@@ -27,8 +27,9 @@ public class IcloudDriveModule: Module {
       try FileManager.default.createDirectory(
         at: target.deletingLastPathComponent(), withIntermediateDirectories: true
       )
-      // Overwritten in place: the JS side names the file for its month, so
-      // this replaces the current month's copy and leaves the ones before it.
+      // The JS side names the file for its day, so this only replaces a copy
+      // taken earlier the same day; the days before it are left alone and
+      // pruned by count, not by being written over.
       if FileManager.default.fileExists(atPath: target.path) {
         try FileManager.default.removeItem(at: target)
       }
@@ -42,6 +43,25 @@ public class IcloudDriveModule: Module {
       file.name = newest.name
       file.modifiedAt = newest.at.timeIntervalSince1970 * 1000
       return file
+    }
+
+    // Retention is decided in JS, which knows what the policy is; this only
+    // reports what is there and removes what it is told to.
+    AsyncFunction("list") { () -> [DriveFile] in
+      return self.bundles().map { found in
+        let file = DriveFile()
+        file.name = found.name
+        file.modifiedAt = found.at.timeIntervalSince1970 * 1000
+        return file
+      }
+    }
+
+    AsyncFunction("remove") { (name: String) -> Void in
+      guard let documents = self.documentsURL() else { throw DriveUnavailable() }
+      let target = documents.appendingPathComponent(name)
+      if FileManager.default.fileExists(atPath: target.path) {
+        try FileManager.default.removeItem(at: target)
+      }
     }
 
     AsyncFunction("copyOut") { (name: String, toPath: String) -> Void in
@@ -108,13 +128,20 @@ public class IcloudDriveModule: Module {
   // MARK: - Files
 
   private func newestBundle() -> (name: String, at: Date)? {
+    return bundles().max { left, right in left.at < right.at }
+  }
+
+  /// Every bundle in the container, placeholders included — a file not yet
+  /// pulled down is still a backup that exists, and still counts against
+  /// whatever retention the JS side is applying.
+  private func bundles() -> [(name: String, at: Date)] {
     guard let documents = documentsURL(),
           let walker = FileManager.default.enumerator(
             at: documents, includingPropertiesForKeys: [.contentModificationDateKey]
           )
-    else { return nil }
+    else { return [] }
 
-    var newest: (name: String, at: Date)?
+    var found: [(name: String, at: Date)] = []
     for case let url as URL in walker {
       // A bundle not yet pulled down is listed as `.name.zip.icloud`, and its
       // real name is what a later copyOut has to ask for. `.nmbak` is what
@@ -130,9 +157,9 @@ public class IcloudDriveModule: Module {
       let key = folder == "Documents" ? name : "\(folder)/\(name)"
       let at = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
         .contentModificationDate ?? Date(timeIntervalSince1970: 0)
-      if newest == nil || at > newest!.at { newest = (key, at) }
+      found.append((key, at))
     }
-    return newest
+    return found
   }
 
   /// On a fresh install the file is usually still a placeholder: asking for

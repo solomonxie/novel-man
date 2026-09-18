@@ -136,8 +136,8 @@ Not a file browser: a list of the bundles this connection holds.
 └───────────────────────────────────────────┘
 ```
 
-Bundles are a month each — `202609-library.zip`, `books/202609-<id>.zip` —
-so the list is one row per month, newest first, and the whole library and the
+Bundles are a day each — `library-2026-09-18.zip`, `books/<id>-2026-09-18.zip` —
+so the list is one row per day, newest first, and the whole library and the
 per-book bundles are two sections rather than one mixed list. A bundle written
 before backups were named for their month keeps its own name in the row.
 

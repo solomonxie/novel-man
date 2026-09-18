@@ -14,7 +14,7 @@ import {
 import type { RemoteObject } from '../../src/cloud/client';
 import type { Connection } from '../../src/cloud/providers';
 import type { RestoreReport } from '../../src/backup/restore';
-import { monthOf } from '../../src/backup/format';
+import { dateOf } from '../../src/backup/format';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { PickerSheet } from '../../src/ui/PickerSheet';
 import { space, usePalette } from '../../src/theme';
@@ -84,15 +84,18 @@ export default function CloudLibrary() {
   const books = newestFirst((objects ?? []).filter((object) => isBookKey(object.key)));
   const library = newestFirst((objects ?? []).filter((object) => !isBookKey(object.key)));
 
-  /** A bundle from before backups were named for their month keeps its name. */
-  const monthLabel = (key: string) => {
-    const month = monthOf(key);
-    return month
-      ? month.toLocaleDateString(i18n.language, { year: 'numeric', month: 'long' })
+  /** A bundle from before backups were dated keeps whatever name it has. */
+  const dayLabel = (key: string) => {
+    const at = dateOf(key);
+    return at
+      ? at.toLocaleDateString(i18n.language, { year: 'numeric', month: 'long', day: 'numeric' })
       : key.replace(/^books\//, '').replace(/\.(zip|nmbak)$/, '');
   };
   const bookLabel = (key: string) =>
-    key.replace(/^books\//, '').replace(/^\d{6}-/, '').replace(/\.(zip|nmbak)$/, '');
+    key
+      .replace(/^books\//, '')
+      .replace(/-\d{4}-\d{2}-\d{2}$|^\d{6}-/, '')
+      .replace(/\.(zip|nmbak)$/, '');
 
   return (
     <ScrollView
@@ -132,7 +135,7 @@ export default function CloudLibrary() {
               library.map((object, index) => (
                 <Row
                   key={object.key}
-                  label={monthLabel(object.key)}
+                  label={dayLabel(object.key)}
                   detail={new Date(object.modified).toLocaleString()}
                   value={`${Math.round(object.size / 1024)} KB  ›`}
                   onPress={() => confirmGet(object.key)}
@@ -150,7 +153,7 @@ export default function CloudLibrary() {
                 <Row
                   key={object.key}
                   label={bookLabel(object.key)}
-                  detail={monthLabel(object.key)}
+                  detail={dayLabel(object.key)}
                   value={`${Math.round(object.size / 1024)} KB  ›`}
                   onPress={() => confirmGet(object.key)}
                   last={index === books.length - 1}
