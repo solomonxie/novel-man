@@ -32,6 +32,10 @@ import {
   type Verse,
 } from '../../src/db/repo';
 import { annotationAt, layoutChapter } from '../../src/reader/model';
+import { imageIn } from '../../src/reader/images';
+import { sentenceAtLine, type Line } from '../../src/reader/lines';
+import { codeBlockIn, runsIn } from '../../src/reader/rich';
+import { ReaderImage } from '../../src/ui/ReaderImage';
 import { supports } from '../../src/books/kinds';
 import { quoteWithVerses } from '../../src/scripture/reference';
 import { fingerprint, repairAll } from '../../src/reader/anchor';
@@ -46,6 +50,7 @@ import {
   type ReadingSettings,
 } from '../../src/reader/settings';
 import { ReadingSettingsSheet } from '../../src/ui/ReadingSettingsSheet';
+import { ActionMenu, type MenuAction } from '../../src/ui/ActionMenu';
 import { SentenceMenu } from '../../src/ui/SentenceMenu';
 import { NoteSheet } from '../../src/ui/NoteSheet';
 import { Scrubber } from '../../src/ui/Scrubber';
@@ -53,6 +58,7 @@ import { PickerSheet } from '../../src/ui/PickerSheet';
 import { ChapterSheet } from '../../src/ui/ChapterSheet';
 import { shareQuoteCard, shareQuoteText } from '../../src/share/quote';
 import { listTargets, listUnits } from '../../src/db/translation';
+import { queueChapterRun } from '../../src/analysis/runs';
 
 const CHROME_IDLE_MS = 2800;
 /** Apple and Android both put the floor at 44pt / 48dp. */
@@ -65,14 +71,22 @@ export default function Reader() {
     at?: string;
   }>();
   const { t } = useTranslation();
-  const { height } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
 
   const [book, setBook] = useState<Book | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [text, setText] = useState('');
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [index, setIndex] = useState(0);
-  const [settings, setSettings] = useState<ReadingSettings>(defaultSettings);
+  const scheme = useScheme();
+  /**
+   * Seeded, not defaulted: `loadSettings` is a round trip to storage, and
+   * rendering Paper for that one frame is a white flash in a dark room.
+   */
+  const [settings, setSettings] = useState<ReadingSettings>(() => ({
+    ...defaultSettings,
+    theme: scheme === 'dark' ? 'night' : 'paper',
+  }));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [flashAt, setFlashAt] = useState<number | null>(null);
   /**
@@ -83,6 +97,7 @@ export default function Reader() {
    */
   const [selection, setSelection] = useState<{ anchor: Span; focus: Span; y: number } | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [noteFor, setNoteFor] = useState<Span | null>(null);
   const [shareFor, setShareFor] = useState<Span | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -97,6 +112,9 @@ export default function Reader() {
    */
   const [selecting, setSelecting] = useState(false);
 
+  /** Where each paragraph's lines ended up, so a tap that missed the words
+   *  can still be answered by the line it landed on. */
+  const linesOf = useRef(new Map<number, Line[]>());
   const scrollRef = useRef<ScrollView>(null);
   const viewport = useRef({ content: 0, layout: 0 });
   const pendingScroll = useRef<number | null>(null);
@@ -122,7 +140,6 @@ export default function Reader() {
     };
   }, [setChrome]);
 
-  const scheme = useScheme();
   useEffect(() => {
     loadSettings(scheme).then(setSettings);
     // Deliberately once: re-reading on a scheme change would throw away the
@@ -130,30 +147,23 @@ export default function Reader() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Three loads, not one. The manuscript is megabytes and the annotations have
+   * to be walked against all of it — waiting for both before drawing anything
+   * left the page, and the bar at the bottom of it, blank for seconds on a
+   * bible. What the chrome needs is three small queries, so it goes first.
+   */
   useEffect(() => {
     if (!id) return;
     (async () => {
-      const [loadedBook, loadedChapters, loadedText, loadedAnnotations, saved] = await Promise.all([
+      const [loadedBook, loadedChapters, saved] = await Promise.all([
         getBook(id),
         listChapters(id),
-        getDocumentText(id),
-        listAnnotations(id),
         getProgress(id),
       ]);
       setBook(loadedBook);
       setChapters(loadedChapters);
-      setText(loadedText);
       setOffset(saved);
-
-      // Offsets drift when a book is re-split; the words are what find them.
-      const { placed } = repairAll(loadedText, loadedAnnotations);
-      setAnnotations(placed);
-      for (const repaired of placed) {
-        const before = loadedAnnotations.find((entry) => entry.id === repaired.id);
-        if (before && (before.start !== repaired.start || before.end !== repaired.end)) {
-          void updateAnnotation(repaired.id, { start: repaired.start, end: repaired.end });
-        }
-      }
 
       const target = at ? Number(at) : null;
       const requested = chapterParam ? Number(chapterParam) : null;
@@ -172,10 +182,39 @@ export default function Reader() {
             (target - landing.start) / Math.max(1, landing.end - landing.start);
         }
         setFlashAt(target);
-        setTimeout(() => setFlashAt(null), 1600);
       }
     })();
   }, [id, chapterParam, at]);
+
+  // The mark on the verse you were sent to only counts once it can be seen,
+  // so it fades from when the words arrive rather than from when we asked.
+  useEffect(() => {
+    if (flashAt === null || !text) return;
+    const timer = setTimeout(() => setFlashAt(null), 1600);
+    return () => clearTimeout(timer);
+  }, [flashAt, text]);
+
+  /** The words themselves, behind the chrome that is already on screen. */
+  useEffect(() => {
+    if (!id) return;
+    getDocumentText(id).then(setText);
+  }, [id]);
+
+  // Offsets drift when a book is re-split; the words are what find them. This
+  // needs the whole text, so it waits for it rather than holding it up.
+  useEffect(() => {
+    if (!id || !text) return;
+    listAnnotations(id).then((rows) => {
+      const { placed } = repairAll(text, rows);
+      setAnnotations(placed);
+      for (const repaired of placed) {
+        const before = rows.find((entry) => entry.id === repaired.id);
+        if (before && (before.start !== repaired.start || before.end !== repaired.end)) {
+          void updateAnnotation(repaired.id, { start: repaired.start, end: repaired.end });
+        }
+      }
+    });
+  }, [id, text]);
 
   useEffect(() => {
     if (!id) return;
@@ -234,6 +273,27 @@ export default function Reader() {
   const refreshAnnotations = useCallback(async () => {
     if (id) setAnnotations(await listAnnotations(id));
   }, [id]);
+
+  /**
+   * A tap on the white of a paragraph — the ragged edge, the space after a
+   * full stop, the gap under a short last line. In select mode it means the
+   * line it landed on; outside it, it is still just a tap on the page.
+   */
+  function pressParagraph(paragraph: { start: number; sentences: Span[] }, event: GestureResponderEvent) {
+    if (!selecting && !selection) {
+      setChrome(!chromeShown.current);
+      return;
+    }
+    const found = sentenceAtLine(
+      linesOf.current.get(paragraph.start) ?? [],
+      paragraph.sentences,
+      paragraph.start,
+      event.nativeEvent.locationY
+    );
+    if (!found) return;
+    if (selection) extendSelect(found, event);
+    else beginSelect(found, event);
+  }
 
   function beginSelect(span: Span, event: GestureResponderEvent) {
     setSelection({ anchor: span, focus: span, y: event.nativeEvent.pageY });
@@ -338,6 +398,72 @@ export default function Reader() {
     });
   }
 
+  /**
+   * What this page can do that isn't reading it. Ordered by how often it is
+   * wanted: move within the book, then mark it up, then leave for a page that
+   * is about what you are looking at.
+   */
+  function moreActions(): MenuAction[] {
+    if (!chapter) return [];
+    const partIdx = chapter.part_idx;
+    const actions: MenuAction[] = [
+      {
+        label: t('reader.jumpTo'),
+        onPress: () => {
+          setMoreOpen(false);
+          setListOpen(true);
+        },
+      },
+      {
+        label: selecting || selection ? t('reader.selectDone') : t('reader.select'),
+        onPress: () => {
+          setMoreOpen(false);
+          if (selecting || selection) return endSelection();
+          setSelecting(true);
+          setChrome(true);
+          flash(t('reader.selectHint'));
+        },
+      },
+      {
+        label: t('reader.openChapter'),
+        onPress: () => {
+          setMoreOpen(false);
+          router.push(`/chapter/${chapter.id}`);
+        },
+      },
+    ];
+    // A bible's Genesis, a novel's 卷 — named, because "the part" is not what
+    // anyone calls the thing they are reading.
+    if (partIdx !== null && partIdx !== undefined) {
+      actions.push({
+        label: t('reader.openPart', { name: chapter.part_title?.trim() || `${partIdx + 1}` }),
+        onPress: () => {
+          setMoreOpen(false);
+          router.push(`/book/${id}/part/${partIdx}`);
+        },
+      });
+    }
+    actions.push(
+      {
+        label: t('reader.openBook', { name: book?.title ?? '' }),
+        onPress: () => {
+          setMoreOpen(false);
+          router.push(`/book/${id}`);
+        },
+      },
+      {
+        label: t('reader.analyzeChapter'),
+        onPress: async () => {
+          setMoreOpen(false);
+          if (!id) return;
+          await queueChapterRun(id, 'deep-analyze', [chapter]);
+          flash(t('work.queued', { count: 1 }));
+        },
+      }
+    );
+    return actions;
+  }
+
   function quoteFor(span: Span) {
     return {
       text: text.slice(span.start, span.end),
@@ -363,6 +489,7 @@ export default function Reader() {
 
   /** The scrubber addresses the whole book, so a seek is an offset, not a page. */
   function seek(fraction: number) {
+    if (!text) return;
     const target = Math.round(fraction * Math.max(1, text.length));
     const next = chapters.findIndex((entry) => target >= entry.start && target < entry.end);
     const to = next >= 0 ? next : chapters.length - 1;
@@ -390,7 +517,14 @@ export default function Reader() {
     );
   }
 
-  const bookFraction = Math.min(1, offset / Math.max(1, text.length));
+  // char_count is the book's own length, known before its text is read — the
+  // scrubber is in the right place on the first frame rather than at zero.
+  const length = text.length || book.char_count;
+  const bookFraction = Math.min(1, offset / Math.max(1, length));
+
+  // The selection bar replaces the reading controls rather than stacking on
+  // top of them: both at once is two rows of buttons over the same thumb.
+  const chromeOpacity = selection ? 0 : chrome;
 
   const bodyStyle = {
     color: palette.text,
@@ -428,7 +562,21 @@ export default function Reader() {
           color: useTarget && !body ? palette.dim : palette.text,
         }}
       >
-        {body || text.slice(span.start, span.end)}{' '}
+        {runsIn(body || text.slice(span.start, span.end)).map((run, at) => (
+          <Text
+            key={at}
+            style={{
+              fontWeight: run.bold ? '700' : undefined,
+              fontStyle: run.italic ? 'italic' : undefined,
+              textDecorationLine: run.strike ? 'line-through' : undefined,
+              backgroundColor: run.mark ? palette.tint : undefined,
+              fontFamily: run.code ? 'Menlo' : undefined,
+              fontSize: run.code ? settings.fontSize * 0.92 : undefined,
+            }}
+          >
+            {run.text}
+          </Text>
+        ))}{' '}
       </Text>
     );
   }
@@ -465,6 +613,9 @@ export default function Reader() {
           scrollEventThrottle={200}
           onContentSizeChange={(_, contentHeight) => {
             viewport.current.content = contentHeight;
+            // The spinner's height is not the chapter's: landing on a verse
+            // has to wait for the words, or it lands at the top of nothing.
+            if (!text) return;
             const within = pendingScroll.current;
             pendingScroll.current = null;
             const max = Math.max(0, contentHeight - viewport.current.layout);
@@ -480,12 +631,74 @@ export default function Reader() {
               if (!selection) setChrome(!chromeShown.current);
             }}
           >
-            {paragraphs.length === 0 ? (
+            {!text ? (
+              <ActivityIndicator style={{ marginTop: space.xxl }} />
+            ) : paragraphs.length === 0 ? (
               <Text style={{ color: palette.dim, marginTop: space.xxl }}>{t('reader.empty')}</Text>
             ) : (
-              paragraphs.map((paragraph) => (
-                <View key={paragraph.start} style={{ marginBottom: lineHeight * 0.6 }}>
-                  <Text style={bodyStyle}>
+              paragraphs.map((paragraph) => {
+                const body = text.slice(
+                  paragraph.start,
+                  paragraph.sentences.at(-1)?.end ?? paragraph.start
+                );
+                const figure = imageIn(body);
+                const code = figure ? null : codeBlockIn(body);
+                if (code) {
+                  return (
+                    <Pressable
+                      key={paragraph.start}
+                      onPress={(event) => pressParagraph(paragraph, event)}
+                      style={[styles.code, { borderColor: palette.dim, marginBottom: lineHeight }]}
+                    >
+                      <Text
+                        style={{
+                          color: palette.text,
+                          fontFamily: 'Menlo',
+                          fontSize: settings.fontSize * 0.82,
+                          lineHeight: settings.fontSize * 1.25,
+                        }}
+                      >
+                        {code}
+                      </Text>
+                    </Pressable>
+                  );
+                }
+                if (figure) {
+                  // `![$x^2$](…)` is a formula; anything else is a picture.
+                  const formula = /^\$[\s\S]*\$$/.test(figure.alt);
+                  return (
+                    <View key={paragraph.start} style={{ marginBottom: lineHeight }}>
+                      <ReaderImage
+                        uri={figure.uri}
+                        alt={figure.alt}
+                        width={width - settings.margin * 2}
+                        cap={formula ? lineHeight * 6 : height * 0.7}
+                        tint={palette.dim}
+                        ink={palette.text}
+                        formula={formula}
+                      />
+                    </View>
+                  );
+                }
+                return (
+                <Pressable
+                  key={paragraph.start}
+                  onPress={(event) => pressParagraph(paragraph, event)}
+                  style={{ marginBottom: lineHeight * 0.6 }}
+                >
+                  <Text
+                    style={bodyStyle}
+                    onTextLayout={(event) =>
+                      linesOf.current.set(
+                        paragraph.start,
+                        event.nativeEvent.lines.map((line) => ({
+                          y: line.y,
+                          height: line.height,
+                          length: line.text.length,
+                        }))
+                      )
+                    }
+                  >
                     {/* Raised, small and dim: a number to find a verse by, not
                         a word in the sentence it opens. */}
                     {numberAt.has(paragraph.start) ? (
@@ -519,8 +732,9 @@ export default function Reader() {
                       {targetOf(paragraph.sentences)}
                     </Text>
                   ) : null}
-                </View>
-              ))
+                </Pressable>
+                );
+              })
             )}
           </Pressable>
         </ScrollView>
@@ -538,9 +752,8 @@ export default function Reader() {
 
       {selection && (
         <SentenceMenu
-          y={selection.y}
-          screenHeight={height}
           dark={settings.theme === 'night'}
+          dismissLabel={t('reader.done')}
           activeColor={
             selected && selected.kind !== 'bookmark' ? selected.color : settings.highlight
           }
@@ -578,7 +791,10 @@ export default function Reader() {
         />
       )}
 
-      <Animated.View style={[styles.footer, { opacity: chrome }]} pointerEvents="box-none">
+      <Animated.View
+        style={[styles.footer, { opacity: chromeOpacity }]}
+        pointerEvents={selection ? 'none' : 'box-none'}
+      >
         <View style={{ paddingHorizontal: space.lg }}>
           <Scrubber
             value={bookFraction}
@@ -588,7 +804,7 @@ export default function Reader() {
             label={(fraction) =>
               t('reader.scrub', {
                 percent: Math.round(fraction * 100),
-                chapter: chapterAt(chapters, fraction * text.length) + 1,
+                chapter: chapterAt(chapters, fraction * length) + 1,
                 total: chapters.length,
               })
             }
@@ -608,33 +824,21 @@ export default function Reader() {
           <Pressable onPress={() => setSettingsOpen(true)} style={styles.barButton}>
             <Text style={{ color: palette.text, fontSize: 20 }}>Aa</Text>
           </Pressable>
-          {/* Drawn rather than set in a glyph: a box that fills in is what a
-              mode being on looks like, at whatever size the bar is. */}
-          <Pressable
-            onPress={() => {
-              if (selecting || selection) return endSelection();
-              setSelecting(true);
-              setChrome(true);
-              flash(t('reader.selectHint'));
-            }}
-            style={styles.barButton}
-          >
-            <View
-              style={[
-                styles.check,
-                { borderColor: selecting ? palette.accent : palette.text },
-                selecting && { backgroundColor: palette.accent },
-              ]}
+          {/* One button for everything that isn't turning a page or resizing
+              the type. The bar had five; the two it kept are the two a thumb
+              reaches for without looking, and the rest are a list that can say
+              what they do in words. Accent while selecting, because that is a
+              mode the page is in and the bar has to admit it. */}
+          <Pressable onPress={() => setMoreOpen(true)} style={styles.barButton}>
+            <Text
+              style={{
+                color: selecting ? palette.accent : palette.text,
+                fontSize: 26,
+                lineHeight: 30,
+              }}
             >
-              {selecting ? (
-                <Text style={{ color: palette.bg, fontSize: 13, lineHeight: 15, fontWeight: '700' }}>
-                  ✓
-                </Text>
-              ) : null}
-            </View>
-          </Pressable>
-          <Pressable onPress={() => setListOpen(true)} style={styles.barButton}>
-            <Text style={{ color: palette.text, fontSize: 26, lineHeight: 30 }}>≡</Text>
+              ⋯
+            </Text>
           </Pressable>
           <Pressable
             onPress={() => index < chapters.length - 1 && goToChapter(index + 1)}
@@ -695,6 +899,13 @@ export default function Reader() {
         onClose={() => setShareFor(null)}
       />
 
+      <ActionMenu
+        visible={moreOpen}
+        title={chapter.title.trim() || `${index + 1}`}
+        actions={moreActions()}
+        onClose={() => setMoreOpen(false)}
+      />
+
       <ChapterSheet
         visible={listOpen}
         chapters={chapters}
@@ -735,16 +946,10 @@ const styles = StyleSheet.create({
   /** The back chevron carries a header's worth of weight, so it gets the room. */
   backButton: { width: TOUCH + 8, height: TOUCH + 8, alignItems: 'center', justifyContent: 'center' },
   arrowButton: { width: TOUCH + 28, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
-  check: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   arrow: { fontSize: 34, lineHeight: 38, fontWeight: '700' },
   zone: { position: 'absolute', top: 0, bottom: 0 },
+  /** Code is set apart by a rule, not a box: a box on a reading page is a form. */
+  code: { borderLeftWidth: 2, paddingLeft: space.md, paddingVertical: space.xs },
   footer: { paddingBottom: space.xs },
   /** Evenly spread, outermost first: the arrows fall under either thumb. */
   controls: {

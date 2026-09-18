@@ -35,6 +35,10 @@ export function ReadingSettingsSheet({ visible, settings, targets, target, onTar
     onChange({ ...settings, [key]: next });
   };
 
+  // Hidden is not mounted: a Modal left in the tree keeps a sheet-sized
+  // view on the page, which is the white band under everything.
+  if (!visible) return null;
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.scrim} onPress={onClose}>

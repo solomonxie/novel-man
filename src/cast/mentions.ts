@@ -61,6 +61,51 @@ export function byFrequency<T extends { id: string }>(entities: T[], mentions: M
   return [...entities].sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0));
 }
 
+/** One place a name actually occurs: where it is, and enough around it to read. */
+export type Appearance = { chapterIdx: number; offset: number; quote: string };
+
+/** Half a line either side — enough to recognise the moment, short enough to scan. */
+const AROUND = 42;
+
+/**
+ * Every occurrence of a name inside a run of chapters, found the same way the
+ * counts were: `indexOf` over text already on the device. The graph knows how
+ * often someone turns up around here; this is what they were doing.
+ */
+export function appearancesIn(
+  text: string,
+  chapters: Chapter[],
+  names: string[],
+  range: { from: number; to: number },
+  cap = 12
+): Appearance[] {
+  const found: Appearance[] = [];
+  for (const chapter of chapters) {
+    if (chapter.idx < range.from || chapter.idx > range.to) continue;
+    const body = text.slice(chapter.start, chapter.end);
+    for (const needle of names) {
+      let at = body.indexOf(needle);
+      while (at >= 0) {
+        found.push({
+          chapterIdx: chapter.idx,
+          offset: chapter.start + at,
+          quote: quoteAround(body, at, needle.length),
+        });
+        at = body.indexOf(needle, at + needle.length);
+      }
+    }
+  }
+  return found.sort((a, b) => a.offset - b.offset).slice(0, cap);
+}
+
+/** No word boundaries to lean on in Chinese, so it is a window, marked as one. */
+function quoteAround(body: string, at: number, length: number): string {
+  const from = Math.max(0, at - AROUND);
+  const to = Math.min(body.length, at + length + AROUND);
+  const slice = body.slice(from, to).replace(/\s+/g, ' ').trim();
+  return `${from > 0 ? '…' : ''}${slice}${to < body.length ? '…' : ''}`;
+}
+
 export function appearances(timeline: Timeline): { first: number; last: number } | null {
   if (!timeline.length) return null;
   return {
