@@ -220,14 +220,6 @@ export default function Home() {
                   }
                   onPress={openWorkQueue}
                 />
-                {/* A passage you can ask for but not own: the one source
-                    here that answers questions instead of handing over books. */}
-                <Row
-                  label={t('lookup.title')}
-                  detail={t('lookup.shelfDetail')}
-                  value="›"
-                  onPress={() => router.push('/lookup')}
-                />
                 <Row
                   label={t('settings.language')}
                   value={LANGUAGE_LABELS[i18n.language as UiLanguage] ?? 'English'}

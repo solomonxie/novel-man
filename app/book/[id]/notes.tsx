@@ -86,7 +86,10 @@ export default function Notes() {
     });
     const byChapter = new Map<string, { chapter: Chapter | null; items: Annotation[] }>();
     for (const entry of matching) {
-      const chapter = chapters.find((c) => entry.start >= c.start && entry.start < c.end) ?? null;
+      const chapter =
+        (entry.chapter_id
+          ? chapters.find((c) => c.id === entry.chapter_id)
+          : chapters.find((c) => entry.start >= c.start && entry.start < c.end)) ?? null;
       const key = chapter?.id ?? 'none';
       if (!byChapter.has(key)) byChapter.set(key, { chapter, items: [] });
       byChapter.get(key)!.items.push(entry);
@@ -195,7 +198,11 @@ export default function Notes() {
                   onPress={() =>
                     selecting
                       ? toggle(entry.id)
-                      : router.push(`/reader/${id}?chapter=${chapter?.idx ?? 0}&at=${entry.start}`)
+                      : router.push(
+                          entry.chapter_id
+                            ? `/reader/${id}?chapter=${chapter?.idx ?? 0}`
+                            : `/reader/${id}?chapter=${chapter?.idx ?? 0}&at=${entry.start}`
+                        )
                   }
                   // The long-press that deleted one is now the way into picking
                   // several — with the one pressed already picked.

@@ -394,4 +394,16 @@ export const migrations: string[] = [
      fetched_at INTEGER NOT NULL,
      PRIMARY KEY (source, query)
    );`,
+
+  // A book whose words are not here. Everything else about it is — its
+  // chapters, its parts, what was read of it, what a pass concluded — but the
+  // text of each chapter arrives when that chapter is opened and is kept only
+  // as a cache. Null for every book that carries its own manuscript.
+  `ALTER TABLE books ADD COLUMN text_source TEXT;`,
+
+  // Which chapter a mark is in. Null for every book that has a manuscript,
+  // where the offsets say it already; set for a book whose text is fetched a
+  // chapter at a time, where every chapter starts at zero and the offsets
+  // alone would put all of them on top of each other.
+  `ALTER TABLE annotations ADD COLUMN chapter_id TEXT;`,
 ];

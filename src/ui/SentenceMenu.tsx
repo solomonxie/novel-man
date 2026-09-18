@@ -78,18 +78,23 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     overflow: 'hidden',
   },
-  row: { flexDirection: 'row', alignItems: 'center', minHeight: ROW },
+  row: { flexDirection: 'row', alignItems: 'center', minHeight: ROW, flexWrap: 'wrap', justifyContent: 'space-around' },
   colors: {
     justifyContent: 'space-around',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.18)',
   },
+  /**
+   * Sized to its word, not to an equal share of the bar. Five equal shares of
+   * what is left after the Done button is about fifty points each, which cuts
+   * "Highlight" and "Bookmark" in half — and a control whose name is cut is a
+   * control you have to remember rather than read.
+   */
   item: {
-    flex: 1,
     minHeight: ROW,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: space.xs,
+    paddingHorizontal: space.md,
   },
   /**
    * Wider than an action and set apart by a rule: leaving a mode is the one
@@ -97,7 +102,7 @@ const styles = StyleSheet.create({
    * wrong target for it.
    */
   dismiss: {
-    minWidth: 96,
+    minWidth: 84,
     minHeight: ROW,
     alignItems: 'center',
     justifyContent: 'center',
