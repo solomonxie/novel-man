@@ -53,8 +53,11 @@
     "showAll": "查看全部 {{count}} 章",
     "edit": "编辑",
     "notes": "笔记",
-    "cast": "全部人物",
-    "castEmpty": "还没有人物。",
+    "charactersAll": "全部人物",
+    "charactersEmpty": "还没有人物。",
+    "people": "人物",
+    "peopleAll": "全部人物",
+    "peopleEmpty": "还没有人物。",
     "comingSoon": "即将推出",
     "script": "剧本",
     "importedFrom": "来自 {{name}}",
@@ -98,7 +101,11 @@
     "inside": "书里有什么",
     "addOne": "添加一个",
     "notesShort": "笔记",
-    "analyzeShort": "分析"
+    "analyzeShort": "分析",
+    "parts_book": "卷书",
+    "parts_volume": "分卷",
+    "partChapters": "{{count}} 章",
+    "partsHint": "点任意一卷，从它的开头开始读。"
   },
   "reader": {
     "empty": "本章没有内容。",
@@ -191,7 +198,10 @@
     "unit_places": "地点",
     "unit_chapters": "章",
     "unit_toRead": "读完约",
-    "chapterShort": "第{{n}}章"
+    "chapterShort": "第{{n}}章",
+    "unit_books": "卷书",
+    "unit_volumes": "分卷",
+    "unit_verses": "节"
   },
   "queue": {
     "title": "队列（{{count}}）",
@@ -255,6 +265,12 @@
     "unplaced": "未定位",
     "noMatches": "没有匹配的内容。",
     "deleteConfirm": "删除这条标注？",
+    "select": "选择",
+    "selectDone": "完成",
+    "selected": "已选 {{count}} 条",
+    "selectHint": "点选要删除的条目。",
+    "deleteSelected": "删除 {{count}} 条",
+    "deleteSelectedConfirm": "删除这 {{count}} 条标注？书中的文字不受影响。",
     "filter_bookmark": "书签"
   },
   "structure": {
@@ -294,7 +310,7 @@
     "aiChapter": "用 AI 分析本章",
     "aiChapterBrief": "用 AI 写本章摘要",
     "aiOne": "分析第 {{n}} 章",
-    "aiOneWhat": "结合全书简介、前几章内容和已知人物阅读这一章，写入该章摘要、出场人物与地点。",
+    "aiOneWhat": "结合全书简介、前几章内容和已知人物阅读这一章，写入该章摘要、出场人物、地点，以及人物之间的关系。",
     "aiOneBrief": "为第 {{n}} 章写摘要",
     "aiOneBriefWhat": "结合前几章内容，用一两句话写清本章发生了什么。"
   },
@@ -486,7 +502,7 @@
     "clearConfirm": "将删除转换出的剧本，原著不受影响。"
   },
   "work": {
-    "title": "任务",
+    "title": "任务队列",
     "empty": "没有正在进行的任务。",
     "progress": "{{done}} / {{total}}",
     "finished": "已完成 {{done}} / {{total}}",
@@ -522,14 +538,14 @@
     "read": "从这里开始读 →",
     "scenes": "场景",
     "noScenes": "还没有场景 — 手动标记，或让 AI 分析识别。",
-    "scenePlaceholder": "场景 {{index}}",
+    "sceneNamePlaceholder": "给这个场景起个名字",
     "sceneSummaryPlaceholder": "这个场景发生了什么？",
     "readScene": "从这个场景开始读 →",
     "cast": "出场人物",
     "noCast": "还没有记录人物。",
     "places": "发生地点",
     "noPlaces": "还没有记录地点。",
-    "hint": "点名字可进入对应档案。分析本章会填充场景、人物和地点。",
+    "hint": "点名字可进入对应档案。分析本章会填充场景、人物、地点，以及人物之间的关系。",
     "analyzeShort": "分析"
   },
   "keyLog": {
@@ -611,13 +627,41 @@
   "kind": {
     "novel": "小说",
     "novelHint": "虚构 — 人物、场景、剧本与插图",
-    "scripture": "经典 / 圣经",
-    "scriptureHint": "真实的人物与地点，当作记载来读 — 没有场景与剧本",
+    "scripture": "圣经",
+    "scriptureHint": "圣经 — 真实人物与地点、经节与引用，可从 eBible.org 安装。",
     "nonfiction": "非虚构",
     "nonfictionHint": "真实的人物与地点，当作记载来读 — 没有场景与剧本",
-    "tutorial": "教程 / 手册",
+    "tutorial": "教程",
     "tutorialHint": "操作说明 — 结构、术语与笔记，没有人物",
     "textbook": "教材",
     "textbookHint": "课程内容 — 结构、术语与笔记，没有人物"
+  },
+  "add": {
+    "title": "添加书籍",
+    "kindTitle": "什么类型",
+    "whereFrom": "来源",
+    "about": "这本书",
+    "commit": "添加",
+    "install": "安装",
+    "free": "点这里之前不会下载任何东西。",
+    "chosen": "已选择",
+    "changeFile": "点击可另选文件",
+    "sourceEbible": "eBible.org",
+    "catalogAsOf": "{{count}} 个译本 · 更新于 {{date}}",
+    "noCatalog": "还没有译本列表。",
+    "update": "更新",
+    "updating": "更新中…",
+    "updateFailed": "连不上 eBible.org，已有的列表仍然可用。",
+    "translation": "译本",
+    "choose": "选择",
+    "chooseTranslation": "选择译本",
+    "searchTranslations": "名称或语言…",
+    "noTranslations": "没有找到。",
+    "canon": "正典",
+    "canon66": "66 卷",
+    "canonAll": "另加 {{count}} 卷",
+    "canonAllHint": "这个版本收录的次经。",
+    "willGet": "{{books}} 卷 · {{chapters}} 章 · {{verses}} 节",
+    "structureIncluded": "结构随书附带 — 卷、章、节都是发布好的，无需识别。"
   }
 }

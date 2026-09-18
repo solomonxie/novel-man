@@ -1,4 +1,5 @@
 import { buildBundle, fingerprint, openBundle } from '../backup/bundle';
+import { bundleName } from '../backup/format';
 import { restoreBundle, type RestoreReport } from '../backup/restore';
 import { contentHash } from '../ai/cache';
 import {
@@ -15,9 +16,16 @@ import {
 import { getBook, listBookIds } from '../db/repo';
 import { bucketFor, listConnections } from './connections';
 
-/** Per book under `books/`, the whole library at the root. Nothing else. */
-export const LIBRARY_KEY = 'library.zip';
-export const bookKey = (bookId: string) => `books/${bookId}.zip`;
+/**
+ * Per book under `books/`, the whole library at the root, and a file per month
+ * in both places — `202609-library.zip`, `books/202609-<id>.zip`. The month is
+ * what a bucket is for: the newest copy is the one you restore from, and the
+ * one from before last month's mistake is still there.
+ */
+export const libraryKey = (at = new Date()) => bundleName('library', at);
+export const bookKey = (bookId: string, at = new Date()) => `books/${bundleName(bookId, at)}`;
+/** A key belongs to one book rather than the library. */
+export const isBookKey = (key: string) => key.startsWith('books/');
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -91,7 +99,7 @@ async function run(job: CloudJob) {
   }
 
   const isBook = job.kind === 'upload-book';
-  const key = isBook ? bookKey(job.book_id!) : LIBRARY_KEY;
+  const key = isBook ? bookKey(job.book_id!) : libraryKey();
   if (isBook && !(await getBook(job.book_id!))) return;
 
   const bundle = await buildBundle(isBook ? [job.book_id!] : undefined);
@@ -115,7 +123,7 @@ export async function syncOnLaunch(): Promise<void> {
   await requeueStale();
   for (const connection of await listConnections()) {
     if (connection.frequency === 'manual') continue;
-    const last = await lastUploadedAt(connection.id, LIBRARY_KEY);
+    const last = await lastUploadedAt(connection.id, libraryKey());
     if (last !== null && Date.now() - last < INTERVALS[connection.frequency]) continue;
     await queueBackup(connection.id);
   }

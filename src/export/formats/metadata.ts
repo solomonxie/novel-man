@@ -28,8 +28,10 @@ function sections(input: ExportInput): Section[] {
     const head = `${index + 1}. ${chapter.title.trim() || '—'}`;
     const lines = [chapter.brief?.trim() ? `${head}\n${chapter.brief.trim()}` : head];
     for (const scene of scenesByChapter.get(chapter.id) ?? []) {
-      const label = scene.title?.trim() || `Scene ${scene.idx + 1}`;
-      lines.push(`    ${label}${scene.summary?.trim() ? ` — ${scene.summary.trim()}` : ''}`);
+      const said = [scene.title?.trim(), scene.summary?.trim()].filter(Boolean).join(' — ');
+      // A scene with neither a name nor a summary has nothing to export but its
+      // position, and the export is not a place to invent one.
+      if (said) lines.push(`    ${said}`);
     }
     return lines;
   });

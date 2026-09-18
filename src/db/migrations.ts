@@ -322,4 +322,31 @@ export const migrations: string[] = [
   // all imported as novels, which is also the only honest default for one that
   // arrives through the share sheet with nobody to ask.
   `ALTER TABLE books ADD COLUMN kind TEXT NOT NULL DEFAULT 'novel';`,
+
+  // A level above the chapter, for books that have one: a bible's book, a
+  // novel's 卷. It is a label and an order carried by the chapters under it
+  // rather than a second tree — nothing else in the app has to learn about it.
+  `ALTER TABLE chapters ADD COLUMN part_idx INTEGER;
+   ALTER TABLE chapters ADD COLUMN part_title TEXT;`,
+
+  // The citable unit. Same shape as everything else that addresses the text:
+  // a range of offsets, so a verse, a highlight and a chapter are one idea.
+  `CREATE TABLE verses (
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+     number INTEGER NOT NULL,
+     start INTEGER NOT NULL,
+     end INTEGER NOT NULL,
+     PRIMARY KEY (chapter_id, number)
+   );
+   CREATE INDEX verses_book ON verses(book_id, start);`,
+
+  // What the edition calls its own books, so a reference parses in the
+  // language the edition is written in: \toc1 long, \toc2 short, \toc3 abbr.
+  `CREATE TABLE part_names (
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     part_idx INTEGER NOT NULL,
+     name TEXT NOT NULL,
+     PRIMARY KEY (book_id, part_idx, name)
+   );`,
 ];

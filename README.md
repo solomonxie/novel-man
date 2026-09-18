@@ -44,9 +44,11 @@ what it drops before you pick it, and is rendered from the current structure
 
 **Backup** — one bundle format — a plain `.zip` of `snapshot.json` plus your
 covers and portraits, openable anywhere — and three destinations: iCloud
-Drive, a file you keep, or a cloud bucket you own. Per book, so a single book can come back
-without touching the rest. Restore never overwrites — it creates something new
-and tells you what it couldn't place.
+Drive, a file you keep, or a cloud bucket you own. A file per month
+(`202609-library.zip`), overwritten all month long, so a year is twelve files
+rather than a thousand and last month's copy is still there. Per book too, so
+a single book can come back without touching the rest. Restore never
+overwrites — it creates something new and tells you what it couldn't place.
 
 **iCloud, one switch** — turn it on and everything you made — notes,
 characters, structure, progress, settings — is copied into the app's own
@@ -71,9 +73,14 @@ filter by chapter range, continuity flags ("grey eyes in ch.3, green in
 ch.20") raised for review rather than applied, a character bible export, and
 screenplay conversion out to `.fountain` and `.fdx`.
 
-**Planned** — generated portraits and storyboards (分镜) on the way to manga
-and partial animation. Both wait on per-capability AI routing: image models
-are a different endpoint per vendor, not a different model name.
+**Planned** — books you name instead of find: known public sources with
+fetched indexes, apt-style. "A bible" becomes a request page asking two
+questions — which translation, and which canon — and installs from eBible.org
+as USFM, so the books, chapters and verses arrive published rather than
+detected, and `John 3:16` or `约 3:16` is a lookup. Verse numbers, headings and
+red letter are reading settings over that text, never another download. Also generated portraits and storyboards (分镜) on the way to
+manga and partial animation — both wait on per-capability AI routing, since
+image models are a different endpoint per vendor, not a different model name.
 
 
 ## How it's built

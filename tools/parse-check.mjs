@@ -30,6 +30,10 @@ const { parseListing, extractMessage } = await import(join(build, 'cloud/client.
 const { parsePasted, regionFromEndpoint } = await import(join(build, 'cloud/providers.js'));
 const { rewrite, nameFor, looksLikeSignIn } = await import(join(build, 'import/sources/links.js'));
 const { fountainExporter, finalDraftExporter } = await import(join(build, 'export/formats/screenplay.js'));
+const { bundleName, monthOf, isBundleName } = await import(join(build, 'backup/format.js'));
+const { parseUsfm, layoutBible, cleanLine } = await import(join(build, 'scripture/usfm.js'));
+const { quoteWithVerses, referenceOf, versesIn } = await import(join(build, 'scripture/reference.js'));
+const { parseCsv } = await import(join(build, 'scripture/csv.js'));
 
 let failures = 0;
 
@@ -72,6 +76,18 @@ console.log('docx');
   check('an offset-anchored highlight survives re-detection',
     layoutChapter(doc.text, { ...redetected, id: 'c', idx: 0 }, 'en')
       .flatMap((p) => p.sentences).some((s) => !!annotationAt(annotations, s)), true);
+
+  // A highlight is made over a passage; the page is drawn a sentence at a time.
+  const passage = { start: sentences[2].start, end: sentences[4].end };
+  const wide = [{ start: passage.start, end: passage.end }];
+  check('every sentence under one highlight is marked',
+    [sentences[2], sentences[3], sentences[4]].every((s) => !!annotationAt(wide, s)), true);
+  check('a sentence outside it is not',
+    !!annotationAt(wide, sentences[5]), false);
+  check('the exact mark wins over one merely drawn across it',
+    annotationAt([{ start: passage.start, end: passage.end, id: 'wide' },
+                  { start: sentences[3].start, end: sentences[3].end, id: 'exact' }],
+                 sentences[3]).id, 'exact');
   console.log(`  (${ms}ms)`);
 }
 
@@ -351,6 +367,108 @@ console.log('screenplay');
     fdx.body.includes('<Paragraph Type="Scene Heading">') &&
     fdx.body.includes('<Paragraph Type="Dialogue">'), true);
   check('fdx escapes the apostrophe safely', fdx.body.includes("It's late."), true);
+}
+
+console.log('backup names');
+{
+  const march = new Date(2026, 2, 9, 4, 30);
+  check('a bundle is named for its month', bundleName('library', march), '202603-library.zip');
+  check('every write in a month is the same file', bundleName('library', new Date(2026, 2, 28)), bundleName('library', march));
+  check('a new month is a new file', bundleName('library', new Date(2026, 3, 1)), '202604-library.zip');
+  check('the month reads back off the name', monthOf('202603-library.zip')?.getMonth(), 2);
+  check('and off a key under a folder', monthOf('books/202612-abc.zip')?.getFullYear(), 2026);
+  check('a bundle from before this stays a bundle', monthOf('library-2026-03-09-04-30.zip'), null);
+  check('and still opens', isBundleName('library-2026-03-09-04-30.zip'), true);
+  check('13 is not a month', monthOf('202613-library.zip'), null);
+}
+
+console.log('usfm');
+{
+  const john = [
+    String.raw`\id JHN 43-JHN-web.sfm World English Bible (WEB)`,
+    String.raw`\h John`,
+    String.raw`\toc1 The Good News According to John`,
+    String.raw`\toc2 John`,
+    String.raw`\toc3 Jhn`,
+    String.raw`\mt1 John`,
+    String.raw`\c 3`,
+    String.raw`\s1 Nicodemus`,
+    String.raw`\p`,
+    String.raw`\v 16 \w For|strong="G1063"\w* God so loved the world,\f + \fr 3:16 \ft or: only begotten\f*`,
+    String.raw`\v 17 he gave his Son.\x + \xo 3:17 \xt Rom 5:8\x*`,
+    String.raw`\c 4`,
+    String.raw`\p`,
+    String.raw`\v 1 Therefore.`,
+  ].join('\n');
+  const book = parseUsfm(john);
+  check("the book keeps the edition's own name", book.name, 'John');
+  check('every spelling a reference might use', book.names, ['John', 'The Good News According to John', 'Jhn']);
+  check('chapters are stated, not detected', book.chapters.map((c) => c.number), [3, 4]);
+  check('verses come with them', book.chapters[0].verses.map((v) => v.number), [16, 17]);
+  check("a word's dictionary key is not the word", book.chapters[0].verses[0].text, 'For God so loved the world,');
+  check('nor is a cross-reference', book.chapters[0].verses[1].text, 'he gave his Son.');
+  check('front matter is not a book', parseUsfm(String.raw`\id FRT` + '\n' + String.raw`\p nothing here`), null);
+
+  const laid = layoutBible([book]);
+  check('one verse, one block', laid.blocks.length, 3);
+  check('a chapter points at the block it starts on', laid.chapters.map((c) => c.block), [0, 2]);
+  check('and a verse at its own', laid.verses.map((v) => v.number), [16, 17, 1]);
+  check('the part is the bible book', laid.parts[0].name, 'John');
+  check('a marker with no content leaves nothing behind', cleanLine(String.raw`\p`), '');
+
+  // The install reads a chapter's offsets off the block it starts on, by index
+  // into what was handed to normalize. Without that index every chapter began
+  // at 0 and ran to the end of the bible.
+  const placed = normalize(laid.blocks);
+  const chapterStarts = laid.chapters.map((chapter) =>
+    placed.blocks.find((block) => block.source === chapter.block)?.start);
+  check('a chapter starts at its own first verse',
+    chapterStarts, [0, placed.text.indexOf('Therefore.')]);
+  check('every verse finds its block',
+    laid.verses.every((verse) => placed.blocks.some((block) => block.source === verse.block)), true);
+}
+
+console.log('citing a passage');
+{
+  //          0123456789...
+  const text = 'Therefore, holy brothers. Consider Jesus. He was faithful.';
+  const verses = [
+    { number: 1, start: 0, end: 25 },
+    { number: 2, start: 26, end: 41 },
+    { number: 3, start: 42, end: 58 },
+  ];
+
+  check('a range of verses reads as a range',
+    referenceOf('Hebrews 3', verses), 'Hebrews 3:1-3');
+  check('one verse is not a range of one',
+    referenceOf('Hebrews 3', [verses[1]]), 'Hebrews 3:2');
+  check('a selection touching two verses names both',
+    versesIn(verses, { start: 10, end: 30 }).map((v) => v.number), [1, 2]);
+  check('a verse the selection only abuts is not in it',
+    versesIn(verses, { start: 26, end: 41 }).map((v) => v.number), [2]);
+
+  check('the reference leads, every verse is numbered',
+    quoteWithVerses(text, { start: 0, end: 58 }, verses, 'Hebrews 3'),
+    'Hebrews 3:1-3. [1] Therefore, holy brothers. [2] Consider Jesus. [3] He was faithful.');
+  check('half a verse quotes as half a verse',
+    quoteWithVerses(text, { start: 10, end: 41 }, verses, 'Hebrews 3'),
+    'Hebrews 3:1-2. [1] holy brothers. [2] Consider Jesus.');
+  check('a book with no verses is quoted plainly',
+    quoteWithVerses(text, { start: 0, end: 20 }, [], 'Chapter 3'), null);
+}
+
+console.log('catalog csv');
+{
+  const csv = [
+    'languageCode,translationId,title,Redistributable,Copyright,OTbooks,NTbooks,DCbooks',
+    'eng,engwebp,"World English Bible",True,public domain,39,27,0',
+    'cmn,cmn-cu89s,"新标点和合本",True,public domain,39,27,0',
+    'xxx,priv,"A, quoted ""title""",False,all rights reserved,39,27,0',
+  ].join('\n');
+  const rows = parseCsv(csv);
+  check('every row is read', rows.length, 3);
+  check('a comma inside quotes is not a column', rows[2].title, 'A, quoted "title"');
+  check('the licence column is read as published', rows[0].Redistributable, 'True');
 }
 
 console.log(failures ? `\n${failures} failing` : '\nall passing');

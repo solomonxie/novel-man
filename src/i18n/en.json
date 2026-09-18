@@ -53,8 +53,11 @@
     "showAll": "Show all {{count}}",
     "edit": "Edit",
     "notes": "Notes",
-    "cast": "All characters",
-    "castEmpty": "No characters yet.",
+    "charactersAll": "All characters",
+    "charactersEmpty": "No characters yet.",
+    "people": "People",
+    "peopleAll": "All people",
+    "peopleEmpty": "No people yet.",
     "comingSoon": "Coming soon",
     "script": "Screenplay",
     "importedFrom": "Imported from {{name}}",
@@ -98,7 +101,11 @@
     "inside": "Inside",
     "addOne": "Add one",
     "notesShort": "Notes",
-    "analyzeShort": "Analyze"
+    "analyzeShort": "Analyze",
+    "parts_book": "Books",
+    "parts_volume": "Volumes",
+    "partChapters": "{{count}} chapters",
+    "partsHint": "Each one opens the reader where that book begins."
   },
   "reader": {
     "empty": "This chapter is empty.",
@@ -191,7 +198,10 @@
     "unit_places": "places",
     "unit_chapters": "chapters",
     "unit_toRead": "to read",
-    "chapterShort": "ch. {{n}}"
+    "chapterShort": "ch. {{n}}",
+    "unit_books": "books",
+    "unit_volumes": "volumes",
+    "unit_verses": "verses"
   },
   "queue": {
     "title": "Queue ({{count}})",
@@ -255,6 +265,12 @@
     "unplaced": "Unplaced",
     "noMatches": "Nothing matches.",
     "deleteConfirm": "Delete this highlight?",
+    "select": "Select",
+    "selectDone": "Done",
+    "selected": "{{count}} selected",
+    "selectHint": "Tap the ones you want gone.",
+    "deleteSelected": "Delete {{count}}",
+    "deleteSelectedConfirm": "Delete {{count}} marks? The words stay in the book.",
     "filter_bookmark": "Bookmarks"
   },
   "structure": {
@@ -294,7 +310,7 @@
     "aiChapter": "Analyze this chapter with AI",
     "aiChapterBrief": "Write this chapter's brief with AI",
     "aiOne": "Analyze chapter {{n}}",
-    "aiOneWhat": "Reads this one chapter with the book's summary, the chapters just before it, and everyone already known as context. Writes its brief, its characters and its places.",
+    "aiOneWhat": "Reads this one chapter with the book's summary, the chapters just before it, and everyone already known as context. Writes its brief, its characters, its places and the ties between them.",
     "aiOneBrief": "Brief chapter {{n}}",
     "aiOneBriefWhat": "One or two sentences on what happens, written with the chapters just before it as context."
   },
@@ -486,7 +502,7 @@
     "clearConfirm": "Deletes the converted screenplay. The novel is untouched."
   },
   "work": {
-    "title": "Work",
+    "title": "Analysis queue",
     "empty": "Nothing running.",
     "progress": "{{done}} of {{total}}",
     "finished": "{{done}} of {{total}} done",
@@ -512,7 +528,7 @@
     "chapterN": "chapter {{n}}",
     "stopAll": "Stop everything",
     "andMore": "{{count}} more not shown",
-    "open": "Task queue",
+    "open": "Analysis queue",
     "idle": "Nothing running",
     "busy": "{{count}} running"
   },
@@ -522,14 +538,14 @@
     "read": "Read from here →",
     "scenes": "Scenes",
     "noScenes": "No scenes yet — mark one, or let an analysis read for them.",
-    "scenePlaceholder": "Scene {{index}}",
+    "sceneNamePlaceholder": "Name this scene",
     "sceneSummaryPlaceholder": "What happens in this scene?",
     "readScene": "Read from this scene →",
     "cast": "Who is in it",
     "noCast": "Nobody recorded yet.",
     "places": "Where it happens",
     "noPlaces": "No places recorded yet.",
-    "hint": "Names here open that profile. Analyzing the chapter fills the scenes, the cast and the places.",
+    "hint": "Names here open that profile. Analyzing the chapter fills the scenes, the cast, the places and how those people are tied to each other.",
     "analyzeShort": "Analyze"
   },
   "keyLog": {
@@ -611,13 +627,41 @@
   "kind": {
     "novel": "Novel",
     "novelHint": "Fiction — cast, scenes, screenplay and illustrations",
-    "scripture": "Scripture",
-    "scriptureHint": "Real people and places, read as record — no scenes or screenplay",
+    "scripture": "Bible",
+    "scriptureHint": "A bible — real people and places, verses, and references. Installs from eBible.org.",
     "nonfiction": "Nonfiction",
     "nonfictionHint": "Real people and places, read as record — no scenes or screenplay",
-    "tutorial": "Tutorial or manual",
+    "tutorial": "Tutorial",
     "tutorialHint": "Instructions — structure, terms and notes, no cast",
     "textbook": "Textbook",
     "textbookHint": "Course material — structure, terms and notes, no cast"
+  },
+  "add": {
+    "title": "Add a book",
+    "kindTitle": "What kind",
+    "whereFrom": "Where from",
+    "about": "About this book",
+    "commit": "Add it",
+    "install": "Install",
+    "free": "Nothing is fetched until you tap this.",
+    "chosen": "ready",
+    "changeFile": "Tap to choose another file",
+    "sourceEbible": "eBible.org",
+    "catalogAsOf": "{{count}} translations · as of {{date}}",
+    "noCatalog": "No list yet.",
+    "update": "Update",
+    "updating": "Updating…",
+    "updateFailed": "Couldn't reach eBible.org. The list you already have still works.",
+    "translation": "Translation",
+    "choose": "Choose",
+    "chooseTranslation": "Choose a translation",
+    "searchTranslations": "A name, a language…",
+    "noTranslations": "Nothing by that name.",
+    "canon": "Canon",
+    "canon66": "66 books",
+    "canonAll": "With {{count}} more",
+    "canonAllHint": "The deuterocanonical books this edition carries.",
+    "willGet": "{{books}} books · {{chapters}} chapters · {{verses}} verses",
+    "structureIncluded": "Structure included — its chapters and verses are published, not detected."
   }
 }

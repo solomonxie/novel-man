@@ -3,7 +3,8 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { listChapters, listScenes, type Chapter, type Scene } from '../../../src/db/repo';
+import { getDocumentText, listChapters, listScenes, type Chapter, type Scene } from '../../../src/db/repo';
+import { sceneOpening } from '../../../src/structure/scenes';
 import { Hint, Row, Section } from '../../../src/ui/primitives';
 import { space, usePalette } from '../../../src/theme';
 import { useWorkRefresh } from '../../../src/work/refresh';
@@ -21,11 +22,13 @@ export default function ScenesPage() {
   const palette = usePalette();
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [scenes, setScenes] = useState<Scene[]>([]);
+  const [text, setText] = useState('');
 
   const load = useCallback(() => {
     if (!id) return;
     listChapters(id).then(setChapters);
     listScenes(id).then(setScenes);
+    getDocumentText(id).then(setText);
   }, [id]);
 
   useFocusEffect(load);
@@ -66,7 +69,7 @@ export default function ScenesPage() {
               return (
                 <Row
                   key={scene.id}
-                  label={title || t('chapter.scenePlaceholder', { index: scene.idx + 1 })}
+                  label={title || sceneOpening(text, scene)}
                   detail={[
                     chapter ? `${chapter.idx + 1}. ${chapter.title.trim()}`.trim() : null,
                     scene.summary?.trim() || t('scenes.noSummary'),

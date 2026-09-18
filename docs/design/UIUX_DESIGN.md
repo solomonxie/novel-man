@@ -21,6 +21,9 @@ reachable only through a tab.
 |---|---|---|
 | **Home** | one scrollable page | Search · Reading · Library · Settings. No tabs. |
 | Add book | menu → sheet per source | The source choice is one tap from ⊕; each source then gets the sheet it needs. |
+| Find a book in a source | page, pushed from the add-book sheet | A search field, results that arrive as you type, and rows that push further. A sheet can't hold a list that grows and a keyboard at once. |
+| Request a book | page, pushed from a result | The options that source declares, generated from its schema, with what you'll get stated above the button. |
+| Public sources | section on Home, with a page per source | Sits with Settings because it is a list you maintain — refresh, add your own, remove. |
 | Import | the queue sheet | Multi-step (fetch → parse → preview → detect) and cancellable without losing the fetched file. Built as the queue sheet rather than a second surface: imports run in the background, so the list of them *is* the import screen. |
 | **Book** | page | The hub. Everything about one book lives here and nowhere else. |
 | **Reader** | page, chrome-hidden | The screen the app is used in. Full bleed, no tab bar. |
@@ -53,7 +56,7 @@ equal weight to the library.
 
 ## Flows
 
-### Adding a book — one pipeline, four doors
+### Adding a book — one pipeline, five doors
 
 ```
 Shelf  ⊕
@@ -64,6 +67,9 @@ Shelf  ⊕
    │                      (Google Docs share    │
    │                       link → export?format │
    │                       =docx, transparently)│
+   ├─ From a public     ─ type a name ─▶ ──────┤   the catalog knows the URL,
+   │  source…             matches ─▶ options    │   so nobody has to
+   │                                            │
    ├─ From cloud backup ─ bucket bundle list ──┤
    │                                            │
    └─ (Share sheet, from any other app) ───────┘
@@ -102,7 +108,62 @@ Shelf  ⊕
 ```
 
 A backup zip entering by any of these doors is recognized and routed to
-restore instead of parse — same door, different handler.
+restore instead of parse — same door, different handler. An edition that
+arrived from a public source with its own structure map skips detection
+entirely: its chapters were published, not guessed.
+
+### Getting a book from a public source
+
+The `apt` shape, said in words a reader uses. You name the book; the catalog
+knows where it lives.
+
+```
+ ⊕ ─▶ From a public source…
+            │
+            ▼
+ ┌─ Find a book ──────────────────────────────┐
+ │ 🔍 A title, an author, 圣经…               │ ← searches every source's
+ │                                            │   cached index, offline-first
+ │ BIBLE                                      │
+ │ King James Version        Public domain ›  │ ← source named on every row,
+ │   Gutenberg · en · 4.4 MB                  │   licence stated before the tap
+ │ World English Bible       Public domain ›  │
+ │   eBible · en · 4.1 MB                     │
+ │ 和合本                     Public domain ›  │
+ │   eBible · zh · 3.8 MB                     │
+ │ ─────────────────────────────────────────  │
+ │ Indexes as of 3 Mar        ⟳ Refresh       │ ← never silently stale
+ └────────────────────────────────────────────┘
+            │ tap
+            ▼
+ ┌─ King James Version ───────────────────────┐
+ │ Gutenberg · public domain · en             │
+ │                                            │
+ │ Canon              Protestant (66)      ▾  │ ← every row is declared by the
+ │ Verses             One per line         ▾  │   source, not hardcoded here
+ │ Verse numbers      ─●                      │
+ │ Red letter         ○─                      │
+ │ Maps and plates    ○─  adds 12 MB          │
+ │                                            │
+ │ You'll get 66 books · 1,189 chapters ·     │ ← recomputed as options change
+ │ ~4.4 MB, structure included                │
+ │            [[ Get it ]]                    │
+ └────────────────────────────────────────────┘
+            │
+            ▼
+ the import queue, as if the file had been picked:
+ Fetching from Gutenberg…  ▸ Reading .epub…  ▸ Saving…
+ (no "Finding chapters…" — this edition brought its own)
+```
+
+Failures name the source, never the app:
+
+```
+ ⊗ Couldn't reach Gutenberg. Your other sources still work.
+ ⊗ That edition has moved. The index is from 3 Mar — refresh and try again.
+ ⊗ No book by that name in your sources.   ⟳ Refresh indexes   ＋ Add a source
+ ⚠ You already have this edition.        ( Open it )  ( Get it again )
+```
 
 ### Reading → sentence action
 
@@ -285,397 +346,38 @@ the book's own words are never confused with what was written about them.
 
 ## Layout sketches
 
-### Home — one page
+**Every screen is drawn in `uiux/` — one file per subset, kept current with
+the code.** Where a description here and a drawing there disagree, the drawing
+is current.
 
-```
-┌───────────────────────────────────────────┐
-│ 🔍 Search books                           │ ← search is the top of the page,
-├───────────────────────────────────────────┤   not behind a nav-bar icon
-│ Importing · big.docx        47%       ›   │ ← queue strip, only while active
-│                                           │
-│ Library           Show 4 more          ＋ │ ← ＋ sits on the row that names
-│ ┌───────┐ ┌───────┐ ┌───────┐             │   what it adds to
-│ │ cover │ │ cover │ │ cover │             │
-│ └───────┘ └───────┘ └───────┘             │   three across, two rows, most
-│ 《长夜…》  Ash Lane   The Sec…             │   recently read first
-│ 14%       138.1万字   2%                   │
-│ ┌───────┐ ┌───────┐ ┌───────┐             │
-│ │ cover │ │ cover │ │ cover │             │
-│ └───────┘ └───────┘ └───────┘             │
-│                                           │
-│ SETTINGS                                  │ ← a section, not a tab, and flat
-│ ┌───────────────────────────────────────┐ │   all the way down: no settings
-│ │ Language                    English   │ │   page exists at all
-│ │ Appearance                   System   │ │ ← picking a value opens a sheet
-│ └───────────────────────────────────────┘ │   over the page, never a push
-│                                           │
-│ Task queue          3 running         ›   │ ← always in the same place; the
-│                                           │   strip only exists mid-run
-│                                           │
-│ AI KEYS                      Sequential   │ ← the fallback strategy is the
-│ ┌───────────────────────────────────────┐ │   section's own action
-│ │ OpenAI              12 requests ↑↓ ⋯  │ │
-│ │ ＋ Add AI Key                         │ │
-│ └───────────────────────────────────────┘ │
-│                                           │
-│ BACKUP                                    │
-│ ┌───────────────────────────────────────┐ │
-│ │ Export the whole library              │ │
-│ │ Restore from a file…                  │ │
-│ └───────────────────────────────────────┘ │
-│                                           │
-│ PRIVATE CLOUD                             │ ← its own section: storage you
-│ ┌───────────────────────────────────────┐ │   own, named as the user thinks
-│ │ my-manuscripts    bucket/prefix    ›  │ │   of it. The › goes to what's
-│ │ Connect a bucket                      │ │   *in* the bucket — a different
-│ └───────────────────────────────────────┘ │   place, not a settings page
-│ Storage you own. Off by default.          │
-└───────────────────────────────────────────┘
-```
+| File | Covers |
+|---|---|
+| `uiux/shelf.md` | the shelf page, search, import, settings sections |
+| `uiux/book.md` | the book hub and its sheets |
+| `uiux/reader.md` | reader chrome, sentence menu, reading settings, share |
+| `uiux/structure.md` | chapter list, one chapter, scenes |
+| `uiux/cast.md` | cast, character/place profiles, relationship graph |
+| `uiux/translation.md` | translation, glossary, sentence editor, screenplay |
+| `uiux/notes.md` | notes and highlights |
+| `uiux/cloud.md` | AI keys, cloud backup, work queue, cloud library |
+| `uiux/components.md` | the primitives every page is built from |
 
-**A page whose only job is holding links gets deleted.** Settings had exactly
-that shape twice over: a row pushing a page of four rows, three of which
-pushed pages of their own. Every one of those pages is now a section here, and
-`app/settings/` holds a single screen — the cloud library, which browses what
-is *in* a bucket rather than configuring it.
+The rules those drawings encode, in one place:
 
-The only rows left that push are the ones that lead somewhere genuinely else.
-A row that leads to more settings is a row that shouldn't exist.
-
-**One shelf, not two.** Reading and Library were separate rows, with Library
-holding everything — which meant that with one book in progress the same cover
-appeared twice, one above the other, and the second row said nothing the first
-hadn't. Sorting by last-read gives what the Reading shelf was for: the book you
-had open is first. A tile shows how far in you are if you've started it, and
-how long it is if you haven't.
-
-The grid is three across and two rows deep — six covers, which is as much as
-fits before Settings is pushed off the page. Past that, **Show N more**; the
-count is in the label so the tap is a known quantity. Cover falls through:
-user-set image → generated (title on a color derived from the title) →
-placeholder. Never blank.
-
-### Book — the hub, as one page with clear sections
-
-```
-┌───────────────────────────────────────────┐
-│ ‹                                       ⋯ │ ← ⋯ : Export · Back up · Re-detect
-│ ┌───────┐                                 │       structure · Replace source ·
-│ │ cover │  The Second Step                │       Rename · Delete
-│ │       │  Imported from ash-lane.docx    │
-│ └───────┘  312,400 words · 47 ch · 21h    │ ← "words" vs "characters" per the
-│                                           │   manuscript's own language
-│ ┌───────────────────────────────────────┐ │
-│ │        ▶  Continue · Chapter 12       │ │ ← the one primary action
-│ └───────────────────────────────────────┘ │   ("Start reading" before first open)
-│                                           │
-│ CHAPTERS                                  │
-│ ┌───────────────────────────────────────┐ │
-│ │ Jump to chapter              509   ›  │ │ ← 509 chapters is a PICKER, not a
-│ └───────────────────────────────────────┘ │   section. Collapsed by default;
-│ NOTES                                     │   the sheet is searchable and
-│ ┌───────────────────────────────────────┐ │   marks ⚠ low-confidence ones
-│ │ Highlights and notes          12   ›  │ │
-│ └───────────────────────────────────────┘ │
-│                                           │
-│ CHARACTERS                             ＋ │
-│ ┌───────────────────────────────────────┐ │
-│ │ 林小满                        小满   ›  │ │ ← each opens its own profile page
-│ └───────────────────────────────────────┘ │
-│ PLACES                                 ＋ │
-│                                           │
-│ SECTIONS                                  │ ← named honestly as unbuilt
-│ ┌───────────────────────────────────────┐ │   rather than hidden
-│ │ Story arcs              Coming soon   │ │
-│ │ Translations            Coming soon   │ │
-│ │ Illustrations           Coming soon   │ │
-│ │ Animations              Coming soon   │ │
-│ └───────────────────────────────────────┘ │
-└───────────────────────────────────────────┘
-```
-
-**The header IS the edit form.** Title, author, year and edition are editable
-where they're displayed, committing on blur. The first build had both a header
-*and* a Details section repeating the same four values — the same information
-twice, with the copy you can't touch on top. The cover carries a small ✎ badge
-in its corner rather than a stray `+` floating beneath it, which named nothing.
-
-**No control that does nothing.** An "Edit" action sat on the chapter heading
-wired to an empty handler because the structure editor isn't built. A dead
-control is worse than a missing one; it was removed until T3.6 lands.
-
-### Character / place profile
-
-One page per named thing in the story, modeled on `bring-your-own-photos`'
-person profile — because a character *is* a person as far as the interface is
-concerned.
-
-```
-┌───────────────────────────────────────────┐
-│ ‹ 《长夜纪》                  林小满      │
-│ ┌─────────────────────────────────┐       │
-│ │ CHARACTER                       │       │ ← the eyebrow says what kind
-│ │ ╭────╮ 林小满                   │       │   of page this is
-│ │ │ 林小 │ 小满                   │       │ ← the face leads the line rather
-│ │ ╰────╯                          │       │   than floating centred above it
-│ │ [12] [ch.1] [ch.40]             │       │ ← facts as pills: how many
-│ │  chapters first  last           │       │   chapters, first seen, last
-│ │ ( Polish with AI )( Export )    │       │ ← what you can do, as buttons —
-│ └─────────────────────────────────┘       │   a list row would say "over here"
-│ 灯塔守夜人，第一章出场…                   │ ← summary edits in place
-│                                           │
-│ Profile                                   │
-│ ┌─────────────────────────────────┐       │
-│ │ Role      守夜人                │       │
-│ │ Age       27                    │       │
-│ └─────────────────────────────────┘       │
-│                                           │
-│ Per chapter                      12       │
-│ ┌─────────────────────────────────┐       │
-│ │ (1) 第一章 灯灭                 │       │ ← the badge is the chapter number:
-│ │     青衫，声音很轻              │       │   an index means position
-│ └─────────────────────────────────┘       │
-└───────────────────────────────────────────┘
-```
-
-**Beyond name/alias/summary the schema is user-defined**, because what matters
-about a character is genre-specific — cultivation level, house, ship, species,
-rank. A fixed set of fields would be wrong for most books and padded for the
-rest. Characters and places share one table with a `kind`, since they differ
-only in what they're called.
-
-### Reader — chrome hidden
-
-```
-┌───────────────────────────────────────────┐
-│                                           │ ← no nav bar
-│   The rain had not stopped for three      │
-│   days. ████████████████████████████████  │ ← highlight: background tint only,
-│   ████████████, and the river had risen   │   no underline, no icon
-│   past the second step.                   │
-│                                           │
-│   She went down anyway.¹                  │ ← superscript = a note exists
-│                                           │
-│   ┌─────────────────────────────────────┐ │
-│   │ Copy  Highlight ▾  Note  Share  ⋯   │ │
-│   └──────────────▼──────────────────────┘ │
-│   ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │ ← tapped sentence, soft tint
-│   ░░░░░░░░░░░░░░░░░░░░░░                  │
-│                                           │
-│ Chapter 12 · The Second Step        37%   │ ← always visible, small, dim.
-└───────────────────────────────────────────┘   The one thing never hidden.
-```
-
-### Reader — chrome shown
-
-```
-┌───────────────────────────────────────────┐
-│ ‹        Chapter 12 · The Second Step   ⋯ │ ← ⋯ : Bookmark · Notes in this
-├───────────────────────────────────────────┤      chapter · Analyze chapter ·
-│   The rain had not stopped for three      │      Edit structure · Export chapter
-│   days. …                                 │
-├───────────────────────────────────────────┤
-│  Aa        ☀/☾        ≡ Chapters          │ ← three controls, nothing else
-│ ▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░  37% · 8m left  │ ← scrub within the chapter
-└───────────────────────────────────────────┘
-```
-
-### Reading settings (half sheet, live)
-
-```
-┌───────────────────────────────────────────┐
-│                  ───                      │
-│  Aa    ⊖ ──────●────────── ⊕    17pt      │
-│                                           │
-│  Theme  ( Paper )( Sepia )( Grey )( Night)│ ← applied live to the page behind
-│  Font    Serif · Sans · System       ›    │   the sheet
-│  Spacing Compact · Normal · Loose         │
-│  Margins ⊖ ────●───── ⊕                   │
-│  Page turn  Slide · Fade · Scroll         │ ← Scroll switches the reader to
-│  Brightness ☀ ──────●──── ☾               │   continuous mode
-│  Keep screen on                     [ ● ] │
-└───────────────────────────────────────────┘
-```
-
-Serif/sans choice is per script — a font that's right for English isn't
-necessarily right for Chinese, so the picker lists what's available for the
-manuscript's script.
-
-### Bilingual reader
-
-```
-┌───────────────────────────────────────────┐
-│ ‹     Chapter 12 · 中↔EN           Aa  ⋯ │ ← the language pair, not a flag
-├───────────────────────────────────────────┤
-│  雨已经下了三天没有停，河水涨过了        │ ← source, dimmed
-│  第二级台阶。                             │
-│  The rain had not stopped for three       │ ← target, full contrast:
-│  days, and the river had risen past       │   you are reading THIS
-│  the second step.                         │
-│                                           │
-│  她还是下去了。                           │
-│  She went down anyway. ~~˜~~              │ ← subtle underline = edited,
-│                                           │   differs from the machine output
-│  ┌─────────────────────────────────────┐ │
-│  │ Edit   Original   Term   Copy   ⋯   │ │ ← same anchored menu as the
-│  └──────────────▼──────────────────────┘ │   monolingual reader; "Original"
-│                                           │   shows what the model first said
-└───────────────────────────────────────────┘
-   ⋯ on the nav bar: Source only · Target only · Both ▸
-```
-
-Reading mode is a display choice, not a separate screen — the sentence tap,
-highlights and notes all work the same in all three.
-
-### Unit editor (half sheet)
-
-```
-┌───────────────────────────────────────────┐
-│ Cancel            Sentence          Save  │
-├───────────────────────────────────────────┤
-│ 她还是下去了。                            │ ← source, not editable
-│                                           │
-│ She went down ~~regardless~~ anyway.      │ ← diff vs. the machine output:
-│                                           │   strikethrough = removed,
-│ ┌───────────────────────────────────────┐ │   underline = added
-│ │ She went down anyway.                 │ │ ← the editable field
-│ └───────────────────────────────────────┘ │
-│                                           │
-│ [ Revert to original ]                    │
-│ [ Save “regardless → anyway” as a term ]  │ ← one tap promotes the diff into
-└───────────────────────────────────────────┘   the glossary
-```
-
-### Glossary
-
-```
-┌───────────────────────────────────────────┐
-│ 🔍 Search                                 │
-│ ( All )( Characters )( Places )( Terms )  │
-│                                           │
-│ CHARACTERS                                │
-│ ┌─────────────────────────────────┐       │
-│ │ 林小满        Lin Xiaoman   🔒  │       │ ← 🔒 = locked: a hard constraint
-│ │ 老陈          Old Chen          │       │   in the prompt, not a hint
-│ ├─────────────────────────────────┤       │
-│ │ 长夜纪        The Long Night🔒  │       │
-│ └─────────────────────────────────┘       │
-│                                           │
-│ SUGGESTED                     41  ›       │ ← proper nouns seen 3+ times that
-│ Seen often, not in your glossary yet.     │   nobody has decided on
-└───────────────────────────────────────────┘
-```
-
-### Notes & highlights (per book)
-
-```
-┌───────────────────────────────────────────┐
-│ ‹  Notes                             ⇪    │ ← ⇪ = export these
-│ 🔍 Search notes and highlights            │
-│ ( All )( Highlights )( Notes )( Marks )   │
-│                                           │
-│ Chapter 3                                 │ ← grouped by chapter in reading
-│ ┌───────────────────────────────────────┐ │   order, not by date
-│ │ ▌"…the river had risen past the       │ │
-│ │ ▌ second step."                       │ │ ← ▌ carries the highlight color
-│ │   check this against ch.20            │ │
-│ │   Sep 14                          ⋯   │ │ ← ⋯ : Jump to · Edit · Share · Delete
-│ └───────────────────────────────────────┘ │
-└───────────────────────────────────────────┘
-```
-
-Tapping a row opens the reader at that offset and briefly flashes the sentence
-— jumping to a note has to land *on* it, not near it.
-
-### Share card
-
-```
-┌─────────────────────────┐
-│  "She went down         │ ← typeset in the reader's own font and theme
-│   anyway."              │
-│  ──────                 │
-│  The Second Step        │
-│  Chapter 12             │
-└─────────────────────────┘
-  Theme ( ○ ○ ○ ○ )
-  [ Copy text ] [ Save image ] [ Share ]
-```
-
-Rendered locally into the OS share sheet. Nothing is posted anywhere.
-
-### Settings — AI keys (`byo-ai-keys`)
-
-```
-AI KEYS                                Sequential ▾  ← order IS the fallback
-Used by chapter detection and analysis. Keys never      order, so rows reorder
-leave this device, including in backups.
-┌─────────────────────────────────────────────────┐
-│ OpenAI                             ↑   ↓    ⋯   │ ← ⋯ holds Delete: visible,
-│ 128 requests                                    │   not a hidden long-press
-├─────────────────────────────────────────────────┤
-│                  + Add AI Key                   │ ← centered accent link
-└─────────────────────────────────────────────────┘
-```
-
-Adding one is a half sheet and **Save is the test**: one real cheap request,
-persisted only on success, spinner inline in the form, never an alert.
-Autocorrect, smart quotes and smart dashes off on the key field
-(`credentials`); a failed attempt is kept as a draft so a 40-character secret
-never gets retyped.
-
-### Settings — backup & cloud
-
-```
-CLOUD BACKUP                                  ＋   ← one section, two answers
-┌─────────────────────────────────────────────────┐  to the same question.
-│ iCloud Drive                            ●──     │  iCloud first: zero setup,
-│ Files → iCloud Drive → Novel Man · 4m ago       │  and the only destination
-├─────────────────────────────────────────────────┤  that outlives the app
-│ my-manuscripts          bucket/prefix       ›   │
-└─────────────────────────────────────────────────┘
-iCloud keeps what you made, not the books. A bucket
-you own keeps everything, and only when you ask.
-
-A FILE YOU KEEP                                    ← the manual escape hatch;
-┌─────────────────────────────────────────────────┐  the automatic one is the
-│ Export the whole library                    ›   │  switch above it
-│ Restore from a file…                        ›   │
-└─────────────────────────────────────────────────┘
-
-CLOUD                                              ← "Private Cloud": storage
-Storage you own. Off by default.                     the user owns; Drive/Dropbox
-┌─────────────────────────────────────────────────┐  are import sources, not this
-│ ☁  Archive        s3://my-bucket/novels/    ›   │
-│    Backed up 2 hours ago · 12 books              │
-├─────────────────────────────────────────────────┤
-│                  + Connect a bucket             │
-└─────────────────────────────────────────────────┘
-Sync queue: 12 pending · 2 at a time            ›  ← global, lives here ONCE
-```
-
-Add-connection form takes the whole credential block at once via paste-to-fill,
-derives region rather than asking, and **Save proves the connection** with a
-real scoped list call — failure keeps the sheet open with the provider's own
-error code verbatim and stores nothing.
-
-### Cloud library — pulling one book back
-
-```
-┌───────────────────────────────────────────┐
-│ ‹  Archive                              ⋯ │ ← ⋯ : Sync: Manual ▸ · Sync Now ·
-│ s3://my-bucket/novels/  ·  12 books       │      Sync Queue · Delete Connection
-│                                           │
-│ ┌───────┐ The Second Step                 │
-│ │       │ 312k words · backed up Sep 14 ✓ │ ← ✓ = already on this device
-│ ├───────┤ Ash Lane                        │
-│ │       │ 98k words · Sep 2          [Get]│ ← not on device: one tap to pull
-│ └───────┘                                 │
-└───────────────────────────────────────────┘
-```
-
-Not a file browser — a list of the bundles this connection holds. Pulling one
-runs the same restore path as a local bundle: confirm, create new, report what
-couldn't be placed.
+- **A page whose only job is holding links gets deleted.** Settings is
+  sections of the shelf; `app/settings/` holds one screen, the cloud library,
+  which browses what is *in* a bucket rather than configuring it.
+- **One shelf, not two.** Sorting by last-read gives what a separate Reading
+  row was for, without printing the same cover twice.
+- **The header IS the edit form.** Title, author, year and edition are
+  editable where they are displayed, committing on blur — never a header plus
+  a Details section repeating the same four values.
+- **No control that does nothing.** An unbuilt feature is named "Coming soon";
+  a control wired to an empty handler is removed.
+- **Reading mode is a display choice, not a screen.** Original / Translation /
+  Both share one reader, one sentence menu, one set of highlights.
+- **Every AI action states what leaves the device and what it may cost**,
+  before it runs.
 
 
 ## States

@@ -109,6 +109,51 @@ language is detected per project from the text and overridable.
 | Google Docs API with OAuth | Needs a server for the consent redirect and token refresh. One format is not worth a backend. |
 | Ask the user to export .docx themselves | What actually happens today, and it's a fine fallback — but only as a fallback, with the app naming the steps. |
 
+**When the app asks what kind of book this is**
+
+| Option | Deciding factor |
+|---|---|
+| **First, on a page of its own (chosen)** | The kind decides everything after it: which sources are worth offering, which options are worth asking, what the book page becomes, and what the AI is told it is reading. Asked first, those are three rows on one page; asked last, they are three screens nobody expected. |
+| After the import, in a sheet (what shipped) | Asked at the one moment the reader has already got what they came for, so it reads as an interruption — the code even imports anyway when the sheet is dismissed, which is the honest admission that the answer was being skipped. |
+| Never — detect it | A bible is detectable, a textbook is not, and "nonfiction" is a judgement about how the text should be read, not a fact in it. Detection can propose; it cannot decide. |
+
+The cost is one page before the file picker for the ordinary case. It is paid
+back by opening with Novel already chosen and the sources on the same page, so
+"a novel from Files" is still one tap — and by never asking again afterwards.
+
+**Getting a book you don't have a file of** (added after "let me just name it")
+
+| Option | Deciding factor |
+|---|---|
+| **Named sources with fetched indexes, apt-style (chosen)** | The user types a name, not a URL. A source is a row of data — an index URL, a licence, an option schema — so the catalog grows by adding a row, the way formats and vendors already do. Same model people already understand from a package manager: known sources, `update` refreshes the lists, install pulls one thing. |
+| A paste-a-URL box and nothing else | Already built, and it fails the actual request: nobody knows the direct URL of a good KJV `.epub`, and finding one is the work. |
+| Search the open web from the app | Needs a search backend or a scraper per site, returns results nobody can vouch for, and puts the app in the business of judging whether a hit is legal. |
+| Bundle the texts in the app | A bible is 4–5 MB; ten public-domain classics blow the binary up for books most users don't want, and shipping a text means shipping its licence review. |
+| One button per source, hardcoded | Works for the first source, and the second one adds a screen. The option lists differ per source, so the screen has to be generated from data anyway. |
+
+**Only what the source can state a licence for.** The catalog carries a licence
+field per work and the app offers nothing without one. Public domain and
+freely-licensed editions are plenty for what this is for; a source that points
+at anything else is not one we ship, and a user-added source says on its face
+that its files come from wherever it points.
+
+**A bible in a model built for novels**
+
+| Option | Deciding factor |
+|---|---|
+| **A bible chapter is a chapter; the bible book is a part (chosen)** | 1,189 chapters is what a reader actually turns, so the arrows, the scrubber, the chapter sheet and "continue where you left off" all keep their meaning. The bible book becomes a label and an order carried by the chapters under it — one nullable column, not a second tree. |
+| A bible book is a chapter, chapters become scenes | 66 "chapters" makes the next-chapter arrow jump Genesis → Exodus, and it buries the unit everything is cited by inside a feature named for something else. |
+| A third structural level, part → chapter → verse | The honest model, and it touches every query, export and screen that says "chapter" — for one kind. A label and an order do the same work until a book arrives that needs more. |
+
+**Where a bible's text comes from**
+
+| Option | Deciding factor |
+|---|---|
+| **USFM from eBible.org, fetched live (chosen)** | Its catalog is already an index: 1,550 translations with a `Redistributable` flag, a copyright line and book/chapter/verse counts, which is the licence gate and the "what you'll get" line for free. The USFM itself carries `\c`/`\v` marks and the edition's own book names — so the structure is published, not detected, and 约 3:16 parses because `\toc3` says 约. 2.9 MB for the World English Bible. |
+| A bible bundled in the app | One translation for everyone, ~3 MB of binary for users who don't want it, and a licence review shipped with every release. |
+| The same edition as epub or plain text | 11.5 MB against USFM's 2.9 MB for the identical text, arriving as prose with verse numbers glued into the words — re-guessing a structure the source already knew. |
+| A verse API per request (bible-api, getbible) | Reading offline is the whole app. Fine as a lookup, useless as a book. |
+
 **Translation granularity**
 
 | Option | Deciding factor |
@@ -177,6 +222,44 @@ built structure-first.**
   format declares what it is, whether it can round-trip, and what it loses.
   The UI reads that list rather than hardcoding it — which is also what lets
   it say "PDF export is one-way" honestly instead of silently degrading.
+- *The kind is the first question, and the only one asked twice over.* One
+  page: what kind of book, where it comes from, and whatever that kind needs to
+  know. Rows appear as they become answerable rather than as steps in a wizard
+  — the shelf is one page, and so is this.
+- *Sources belong to kinds.* A bible offers eBible.org, not the file picker
+  first; a novel offers Files, a link, and Gutenberg. The source row shows what
+  applies to what was chosen and hides the rest, and a file already in hand
+  (share sheet, "Open in…") appears at the top of it already chosen.
+- *A kind carries its own page.* The book page renders the sections its kind
+  declares, in the order it declares them — not a screen of `if (kind ===
+  'novel')`. That is what makes a bible's page show Books and a novel's show
+  Scenes without either of them knowing about the other, and what makes a new
+  kind a row of data rather than an edit to every screen.
+- *Scripture is a kind, not a second app.* A bible reads, annotates, exports
+  and analyzes through the same pipeline as a novel — one normalized text,
+  offsets for everything. What the kind changes is what the structure is called
+  and what a tap lands on, not how any of it is stored.
+- *The edition brings its own structure and its own names.* USFM states the
+  book, the chapter and the verse, so nothing is detected; `\toc1`/`\toc2`/
+  `\toc3` state what that book is called and abbreviated in the edition's own
+  language, which is what makes `John 3:16`, `约 3:16` and `1 Cor 13` all
+  resolve without a hardcoded book list per language.
+- *Two questions at install; everything else is a reading setting.* Translation
+  and canon decide which bytes are fetched. Verse numbers, one-verse-per-line
+  against flowing paragraphs, section headings, poetry indents, footnotes,
+  cross-references and red letter are all render choices over the same text —
+  changing your mind about any of them must never re-download a bible.
+- *The verse is the unit a tap lands on.* For a novel that unit is a sentence;
+  for scripture it is the verse, because that is what gets highlighted, quoted
+  and cited. Both are `(start, end)` ranges over the one text, so annotations,
+  search and translation need no second mechanism.
+- *A book you name, not a URL.* Sources are data, like formats and vendors:
+  an index the app fetches and caches, a licence per work, and an option
+  schema the request screen is generated from — so a bible asking for a
+  translation and Gutenberg asking for a file format are the same screen, and
+  a new source is a row, not a feature. An edition may ship its own structure
+  (book and chapter map), in which case detection never runs: the structure
+  arrived with the text.
 - *Translation units are sentences, anchored on the same offsets as
   everything else.* A translated sentence, a highlight and a chapter are all
   `(start, end)` ranges into the one normalized text. That's what lets a
@@ -272,13 +355,84 @@ order. Only vendors that can do
 the requested job are offered for it (image generation routes separately from
 text).
 
-**Book kinds** — what a book *is* decides what it gets. Kinds are data
-(`novel`, `scripture`, `nonfiction`, `tutorial`, `textbook`), each carrying a
-feature set and how a pass should read it. Scripture and nonfiction keep people
-and places but lose scenes, screenplay and generated art; instruction books lose
-those too. The analysis prompt is built from the kind, so a non-fiction pass is
-never asked to invent a motive or an arc. Asked once when adding, editable on
-the book page, defaulting to `novel` — a share-sheet import has nobody to ask.
+**Public sources** — an `apt`-shaped catalog, all of it data:
+
+```
+Source    id · name · index URL · licence policy · trust (bundled | yours) · fetched_at
+Work      source · slug · title · author · language · kind · licence · options
+Edition   the fetchable thing: format · URL · bytes · sha256 · structure map?
+Install   book ← source · work · the option values that produced it
+```
+
+- **The app ships the source list, never the books.** Indexes are names and
+  metadata; a manuscript is fetched only when a book is asked for.
+- **An index is cached and dated.** Offline, the last one still lists and says
+  "as of 3 Mar"; refresh is explicit, plus once when a search finds nothing.
+- **Options are declared by the source and rendered generically** — pick-one,
+  toggle or free text, each with a default, and a one-line "what you get" built
+  from the current values. The bible's translation / canon / verse layout and
+  Gutenberg's file format go through the same renderer.
+- **An install is recorded**, so the same edition can be recognized ("you
+  already have this"), re-fetched after a delete, and re-requested with one
+  option changed without retyping the rest.
+- **Fetching reuses the import pipeline** — the same queue, the same preview
+  gate, the same failures, named. What the catalog adds is the URL and,
+  where the edition carries one, its structure map.
+- **Sources are managed in Settings**, listed with when each was last
+  refreshed; a user can add an index URL of their own or remove any source.
+  A removed source doesn't touch the books it installed.
+
+**Scripture** — three additions, all offsets over the same Document:
+
+```
+part        chapters carry (part_idx, part_title) — "Genesis", 1 of 66
+verse       book · chapter · number · (start,end)   the citable unit
+names       per edition, from \toc1/\toc2/\toc3 — long, short, abbreviation
+```
+
+- **USFM in, normalized text out**: `\c`/`\v` become the chapter and verse
+  marks, `\w word|strong="G1722"\w*` collapses to the word, `\s1` is a section
+  heading, `\q1`/`\q2` poetry indents, `\wj` the red-letter span, `\f`/`\x`
+  footnotes and cross-references — each kept as a mark the reader can switch
+  off, never as text baked into the manuscript.
+- **A reference is a lookup, not a search**: `names` resolves the book, the
+  chapter is an index, the verse is a row — so `John 3:16` is three lookups and
+  an offset, and it works in whatever language the edition is in.
+- **Cast still applies**, and reads as a record of real people (`kind.fiction`
+  is already what turns off invented motive and arc). Scenes, screenplay and
+  generated art stay off: a chapter of Leviticus has no scene to find.
+- **Analysis is per book, never per bible.** 1,189 chapters is the one place
+  where "analyze everything" is a bill nobody meant to agree to, so the run is
+  scoped to a part and priced by it.
+
+**Book kinds** — what a book *is* decides what it gets, and a kind is a row:
+
+```
+kind      id · subject · fiction · features
+          units     what sits above a chapter and below it
+          sources   which doors can supply this kind
+          options   what to ask before adding one, as a schema
+          sections  the book page, in order
+```
+
+Scripture and nonfiction keep people and places but lose scenes, screenplay and
+generated art; instruction books lose those too. The analysis prompt is built
+from the kind, so a non-fiction pass is never asked to invent a motive or an
+arc. Asked on the Add page before anything is fetched, editable on the book
+page afterwards, defaulting to `novel` — a share-sheet import has nobody to ask.
+
+Where the five diverge, which is what `sections` and `units` encode:
+
+| | novel | scripture | nonfiction | how-to | textbook |
+|---|---|---|---|---|---|
+| above a chapter | part (卷) | book, 66 | part | module | unit |
+| below a chapter | scene | verse | section | step | section |
+| a tap in the reader | sentence | verse | sentence | step | sentence |
+| people | characters | real, as record | real, as record | — | — |
+| scenes · screenplay · art | yes | — | — | — | — |
+| terms | translation glossary | names per edition | index terms | commands | key terms |
+| its own navigation | — | `John 3:16` | the index | the step list | figures |
+| analysis is scoped to | the book, a chapter | one bible book | one part | one module | one unit |
 
 **Cost shape** — the thing to control, and why the UI has an explicit "analyze"
 action rather than an automatic one:
@@ -304,11 +458,13 @@ destination differs; the bundle is identical.
 
 ```
 bucket/<prefix>/
-├── library.zip              settings, shelf order, language, connection
-│                            list — NO secrets
+├── 202609-library.zip       settings, shelf order, language, connection
+├── 202610-library.zip       list — NO secrets. A file per month, the
+│                            current one overwritten all month long
 └── books/
-    ├── <book-uuid>.zip      one bundle per book, so a single book can be
-    └── <book-uuid>.zip      pulled back without touching the rest
+    ├── 202609-<book-uuid>.zip   one bundle per book per month, so a single
+    └── 202610-<book-uuid>.zip   book can be pulled back without touching
+                                 the rest — and from before last month
 ```
 
 The bundle is a plain zip, and named one. It carried a `.nmbak` extension
@@ -363,11 +519,14 @@ assets/
   prompt: there is nothing to overwrite and no context yet for the question.
   Launch pulls back *before* it pushes up, or an empty shelf would overwrite
   the backup it came for. The file picker stays the only manual path.
-- **One file, always overwritten** — `novel-man.zip`, not a dated series.
-  The folder exists so that deleting the app doesn't delete the work, and for
-  that only the newest copy was ever the answer; a list of near-identical
-  bundles would ask the reader to choose between them, which is a question
-  they cannot answer. iCloud keeps its own file versions underneath.
+- **One file per month, overwritten all month long** — `202609-library.zip`.
+  Backups are written on every change, so a file per write is a wall of
+  near-identical bundles nobody can choose between, and a single file forever
+  means a mistake noticed in April has nothing behind it. A month is the unit
+  someone means by "before I broke it", it caps a year at twelve files, and
+  the month leads the name so any folder sorts itself. Restore-on-install
+  takes the newest and never asks. iCloud keeps its own file versions
+  underneath that.
 - **The container is document-scope public** (`NSUbiquitousContainers`), so
   the folder is reachable in Files under the app's name. A backup the user
   can't open is worse than a local file.
@@ -530,6 +689,43 @@ chapter corrections.
   sentences, especially between CJK and English where the natural sentence
   boundary genuinely differs. Count validation catches it; what to do when a
   language legitimately needs two sentences for one is an open question.
+- **A public source is a link that can rot.** Indexes move, works are
+  renumbered, a mirror goes down. The index is cached so the catalog still
+  lists offline, an install failure names the source rather than the app, and
+  a work that 404s is reported as gone rather than retried silently. What is
+  not solved: nobody is watching those indexes but us.
+- **Licence is asserted by the source, not verified by the app.** We can refuse
+  to ship a source that doesn't state one, and refuse to show a work without
+  one — we cannot audit a user-added index. That is why a user-added source is
+  labelled as theirs everywhere it appears.
+- **"A bible" is not one book.** Translation, canon, versification and whether
+  verses are lines or prose all change the text. The option schema is the
+  mitigation; the risk is a request screen with nine questions on it, so a
+  source must carry sane defaults and the screen must show only what changes
+  the result.
+- **Verse numbering is not the same in every tradition.** Psalm titles counted
+  as verse 1, 3 John's 14 or 15 verses, Hebrew versification in the Old
+  Testament — a reference resolves against *the edition installed*, and a note
+  citing John 3:16 in one edition is not guaranteed to land on the same words
+  in another. The app cites the edition it has rather than pretending to a
+  universal address.
+- **A bible is 1,189 chapters of analysis if nobody stops it.** Scoping runs to
+  one book is the mitigation; the risk is a per-chapter feature that forgets to
+  ask which book, and quietly bills for the whole thing.
+- **eBible's catalog is 731 KB and its ids are not promised forever.** Cached
+  with its date like any other index, and a translation that has moved fails
+  by name. Rows marked `Redistributable = False` never reach the list.
+- **Right-to-left editions are in that catalog** (Hebrew, Arabic) and the
+  reader has no RTL mode. They are listed today and would read wrongly, so
+  either the reader learns direction or the source filters them out; filtering
+  is the honest short-term answer and is recorded as such rather than being
+  discovered by a user.
+- **Open**: two translations side by side is the bilingual reader's shape, not
+  the translation feature's — same screen, different pairing. Worth reusing,
+  not worth forcing before someone asks.
+- **Open**: when a source publishes a newer edition of a book already
+  installed, is that an update or a second book? Leaning second book —
+  annotations anchor to offsets, and a silent re-fetch would move them.
 - **Open**: does a project ever hold more than one source file (a series, or a
   manuscript split across files)? Modeled as one-to-many already; the UI
   assumes one until there's demand.

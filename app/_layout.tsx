@@ -37,6 +37,8 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="index" />
+          <Stack.Screen name="add" options={{ headerShown: true, title: '' }} />
+          <Stack.Screen name="scripture/translations" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="entity/[id]" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="chapter/[id]" options={{ headerShown: true, title: '' }} />
@@ -49,6 +51,7 @@ export default function RootLayout() {
           <Stack.Screen name="book/[id]/structure" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]/cast" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]/scenes" options={{ headerShown: true, title: '' }} />
+          <Stack.Screen name="book/[id]/parts" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]/graph" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]/translation" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="book/[id]/terms" options={{ headerShown: true, title: '' }} />

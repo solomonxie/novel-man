@@ -143,6 +143,16 @@ export async function lastUploadedAt(connectionId: string, key: string): Promise
   return row?.uploaded_at ?? null;
 }
 
+/** The newest upload to a destination whatever it was named — see monthStamp. */
+export async function lastUploadedAnywhere(connectionId: string): Promise<number | null> {
+  const database = await db();
+  const row = await database.getFirstAsync<{ uploaded_at: number | null }>(
+    'SELECT MAX(uploaded_at) AS uploaded_at FROM cloud_uploads WHERE connection_id = ?',
+    connectionId
+  );
+  return row?.uploaded_at ?? null;
+}
+
 export async function recordUpload(connectionId: string, key: string, hash: string) {
   const database = await db();
   await database.runAsync(

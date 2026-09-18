@@ -13,6 +13,7 @@ import {
   listChapterScenes,
   listObservations,
   mergeFields,
+  recordRelation,
   replaceMentions,
   replaceScenes,
   setChapterBrief,
@@ -22,7 +23,7 @@ import {
   type Book,
   type Chapter,
 } from '../db/repo';
-import { countMentions } from '../cast/mentions';
+import { countMentions, namesOf } from '../cast/mentions';
 import { kindOf } from '../books/kinds';
 import type { WorkJob, WorkKind } from '../db/work';
 import {
@@ -164,11 +165,14 @@ type Character = {
 
 type SceneResult = { start?: number; title?: string; summary?: string };
 
+type Tie = { from: string; to: string; label: string };
+
 type DeepResult = {
   brief?: string;
   scenes?: SceneResult[];
   characters?: Character[];
   places?: { name: string; note?: string }[];
+  relations?: Tie[];
 };
 
 /**
@@ -207,6 +211,14 @@ const PROFILE_RULES =
   'schooling, rank, occupation, where they live, family, and whatever this genre ' +
   'tracks — as short label/value pairs in the language of the book. ' +
   'Leave a field out rather than inventing it.';
+
+const RELATION_RULES =
+  '"relations" are the ties this chapter shows between two of its people — ' +
+  'family, rank, allegiance, rivalry, who works for whom. "from" and "to" are ' +
+  'names from "characters" or from the list already known, spelled exactly as ' +
+  'they appear there; "label" is two or three words in the language of the book. ' +
+  'Only what this chapter states or plainly shows: omit a pair rather than ' +
+  'guessing at one, and never name a tie to someone not in this chapter.';
 
 /** Every pass that reads a chapter writes its people down the same way. */
 async function recordCharacters(bookId: string, chapterIdx: number, characters: Character[]) {
@@ -247,6 +259,34 @@ async function recordPlaces(bookId: string, chapterIdx: number, places: { name?:
       appearance: null,
       voice: null,
       note: place.note?.trim() || null,
+    });
+  }
+}
+
+/**
+ * Ties are written down as the chapters go by rather than only by the
+ * whole-book pass: by the time a reader opens a character, the chapters
+ * already analyzed should say who that character is to everyone else.
+ * A name the chapter invented for the occasion is dropped — a relation is only
+ * recorded between two people this book already has profiles for.
+ */
+async function recordRelations(bookId: string, chapterIdx: number, ties: Tie[]) {
+  if (!ties.length) return;
+  const known = await listEntities(bookId, 'character');
+  const byName = new Map<string, string>();
+  for (const entity of known) {
+    for (const name of namesOf(entity)) byName.set(name.toLowerCase(), entity.id);
+  }
+  for (const tie of ties) {
+    const from = byName.get(tie?.from?.trim().toLowerCase() ?? '');
+    const to = byName.get(tie?.to?.trim().toLowerCase() ?? '');
+    if (!from || !to || from === to || !tie.label?.trim()) continue;
+    await recordRelation({
+      book_id: bookId,
+      from_id: from,
+      to_id: to,
+      label: tie.label.trim(),
+      chapter_idx: chapterIdx,
     });
   }
 }
@@ -308,6 +348,7 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
     wantsScenes && '"scenes":[{"start":0,"title","summary"}]',
     wantsCast && `"characters":[${PROFILE_SHAPE}]`,
     wantsCast && '"places":[{"name","note"}]',
+    wantsCast && '"relations":[{"from","to","label"}]',
   ]
     .filter(Boolean)
     .join(',');
@@ -320,6 +361,7 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
         'spelling of someone already there; put any new form in "aliases". ' +
         '"appearance" and "voice" carry only what *this* chapter states. ' +
         `${PROFILE_RULES} Skip people only mentioned in passing.`,
+    wantsCast && RELATION_RULES,
     // Without this a profile of Paul reads like a character study of an
     // invented person: motives assigned, arc predicted, traits embellished.
     wantsCast && !kind.fiction &&
@@ -367,6 +409,8 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
   if (wantsCast) {
     await recordCharacters(job.book_id, chapter.idx, result.characters ?? []);
     await recordPlaces(job.book_id, chapter.idx, result.places ?? []);
+    // After the people: a tie can only be recorded between two profiles that exist.
+    await recordRelations(job.book_id, chapter.idx, result.relations ?? []);
   }
 
   if (wantsScenes) {

@@ -20,6 +20,7 @@ import {
   type Mention,
   type Relation,
 } from '../../../src/db/repo';
+import { castNoun } from '../../../src/books/kinds';
 import { estimateCast } from '../../../src/cast/extract';
 import { estimateDeep, queueChapterRun, queuePolish } from '../../../src/analysis/runs';
 import { coOccurring, estimateRelations, extractRelations } from '../../../src/cast/relations';
@@ -140,7 +141,7 @@ export default function Cast() {
       style={{ backgroundColor: palette.bg }}
       contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
     >
-      <Stack.Screen options={{ title: t('book.characters'), headerBackTitle: ' ' }} />
+      <Stack.Screen options={{ title: t(`book.${castNoun(book?.kind)}`), headerBackTitle: ' ' }} />
 
       <Section title={t('cast.analysis')}>
         <Row
@@ -208,9 +209,9 @@ export default function Cast() {
         </Section>
       )}
 
-      <Section title={t('book.characters')}>
+      <Section title={t(`book.${castNoun(book?.kind)}`)}>
         {entities.length === 0 ? (
-          <Row label={t('book.castEmpty')} last />
+          <Row label={t(`book.${castNoun(book?.kind)}Empty`)} last />
         ) : (
           ordered.map((entity, index) => {
             const timeline = timelineFor(mentions, entity.id);
