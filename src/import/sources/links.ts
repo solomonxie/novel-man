@@ -20,6 +20,20 @@ export function rewrite(url: string): { url: string; name?: string } {
   if (doc) {
     return { url: `https://docs.google.com/document/d/${doc[1]}/export?format=docx`, name: `${doc[1]}.docx` };
   }
+  /**
+   * A book written in a repository needs no source of its own: the file is
+   * already at a url. What people paste is the page they were reading, so the
+   * blob url becomes the raw one rather than coming back as HTML.
+   */
+  const blob = /github\.com\/([^/]+)\/([^/]+)\/blob\/([^?#]+)/.exec(url);
+  if (blob) {
+    const [, owner, repo, path] = blob;
+    return {
+      url: `https://raw.githubusercontent.com/${owner}/${repo}/${path}`,
+      name: decodeURIComponent(path.split('/').pop() ?? ''),
+    };
+  }
+
   const drive = /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/.exec(url);
   if (drive) {
     return { url: `https://drive.google.com/uc?export=download&id=${drive[1]}`, name: drive[1] };

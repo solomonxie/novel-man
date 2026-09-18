@@ -1,5 +1,15 @@
 import { newId } from '../db';
-import { installTranslation, type Translation } from '../scripture/ebible';
+import { updateBook } from '../db/repo';
+import { downloadTranslation, type Translation } from '../sources/ebible';
+import {
+  authorLine,
+  fetchPaperHtml,
+  fileNameFor as paperFileName,
+  type Paper,
+} from '../sources/arxiv';
+import { readGutenbergBook, type GutenbergBook } from '../sources/gutenberg';
+import { fetchManuscript } from './sources/url';
+import { saveDownload } from './sources/downloads';
 import { importFile, type ImportPreview, type ImportProgress } from './pipeline';
 
 export type JobStatus = 'pending' | 'running' | 'awaiting' | 'done' | 'failed';
@@ -25,7 +35,9 @@ type Listener = (jobs: ImportJob[]) => void;
  */
 export type QueuedSource =
   | { via: 'file'; uri: string; name: string; kind?: string }
-  | { via: 'scripture'; translation: Translation; apocrypha: boolean };
+  | { via: 'ebible'; translation: Translation; apocrypha: boolean }
+  | { via: 'gutenberg'; book: GutenbergBook; kind?: string }
+  | { via: 'arxiv'; paper: Paper; kind?: string };
 
 const jobs: ImportJob[] = [];
 const sources = new Map<string, QueuedSource>();
@@ -65,8 +77,17 @@ export function enqueueImport(input: { uri: string; name: string; kind?: string 
 
 /** A bible from a preset source, queued exactly like a file. */
 export function enqueueTranslation(translation: Translation, apocrypha: boolean): string {
-  return enqueue({ via: 'scripture', translation, apocrypha }, translation.title);
+  return enqueue({ via: 'ebible', translation, apocrypha }, translation.title);
 }
+
+export function enqueueGutenberg(book: GutenbergBook, kind?: string): string {
+  return enqueue({ via: 'gutenberg', book, kind }, book.title);
+}
+
+export function enqueuePaper(paper: Paper, kind?: string): string {
+  return enqueue({ via: 'arxiv', paper, kind }, paper.title);
+}
+
 
 function enqueue(source: QueuedSource, name: string): string {
   const id = newId();
@@ -133,20 +154,55 @@ async function drain() {
 }
 
 async function runJob(job: ImportJob, source: QueuedSource) {
-  if (source.via === 'scripture') {
-    return installTranslation(
+  if (source.via === 'gutenberg') {
+    job.stage = 'reading';
+    publish();
+    // The book's own feed states the url, so it is read now rather than held
+    // in a screen's state from whenever the list was last searched.
+    const edition = await readGutenbergBook(source.book);
+    const file = await fetchManuscript(edition.url, edition.fileName);
+    return importFrom({ ...file, kind: source.kind }, job);
+  }
+
+  if (source.via === 'arxiv') {
+    job.stage = 'reading';
+    publish();
+    // The rendered HTML when the paper has one, the PDF when it does not.
+    const html = await fetchPaperHtml(source.paper);
+    const file = html
+      ? saveDownload(paperFileName(source.paper, 'html'), html)
+      : await fetchManuscript(source.paper.pdf, paperFileName(source.paper));
+    const result = await importFrom({ ...file, kind: source.kind }, job);
+    // A PDF's first page is a guess at what the paper is called; arXiv is not.
+    await updateBook(result.bookId, {
+      title: source.paper.title,
+      author: authorLine(source.paper),
+      year: source.paper.published.slice(0, 4),
+      edition: [source.paper.id, source.paper.category].filter(Boolean).join(' · '),
+      summary: source.paper.abstract,
+    });
+    return result;
+  }
+
+  if (source.via === 'ebible') {
+    return downloadTranslation(
       source.translation,
       { apocrypha: source.apocrypha },
       (stage, fraction) => {
-        // The queue's own vocabulary: an install is a fetch, a read and a save.
+        // The queue's own vocabulary: a download is a fetch, a read and a save.
         job.stage = stage === 'fetching' ? 'reading' : stage === 'reading' ? 'parsing' : 'saving';
         job.fraction = stage === 'fetching' ? fraction * 0.5 : 0.5 + fraction * 0.5;
         publish();
       }
     );
   }
+  return importFrom(source, job);
+}
+
+/** Every path ends here: a file on disk, the preview gate, the same stages. */
+function importFrom(file: { uri: string; name: string; kind?: string }, job: ImportJob) {
   return importFile(
-    source,
+    file,
     (progress) => {
       job.stage = progress.stage;
       job.fraction = progress.fraction;

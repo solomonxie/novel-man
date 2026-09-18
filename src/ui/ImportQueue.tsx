@@ -82,8 +82,8 @@ export function QueueSheet({ jobs, visible, onClose }: {
           )}
           {[...unfinished, ...finished].map((job) => (
             <View key={job.id}>
-              <Row job={job} />
-              {job.status === 'awaiting' ? <Preview job={job} /> : null}
+              <JobRow job={job} />
+              {job.status === 'awaiting' ? <JobPreview job={job} /> : null}
             </View>
           ))}
         </ScrollView>
@@ -92,7 +92,7 @@ export function QueueSheet({ jobs, visible, onClose }: {
   );
 }
 
-function Row({ job }: { job: ImportJob }) {
+export function JobRow({ job }: { job: ImportJob }) {
   const { t } = useTranslation();
   const palette = usePalette();
   const failed = job.status === 'failed';
@@ -102,7 +102,7 @@ function Row({ job }: { job: ImportJob }) {
         <Text numberOfLines={1} style={{ color: palette.text, fontSize: 15 }}>{job.name}</Text>
         <Text style={{ color: failed ? palette.danger : palette.dim, fontSize: 12, marginTop: 2 }}>
           {failed
-            ? describe(job.error, t)
+            ? describeImportError(job.error, t)
             : job.status === 'done'
               ? t('queue.doneChapters', { count: job.chapters ?? 0 })
               : job.status === 'running'
@@ -127,7 +127,7 @@ function Row({ job }: { job: ImportJob }) {
 }
 
 /** What was actually extracted, before it becomes a book on the shelf. */
-function Preview({ job }: { job: ImportJob }) {
+export function JobPreview({ job }: { job: ImportJob }) {
   const { t } = useTranslation();
   const palette = usePalette();
   if (!job.preview) return null;
@@ -161,7 +161,7 @@ function Preview({ job }: { job: ImportJob }) {
   );
 }
 
-function describe(error: unknown, t: TFunction): string {
+export function describeImportError(error: unknown, t: TFunction): string {
   if (error instanceof ImportError) {
     if (error.code === 'unsupported') return t('import.unsupported', { ext: `.${error.detail}` });
     if (error.code === 'no-text') return t('import.noText');

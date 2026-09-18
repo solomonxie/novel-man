@@ -1,5 +1,5 @@
 import { yieldToUI } from '../async/yield';
-import { adoptSourceFile, extensionOf } from '../storage/files';
+import { adoptSourceFile, extensionOf, writeImage } from '../storage/files';
 import { saveImportedBook } from '../db/repo';
 import { applyToImport } from '../backup/pending';
 import { detectChapters } from '../structure/detect';
@@ -7,6 +7,7 @@ import { hintsOf } from '../structure/document';
 import { countUnits } from '../text/counts';
 import { detectLanguage } from '../text/language';
 import { DEFAULT_KIND } from '../books/kinds';
+import { renderMath } from './extractor';
 import { normalize } from './normalize';
 import { importerFor } from './registry';
 
@@ -63,6 +64,8 @@ export async function importFile(
   let parsed;
   try {
     parsed = await importer.parse(stored.bytes, input.name, {
+      saveImage: writeImage,
+      renderMath,
       onProgress: async (done, total) => {
         report('parsing', total ? done / total : 0, importer.label);
         // The scan holds the JS thread until it lets go here.

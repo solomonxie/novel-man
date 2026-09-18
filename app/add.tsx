@@ -9,16 +9,26 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { bookKinds, DEFAULT_KIND, kindOf } from '../src/books/kinds';
-import { enqueueImport, enqueueTranslation } from '../src/import/queue';
+import { enqueueGutenberg, enqueueImport, enqueuePaper, enqueueTranslation } from '../src/import/queue';
 import { pickManuscript } from '../src/import/sources/picker';
 import { fetchManuscript, FetchError } from '../src/import/sources/url';
 import { supportedExtensions } from '../src/import/registry';
-import { readCatalog, refreshCatalog, type Catalog, type Translation } from '../src/scripture/ebible';
+import { readCatalog, refreshCatalog, type Catalog } from '../src/sources/ebible';
+import {
+  fetchGutenbergIndex,
+  readGutenbergBook,
+  type GutenbergEdition,
+} from '../src/sources/gutenberg';
+import { indexState, replaceIndex, type IndexState } from '../src/sources/catalog';
+import { authorLine } from '../src/sources/arxiv';
+import { sourcesFor } from '../src/sources/registry';
+import { takeChoice, type Choice } from '../src/sources/chosen';
+import { esvKey, forgetEsvKey, saveEsvKey } from '../src/sources/esvKey';
 import { Hint, Row, Section } from '../src/ui/primitives';
 import { PickerSheet } from '../src/ui/PickerSheet';
 import { radius, space, usePalette } from '../src/theme';
@@ -30,10 +40,7 @@ import { radius, space, usePalette } from '../src/theme';
  * it was opened from.
  */
 export default function AddBook() {
-  const { kind: kindParam, translation: translationParam } = useLocalSearchParams<{
-    kind?: string;
-    translation?: string;
-  }>();
+  const { kind: kindParam } = useLocalSearchParams<{ kind?: string }>();
   const { t, i18n } = useTranslation();
   const palette = usePalette();
 
@@ -45,41 +52,94 @@ export default function AddBook() {
   const [busy, setBusy] = useState(false);
 
   const [catalog, setCatalog] = useState<Catalog | null>(null);
-  const [updating, setUpdating] = useState(false);
+  /** What the kept index knows, per source, and which one is being refreshed. */
+  const [states, setStates] = useState<Record<string, IndexState | null>>({});
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [updateFraction, setUpdateFraction] = useState(0);
   const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [translation, setTranslation] = useState<Translation | null>(null);
+  /** What came back from a find page: a translation, or a book. */
+  const [choice, setChoice] = useState<Choice | null>(null);
+  /** Gutenberg states the size and the terms on the book's feed, not the search. */
+  const [edition, setEdition] = useState<GutenbergEdition | null>(null);
   const [apocrypha, setApocrypha] = useState(false);
   const [canonOpen, setCanonOpen] = useState(false);
+  const [kindOpen, setKindOpen] = useState(false);
+  /** The one edition that is asked rather than owned — see `lookup`. */
+  const [esvKeyed, setEsvKeyed] = useState(false);
+  const [esvOpen, setEsvOpen] = useState(false);
+  const [esvDraft, setEsvDraft] = useState('');
 
   const kind = kindOf(kindId);
-  const wantsScripture = kind.sources.includes('scripture');
+  const sources = sourcesFor(kind.sources);
+  const indexed = sources.filter((source) => source.indexed);
+  const wantsCatalog = kind.sources.includes('ebible');
 
-  const update = useCallback(async () => {
-    setUpdating(true);
-    setCatalogError(null);
-    try {
-      setCatalog(await refreshCatalog());
-    } catch {
-      setCatalogError(t('add.updateFailed'));
-    } finally {
-      setUpdating(false);
+  const readStates = useCallback(async () => {
+    const found: Record<string, IndexState | null> = {};
+    for (const source of sources) found[source.id] = await indexState(source.id);
+    setStates(found);
+  }, [kindId]);
+
+  /** `apt update`, one source at a time, on the reader's say-so. */
+  const update = useCallback(
+    async (id: string) => {
+      setUpdating(id);
+      setUpdateFraction(0);
+      setCatalogError(null);
+      try {
+        if (id === 'ebible') setCatalog(await refreshCatalog());
+        else if (id === 'gutenberg') {
+          const rows = await fetchGutenbergIndex();
+          await replaceIndex('gutenberg', rows, (done, total) =>
+            setUpdateFraction(total ? done / total : 0)
+          );
+        }
+        await readStates();
+      } catch {
+        setCatalogError(t('add.updateFailed'));
+      } finally {
+        setUpdating(null);
+      }
+    },
+    [readStates, t]
+  );
+
+  useEffect(() => {
+    if (wantsCatalog) esvKey().then((token) => setEsvKeyed(Boolean(token)));
+  }, [wantsCatalog]);
+
+  useEffect(() => {
+    if (wantsCatalog && !catalog) {
+      const cached = readCatalog();
+      if (cached) setCatalog(cached);
     }
-  }, [t]);
+    void readStates();
+  }, [wantsCatalog, catalog, readStates]);
 
-  useEffect(() => {
-    if (!wantsScripture || catalog) return;
-    const cached = readCatalog();
-    if (cached) setCatalog(cached);
-    else void update();
-  }, [wantsScripture, catalog, update]);
 
-  // Coming back from the translation list, which replaces this page rather
-  // than stacking a second one on top of it.
+  // A find page hands its answer back by leaving it here and popping itself,
+  // so this page takes it on the way back rather than being pushed again.
+  useFocusEffect(
+    useCallback(() => {
+      const taken = takeChoice();
+      if (taken) setChoice(taken);
+    }, [])
+  );
+
+  // What Gutenberg will actually hand over, read once a book is chosen.
   useEffect(() => {
-    if (!translationParam || !catalog) return;
-    const found = catalog.translations.find((entry) => entry.id === translationParam);
-    if (found) setTranslation(found);
-  }, [translationParam, catalog]);
+    if (choice?.source !== 'gutenberg') {
+      setEdition(null);
+      return;
+    }
+    let live = true;
+    readGutenbergBook(choice.book)
+      .then((found) => live && setEdition(found))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [choice]);
 
   async function chooseFile() {
     try {
@@ -105,13 +165,23 @@ export default function AddBook() {
     }
   }
 
-  const ready = wantsScripture && translation ? true : file !== null;
+  const fromSource = choice !== null && !file;
+  const ready = fromSource || file !== null;
 
   function commit() {
-    if (wantsScripture && translation && !file) enqueueTranslation(translation, apocrypha);
-    else if (file) enqueueImport({ ...file, kind: kindId });
-    else return;
-    router.back();
+    let id: string;
+    if (fromSource && choice) {
+      if (choice.source === 'ebible') id = enqueueTranslation(choice.translation, apocrypha);
+      else if (choice.source === 'arxiv') id = enqueuePaper(choice.paper, kindId);
+      else id = enqueueGutenberg(choice.book, kindId);
+    } else if (file) {
+      id = enqueueImport({ ...file, kind: kindId });
+    } else {
+      return;
+    }
+    // Somewhere that shows what is happening. Going back to the page you came
+    // from reads as nothing having happened at all.
+    router.replace(`/job/${id}`);
   }
 
   return (
@@ -122,34 +192,18 @@ export default function AddBook() {
     >
       <Stack.Screen options={{ title: t('add.title'), headerBackTitle: ' ' }} />
 
-      <Section title={t('add.kindTitle')} flush>
-        <View style={styles.chips}>
-          {bookKinds.map((entry) => {
-            const on = entry.id === kindId;
-            return (
-              <Pressable
-                key={entry.id}
-                onPress={() => {
-                  setKindId(entry.id);
-                  // A file already chosen still applies; a translation only
-                  // means anything to the kind that asked for one.
-                  if (!kindOf(entry.id).sources.includes('scripture')) setTranslation(null);
-                }}
-                style={[
-                  styles.chip,
-                  { borderColor: on ? palette.accent : palette.border },
-                  on && { backgroundColor: palette.soft },
-                ]}
-              >
-                <Text style={{ color: on ? palette.accent : palette.text, fontSize: 15 }}>
-                  {t(`kind.${entry.id}`)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+      {/* One row, not a row of chips: five kinds laid out flat is a wall of
+          buttons for a question with one answer, and the answer is usually the
+          one already there. */}
+      <Section flush>
+        <Row
+          label={t('add.kindTitle')}
+          detail={t(`kind.${kindId}Hint`)}
+          value={`${t(`kind.${kindId}`)}  ▾`}
+          onPress={() => setKindOpen(true)}
+          last
+        />
       </Section>
-      <Hint>{t(`kind.${kindId}Hint`)}</Hint>
 
       <Section title={t('add.whereFrom')}>
         {file ? (
@@ -158,25 +212,50 @@ export default function AddBook() {
             value={t('add.chosen')}
             detail={t('add.changeFile')}
             onPress={chooseFile}
-            last={!wantsScripture || translation !== null}
-          />
-        ) : null}
-        {wantsScripture ? (
-          <Row
-            label={t('add.sourceEbible')}
-            detail={
-              catalog
-                ? t('add.catalogAsOf', {
-                    count: catalog.translations.length,
-                    date: new Date(catalog.fetchedAt).toLocaleDateString(i18n.language),
-                  })
-                : t('add.noCatalog')
-            }
-            value={updating ? t('add.updating') : t('add.update')}
-            onPress={updating ? undefined : update}
             last={false}
           />
         ) : null}
+        {/* A source is a list to keep, not a website to interrogate: ⟳ fetches
+            it once and the search below reads it off the device. */}
+        {sources.map((source) => {
+          const state = states[source.id];
+          const busyHere = updating === source.id;
+          return (
+            <Row
+              key={source.id}
+              label={t(`source.${source.id}`)}
+              detail={
+                source.indexed
+                  ? state
+                    ? t('add.indexAsOf', {
+                        count: state.count,
+                        date: new Date(state.fetchedAt).toLocaleDateString(i18n.language),
+                      })
+                    : t('add.indexMissing')
+                  : t(`source.${source.id}Detail`)
+              }
+              value={
+                source.indexed
+                  ? busyHere
+                    ? updateFraction
+                      ? `${Math.round(updateFraction * 100)}%`
+                      : t('add.updating')
+                    : state
+                      ? t('add.update')
+                      : t('add.getList')
+                  : `${t('add.find')}  ›`
+              }
+              onPress={
+                source.indexed
+                  ? updating
+                    ? undefined
+                    : () => update(source.id)
+                  : () => router.push({ pathname: source.find!, params: { kind: kindId } })
+              }
+              last={false}
+            />
+          );
+        })}
         {kind.sources.includes('files') && !file ? (
           <Row
             label={t('shelf.fromFiles')}
@@ -224,53 +303,138 @@ export default function AddBook() {
 
       {catalogError ? <Hint>{catalogError}</Hint> : null}
 
-      {wantsScripture && !file ? (
+      {/* A licensed edition cannot be a row beside the others, because there is
+          no file to fetch — but this is exactly where someone looking for it
+          will look, so this is where it says so. */}
+      {wantsCatalog && !file ? (
+        <Section title={t('add.esvTitle')}>
+          <Row
+            label={t('lookup.title')}
+            detail={t('add.esvWhy')}
+            value="›"
+            onPress={() => router.push('/lookup')}
+          />
+          <Row
+            label={t('add.esvKeyRow')}
+            value={esvKeyed ? t('add.esvKeySet') : t('add.esvKeyNone')}
+            onPress={() => setEsvOpen((was) => !was)}
+            last={!esvKeyed}
+          />
+          {esvKeyed ? (
+            <Row
+              label={t('lookup.forget')}
+              onPress={() =>
+                forgetEsvKey().then(() => {
+                  setEsvKeyed(false);
+                  setEsvOpen(false);
+                })
+              }
+              danger
+              last
+            />
+          ) : null}
+        </Section>
+      ) : null}
+
+      {esvOpen && wantsCatalog && !file ? (
+        <View style={[styles.link, { borderColor: palette.border, backgroundColor: palette.surface }]}>
+          <TextInput
+            value={esvDraft}
+            onChangeText={setEsvDraft}
+            placeholder={t('lookup.paste')}
+            placeholderTextColor={palette.faint}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={[styles.input, { color: palette.text, borderColor: palette.border }]}
+          />
+          <Text style={{ color: palette.dim, fontSize: 12 }}>{t('lookup.keyStaysHere')}</Text>
+          <Pressable
+            onPress={() => {
+              if (!esvDraft.trim()) return;
+              saveEsvKey(esvDraft).then(() => {
+                setEsvKeyed(true);
+                setEsvDraft('');
+                setEsvOpen(false);
+              });
+            }}
+            style={styles.fetch}
+          >
+            <Text style={{ color: palette.accent, fontSize: 16 }}>{t('lookup.save')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* A page of its own, not a field down here: a field at the foot of a
+          form is a field under the keyboard the moment anyone uses it. */}
+      {indexed.length && !file ? (
+        <Section>
+          <Row
+            label={t('add.findTitle')}
+            detail={t('add.findAcross', {
+              sources: indexed.map((source) => t(`source.${source.id}`)).join(' · '),
+            })}
+            value="›"
+            onPress={() => router.push({ pathname: '/source/find', params: { kind: kindId } })}
+            last
+          />
+        </Section>
+      ) : null}
+
+      {fromSource && choice ? (
         <>
           <Section title={t('add.about')}>
-            <Row
-              label={t('add.translation')}
-              value={translation ? `${translation.title}  ›` : `${t('add.choose')}  ›`}
-              detail={translation ? `${translation.language} · ${translation.copyright}` : undefined}
-              onPress={
-                catalog
-                  ? () => router.push({ pathname: '/scripture/translations', params: { kind: kindId } })
-                  : undefined
-              }
-              last={!translation || translation.extraBooks === 0}
-            />
-            {/* One question, and only where the edition has a second answer. */}
-            {translation && translation.extraBooks > 0 ? (
+            {choice.source === 'ebible' ? (
+              <>
+                <Row
+                  label={t('add.translation')}
+                  value={`${choice.translation.abbr}  ›`}
+                  detail={`${choice.translation.title} · ${choice.translation.copyright}`}
+                  onPress={() => router.push({ pathname: '/source/ebible', params: { kind: kindId } })}
+                  last={choice.translation.extraBooks === 0}
+                />
+                {/* One question, and only where the edition has a second answer. */}
+                {choice.translation.extraBooks > 0 ? (
+                  <Row
+                    label={t('add.canon')}
+                    value={
+                      apocrypha
+                        ? t('add.canonAll', { count: choice.translation.extraBooks })
+                        : t('add.canon66')
+                    }
+                    onPress={() => setCanonOpen(true)}
+                    last
+                  />
+                ) : null}
+              </>
+            ) : null}
+
+            {choice.source === 'gutenberg' ? (
               <Row
-                label={t('add.canon')}
-                value={apocrypha
-                  ? t('add.canonAll', { count: translation.extraBooks })
-                  : t('add.canon66')}
-                onPress={() => setCanonOpen(true)}
+                label={choice.book.title}
+                detail={choice.book.author || undefined}
+                value={t('source.gutenberg')}
+                last
+              />
+            ) : null}
+
+            {choice.source === 'arxiv' ? (
+              <Row
+                label={choice.paper.title}
+                detail={authorLine(choice.paper) || undefined}
+                value={choice.paper.category}
                 last
               />
             ) : null}
           </Section>
-          {translation ? (
-            <Hint>
-              {t('add.willGet', {
-                books: apocrypha ? translation.books : translation.books - translation.extraBooks,
-                chapters: translation.chapters,
-                verses: translation.verses,
-              })}
-              {'\n'}
-              {t('add.structureIncluded')}
-            </Hint>
-          ) : null}
+
+          <Hint>{aboutLine(choice, { apocrypha, edition }, t)}</Hint>
         </>
       ) : null}
 
       <Pressable
         onPress={commit}
         disabled={!ready}
-        style={[
-          styles.commit,
-          { backgroundColor: ready ? palette.accent : palette.sunken },
-        ]}
+        style={[styles.commit, { backgroundColor: ready ? palette.accent : palette.sunken }]}
       >
         <Text
           style={{
@@ -279,10 +443,29 @@ export default function AddBook() {
             fontWeight: '600',
           }}
         >
-          {wantsScripture && translation && !file ? t('add.install') : t('add.commit')}
+          {fromSource ? t('add.download') : t('add.commit')}
         </Text>
       </Pressable>
       <Hint>{t('add.free')}</Hint>
+
+      <PickerSheet
+        visible={kindOpen}
+        title={t('add.kindTitle')}
+        selectedId={kindId}
+        options={bookKinds.map((entry) => ({
+          id: entry.id,
+          label: t(`kind.${entry.id}`),
+          detail: t(`kind.${entry.id}Hint`),
+        }))}
+        onPick={(picked) => {
+          setKindOpen(false);
+          setKindId(picked);
+          // A file already chosen still applies; a book chosen from a source
+          // this kind doesn't have is no longer an answer.
+          if (choice && !kindOf(picked).sources.includes(choice.source)) setChoice(null);
+        }}
+        onClose={() => setKindOpen(false)}
+      />
 
       <PickerSheet
         visible={canonOpen}
@@ -291,19 +474,55 @@ export default function AddBook() {
           { id: 'protestant', label: t('add.canon66') },
           {
             id: 'all',
-            label: t('add.canonAll', { count: translation?.extraBooks ?? 0 }),
+            label: t('add.canonAll', {
+              count: choice?.source === 'ebible' ? choice.translation.extraBooks : 0,
+            }),
             detail: t('add.canonAllHint'),
           },
         ]}
         selectedId={apocrypha ? 'all' : 'protestant'}
-        onPick={(choice) => {
-          setApocrypha(choice === 'all');
+        onPick={(picked) => {
+          setApocrypha(picked === 'all');
           setCanonOpen(false);
         }}
         onClose={() => setCanonOpen(false)}
       />
     </ScrollView>
   );
+}
+
+/** What the source says you will get, in the source's own units. */
+function aboutLine(
+  choice: Choice,
+  state: { apocrypha: boolean; edition: GutenbergEdition | null },
+  t: TFunction
+): string {
+  if (choice.source === 'ebible') {
+    const { books, extraBooks, chapters, verses } = choice.translation;
+    return `${t('add.willGet', {
+      books: state.apocrypha ? books : books - extraBooks,
+      chapters,
+      verses,
+    })}\n${t('add.structureIncluded')}`;
+  }
+  if (choice.source === 'arxiv') {
+    const stated = [choice.paper.published, choice.paper.id, choice.paper.journal]
+      .filter(Boolean)
+      .join(' · ');
+    return `${stated}\n${t('add.paperWhat')}`;
+  }
+  if (!state.edition) return t('add.reading');
+  const stated = [state.edition.language, state.edition.rights, sizeOf(state.edition.bytes)]
+    .filter(Boolean)
+    .join(' · ');
+  return `${stated}\n${t('add.gutenbergWhat')}`;
+}
+
+function sizeOf(bytes: number): string {
+  if (!bytes) return '';
+  return bytes >= 1_000_000
+    ? `${(bytes / 1_000_000).toFixed(1)} MB`
+    : `${Math.round(bytes / 1000)} KB`;
 }
 
 function describeFetch(error: unknown, t: TFunction): string {
@@ -315,13 +534,6 @@ function describeFetch(error: unknown, t: TFunction): string {
 }
 
 const styles = StyleSheet.create({
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, padding: space.md },
-  chip: {
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-  },
   link: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
