@@ -14,7 +14,7 @@ import type { Block, ParseContext } from './types';
  * needs a network, which the error says plainly rather than failing oddly.
  */
 type Pending = {
-  resolve: (blocks: Block[]) => void;
+  resolve: (value: never) => void;
   reject: (error: Error) => void;
   context?: ParseContext;
 };
@@ -34,11 +34,26 @@ export class ExtractorError extends Error {
 }
 
 export function extractPdf(bytes: Uint8Array, context?: ParseContext): Promise<Block[]> {
+  return ask<Block[]>('pdf', { data: base64(bytes) }, context);
+}
+
+/**
+ * LaTeX in, a PNG per formula out — drawn black on nothing, so the reader can
+ * tint it to whatever colour the page is set in. A paper's formulas are the
+ * half of it that a PDF's text layer turns to gravel; from the HTML they
+ * arrive as the author's own TeX, which is worth rendering properly.
+ */
+export function renderMath(latex: string[]): Promise<string[]> {
+  if (!latex.length) return Promise.resolve([]);
+  return ask<string[]>('math', { items: latex });
+}
+
+function ask<T>(kind: string, payload: object, context?: ParseContext): Promise<T> {
   if (!bridge) return Promise.reject(new ExtractorError('not-mounted'));
-  const id = `pdf-${counter++}`;
-  return new Promise<Block[]>((resolve, reject) => {
-    pending.set(id, { resolve, reject, context });
-    bridge!.send({ id, kind: 'pdf', data: base64(bytes) });
+  const id = `${kind}-${counter++}`;
+  return new Promise<T>((resolve, reject) => {
+    pending.set(id, { resolve: resolve as Pending['resolve'], reject, context });
+    bridge!.send({ id, kind, ...payload });
   });
 }
 
@@ -60,7 +75,15 @@ export function Extractor() {
   }, [ready]);
 
   function onMessage(event: WebViewMessageEvent) {
-    let payload: { id: string; type: string; blocks?: Block[]; done?: number; total?: number; error?: string };
+    let payload: {
+      id: string;
+      type: string;
+      blocks?: Block[];
+      values?: string[];
+      done?: number;
+      total?: number;
+      error?: string;
+    };
     try {
       payload = JSON.parse(event.nativeEvent.data);
     } catch {
@@ -73,7 +96,7 @@ export function Extractor() {
       return;
     }
     pending.delete(payload.id);
-    if (payload.type === 'done') waiting.resolve(payload.blocks ?? []);
+    if (payload.type === 'done') waiting.resolve((payload.blocks ?? payload.values ?? []) as never);
     else waiting.reject(new ExtractorError('failed', payload.error));
   }
 
@@ -109,6 +132,7 @@ export function base64(bytes: Uint8Array): string {
 }
 
 const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build';
+const MATHJAX = 'https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js';
 
 const HOST_HTML = `<!doctype html><html><head><meta charset="utf-8" /></head><body>
 <script type="module">
@@ -166,9 +190,67 @@ const HOST_HTML = `<!doctype html><html><head><meta charset="utf-8" /></head><bo
     return paragraphs;
   }
 
+  let mathjax = null;
+
+  async function math() {
+    if (mathjax) return mathjax;
+    window.MathJax = { startup: { typeset: false } };
+    await new Promise((resolve, reject) => {
+      const tag = document.createElement('script');
+      tag.src = '${MATHJAX}';
+      tag.onload = resolve;
+      tag.onerror = () => reject(new Error('mathjax'));
+      document.head.appendChild(tag);
+    });
+    await window.MathJax.startup.promise;
+    mathjax = window.MathJax;
+    return mathjax;
+  }
+
+  // MathJax sizes its SVG in ex, which a canvas has no opinion about, so the
+  // box is converted to pixels first and drawn at 3x for a retina page.
+  async function pngOf(latex) {
+    const mj = await math();
+    const svg = mj.tex2svg(latex, { display: true }).querySelector('svg');
+    const ex = (value) => Math.ceil(parseFloat(value || '1') * 8);
+    const width = ex(svg.getAttribute('width'));
+    const height = ex(svg.getAttribute('height'));
+    svg.setAttribute('width', width + 'px');
+    svg.setAttribute('height', height + 'px');
+    const markup = new XMLSerializer().serializeToString(svg);
+    const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(markup)));
+    const image = new Image();
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error('svg'));
+      image.src = url;
+    });
+    const scale = 3;
+    const canvas = document.createElement('canvas');
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png').split(',')[1];
+  }
+
   window.handle = async (raw) => {
     const request = JSON.parse(raw);
     try {
+      if (request.kind === 'math') {
+        const values = [];
+        for (let at = 0; at < request.items.length; at++) {
+          // One bad formula is one missing picture, not a failed import.
+          try {
+            values.push(await pngOf(request.items[at]));
+          } catch (error) {
+            values.push('');
+          }
+          post({ id: request.id, type: 'progress', done: at + 1, total: request.items.length });
+        }
+        post({ id: request.id, type: 'done', values });
+        return;
+      }
       const lib = await library();
       const document = await lib.getDocument({ data: bytesOf(request.data) }).promise;
       const blocks = [];

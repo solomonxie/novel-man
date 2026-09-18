@@ -1,50 +1,43 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { highlightColors, space, type HighlightColor } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { highlightColors, radius, space, type HighlightColor } from '../theme';
 
 export type MenuAction = { key: string; label: string; onPress: () => void };
 
-const MENU_HEIGHT = 46;
-const COLOR_ROW = 40;
-
 /**
- * Anchored above the sentence it acts on, flipped below when that would put it
- * off-screen. The colors are always out: a swatch is a way to highlight, not
- * just a way to recolor something already highlighted, and the marked one says
- * which colour Highlight itself would use.
+ * Fixed to the foot of the page, not floating over the sentence it acts on.
+ * Anchored to the text it covered the words either side of it, and moved with
+ * every selection, so the one control you were reaching for was never twice in
+ * the same place. At the bottom it covers nothing, and the thumb already knows
+ * where it is.
+ *
+ * The colors are always out: a swatch is a way to highlight, not just a way to
+ * recolor something already highlighted, and the marked one says which colour
+ * Highlight itself would use.
  */
-export function SentenceMenu({ y, screenHeight, actions, activeColor, onColor, onDismiss, dark }: {
-  y: number;
-  screenHeight: number;
+export function SentenceMenu({ actions, activeColor, onColor, onDismiss, dismissLabel, dark }: {
   actions: MenuAction[];
   activeColor?: string | null;
   onColor?: (color: HighlightColor) => void;
-  /** The only way out of a selection, so it is always the last thing in the row. */
+  /** The only way out of a selection, so it is the widest target on the bar. */
   onDismiss?: () => void;
+  dismissLabel: string;
   dark: boolean;
 }) {
-  const height = MENU_HEIGHT + (onColor ? COLOR_ROW : 0);
-  const above = y - height - 12;
-  const flipped = above < 80;
-  const top = flipped ? Math.min(y + 28, screenHeight - height - 40) : above;
-
+  // Clear of the home indicator, and off the screen edges: a control that
+  // reaches the glass is a control the hand rests on by accident.
+  const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.menu, { top, backgroundColor: dark ? '#2A2A2E' : '#2B2B2F' }]}>
-      <View style={styles.row}>
-        {actions.map((action) => (
-          <Pressable key={action.key} onPress={action.onPress} style={styles.item}>
-            <Text style={styles.label}>{action.label}</Text>
-          </Pressable>
-        ))}
-        {onDismiss ? (
-          <Pressable onPress={onDismiss} style={[styles.item, styles.dismiss]} hitSlop={6}>
-            <Text style={[styles.label, styles.dismissLabel]}>✕</Text>
-          </Pressable>
-        ) : null}
-      </View>
+    <View
+      style={[
+        styles.bar,
+        { backgroundColor: dark ? '#2A2A2E' : '#2B2B2F', bottom: Math.max(insets.bottom, space.md) },
+      ]}
+    >
       {onColor ? (
         <View style={[styles.row, styles.colors]}>
           {highlightColors.map((color) => (
-            <Pressable key={color} onPress={() => onColor(color)} hitSlop={6}>
+            <Pressable key={color} onPress={() => onColor(color)} style={styles.swatchTarget}>
               <View
                 style={[
                   styles.swatch,
@@ -56,27 +49,64 @@ export function SentenceMenu({ y, screenHeight, actions, activeColor, onColor, o
           ))}
         </View>
       ) : null}
+      <View style={styles.row}>
+        {actions.map((action) => (
+          <Pressable key={action.key} onPress={action.onPress} style={styles.item}>
+            <Text numberOfLines={1} style={styles.label}>
+              {action.label}
+            </Text>
+          </Pressable>
+        ))}
+        {onDismiss ? (
+          <Pressable onPress={onDismiss} style={styles.dismiss}>
+            <Text style={styles.dismissLabel}>{dismissLabel}</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
 
+/** A thumb, at the bottom of a page, holding a phone one-handed. */
+const ROW = 56;
+
 const styles = StyleSheet.create({
-  menu: { position: 'absolute', alignSelf: 'center', borderRadius: 10, paddingHorizontal: space.xs },
-  row: { flexDirection: 'row', alignItems: 'center', height: MENU_HEIGHT },
-  colors: {
-    height: COLOR_ROW,
-    justifyContent: 'space-around',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.18)',
+  bar: {
+    position: 'absolute',
+    left: space.md,
+    right: space.md,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
   },
-  item: { paddingHorizontal: space.md, paddingVertical: space.sm },
+  row: { flexDirection: 'row', alignItems: 'center', minHeight: ROW },
+  colors: {
+    justifyContent: 'space-around',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.18)',
+  },
+  item: {
+    flex: 1,
+    minHeight: ROW,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: space.xs,
+  },
+  /**
+   * Wider than an action and set apart by a rule: leaving a mode is the one
+   * thing someone does in a hurry, and a glyph the size of a full stop is the
+   * wrong target for it.
+   */
   dismiss: {
+    minWidth: 96,
+    minHeight: ROW,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: 'rgba(255,255,255,0.18)',
-    marginLeft: space.xs,
   },
-  dismissLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 15 },
-  label: { color: '#FFFFFF', fontSize: 14 },
-  swatch: { width: 22, height: 22, borderRadius: 11 },
+  dismissLabel: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  label: { color: '#FFFFFF', fontSize: 15 },
+  swatchTarget: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
+  swatch: { width: 24, height: 24, borderRadius: 12 },
   swatchActive: { borderWidth: 2, borderColor: '#FFFFFF' },
 });

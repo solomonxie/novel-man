@@ -36,8 +36,9 @@ import {
   type Observation,
   type RelationEdge,
 } from '../../src/db/repo';
-import { appearances, timelineFor } from '../../src/cast/mentions';
-import { bucketize, Sparkline } from '../../src/ui/Sparkline';
+import { appearances, appearancesIn, namesOf, timelineFor, type Appearance } from '../../src/cast/mentions';
+import { bucketize, Sparkline, type SparkBar } from '../../src/ui/Sparkline';
+import { useDocument } from '../../src/ui/useDocument';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
 import { ExportSheet } from '../../src/ui/ExportSheet';
 import { queuePolish } from '../../src/analysis/runs';
@@ -66,6 +67,11 @@ export default function EntityPage() {
   const [observations, setObservations] = useState<Observation[]>([]);
   const [polishOpen, setPolishOpen] = useState(false);
   const [bar, setBar] = useState<number | null>(null);
+  /** Live while a finger is on the graph, kept when it lifts. */
+  const [scrubbing, setScrubbing] = useState(false);
+  const [shown, setShown] = useState<Appearance[]>([]);
+  const [text, setText] = useState('');
+  const document = useDocument(entity?.book_id);
   const [relations, setRelations] = useState<RelationEdge[]>([]);
   const [cast, setCast] = useState<Entity[]>([]);
   const [linking, setLinking] = useState(false);
@@ -132,6 +138,27 @@ export default function EntityPage() {
   const bars = bucketize(timeline, chapters.length);
   const picked = bars.find((entry) => entry.index === bar) ?? null;
   const perBar = bars.length ? bars[0].to - bars[0].from + 1 : 1;
+
+  /**
+   * The bar says how often; this says what. The manuscript is megabytes, so it
+   * is read on the first touch of the graph rather than on every visit to the
+   * page — and once read it stays for as long as the page does.
+   */
+  function showAppearances(found: SparkBar | null) {
+    if (!found || !entity) {
+      setShown([]);
+      return;
+    }
+    const range = { from: found.from, to: found.to };
+    if (!text) {
+      void document.read().then(({ text: body }) => {
+        setText(body);
+        setShown(appearancesIn(body, chapters, namesOf(entity), range));
+      });
+      return;
+    }
+    setShown(appearancesIn(text, chapters, namesOf(entity), range));
+  }
 
   async function save(changes: Parameters<typeof updateEntity>[1]) {
     await updateEntity(entity!.id, changes);
@@ -278,7 +305,14 @@ export default function EntityPage() {
               dim={palette.faint}
               height={30}
               selected={bar}
-              onSelect={(next) => setBar(next?.index ?? null)}
+              onScrub={(next) => {
+                setScrubbing(next !== null);
+                if (next) showAppearances(next);
+              }}
+              onSelect={(next) => {
+                setBar(next?.index ?? null);
+                showAppearances(next);
+              }}
             />
             <Text style={{ color: palette.dim, fontSize: 13, marginTop: space.sm }}>
               {picked
@@ -299,6 +333,32 @@ export default function EntityPage() {
               <Text style={{ color: palette.faint, fontSize: 12, marginTop: 2 }}>
                 {t('entity.barScale', { count: perBar })}
               </Text>
+            )}
+            {/* Lifting the finger leaves these here: the moments themselves,
+                each one a way back into the book at the word it was found. */}
+            {shown.length > 0 && (
+              <View style={{ marginTop: space.md, gap: space.sm }}>
+                {shown.slice(0, scrubbing ? 1 : 6).map((appearance) => (
+                  <Pressable
+                    key={appearance.offset}
+                    onPress={() => router.push(`/reader/${entity.book_id}?at=${appearance.offset}`)}
+                    style={({ pressed }) => [
+                      styles.quote,
+                      { borderColor: palette.border, opacity: pressed ? 0.6 : 1 },
+                    ]}
+                  >
+                    <Text style={{ color: palette.faint, fontSize: 11 }}>
+                      {chapterLabel(chapters, appearance.chapterIdx)}
+                    </Text>
+                    <Text numberOfLines={2} style={{ color: palette.text, fontSize: 13, lineHeight: 19 }}>
+                      {appearance.quote}
+                    </Text>
+                  </Pressable>
+                ))}
+                {!scrubbing && (
+                  <Text style={{ color: palette.faint, fontSize: 12 }}>{t('entity.tapToRead')}</Text>
+                )}
+              </View>
             )}
           </View>
         </Block>
@@ -552,6 +612,12 @@ function LinkSheet({ visible, cast, onClose, onPick }: {
 }
 
 const styles = StyleSheet.create({
+  quote: {
+    borderLeftWidth: 2,
+    paddingLeft: space.md,
+    paddingVertical: 2,
+    gap: 2,
+  },
   card: {
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,

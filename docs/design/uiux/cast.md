@@ -79,9 +79,14 @@ as `bring-your-own-photos`' person profile.
 │ └─────────────────────────────────┘       │
 │ Nobody else in this book yet.             │
 │ WHERE THEY APPEAR                         │
-│ ▁▂▅▇▃▁▁▂▇▅▃▁▁▁  ← tap a bar               │
-│ Each bar covers 4 chapters — tap one      │
-│ ch.1 – ch.4 · 6 mentions                  │
+│ ▁▂▅▇▃▁▁▂▇▅▃▁▁▁  ← drag along it           │
+│ Each bar covers 4 chapters                │
+│ ch.9 – ch.12 · 6 mentions                 │
+│ │ ch.9                                    │ ← every occurrence under the
+│ │ …she found 林小满 at the second step…   │   finger, kept when it lifts
+│ │ ch.11                                   │
+│ │ …林小满 said nothing for a long time…   │
+│ Tap a line to read it where it happens.   │
 │ CHAPTER BY CHAPTER                12      │
 │ ┌─────────────────────────────────┐       │
 │ │ (1) 第一章 灯灭                 │       │ ← the badge is the chapter
@@ -89,6 +94,12 @@ as `bring-your-own-photos`' person profile.
 │ └─────────────────────────────────┘       │   position
 │ [ Delete this profile ]!                  │
 └───────────────────────────────────────────┘
+ The graph is read with a finger, not tapped: a bar is 4pt wide and nobody
+ hits that reliably, but everybody can drag. Sliding reports every bar it
+ crosses; lifting keeps the last one and its lines stay under the graph, each
+ one a way back into the book at the word it was found. The manuscript is read
+ on the first touch of the graph — megabytes are not loaded to draw 60 bars.
+
  Polish with AI:  Turns 12 chapter notes about this character into a
  profile: summary, role, appearance, voice and arc.
  Add a relationship ⇒ Search the cast, or type a new name
