@@ -54,31 +54,37 @@ export function validate(snapshot: unknown): Snapshot {
 }
 
 /**
- * A month per file, and the month leads the name so a folder sorts itself.
- * Backups are written constantly — every note, every import, every chapter
- * that finishes analyzing — and a stamp to the minute turned any destination
- * into a wall of files nobody could pick from. A month is the unit someone
- * actually means by "the copy from before I broke it", and it caps a year at
- * twelve. The current month's file is overwritten in place; the months before
- * it stay as they were.
+ * One file per day, named for the day, sorting chronologically because the
+ * stamp leads. A dated file is the only way to answer "what did this look like
+ * in March" — a name that is overwritten all month cannot, because by the time
+ * you ask, March has written over itself thirty times.
  *
- * Local time, because the month someone means is the one on their calendar.
+ * What bounds the count is retention, not the name: iCloud keeps the latest
+ * few and prunes, a bucket keeps every one. See `backup-restore`.
+ *
+ * Local time, because the day someone means is the one on their calendar.
  */
-export function monthStamp(at = new Date()): string {
-  return `${at.getFullYear()}${String(at.getMonth() + 1).padStart(2, '0')}`;
+export function dayStamp(at = new Date()): string {
+  const month = String(at.getMonth() + 1).padStart(2, '0');
+  const day = String(at.getDate()).padStart(2, '0');
+  return `${at.getFullYear()}-${month}-${day}`;
 }
 
 export function bundleName(label: string, at = new Date()): string {
-  return `${monthStamp(at)}-${label}.${BUNDLE_EXTENSION}`;
+  return `${label}-${dayStamp(at)}.${BUNDLE_EXTENSION}`;
 }
 
 /**
- * The month a bundle is for, read back off its name — the first of that month,
- * so it can be formatted in whatever language is on. Null for a bundle from
- * before backups were named this way, which is still a bundle.
+ * The day a bundle is for, read back off its name. Bundles from the monthly
+ * scheme before this one are still bundles, and still readable, so their names
+ * are still understood — the first of that month.
  */
-export function monthOf(name: string): Date | null {
-  const match = /(?:^|\/)(\d{4})(0[1-9]|1[0-2])-/.exec(name);
-  if (!match) return null;
-  return new Date(Number(match[1]), Number(match[2]) - 1, 1);
+export function dateOf(name: string): Date | null {
+  const day = /-(\d{4})-(\d{2})-(\d{2})(?:\D|$)/.exec(name);
+  if (day) {
+    const at = new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]));
+    return Number.isNaN(at.getTime()) || Number(day[2]) > 12 || Number(day[3]) > 31 ? null : at;
+  }
+  const month = /(?:^|\/)(\d{4})(0[1-9]|1[0-2])-/.exec(name);
+  return month ? new Date(Number(month[1]), Number(month[2]) - 1, 1) : null;
 }

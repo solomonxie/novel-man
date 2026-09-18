@@ -4,6 +4,17 @@ import { migrations } from './migrations';
 
 let handle: Promise<SQLite.SQLiteDatabase> | null = null;
 
+/**
+ * Handed in by the backup layer rather than imported: a migration rewrites
+ * rows nobody asked it to, and is the one failure no row-level undo reaches —
+ * but the database must not depend on the thing that copies it.
+ */
+let beforeMigrations: ((database: SQLite.SQLiteDatabase) => Promise<unknown>) | null = null;
+
+export function setBeforeMigrations(hook: typeof beforeMigrations) {
+  beforeMigrations = hook;
+}
+
 export function db(): Promise<SQLite.SQLiteDatabase> {
   if (!handle) handle = open();
   return handle;
@@ -14,6 +25,8 @@ async function open() {
   await database.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   const row = await database.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;
+  // The copy that survives a schema problem, taken before the schema changes.
+  if (version < migrations.length) await beforeMigrations?.(database).catch(() => undefined);
   while (version < migrations.length) {
     await database.execAsync(migrations[version]);
     version += 1;
