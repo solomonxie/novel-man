@@ -1,11 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, Text, View } from 'react-native';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { readCatalog, type Translation } from '../../src/sources/ebible';
 import { choose } from '../../src/sources/chosen';
-import { Row } from '../../src/ui/primitives';
+import { Row, Search, SEARCHABLE_FROM } from '../../src/ui/primitives';
 import { space, usePalette } from '../../src/theme';
 
 /**
@@ -18,7 +18,17 @@ export default function Translations() {
   const { t } = useTranslation();
   const palette = usePalette();
   const catalog = useMemo(() => readCatalog(), []);
-  const found = catalog?.translations ?? [];
+  const all = catalog?.translations ?? [];
+  const [query, setQuery] = useState('');
+  // Every redistributable edition is here — over a thousand — so the field is
+  // how anyone reaches one, and it filters a list already on the device.
+  const found = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return all;
+    return all.filter((entry) =>
+      `${entry.title} ${entry.abbr} ${entry.language} ${entry.id}`.toLowerCase().includes(needle)
+    );
+  }, [all, query]);
 
   function pick(translation: Translation) {
     choose({ source: 'ebible', translation });
@@ -28,6 +38,12 @@ export default function Translations() {
   return (
     <View style={{ flex: 1, backgroundColor: palette.bg }}>
       <Stack.Screen options={{ title: t('add.chooseTranslation'), headerBackTitle: ' ' }} />
+
+      {all.length >= SEARCHABLE_FROM ? (
+        <View style={{ paddingHorizontal: space.lg, paddingTop: space.md }}>
+          <Search value={query} onChange={setQuery} placeholder={t('add.searchEditions')} />
+        </View>
+      ) : null}
 
       <FlatList
         data={found}
