@@ -57,7 +57,7 @@ import { formatCount, formatDuration, readingMinutes } from '../../src/text/coun
 import { radius, space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { PickerSheet } from '../../src/ui/PickerSheet';
-import { bookKinds, castNoun, kindOf, shows, supports } from '../../src/books/kinds';
+import { bookKinds, castNoun, kindOf, shows, supports, unitOf } from '../../src/books/kinds';
 
 export default function BookPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -134,7 +134,7 @@ export default function BookPage() {
     setSummaryOpen(true);
     setSummaryEstimate(null);
     const { text: body } = await document.read();
-    estimateDeep(body, chapters, book!.language).then(setSummaryEstimate).catch(() => undefined);
+    estimateDeep(body, chapters, book!).then(setSummaryEstimate).catch(() => undefined);
   }
 
   async function edit(field: 'title' | 'author' | 'year' | 'edition' | 'summary', value: string) {
@@ -193,7 +193,7 @@ export default function BookPage() {
             ) : (
               <Fact value={formatCount(book.word_count, book.language)} label={t('units.unit_long')} />
             )}
-            <Fact value={chapters.length} label={t('units.unit_chapters')} />
+            <Fact value={chapters.length} label={t(`units.unit_${unitOf(book.kind)}s`)} />
             {verses > 0 ? (
               <Fact value={formatCount(verses, 'en')} label={t('units.unit_verses')} />
             ) : (
@@ -383,7 +383,10 @@ export default function BookPage() {
       <AiRunSheet
         visible={summaryOpen}
         title={t('book.analyze')}
-        description={t('book.analyzeWhat', { count: chapters.length })}
+        description={t(
+          supports(book.kind, 'verses') ? 'book.analyzeWhatCited' : 'book.analyzeWhat',
+          { count: chapters.length }
+        )}
         estimate={summaryEstimate}
         hasKey={keyed}
         onRun={async () => {

@@ -349,4 +349,49 @@ export const migrations: string[] = [
      name TEXT NOT NULL,
      PRIMARY KEY (book_id, part_idx, name)
    );`,
+
+  // A part is still a label carried by its chapters, but it is now a page you
+  // can open — and a summary and a picture have nowhere on a chapter to live.
+  // Only what the reader writes is here; the title stays on the chapters.
+  `CREATE TABLE part_details (
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     idx INTEGER NOT NULL,
+     summary TEXT,
+     image_path TEXT,
+     PRIMARY KEY (book_id, idx)
+   );`,
+
+  // One kind for both: a tutorial and a textbook are the same book to this app.
+  `UPDATE books SET kind = 'textbook' WHERE kind = 'tutorial';`,
+
+  // The index a source publishes, kept here — `apt update`, for books. One
+  // table for every source, so one search covers all of them, and `needle` is
+  // the row flattened and lowercased because that is what a LIKE reads.
+  `CREATE TABLE catalog (
+     source TEXT NOT NULL,
+     ext_id TEXT NOT NULL,
+     title TEXT NOT NULL,
+     author TEXT NOT NULL DEFAULT '',
+     language TEXT NOT NULL DEFAULT '',
+     needle TEXT NOT NULL DEFAULT '',
+     PRIMARY KEY (source, ext_id)
+   );
+   CREATE TABLE catalog_state (
+     source TEXT PRIMARY KEY NOT NULL,
+     fetched_at INTEGER NOT NULL,
+     count INTEGER NOT NULL
+   );`,
+
+  // Passages fetched from a licensed source, kept so a second read of the same
+  // verse is instant and works offline. Bounded on purpose: this is a record of
+  // what someone read, not a copy of the book, and it never leaves the device —
+  // no backup carries it, because a backup is a file that can be handed on.
+  `CREATE TABLE passage_cache (
+     source TEXT NOT NULL,
+     query TEXT NOT NULL,
+     reference TEXT NOT NULL,
+     text TEXT NOT NULL,
+     fetched_at INTEGER NOT NULL,
+     PRIMARY KEY (source, query)
+   );`,
 ];

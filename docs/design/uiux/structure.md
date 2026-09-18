@@ -5,8 +5,11 @@
 ```
 ┌───────────────────────────────────────────┐
 │ ‹  Structure                              │
+│ ┌───────────────────────────────────────┐ │ ← past 8 chapters. A number, a
+│ │ 🔍 Search chapters                    │ │   title or a brief — the three
+│ └───────────────────────────────────────┘ │   things anyone remembers one by
 │ 3 chapters the detector wasn't sure about.│
-│ CHAPTERS                                  │
+│ CHAPTERS  /  12 of them   while searching │
 │ ┌───────────────────────────────────────┐ │
 │ │ 1  第一章 灯灭                     ›  │ │
 │ │    12,400 chars · 4 scenes            │ │
@@ -21,6 +24,10 @@
 │ │ Brief all 44 remaining chapters       │ │
 │ └───────────────────────────────────────┘ │
 └───────────────────────────────────────────┘
+ Searching never renumbers the book: the number on a row is its place in the
+ manuscript, and every action in the ⋯ menu still edits by that position.
+ No chapter matches that.
+
  row menu ▸ Split… · Merge with next · Move up · Move down ·
             Add a scene break… · Clear 4 scene breaks ·
             Delete this chapter !

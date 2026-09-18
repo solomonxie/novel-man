@@ -9,6 +9,7 @@ import {
   getDocumentText,
   getEntity,
   listChapters,
+  listVerses,
   listEntities,
   listChapterScenes,
   listObservations,
@@ -30,10 +31,12 @@ import {
   assemble,
   bookHeader,
   castList,
-  chapterBody,
+  chapterMaterial,
   chapterParagraphs,
+  citedNotSent,
   recentBriefs,
   type ChapterParagraph,
+  type Passage,
 } from '../analysis/context';
 
 export type Handler = (job: WorkJob, signal: AbortSignal) => Promise<void>;
@@ -70,14 +73,27 @@ async function ask(kind: string, messages: ChatMessage[], maxTokens: number, sig
   return answer;
 }
 
-async function loadChapter(job: WorkJob): Promise<{ book: Book; chapters: Chapter[]; chapter: Chapter; text: string }> {
+async function loadChapter(job: WorkJob): Promise<{
+  book: Book;
+  chapters: Chapter[];
+  chapter: Chapter;
+  text: string;
+  passage?: Passage;
+}> {
   const book = await getBook(job.book_id);
   if (!book) throw new Error('book is gone');
   const chapters = await listChapters(job.book_id);
   const chapter = chapters.find((entry) => entry.idx === job.chapter_idx);
   if (!chapter) throw new Error('chapter is gone');
   const text = await getDocumentText(job.book_id);
-  return { book, chapters, chapter, text };
+  // A chapter that is cited rather than sent needs its verse range, and only
+  // that: the query is one row, against a book whose text never goes out.
+  if (!citedNotSent(book)) return { book, chapters, chapter, text };
+  const verses = await listVerses(chapter.id);
+  const passage = verses.length
+    ? { first: verses[0].number, last: verses[verses.length - 1].number }
+    : undefined;
+  return { book, chapters, chapter, text, passage };
 }
 
 /**
@@ -104,9 +120,14 @@ async function summarizeBook(job: WorkJob, signal: AbortSignal) {
       {
         role: 'system',
         content:
-          'You write the back-cover summary of a novel: three to five sentences, present ' +
-          'tense, no spoilers past the first act, no marketing language. Reply with the ' +
-          'summary only — no heading, no preamble.',
+          kindOf(book.kind).reads === 'argument'
+            ? 'You write the abstract of a paper from notes on its sections: what question ' +
+              'it asks, how it goes about it, what it reports, and what it does not show. ' +
+              'Four to six sentences, no evaluation of importance. Reply with the abstract ' +
+              'only — no heading, no preamble.'
+            : 'You write the back-cover summary of a novel: three to five sentences, present ' +
+              'tense, no spoilers past the first act, no marketing language. Reply with the ' +
+              'summary only — no heading, no preamble.',
       },
       {
         role: 'user',
@@ -120,7 +141,7 @@ async function summarizeBook(job: WorkJob, signal: AbortSignal) {
 }
 
 async function briefChapter(job: WorkJob, signal: AbortSignal) {
-  const { book, chapters, chapter, text } = await loadChapter(job);
+  const { book, chapters, chapter, text, passage } = await loadChapter(job);
   const before = recentBriefs(chapters, chapter);
   const answer = await ask(
     'chapter-brief',
@@ -128,16 +149,20 @@ async function briefChapter(job: WorkJob, signal: AbortSignal) {
       {
         role: 'system',
         content:
-          'You write a one or two sentence brief of a chapter: who is in it, where it ' +
-          'happens, and what changes. Past tense, plain, no interpretation. Reply with ' +
-          'the brief only.',
+          kindOf(book.kind).reads === 'argument'
+            ? 'You write a one or two sentence brief of one section of a paper: what it ' +
+              'claims and what it rests on. Plain, no interpretation of significance. ' +
+              'Reply with the brief only.'
+            : 'You write a one or two sentence brief of a chapter: who is in it, where it ' +
+              'happens, and what changes. Past tense, plain, no interpretation. Reply with ' +
+              'the brief only.',
       },
       {
         role: 'user',
         content: [
           bookHeader(book, chapters),
           before && `RECENT CHAPTERS\n${before}`,
-          `CHAPTER ${chapter.idx + 1}${chapter.title.trim() ? `: ${chapter.title.trim()}` : ''}\n${chapterBody(text, chapter)}`,
+          `CHAPTER ${chapter.idx + 1}${chapter.title.trim() ? `: ${chapter.title.trim()}` : ''}\n${chapterMaterial(book, chapter, text, passage)}`,
         ]
           .filter(Boolean)
           .join('\n\n'),
@@ -330,7 +355,7 @@ function locateScenes(paragraphs: ChapterParagraph[], chapter: Chapter, scenes: 
  * come back consistent and the brief knows what it is continuing from.
  */
 async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
-  const { book, chapters, chapter, text } = await loadChapter(job);
+  const { book, chapters, chapter, text, passage } = await loadChapter(job);
   const characters = await listEntities(job.book_id, 'character');
   const places = await listEntities(job.book_id, 'place');
   const kind = kindOf(book.kind);
@@ -354,6 +379,12 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
     .join(',');
 
   const rules = [
+    // A story is followed; an argument is weighed. Same pass, different question.
+    kind.reads === 'argument' &&
+      'This is one section of a paper, not a chapter of a story. The brief says what ' +
+        'the section claims and what it rests on — question, method, data, result, ' +
+        'limitation, as far as each appears here. State what the authors assert as ' +
+        'their assertion, not as fact, and never supply a number the section does not.',
     wantsScenes && 'Its paragraphs are numbered in brackets: [0], [1], [2] and so on.',
     wantsScenes && SCENE_RULES,
     wantsCast &&
@@ -391,6 +422,7 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
           characters: wantsCast ? characters : [],
           places: wantsCast ? places : [],
           text,
+          passage,
           previousScenes,
           paragraphs: wantsScenes ? paragraphs : undefined,
         }),
@@ -475,7 +507,7 @@ async function polishPlace(job: WorkJob, signal: AbortSignal) {
 
 /** The cast pass without the brief — cheaper, for when only names are wanted. */
 async function castChapter(job: WorkJob, signal: AbortSignal) {
-  const { book, chapters, chapter, text } = await loadChapter(job);
+  const { book, chapters, chapter, text, passage } = await loadChapter(job);
   const characters = await listEntities(job.book_id, 'character');
 
   const answer = await ask(
@@ -494,7 +526,7 @@ async function castChapter(job: WorkJob, signal: AbortSignal) {
         content: [
           bookHeader(book, chapters),
           castList(characters) && `CHARACTERS ALREADY KNOWN\n${castList(characters)}`,
-          `CHAPTER ${chapter.idx + 1}\n${chapterBody(text, chapter)}`,
+          `CHAPTER ${chapter.idx + 1}\n${chapterMaterial(book, chapter, text, passage)}`,
         ]
           .filter(Boolean)
           .join('\n\n'),

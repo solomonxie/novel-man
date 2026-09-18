@@ -22,6 +22,7 @@ import {
   replaceChapters,
   setSceneBreaks,
   toDrafts,
+  type Book,
   type Chapter,
   type ChapterDraft,
   type Scene,
@@ -46,9 +47,10 @@ import { hasAnyKey } from '../../../src/ai/keys';
 import type { Estimate } from '../../../src/ai/cost';
 import { AiRunSheet } from '../../../src/ui/AiRunSheet';
 import { estimateBriefs, queueChapterRun, unbriefed } from '../../../src/analysis/runs';
-import { Hint, Row, Section } from '../../../src/ui/primitives';
+import { Hint, Row, Search, SEARCHABLE_FROM, Section } from '../../../src/ui/primitives';
 import { ActionMenu, type MenuAction } from '../../../src/ui/ActionMenu';
 import { useDocument } from '../../../src/ui/useDocument';
+import { backUpBefore } from '../../../src/backup/local';
 import { space, usePalette } from '../../../src/theme';
 import { useWorkRefresh } from '../../../src/work/refresh';
 
@@ -57,8 +59,10 @@ export default function StructurePage() {
   const { t } = useTranslation();
   const palette = usePalette();
   const [chapters, setChapters] = useState<Chapter[] | null>(null);
+  const [query, setQuery] = useState('');
   const [text, setText] = useState('');
-  const [language, setLanguage] = useState('en');
+  const [book, setBook] = useState<Book | null>(null);
+  const language = book?.language ?? 'en';
   const document = useDocument(id);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [busy, setBusy] = useState(false);
@@ -77,7 +81,7 @@ export default function StructurePage() {
   const load = useCallback(() => {
     if (!id) return;
     listChapters(id).then(setChapters);
-    getBook(id).then((book) => book && setLanguage(book.language));
+    getBook(id).then(setBook);
     listScenes(id).then(setScenes);
   }, [id]);
 
@@ -108,7 +112,7 @@ export default function StructurePage() {
       return;
     }
     setBriefOpen(true);
-    estimateBriefs(body, unbriefed(chapters ?? []), language)
+    estimateBriefs(body, unbriefed(chapters ?? []), book ?? { language, kind: 'novel', title: '' })
       .then(setBriefEstimate)
       .catch(() => undefined);
   }
@@ -182,6 +186,9 @@ export default function StructurePage() {
     if (!id) return;
     setBusy(true);
     try {
+      // Every chapter of the book, rewritten in one go: the copy that undoes
+      // it has to exist before it happens, not on tomorrow's schedule.
+      await backUpBefore('restructure');
       await replaceChapters(id, next);
       load();
     } finally {
@@ -223,6 +230,15 @@ export default function StructurePage() {
   }
 
   const drafts = toDrafts(chapters);
+  // The number, the title and the brief: the three things anyone remembers a
+  // chapter by. Editing still acts on the chapter itself, so a filtered list
+  // is only a shorter way to reach the same row.
+  const needle = query.trim().toLowerCase();
+  const shown = needle
+    ? chapters.filter((chapter) =>
+        `${chapter.idx + 1} ${chapter.title} ${chapter.brief ?? ''}`.toLowerCase().includes(needle)
+      )
+    : chapters;
   const unsure = chapters.filter((chapter) => !chapter.confident).length;
   // A chapter already briefed costs nothing to skip and everything to redo.
   const pending = unbriefed(chapters);
@@ -238,7 +254,7 @@ export default function StructurePage() {
     <View style={{ flex: 1, backgroundColor: palette.bg }}>
       <FlatList
         contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
-        data={chapters}
+        data={shown}
         keyExtractor={(chapter) => chapter.id}
         // A 500-chapter book mounts every row at once in a ScrollView.
         initialNumToRender={12}
@@ -248,10 +264,20 @@ export default function StructurePage() {
         ListHeaderComponent={
           <>
             <Stack.Screen options={{ title: t('structure.title'), headerBackTitle: ' ' }} />
+            {chapters.length >= SEARCHABLE_FROM && (
+              <Search value={query} onChange={setQuery} placeholder={t('structure.search')} />
+            )}
             <Text style={[styles.sectionTitle, { color: palette.dim }]}>
-              {t('structure.chapters').toUpperCase()}
+              {needle
+                ? t('structure.found', { count: shown.length })
+                : t('structure.chapters').toUpperCase()}
             </Text>
           </>
+        }
+        ListEmptyComponent={
+          <Text style={{ color: palette.dim, fontSize: 14, paddingVertical: space.lg }}>
+            {t('book.jumpNone')}
+          </Text>
         }
         renderItem={({ item: chapter, index }) => (
           <View
@@ -259,10 +285,12 @@ export default function StructurePage() {
               styles.row,
               { backgroundColor: palette.surface, borderColor: palette.border },
               index === 0 && styles.firstRow,
-              index === chapters.length - 1 ? styles.lastRow : { borderBottomWidth: StyleSheet.hairlineWidth },
+              index === shown.length - 1 ? styles.lastRow : { borderBottomWidth: StyleSheet.hairlineWidth },
             ]}
           >
-            <Text style={{ color: palette.faint, fontSize: 13, width: 28 }}>{index + 1}</Text>
+            {/* The number is the chapter's place in the book, not its place in
+                a filtered list — searching must not renumber the book. */}
+            <Text style={{ color: palette.faint, fontSize: 13, width: 28 }}>{chapter.idx + 1}</Text>
             {/* The row navigates; the chapter's own page is where it is edited. */}
             <Pressable
               onPress={() => router.push(`/chapter/${chapter.id}`)}
@@ -293,7 +321,13 @@ export default function StructurePage() {
               </Text>
             </Pressable>
             <Text style={{ color: palette.faint, fontSize: 16 }}>›</Text>
-            <Pressable onPress={() => setActionsFor(index)} style={styles.more} hitSlop={8}>
+            {/* Every action edits by position in the book, which a filtered
+                list no longer agrees with. */}
+            <Pressable
+              onPress={() => setActionsFor(chapters.findIndex((entry) => entry.id === chapter.id))}
+              style={styles.more}
+              hitSlop={8}
+            >
               <Text style={{ color: palette.accent, fontSize: 20 }}>⋯</Text>
             </Pressable>
           </View>

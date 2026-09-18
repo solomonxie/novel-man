@@ -1,23 +1,34 @@
 import { estimate, type Estimate } from '../ai/cost';
 import type { Book, Chapter } from '../db/repo';
 import { queueWork } from '../work/queue';
-import { bookHeader, chapterBody } from './context';
+import { bookHeader, chapterBody, citedNotSent, passageBody } from './context';
 
 /** Roughly what the context adds on top of the chapter itself, in tokens. */
 const CONTEXT_OVERHEAD = { brief: 400, deep: 900, summary: 300 };
 
-function unitsFor(text: string, chapters: Chapter[]): string[] {
+/** Enough of a book to price a run on it: its words, or its name. */
+export type Priced = Pick<Book, 'language' | 'kind' | 'title'>;
+
+/**
+ * What each chapter will actually cost to send. For a bible that is the
+ * reference and nothing else, so the estimate falls by two orders of magnitude
+ * — and it has to, or the sheet would quote a price the run never spends.
+ */
+function unitsFor(text: string, chapters: Chapter[], book: Priced): string[] {
+  if (citedNotSent(book)) {
+    return chapters.map((chapter) => passageBody(book as Book, chapter));
+  }
   return chapters.map((chapter) => chapterBody(text, chapter));
 }
 
 export function estimateBriefs(
   text: string,
   chapters: Chapter[],
-  language: string
+  book: Priced
 ): Promise<Estimate | null> {
   return estimate({
-    units: unitsFor(text, chapters),
-    language,
+    units: unitsFor(text, chapters, book),
+    language: book.language,
     outputRatio: 0.03,
     overheadTokens: CONTEXT_OVERHEAD.brief,
   });
@@ -26,11 +37,11 @@ export function estimateBriefs(
 export function estimateDeep(
   text: string,
   chapters: Chapter[],
-  language: string
+  book: Priced
 ): Promise<Estimate | null> {
   return estimate({
-    units: unitsFor(text, chapters),
-    language,
+    units: unitsFor(text, chapters, book),
+    language: book.language,
     outputRatio: 0.08,
     overheadTokens: CONTEXT_OVERHEAD.deep,
   });

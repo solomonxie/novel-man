@@ -73,14 +73,28 @@ filter by chapter range, continuity flags ("grey eyes in ch.3, green in
 ch.20") raised for review rather than applied, a character bible export, and
 screenplay conversion out to `.fountain` and `.fdx`.
 
-**Planned** — books you name instead of find: known public sources with
-fetched indexes, apt-style. "A bible" becomes a request page asking two
-questions — which translation, and which canon — and installs from eBible.org
-as USFM, so the books, chapters and verses arrive published rather than
-detected, and `John 3:16` or `约 3:16` is a lookup. Verse numbers, headings and
-red letter are reading settings over that text, never another download. Also generated portraits and storyboards (分镜) on the way to
-manga and partial animation — both wait on per-capability AI routing, since
-image models are a different endpoint per vendor, not a different model name.
+**Books you name instead of find** — public sources searched from the Add page,
+each stating its own terms before anything is fetched. **Project Gutenberg**
+for novels and nonfiction, over its own OPDS search: the EPUB without plates,
+with the size and rights line its feed states. **arXiv** for papers, searched
+by title, by author, or by category browsed newest-first — what it states about
+a paper becomes the book's title, authors, year and abstract. **eBible.org**
+for a bible, below. A book that lives at a url — a chapter in a repository, a file in a
+drive — comes in through the link box, which rewrites a GitHub page to its raw
+file the way it already rewrites a Google Doc to `.docx`.
+
+**A bible** asks two questions — which translation, which canon — and downloads
+from eBible.org as USFM. Eleven editions, not the whole catalog: KJV, ASV, WEB,
+BSB, NET, YLT, 和合本 简/繁, 当代译本 简/繁, 世界中文. NIV, NKJV, NASB and 吕振中
+are absent because their licences forbid redistribution, so no source can serve
+them. Books, chapters and verses arrive published rather than detected, and
+`John 3:16` or `约 3:16` is a lookup. Verse numbers, headings and red letter are
+reading settings over that text, never another download.
+
+**Planned** — more sources, same shape; generated portraits and storyboards
+(分镜) on the way to manga and partial animation — both wait on per-capability
+AI routing, since image models are a different endpoint per vendor, not a
+different model name.
 
 
 ## How it's built
