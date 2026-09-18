@@ -138,11 +138,13 @@ export function Block({ title, count, action, onOpen, children }: {
 }
 
 /** One thing in a block: a badge, what it is, and where it goes. */
-export function Item({ badge, title, detail, meta, onPress, last }: {
+export function Item({ badge, title, detail, meta, quiet, onPress, last }: {
   badge?: React.ReactNode;
   title: string;
   detail?: string;
   meta?: string;
+  /** The line is the thing itself rather than a name for it — an excerpt, not a title. */
+  quiet?: boolean;
   onPress?: () => void;
   last?: boolean;
 }) {
@@ -163,7 +165,9 @@ export function Item({ badge, title, detail, meta, onPress, last }: {
     >
       {badge}
       <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ color: palette.text, fontSize: 16 }}>{title}</Text>
+        <Text numberOfLines={1} style={{ color: quiet ? palette.dim : palette.text, fontSize: 16 }}>
+          {title}
+        </Text>
         {detail ? (
           <Text numberOfLines={2} style={{ color: palette.dim, fontSize: 13, marginTop: 2 }}>
             {detail}

@@ -9,7 +9,10 @@ react-native-webview.
 **v1 = Phases 1-5.** Everything after was roadmap, built in order of how much
 it depends on the structure model being right.
 
-Phases 1-11 are implemented except the four tasks still unticked below.
+Phases 1-11 are implemented except the four tasks still unticked below;
+Phase 12 is designed and not started. Phases 13 and 14 are partly built: a
+bible installs from eBible.org with its structure, and the Add page asks the
+kind first — what each phase still owes is unticked below.
 `(partial: …)` marks a task whose core landed but whose listed scope is not
 fully covered, and `(removed: …)` one that shipped and was then taken out —
 those notes are the honest remainder, not a to-do list that was forgotten.
@@ -180,6 +183,57 @@ specified honestly before those exist in practice rather than on paper.
 - [ ] T11.3 Storyboard (分镜): shot list per scene, generated panels — `src/storyboard/` — depends: T11.1, T11.2
 - [ ] T11.4 Additional formats as demand appears: `.rtf`, `.odt`, `.fb2` import — `src/import/formats/` — depends: T2.1
 
+
+## Phase 12: Public sources
+
+A book you name rather than a file you find. Everything here is data over the
+Phase 2 pipeline: a source supplies a URL and, where it has one, a structure
+map — no new import path, no screen that knows what a bible is.
+
+- [ ] T12.1 Source model + index format: `Source` (id, name, index URL, trust, fetched_at), `Work` (slug, title, author, language, kind, licence, options), `Edition` (format, URL, bytes, sha256, structure map?) — a JSON index spec written down once, with a fixture — `src/sources/` — depends: T1.3, T2.1
+- [ ] T12.2 Index fetch + cache: refresh one source or all, keep the last good index, record its date, work offline off the cache — `src/sources/index.ts` — depends: T12.1
+- [ ] T12.3 Search across cached indexes: title, author, alias, in both scripts, ranked, grouped by subject — `src/sources/search.ts` — depends: T12.2
+- [ ] T12.4 Option schema + resolver: pick-one / toggle / text with defaults, "what you'll get" line, option values → a concrete `Edition` — `src/sources/options.ts` — depends: T12.1
+- [ ] T12.5 Install: fetch the edition through the import queue, verify size/sha256, record the install (source, work, options) on the book — `src/sources/install.ts` — depends: T12.2, T12.4, T2.10
+- [ ] T12.6 Structure map: an edition that publishes its own book/chapter map skips detection and writes those ranges directly — `src/sources/structure.ts` — depends: T12.5, T3.1
+- [ ] T12.7 Find-a-book page and request page, generated from the schema, with the licence and source on every row — `app/source/` — depends: T12.3, T12.4
+- [ ] T12.8 Public sources settings section: list, per-source refresh, add an index URL of your own (validated before it is added), remove — `app/index.tsx`, `app/settings/source/[id].tsx` — depends: T12.2
+- [ ] T12.9 Bundled source adapters and their catalogs: Project Gutenberg, a bible source (translation / canon / verse layout / plates), Chinese public domain (简繁, punctuation, edition) — `src/sources/catalog/` — depends: T12.1, T12.4
+- [ ] T12.10 Failure copy, all of it naming the source: unreachable, moved, stale index, already installed, no licence stated — `src/i18n/` — depends: T12.5
+
+## Phase 13: Scripture
+
+A bible through the same pipeline as a novel. Nothing here is a second reader
+or a second database — it is a part label, a verse table, a USFM importer and
+a source that already publishes its catalog.
+
+- [x] T13.1 `part_idx` / `part_title` on chapters + the grouped chapter list, usable by any book with 卷 or Part I — `src/db/migrations.ts`, `src/structure/` — depends: T3.1
+- [x] T13.2 `verses` table `(book_id, chapter_id, number, start, end)` and the per-edition book-name table from `\toc1`/`\toc2`/`\toc3` — `src/db/migrations.ts`, `src/scripture/` — depends: T13.1 (partial: the `verses` table and per-edition names are written and counted; nothing reads the names back yet — that is T13.5)
+- [x] T13.3 USFM importer: one file per book, `\c`/`\v` marks, `\w …|strong=…\w*` collapsed, `\s1`/`\q1`/`\q2`/`\wj`/`\f`/`\x` kept as switchable marks, never baked into the text — `src/import/formats/usfm.ts` — depends: T2.1, T13.2
+- [x] T13.4 eBible.org source adapter: `translations.csv` as the index (licence from `Redistributable`, counts from OT/NT/DC columns), `<id>_usfm.zip` as the edition, canon as the one option — `src/sources/catalog/ebible.ts` — depends: T12.1, T12.4, T13.3
+- [ ] T13.5 Reference parser and jump: `John 3:16`, `约 3:16`, `1 Cor 13`, resolved against the installed edition; wired into shelf search and the chapter sheet — `src/scripture/reference.ts` — depends: T13.2
+- [ ] T13.6 Scripture reader: verse numbers as marks, the verse as the tap unit, reference as the chrome title, share attributed `John 3:16 (WEB)` — `app/reader/[id].tsx`, `src/reader/` — depends: T13.2
+- [ ] T13.7 Scripture reading settings: numbers, one verse per line, headings, poetry, red letter, footnotes — render-only, never a re-download — `src/reader/settings.ts`, `src/ui/ReadingSettingsSheet.tsx` — depends: T13.6
+- [ ] T13.8 Chapter sheet grouped by book, chapter numbers as a grid, OT/NT split — `src/ui/ChapterSheet.tsx` — depends: T13.1
+- [x] T13.9 Book page for scripture: parts where chapters were, analysis scoped and priced per book — `app/book/[id].tsx`, `src/analysis/runs.ts` — depends: T13.1, T7.3 (partial: parts lead the book page and a bible counts books and verses; per-book analysis scoping is still T14.6)
+- [x] T13.10 `scripture` kind gains `parts` and `verses` features and keeps losing scenes, screenplay and art — `src/books/kinds.ts` — depends: T13.1
+- [x] T13.11 RTL editions are filtered out of the catalog until the reader has a direction — recorded in the source adapter, not discovered by a user — `src/sources/catalog/ebible.ts` — depends: T13.4
+
+## Phase 14: Kind first
+
+The kind decides the sources, the questions and the page, so it is asked before
+any of them. Mostly a move of things that exist: the add sheet becomes a page,
+and the book page stops branching on kind and starts rendering what the kind
+declares.
+
+- [x] T14.1 Kinds carry `units`, `sources`, `options` and `sections` — the row grows, the screens stop knowing the list — `src/books/kinds.ts` — depends: none
+- [x] T14.2 `app/add.tsx`: kind chips, sources filtered by kind, that kind's options, one commit button. Replaces the ⊕ picker sheet and the post-import kind sheet — `app/add.tsx`, `app/index.tsx` — depends: T14.1
+- [ ] T14.3 A file already in hand (share sheet, "Open in…", a link fetched) lands on the page pre-chosen instead of importing behind it — `src/import/sources/incoming.ts` — depends: T14.2
+- [ ] T14.4 Detected values shown as detected: language, chapter convention, volumes — proposed by the detector, overridable before the import runs — `src/structure/detect.ts`, `app/add.tsx` — depends: T14.2
+- [x] T14.5 Book page renders `sections` from the kind rather than branching, with a fallback shape for a kind that declares none — `app/book/[id].tsx` — depends: T14.1 (partial: facts, Inside and the gated sections come from the kind; the rest of the page is still common to every kind)
+- [ ] T14.6 Analysis scoped to the kind's part unit, and the button says which — `src/analysis/runs.ts`, `app/book/[id].tsx` — depends: T14.1, T13.1
+- [ ] T14.7 Kind change after the fact re-renders the page and keeps everything that still applies; what it drops is named before it drops — `app/book/[id].tsx` — depends: T14.5
+- [x] T14.8 Per-kind copy in both catalogs: chip labels, the one-line what-you-get, empty sources, section titles — `src/i18n/` — depends: T14.1
 
 ## Verified mechanically
 

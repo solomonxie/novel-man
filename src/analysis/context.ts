@@ -117,12 +117,13 @@ export function placeList(places: Entity[]): string {
  * back as two unrelated openings.
  */
 export function sceneTail(scenes: Scene[]): string {
+  // A scene nobody named is listed by its summary alone: "Scene 2" is a name the
+  // model is then told to reuse, and it reuses it.
   return scenes
     .slice(-CAPS.recentScenes)
-    .map((scene, index) => {
-      const label = scene.title?.trim() || `Scene ${index + 1}`;
-      return `- ${label}${scene.summary?.trim() ? ` — ${scene.summary.trim()}` : ''}`;
-    })
+    .map((scene) => [scene.title?.trim(), scene.summary?.trim()].filter(Boolean).join(' — '))
+    .filter(Boolean)
+    .map((line) => `- ${line}`)
     .join('\n');
 }
 

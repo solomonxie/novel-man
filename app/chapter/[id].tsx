@@ -16,6 +16,7 @@ import {
   type Scene,
 } from '../../src/db/repo';
 import { estimateDeep, queueChapterRun } from '../../src/analysis/runs';
+import { sceneOpening } from '../../src/structure/scenes';
 import { formatUsd, type Estimate } from '../../src/ai/cost';
 import { getBook, getDocumentText } from '../../src/db/repo';
 import { EditableLine } from '../../src/ui/EditableLine';
@@ -40,6 +41,7 @@ export default function ChapterPage() {
   const [cast, setCast] = useState<ChapterCast[]>([]);
   const [places, setPlaces] = useState<ChapterPlace[]>([]);
   const [cost, setCost] = useState<Estimate | null>(null);
+  const [text, setText] = useState('');
   const [language, setLanguage] = useState('en');
   const [queued, setQueued] = useState(false);
 
@@ -53,8 +55,9 @@ export default function ChapterPage() {
       setPlaces(await listChapterPlaces(found.book_id, found.idx));
       const book = await getBook(found.book_id);
       setLanguage(book?.language ?? 'en');
-      const text = await getDocumentText(found.book_id);
-      setCost(await estimateDeep(text, [found], book?.language ?? 'en'));
+      const body = await getDocumentText(found.book_id);
+      setText(body);
+      setCost(await estimateDeep(body, [found], book?.language ?? 'en'));
     });
   }, [id]);
 
@@ -144,7 +147,11 @@ export default function ChapterPage() {
             <Item
               key={scene.id}
               badge={<Badge n={index + 1} />}
-              title={scene.title?.trim() || t('chapter.scenePlaceholder', { index: index + 1 })}
+              // Nothing has named this one yet, and the badge already says which
+              // it is — so it is shown by how it starts rather than by a number
+              // dressed up as a title.
+              title={scene.title?.trim() || sceneOpening(text, scene)}
+              quiet={!scene.title?.trim()}
               detail={scene.summary?.trim() || undefined}
               onPress={() => router.push(`/scene/${scene.id}`)}
             />

@@ -5,9 +5,10 @@ import { File, Paths } from 'expo-file-system';
 
 import { drive, type DriveStatus } from '../../modules/icloud';
 import { contentHash } from '../ai/cache';
-import { lastUploadedAt, lastUploadHash, recordUpload } from '../db/jobs';
+import { lastUploadedAnywhere, lastUploadHash, recordUpload } from '../db/jobs';
 import { listBookIds } from '../db/repo';
 import { buildBundle, fingerprint, openBundle } from './bundle';
+import { bundleName } from './format';
 import { subscribeToChanges } from './changes';
 import { restoreBundle, type RestoreReport } from './restore';
 
@@ -15,19 +16,21 @@ const AUTO = 'icloud.auto';
 const RESTORED = 'icloud.restoredAt';
 const STAGED = 'icloud-upload.zip';
 /**
- * One file, always overwritten. This is not an archive — it exists so that
- * deleting the app doesn't delete the work, and for that only the newest copy
- * has ever been the answer. A folder of dated bundles would ask the reader to
- * choose between them, which is a question they can't answer and shouldn't be
- * shown. iCloud keeps its own versions of it.
+ * One file per month, overwritten all month long: `202609-library.zip`. This
+ * is not a version history and was never meant to be one — it exists so that
+ * deleting the app doesn't delete the work, and for that the newest copy is
+ * the answer. A file per write would ask the reader to choose between a
+ * thousand of them; a file per month asks them to choose between twelve, which
+ * is a question someone can actually answer when a month of work went wrong.
  */
-const BACKUP = 'novel-man.zip';
+const backupName = () => bundleName('library');
 /**
  * Reuses the upload ledger the bucket sync already keeps; there is no bucket.
- * Keyed by the file name, so renaming the destination is itself a reason to
- * write — otherwise an unchanged library would leave the new name unwritten.
+ * Keyed by the file name, so a new month is itself a reason to write — the
+ * first change of March writes March's file rather than finding February's
+ * hash unchanged and skipping.
  */
-const LEDGER = { connection: 'icloud', key: BACKUP };
+const LEDGER = 'icloud';
 
 let running = false;
 
@@ -77,8 +80,9 @@ export function useDriveStatus(): DriveStatus | null {
   return current;
 }
 
+/** Across months: on the 1st, the last backup is still last month's. */
 export async function lastBackupAt(): Promise<number | null> {
-  return lastUploadedAt(LEDGER.connection, LEDGER.key);
+  return lastUploadedAnywhere(LEDGER);
 }
 
 /** The native side works in paths, not URIs — and a URI can be percent-encoded. */
@@ -99,21 +103,22 @@ export async function backUp(): Promise<boolean> {
   if (!drive || (await refreshDriveStatus()) !== 'available') return false;
   running = true;
   try {
+    const name = backupName();
     const bundle = await buildBundle(undefined, { includeText: false });
     const body = bundle.body as Uint8Array;
     const hash = contentHash('icloud', fingerprint(body));
-    if ((await lastUploadHash(LEDGER.connection, LEDGER.key)) === hash) return false;
+    if ((await lastUploadHash(LEDGER, name)) === hash) return false;
 
     const staged = new File(Paths.cache, STAGED);
     if (staged.exists) staged.delete();
     staged.create();
     staged.write(body);
     try {
-      await drive.copyIn(nativePath(staged), BACKUP);
+      await drive.copyIn(nativePath(staged), name);
     } finally {
       staged.delete();
     }
-    await recordUpload(LEDGER.connection, LEDGER.key, hash);
+    await recordUpload(LEDGER, name, hash);
     return true;
   } finally {
     running = false;

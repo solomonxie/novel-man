@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import {
   deleteEntity,
+  getDocumentText,
   getEntity,
   listChapters,
   listPlaceCompany,
@@ -21,6 +22,7 @@ import {
 } from '../../src/db/repo';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
 import { queuePlacePolish } from '../../src/analysis/runs';
+import { sceneOpening } from '../../src/structure/scenes';
 import { hasAnyKey } from '../../src/ai/keys';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { hueFrom } from '../../src/ui/fields';
@@ -44,6 +46,7 @@ export default function PlacePage() {
   const [visits, setVisits] = useState<PlaceVisit[]>([]);
   const [company, setCompany] = useState<PlaceCompany[]>([]);
   const [scenes, setScenes] = useState<Scene[]>([]);
+  const [text, setText] = useState('');
   const [polishOpen, setPolishOpen] = useState(false);
   const [keyed, setKeyed] = useState(false);
   const latest = useRef<Entity | null>(null);
@@ -66,6 +69,7 @@ export default function PlacePage() {
       setVisits(await listPlaceVisits(found.id));
       setCompany(await listPlaceCompany(found.id));
       setScenes(await listScenesAtPlace(found.id));
+      setText(await getDocumentText(found.book_id));
     });
   }, [id]);
 
@@ -168,7 +172,8 @@ export default function PlacePage() {
               <Item
                 key={scene.id}
                 badge={<Badge n={(chapter?.idx ?? 0) + 1} />}
-                title={scene.title?.trim() || t('chapter.scenePlaceholder', { index: scene.idx + 1 })}
+                title={scene.title?.trim() || sceneOpening(text, scene)}
+                quiet={!scene.title?.trim()}
                 detail={[chapter ? chapterOf(chapter.idx) : null, scene.summary?.trim()]
                   .filter(Boolean)
                   .join(' · ')}

@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,8 +16,6 @@ import type { TFunction } from 'i18next';
 
 import { listBooks, type BookListItem } from '../src/db/repo';
 import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
-import { pickManuscript } from '../src/import/sources/picker';
-import { fetchManuscript, FetchError } from '../src/import/sources/url';
 import { supportedExtensions } from '../src/import/registry';
 import { Cover, Row, Section } from '../src/ui/primitives';
 import { AiKeysSettings } from '../src/settings/AiKeys';
@@ -28,11 +23,10 @@ import { BackupSettings } from '../src/settings/Backup';
 import { CloudSettings } from '../src/settings/Cloud';
 import { setUiLanguage, SUPPORTED, type UiLanguage } from '../src/i18n';
 import { QueueSheet, QueueStrip } from '../src/ui/ImportQueue';
+import { PickerSheet } from '../src/ui/PickerSheet';
 import { openWorkQueue, useWorkFeed } from '../src/ui/WorkQueue';
 import { resumeWorkOnLaunch } from '../src/work/queue';
 import { useWorkRefresh } from '../src/work/refresh';
-import { PickerSheet } from '../src/ui/PickerSheet';
-import { bookKinds } from '../src/books/kinds';
 import { formatCount } from '../src/text/counts';
 import { matchesBook, searchContent, type ContentHit } from '../src/search/library';
 import { backUpIfAuto, restoreOnLaunch } from '../src/backup/icloud';
@@ -42,8 +36,6 @@ import { appearances, setAppearance, useAppearance, type Appearance } from '../s
 
 /** Two rows of three. Past that it's a scroll, and a scroll needs asking for. */
 const VISIBLE = 6;
-/** Long enough for the system picker to finish leaving the screen. */
-const SHEET_AFTER_PICKER_MS = 350;
 const LANGUAGE_LABELS: Record<UiLanguage, string> = { en: 'English', 'zh-Hans': '简体中文' };
 
 export default function Home() {
@@ -58,13 +50,7 @@ export default function Home() {
   const [expanded, setExpanded] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
-  const [sourceOpen, setSourceOpen] = useState(false);
-  const [pendingSource, setPendingSource] = useState<string | null>(null);
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [link, setLink] = useState('');
-  const [linkError, setLinkError] = useState<string | null>(null);
   /** A picked file waiting on the one question only a person can answer. */
-  const [pendingBook, setPendingBook] = useState<{ uri: string; name: string } | null>(null);
   const [hits, setHits] = useState<ContentHit[]>([]);
   const work = useWorkFeed();
 
@@ -96,39 +82,6 @@ export default function Home() {
       return next;
     });
   }), [refresh]);
-
-  async function addFromFiles() {
-    try {
-      const picked = await pickManuscript();
-      // Asked after the file is in hand, not before: the name on screen is
-      // most of the answer, and a sheet opened before the system picker is
-      // what wedges it on iOS. The wait is the same constraint from the other
-      // side — the picker resolves as it starts dismissing, and a modal
-      // presented into that animation never appears.
-      if (picked) setTimeout(() => setPendingBook(picked), SHEET_AFTER_PICKER_MS);
-    } catch (error) {
-      Alert.alert(t('import.failed'), String(error));
-    }
-  }
-
-  // iOS refuses to present the file picker while the sheet is still animating
-  // away, and the failed attempt leaves the picker unusable until a reload.
-  function runSource(choice: string) {
-    if (choice === 'files') void addFromFiles();
-    else setLinkOpen(true);
-  }
-
-  async function addFromLink() {
-    setLinkError(null);
-    try {
-      const fetched = await fetchManuscript(link);
-      setLink('');
-      setLinkOpen(false);
-      setPendingBook(fetched);
-    } catch (error) {
-      setLinkError(describeFetch(error, t));
-    }
-  }
 
   const library = useMemo(
     () => (query.trim() ? (books ?? []).filter((book) => matchesBook(book, query)) : books ?? []),
@@ -218,7 +171,7 @@ export default function Home() {
                       </Text>
                     </Pressable>
                   )}
-                  <Pressable onPress={() => setSourceOpen(true)} hitSlop={12}>
+                  <Pressable onPress={() => router.push('/add')} hitSlop={12}>
                     <Text style={{ color: palette.accent, fontSize: 26 }}>＋</Text>
                   </Pressable>
                 </View>
@@ -253,6 +206,20 @@ export default function Home() {
               </Text>
 
               <Section title={t('settings.general')}>
+                {/* Work is started from a book's own pages and then watched
+                    from wherever you are — so it needs a door that is always
+                    in the same place, not only a strip that appears mid-run.
+                    It leads the section because it is the only row that is ever
+                    doing something: language and appearance are set once. */}
+                <Row
+                  label={t('work.open')}
+                  value={
+                    work.counts.pending + work.counts.running > 0
+                      ? t('work.busy', { count: work.counts.pending + work.counts.running })
+                      : t('work.idle')
+                  }
+                  onPress={openWorkQueue}
+                />
                 <Row
                   label={t('settings.language')}
                   value={LANGUAGE_LABELS[i18n.language as UiLanguage] ?? 'English'}
@@ -262,18 +229,6 @@ export default function Home() {
                   label={t('settings.appearance')}
                   value={t(`settings.appearance_${appearance}`)}
                   onPress={() => setAppearanceOpen(true)}
-                />
-                {/* Work is started from a book's own pages and then watched
-                    from wherever you are — so it needs a door that is always
-                    in the same place, not only a strip that appears mid-run. */}
-                <Row
-                  label={t('work.open')}
-                  value={
-                    work.counts.pending + work.counts.running > 0
-                      ? t('work.busy', { count: work.counts.pending + work.counts.running })
-                      : t('work.idle')
-                  }
-                  onPress={openWorkQueue}
                   last
                 />
               </Section>
@@ -289,78 +244,17 @@ export default function Home() {
       <QueueSheet jobs={jobs} visible={queueOpen} onClose={() => setQueueOpen(false)} />
 
       <PickerSheet
-        visible={sourceOpen}
-        title={t('shelf.add')}
-        options={[
-          { id: 'files', label: t('shelf.fromFiles'), detail: supportedExtensions.map((e) => `.${e}`).join(' ') },
-          { id: 'link', label: t('shelf.fromLink'), detail: t('shelf.fromLinkHint') },
-        ]}
-        onPick={(choice) => {
-          setSourceOpen(false);
-          if (Platform.OS === 'ios') setPendingSource(choice);
-          else runSource(choice);
+        visible={languageOpen}
+        title={t('settings.language')}
+        options={SUPPORTED.map((code) => ({ id: code, label: LANGUAGE_LABELS[code] }))}
+        selectedId={i18n.language}
+        onPick={(code) => {
+          setUiLanguage(code as UiLanguage);
+          setLanguageOpen(false);
         }}
-        onDismiss={() => {
-          if (!pendingSource) return;
-          runSource(pendingSource);
-          setPendingSource(null);
-        }}
-        onClose={() => setSourceOpen(false)}
+        onClose={() => setLanguageOpen(false)}
       />
 
-      <PickerSheet
-        visible={pendingBook !== null}
-        title={t('shelf.kindTitle')}
-        options={bookKinds.map((kind) => ({
-          id: kind.id,
-          label: t(`kind.${kind.id}`),
-          detail: t(`kind.${kind.id}Hint`),
-        }))}
-        onPick={(kind) => {
-          if (pendingBook) enqueueImport({ ...pendingBook, kind });
-          setPendingBook(null);
-        }}
-        // Dismissing without choosing still imports: the answer has a default,
-        // and losing the file over an unanswered question would be worse.
-        onClose={() => {
-          if (pendingBook) enqueueImport(pendingBook);
-          setPendingBook(null);
-        }}
-      />
-
-      <Modal visible={linkOpen} transparent animationType="fade" onRequestClose={() => setLinkOpen(false)}>
-        <Pressable style={[styles.scrim, { backgroundColor: palette.scrim }]} onPress={() => setLinkOpen(false)}>
-          <Pressable
-            style={[styles.dialog, { backgroundColor: palette.surface, borderColor: palette.border }]}
-            onPress={(event) => event.stopPropagation()}
-          >
-            <Text style={{ color: palette.text, fontSize: 17, fontWeight: '600' }}>
-              {t('shelf.fromLink')}
-            </Text>
-            <TextInput
-              value={link}
-              onChangeText={setLink}
-              placeholder="https://…"
-              placeholderTextColor={palette.faint}
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={[
-                styles.linkInput,
-                { color: palette.text, borderColor: palette.border },
-              ]}
-            />
-            <Text style={{ color: palette.dim, fontSize: 12 }}>{t('shelf.linkHint')}</Text>
-            {linkError ? (
-              <Text style={{ color: palette.danger, fontSize: 13, marginTop: space.sm }}>{linkError}</Text>
-            ) : null}
-            <Pressable onPress={addFromLink} style={{ paddingVertical: space.md, alignItems: 'center' }}>
-              <Text style={{ color: palette.accent, fontSize: 16 }}>{t('shelf.fetch')}</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Applies the moment it's picked — the page behind repaints under it. */}
       <PickerSheet
         visible={appearanceOpen}
         title={t('settings.appearance')}
@@ -375,19 +269,6 @@ export default function Home() {
           setAppearanceOpen(false);
         }}
         onClose={() => setAppearanceOpen(false)}
-      />
-
-      {/* Picking a value never leaves the page. */}
-      <PickerSheet
-        visible={languageOpen}
-        title={t('settings.language')}
-        options={SUPPORTED.map((code) => ({ id: code, label: LANGUAGE_LABELS[code] }))}
-        selectedId={i18n.language}
-        onPick={(code) => {
-          setUiLanguage(code as UiLanguage);
-          setLanguageOpen(false);
-        }}
-        onClose={() => setLanguageOpen(false)}
       />
     </SafeAreaView>
   );
@@ -446,23 +327,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  scrim: { flex: 1, justifyContent: 'center', padding: space.xl },
-  dialog: { borderRadius: radius.lg, padding: space.xl, borderWidth: StyleSheet.hairlineWidth },
-  linkInput: {
-    marginTop: space.lg,
-    marginBottom: space.sm,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm + 2,
-    fontSize: 15,
-    borderRadius: radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
 });
 
-function describeFetch(error: unknown, t: TFunction): string {
-  if (error instanceof FetchError) {
-    if (error.code === 'sign-in') return t('shelf.linkSignIn');
-    if (error.code === 'unsupported') return t('import.unsupported', { ext: error.detail });
-  }
-  return t('shelf.linkFailed');
-}

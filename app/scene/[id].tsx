@@ -99,8 +99,6 @@ export default function ScenePage() {
     );
   }
 
-  const label = scene.title?.trim() || t('chapter.scenePlaceholder', { index: scene.idx + 1 });
-
   return (
     <ScrollView
       style={{ backgroundColor: palette.bg }}
@@ -135,10 +133,11 @@ export default function ScenePage() {
           </>
         }
       >
+        {/* An unnamed scene asks to be named. Filling the line with "Scene 1"
+            answered nothing and made an empty field look finished. */}
         <EditableLine
           value={scene.title}
-          placeholder={label}
-          solid
+          placeholder={t('chapter.sceneNamePlaceholder')}
           onCommit={(value) => updateScene(scene.id, { title: value || null }).then(load)}
           style={{ color: palette.text, fontSize: 26, fontWeight: '700', lineHeight: 32 }}
         />

@@ -30,6 +30,18 @@ export async function adoptSourceFile(uri: string, originalName: string) {
   return { hash, path: stored.uri, size: stored.size, bytes };
 }
 
+/** The same shelf, for a file the app fetched rather than one someone picked. */
+export async function storeSourceBytes(bytes: Uint8Array, name: string) {
+  const hash = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    bytesFingerprint(bytes)
+  );
+  const ext = extensionOf(name);
+  const stored = new File(sourcesDir(), ext ? `${hash}.${ext}` : hash);
+  if (!stored.exists) stored.write(bytes);
+  return { hash, path: stored.uri, size: stored.size, bytes };
+}
+
 export function openStored(path: string, hash: string, ext: string): File {
   const direct = new File(path);
   if (direct.exists) return direct;

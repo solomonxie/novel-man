@@ -36,6 +36,9 @@ export type Chapter = {
   user_edited: number;
   /** A line or two on what happens here. Written by you or by a pass. */
   brief: string | null;
+  /** The level above, for kinds that have one: a bible's book, a novel's 卷. */
+  part_idx: number | null;
+  part_title: string | null;
 };
 
 export type EntityKind = 'character' | 'place';
@@ -113,6 +116,50 @@ export async function getDocumentText(bookId: string): Promise<string> {
   return row?.text ?? '';
 }
 
+/** One row per part, in reading order, with how many chapters sit under it. */
+export type Part = { idx: number; title: string; chapters: number; start: number; end: number };
+
+export async function listParts(bookId: string): Promise<Part[]> {
+  const database = await db();
+  return database.getAllAsync<Part>(
+    `SELECT part_idx AS idx, part_title AS title, COUNT(*) AS chapters,
+            MIN(start) AS start, MAX(end) AS end
+       FROM chapters
+      WHERE book_id = ? AND part_idx IS NOT NULL
+      GROUP BY part_idx, part_title
+      ORDER BY part_idx`,
+    bookId
+  );
+}
+
+export async function listPartChapters(bookId: string, partIdx: number): Promise<Chapter[]> {
+  const database = await db();
+  return database.getAllAsync<Chapter>(
+    'SELECT * FROM chapters WHERE book_id = ? AND part_idx = ? ORDER BY idx',
+    bookId, partIdx
+  );
+}
+
+export async function countVerses(bookId: string): Promise<number> {
+  const database = await db();
+  const row = await database.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM verses WHERE book_id = ?',
+    bookId
+  );
+  return row?.n ?? 0;
+}
+
+/** The verses of one chapter, in reading order. */
+export type Verse = { number: number; start: number; end: number };
+
+export async function listVerses(chapterId: string): Promise<Verse[]> {
+  const database = await db();
+  return database.getAllAsync<Verse>(
+    'SELECT number, start, end FROM verses WHERE chapter_id = ? ORDER BY number',
+    chapterId
+  );
+}
+
 export async function listChapters(bookId: string): Promise<Chapter[]> {
   const database = await db();
   return database.getAllAsync<Chapter>(
@@ -130,8 +177,11 @@ export async function saveImportedBook(input: {
   book: ImportedBook;
   text: string;
   hints: StructureHint[];
-  chapters: { title: string; start: number; end: number; confident: boolean }[];
+  chapters: ChapterInsert[];
   scenes: { chapterIndex: number; start: number; end: number }[];
+  /** Scripture: the citable unit, and what this edition calls its own books. */
+  verses?: { chapterIndex: number; number: number; start: number; end: number }[];
+  partNames?: { part_idx: number; names: string[] }[];
 }): Promise<string> {
   const database = await db();
   const id = newId();
@@ -163,6 +213,15 @@ export async function saveImportedBook(input: {
     );
     const chapterIds = await insertChapters(database, id, input.chapters);
     await insertScenes(database, id, chapterIds, input.scenes);
+    await insertVerses(database, id, chapterIds, input.verses ?? []);
+    for (const part of input.partNames ?? []) {
+      for (const name of part.names) {
+        await database.runAsync(
+          'INSERT OR IGNORE INTO part_names (book_id, part_idx, name) VALUES (?, ?, ?)',
+          id, part.part_idx, name
+        );
+      }
+    }
     await database.runAsync(
       'INSERT INTO reading_state (book_id, offset, updated_at) VALUES (?, 0, ?)',
       id,
@@ -175,17 +234,22 @@ export async function saveImportedBook(input: {
 /** A novel can carry 500+ chapters; one statement per row is 6x the round trips. */
 const CHAPTER_BATCH = 200;
 
+export type ChapterInsert = {
+  title: string;
+  start: number;
+  end: number;
+  confident: boolean;
+  userEdited?: boolean;
+  brief?: string | null;
+  /** The level above: a bible's book, a novel's 卷. Null for books without one. */
+  part_idx?: number | null;
+  part_title?: string | null;
+};
+
 async function insertChapters(
   database: Awaited<ReturnType<typeof db>>,
   bookId: string,
-  chapters: {
-    title: string;
-    start: number;
-    end: number;
-    confident: boolean;
-    userEdited?: boolean;
-    brief?: string | null;
-  }[]
+  chapters: ChapterInsert[]
 ): Promise<string[]> {
   const ids = chapters.map(() => newId());
   for (let from = 0; from < chapters.length; from += CHAPTER_BATCH) {
@@ -193,16 +257,45 @@ async function insertChapters(
     const values: (string | number | null)[] = [];
     const rows = slice.map((chapter, offset) => {
       values.push(ids[from + offset], bookId, from + offset, chapter.title, chapter.start,
-        chapter.end, chapter.confident ? 1 : 0, chapter.userEdited ? 1 : 0, chapter.brief ?? null);
-      return '(?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        chapter.end, chapter.confident ? 1 : 0, chapter.userEdited ? 1 : 0, chapter.brief ?? null,
+        chapter.part_idx ?? null, chapter.part_title ?? null);
+      return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
     });
     await database.runAsync(
-      `INSERT INTO chapters (id, book_id, idx, title, start, end, confident, user_edited, brief)
+      `INSERT INTO chapters (id, book_id, idx, title, start, end, confident, user_edited, brief,
+                             part_idx, part_title)
        VALUES ${rows.join(', ')}`,
       values
     );
   }
   return ids;
+}
+
+const VERSE_BATCH = 200;
+
+async function insertVerses(
+  database: Awaited<ReturnType<typeof db>>,
+  bookId: string,
+  chapterIds: string[],
+  verses: { chapterIndex: number; number: number; start: number; end: number }[]
+) {
+  for (let from = 0; from < verses.length; from += VERSE_BATCH) {
+    const slice = verses.slice(from, from + VERSE_BATCH);
+    const values: (string | number)[] = [];
+    const rows: string[] = [];
+    for (const verse of slice) {
+      const chapterId = chapterIds[verse.chapterIndex];
+      if (!chapterId) continue;
+      values.push(bookId, chapterId, verse.number, verse.start, verse.end);
+      rows.push('(?, ?, ?, ?, ?)');
+    }
+    if (!rows.length) continue;
+    await database.runAsync(
+      `INSERT OR REPLACE INTO verses (book_id, chapter_id, number, start, end)
+       VALUES ${rows.join(', ')}`,
+      values
+    );
+  }
 }
 
 async function insertScenes(
@@ -507,6 +600,16 @@ export async function updateAnnotation(
 export async function removeAnnotation(id: string) {
   const database = await db();
   await database.runAsync('DELETE FROM annotations WHERE id = ?', id);
+}
+
+/** Clearing out a page's worth of marks is one statement, not one per row. */
+export async function removeAnnotations(ids: string[]) {
+  if (!ids.length) return;
+  const database = await db();
+  await database.runAsync(
+    `DELETE FROM annotations WHERE id IN (${ids.map(() => '?').join(',')})`,
+    ...ids
+  );
 }
 
 export async function saveProgress(bookId: string, offset: number) {
@@ -1009,6 +1112,44 @@ export async function replaceRelations(
       );
     }
   });
+}
+
+/**
+ * One relation, as seen while reading one chapter. The pair is the identity:
+ * a later chapter that sees the same two people widens the range it was seen
+ * over instead of adding a second edge, and a label the reader wrote stays
+ * theirs while the range keeps updating — the range is a fact about the book,
+ * not an opinion about the pair.
+ */
+export async function recordRelation(input: {
+  book_id: string;
+  from_id: string;
+  to_id: string;
+  label: string;
+  chapter_idx: number;
+}) {
+  const database = await db();
+  const existing = await database.getFirstAsync<Relation>(
+    `SELECT * FROM relations
+      WHERE book_id = ? AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))`,
+    input.book_id, input.from_id, input.to_id, input.to_id, input.from_id
+  );
+  if (!existing) {
+    await database.runAsync(
+      `INSERT INTO relations (id, book_id, from_id, to_id, label, first_chapter, last_chapter, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'ai')`,
+      newId(), input.book_id, input.from_id, input.to_id, input.label,
+      input.chapter_idx, input.chapter_idx
+    );
+    return;
+  }
+  await database.runAsync(
+    'UPDATE relations SET label = ?, first_chapter = ?, last_chapter = ? WHERE id = ?',
+    existing.source === 'manual' ? existing.label : input.label,
+    Math.min(existing.first_chapter, input.chapter_idx),
+    Math.max(existing.last_chapter, input.chapter_idx),
+    existing.id
+  );
 }
 
 export async function listRelations(bookId: string): Promise<Relation[]> {

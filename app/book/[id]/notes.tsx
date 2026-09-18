@@ -9,6 +9,7 @@ import {
   listAnnotations,
   listChapters,
   removeAnnotation,
+  removeAnnotations,
   type Annotation,
   type Book,
   type Chapter,
@@ -27,6 +28,12 @@ export default function Notes() {
   const [book, setBook] = useState<Book | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  /**
+   * Clearing out a read's worth of marks one long-press at a time is the
+   * tedious way; the mode exists so a batch is one decision, not twenty.
+   */
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const load = useCallback(() => {
     if (!id) return;
@@ -36,6 +43,37 @@ export default function Notes() {
   }, [id]);
 
   useFocusEffect(load);
+
+  function toggle(id: string) {
+    setPicked((was) => {
+      const next = new Set(was);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function endSelecting() {
+    setSelecting(false);
+    setPicked(new Set());
+  }
+
+  function confirmRemovePicked() {
+    const ids = [...picked];
+    if (!ids.length) return;
+    Alert.alert(t('notes.deleteSelectedConfirm', { count: ids.length }), undefined, [
+      { text: t('settings.cancel'), style: 'cancel' },
+      {
+        text: t('settings.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          await removeAnnotations(ids);
+          endSelecting();
+          load();
+        },
+      },
+    ]);
+  }
 
   // Grouped by chapter in reading order — not by date. You look for a note
   // where it happened in the story, not when you made it.
@@ -83,12 +121,25 @@ export default function Notes() {
   }
 
   return (
+    <View style={{ flex: 1, backgroundColor: palette.bg }}>
     <ScrollView
       style={{ backgroundColor: palette.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
+      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 3 }}
       keyboardShouldPersistTaps="handled"
     >
-      <Stack.Screen options={{ title: t('book.notes') }} />
+      <Stack.Screen
+        options={{
+          title: selecting ? t('notes.selected', { count: picked.size }) : t('book.notes'),
+          headerRight: () =>
+            total === 0 ? null : (
+              <Pressable onPress={() => (selecting ? endSelecting() : setSelecting(true))} hitSlop={8}>
+                <Text style={{ color: palette.accent, fontSize: 16 }}>
+                  {selecting ? t('notes.selectDone') : t('notes.select')}
+                </Text>
+              </Pressable>
+            ),
+        }}
+      />
 
       {total === 0 ? (
         <Text style={{ color: palette.dim, textAlign: 'center', marginTop: space.xxl }}>
@@ -127,6 +178,12 @@ export default function Notes() {
             ))}
           </View>
 
+          {selecting && picked.size === 0 ? (
+            <Text style={{ color: palette.dim, fontSize: 13, marginTop: space.md }}>
+              {t('notes.selectHint')}
+            </Text>
+          ) : null}
+
           {groups.map(({ chapter, items }) => (
             <View key={chapter?.id ?? 'none'} style={{ marginTop: space.xl }}>
               <Text style={{ color: palette.text, fontSize: 15, fontWeight: '700' }}>
@@ -136,12 +193,40 @@ export default function Notes() {
                 <Pressable
                   key={entry.id}
                   onPress={() =>
-                    router.push(`/reader/${id}?chapter=${chapter?.idx ?? 0}&at=${entry.start}`)
+                    selecting
+                      ? toggle(entry.id)
+                      : router.push(`/reader/${id}?chapter=${chapter?.idx ?? 0}&at=${entry.start}`)
                   }
-                  onLongPress={() => confirmRemove(entry)}
-                  style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                  // The long-press that deleted one is now the way into picking
+                  // several — with the one pressed already picked.
+                  onLongPress={() => {
+                    if (selecting) return confirmRemove(entry);
+                    setSelecting(true);
+                    toggle(entry.id);
+                  }}
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: palette.surface,
+                      borderColor: picked.has(entry.id) ? palette.accent : palette.border,
+                    },
+                    picked.has(entry.id) && styles.cardPicked,
+                  ]}
                 >
                   <View style={{ flexDirection: 'row', gap: space.sm }}>
+                    {selecting ? (
+                      <View
+                        style={[
+                          styles.check,
+                          { borderColor: picked.has(entry.id) ? palette.accent : palette.border },
+                          picked.has(entry.id) && { backgroundColor: palette.accent },
+                        ]}
+                      >
+                        {picked.has(entry.id) ? (
+                          <Text style={{ color: palette.onAccent, fontSize: 12, lineHeight: 14 }}>✓</Text>
+                        ) : null}
+                      </View>
+                    ) : null}
                     <View style={{ width: 3, borderRadius: 2, backgroundColor: entry.color ?? palette.accent }} />
                     <Text style={{ color: palette.text, fontSize: 15, flex: 1 }}>{entry.quote}</Text>
                   </View>
@@ -153,6 +238,8 @@ export default function Notes() {
                       {new Date(entry.created_at).toLocaleDateString()}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: space.lg }}>
+                      {selecting ? null : (
+                        <>
                       <Pressable onPress={() => Clipboard.setStringAsync(entry.quote)} hitSlop={8}>
                         <Text style={{ color: palette.accent, fontSize: 12 }}>{t('reader.copy')}</Text>
                       </Pressable>
@@ -170,6 +257,8 @@ export default function Notes() {
                       >
                         <Text style={{ color: palette.accent, fontSize: 12 }}>{t('reader.share')}</Text>
                       </Pressable>
+                        </>
+                      )}
                     </View>
                   </View>
                 </Pressable>
@@ -185,6 +274,19 @@ export default function Notes() {
         </>
       )}
     </ScrollView>
+
+      {/* Only once something is picked: a delete button over an empty
+          selection is a button that can only disappoint. */}
+      {selecting && picked.size > 0 ? (
+        <View style={[styles.bar, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+          <Pressable onPress={confirmRemovePicked} style={styles.barButton}>
+            <Text style={{ color: palette.danger, fontSize: 16, fontWeight: '600' }}>
+              {t('notes.deleteSelected', { count: picked.size })}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -211,6 +313,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  cardPicked: { borderWidth: 1 },
+  check: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingBottom: space.xl,
+  },
+  barButton: { paddingVertical: space.md, alignItems: 'center' },
   cardFoot: {
     flexDirection: 'row',
     justifyContent: 'space-between',

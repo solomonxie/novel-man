@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { noticeChange } from '../backup/changes';
-import type { ReadingTheme, Scheme } from '../theme';
+import { highlightColors, type HighlightColor, type ReadingTheme, type Scheme } from '../theme';
 
 export type Bilingual = 'off' | 'target' | 'both';
 
@@ -12,6 +12,8 @@ export type ReadingSettings = {
   serif: boolean;
   /** Which language the page shows. The target itself is chosen per book. */
   bilingual: Bilingual;
+  /** The colour the last highlight was made in, and so the next one's. */
+  highlight: HighlightColor;
 };
 
 export const defaultSettings: ReadingSettings = {
@@ -21,6 +23,7 @@ export const defaultSettings: ReadingSettings = {
   margin: 24,
   serif: false,
   bilingual: 'off',
+  highlight: highlightColors[0],
 };
 
 export const FONT_RANGE = { min: 13, max: 28, step: 1 };

@@ -17,8 +17,17 @@ export function layoutChapter(text: string, chapter: Chapter, language: string):
   return paragraphs;
 }
 
+/**
+ * A highlight is made over a passage, but the page is drawn a sentence at a
+ * time — so a mark that covered three sentences used to match none of them and
+ * showed up nowhere. Exact first, since that is the mark this range made; then
+ * whatever else is drawn across it.
+ */
 export function annotationAt(annotations: Annotation[], span: Span): Annotation | undefined {
-  return annotations.find((entry) => entry.start === span.start && entry.end === span.end);
+  return (
+    annotations.find((entry) => entry.start === span.start && entry.end === span.end) ??
+    annotations.find((entry) => entry.end > span.start && entry.start < span.end)
+  );
 }
 
 export function progressWithin(chapter: Chapter, offset: number): number {

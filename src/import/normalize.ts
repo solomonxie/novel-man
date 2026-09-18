@@ -1,6 +1,13 @@
 import type { Block } from './types';
 
-export type PlacedBlock = { start: number; end: number; heading?: number; boundary?: boolean };
+export type PlacedBlock = {
+  start: number;
+  end: number;
+  heading?: number;
+  boundary?: boolean;
+  /** Which block of the input this was — empty ones are dropped, so it shifts. */
+  source?: number;
+};
 export type NormalizedDocument = { text: string; blocks: PlacedBlock[] };
 
 /**
@@ -10,13 +17,19 @@ export type NormalizedDocument = { text: string; blocks: PlacedBlock[] };
 export function normalize(blocks: Block[]): NormalizedDocument {
   const placed: PlacedBlock[] = [];
   let text = '';
-  for (const block of blocks) {
+  blocks.forEach((block, source) => {
     const clean = block.text.replace(/ /g, ' ').replace(/[ \t]+/g, ' ').trim();
-    if (!clean) continue;
+    if (!clean) return;
     if (text) text += '\n\n';
     const start = text.length;
     text += clean;
-    placed.push({ start, end: text.length, heading: block.heading, boundary: block.boundary });
-  }
+    placed.push({
+      start,
+      end: text.length,
+      heading: block.heading,
+      boundary: block.boundary,
+      source,
+    });
+  });
   return { text, blocks: placed };
 }
