@@ -14,6 +14,9 @@ type NativeDrive = {
   copyIn(fromPath: string, name: string): Promise<number>;
   copyOut(name: string, toPath: string): Promise<void>;
   latest(): Promise<DriveFile | null>;
+  /** Every bundle in the container. Retention is decided here, not natively. */
+  list(): Promise<DriveFile[]>;
+  remove(name: string): Promise<void>;
 };
 
 /** Null in Expo Go and on Android: the module is only built into a dev build. */

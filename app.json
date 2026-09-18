@@ -12,9 +12,15 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.solomonxie.novelman",
       "entitlements": {
-        "com.apple.developer.icloud-container-identifiers": ["iCloud.com.solomonxie.novelman"],
-        "com.apple.developer.ubiquity-container-identifiers": ["iCloud.com.solomonxie.novelman"],
-        "com.apple.developer.icloud-services": ["CloudDocuments"]
+        "com.apple.developer.icloud-container-identifiers": [
+          "iCloud.com.solomonxie.novelman"
+        ],
+        "com.apple.developer.ubiquity-container-identifiers": [
+          "iCloud.com.solomonxie.novelman"
+        ],
+        "com.apple.developer.icloud-services": [
+          "CloudDocuments"
+        ]
       },
       "infoPlist": {
         "NSUbiquitousContainers": {
@@ -36,7 +42,9 @@
               "com.adobe.pdf"
             ]
           }
-        ]
+        ],
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
       }
     },
     "android": {

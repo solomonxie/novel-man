@@ -3,6 +3,7 @@ import { writeImage } from '../storage/files';
 import type { OpenedBundle } from './bundle';
 import { writePrefs } from './prefs';
 import { hold } from './pending';
+import { backUpBefore } from './local';
 
 export type RestoreReport = {
   restored: { title: string; id: string }[];
@@ -26,6 +27,8 @@ export async function restoreBundle(
   // the automatic first-install restore has nothing to overwrite.
   { settings = false }: { settings?: boolean } = {}
 ): Promise<RestoreReport> {
+  // The one copy that can undo this, written before it can be needed.
+  await backUpBefore('restore');
   const existing = await listBooks();
   const known = new Set(existing.map((book) => naturalKey(book.source_hash, book.title)));
   const report: RestoreReport = { restored: [], duplicates: [], waiting: 0, unplaceable: [] };

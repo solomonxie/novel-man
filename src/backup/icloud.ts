@@ -8,7 +8,7 @@ import { contentHash } from '../ai/cache';
 import { lastUploadedAnywhere, lastUploadHash, recordUpload } from '../db/jobs';
 import { listBookIds } from '../db/repo';
 import { buildBundle, fingerprint, openBundle } from './bundle';
-import { bundleName } from './format';
+import { bundleName, isBundleName } from './format';
 import { subscribeToChanges } from './changes';
 import { restoreBundle, type RestoreReport } from './restore';
 
@@ -119,9 +119,33 @@ export async function backUp(): Promise<boolean> {
       staged.delete();
     }
     await recordUpload(LEDGER, name, hash);
+    await prune();
     return true;
   } finally {
     running = false;
+  }
+}
+
+/**
+ * The user pays for iCloud, so a count is what bounds the bill — ten days of
+ * daily copies, and the eleventh takes the oldest with it. The bucket tier
+ * keeps everything instead; that is the one that answers "what did this look
+ * like in March".
+ *
+ * Only ever deletes bundles this app named. A file someone dropped in the
+ * folder themselves is not ours to tidy up.
+ */
+const KEEP = 10;
+
+async function prune(): Promise<void> {
+  if (!drive?.list || !drive.remove) return;
+  try {
+    const files = (await drive.list())
+      .filter((file) => !file.name.includes('/') && isBundleName(file.name))
+      .sort((a, b) => b.modifiedAt - a.modifiedAt);
+    for (const file of files.slice(KEEP)) await drive.remove(file.name);
+  } catch {
+    // A backup that was written is a backup that worked; tidying is not.
   }
 }
 
