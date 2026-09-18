@@ -74,10 +74,14 @@ export default function PartPage() {
 
   // Notes are kept per book, at book offsets — so the ones that belong to this
   // part are the ones that fall inside it. Nothing had to be filed twice.
-  const notes = useMemo(
-    () => (part ? annotations.filter((entry) => entry.start >= part.start && entry.start < part.end) : []),
-    [annotations, part]
-  );
+  const notes = useMemo(() => {
+    if (!part) return [];
+    if (book?.text_source) {
+      const here = new Set(chapters.map((entry) => entry.id));
+      return annotations.filter((entry) => entry.chapter_id && here.has(entry.chapter_id));
+    }
+    return annotations.filter((entry) => entry.start >= part.start && entry.start < part.end);
+  }, [annotations, part, book?.text_source, chapters]);
 
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -215,7 +219,13 @@ export default function PartPage() {
               title={note.quote.trim()}
               quiet
               detail={note.note?.trim() || undefined}
-              onPress={() => router.push(`/reader/${book.id}?at=${note.start}`)}
+              onPress={() =>
+                router.push(
+                  note.chapter_id
+                    ? `/reader/${book.id}?chapter=${chapters.find((entry) => entry.id === note.chapter_id)?.idx ?? 0}`
+                    : `/reader/${book.id}?at=${note.start}`
+                )
+              }
               last={index === Math.min(notes.length, 5) - 1}
             />
           ))

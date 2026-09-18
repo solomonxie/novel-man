@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   type GestureResponderEvent,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import * as Clipboard from 'expo-clipboard';
@@ -34,6 +34,10 @@ import {
 import { annotationAt, layoutChapter } from '../../src/reader/model';
 import { imageIn } from '../../src/reader/images';
 import { sentenceAtLine, type Line } from '../../src/reader/lines';
+import { esvChapterText } from '../../src/sources/esvBook';
+import { neighbouringChapters } from '../../src/scripture/canon';
+import { esvKey } from '../../src/sources/esvKey';
+import { EsvError } from '../../src/sources/esv';
 import { codeBlockIn, runsIn } from '../../src/reader/rich';
 import { ReaderImage } from '../../src/ui/ReaderImage';
 import { supports } from '../../src/books/kinds';
@@ -53,14 +57,18 @@ import { ReadingSettingsSheet } from '../../src/ui/ReadingSettingsSheet';
 import { ActionMenu, type MenuAction } from '../../src/ui/ActionMenu';
 import { SentenceMenu } from '../../src/ui/SentenceMenu';
 import { NoteSheet } from '../../src/ui/NoteSheet';
-import { Scrubber } from '../../src/ui/Scrubber';
 import { PickerSheet } from '../../src/ui/PickerSheet';
 import { ChapterSheet } from '../../src/ui/ChapterSheet';
 import { shareQuoteCard, shareQuoteText } from '../../src/share/quote';
 import { listTargets, listUnits } from '../../src/db/translation';
 import { queueChapterRun } from '../../src/analysis/runs';
 
-const CHROME_IDLE_MS = 2800;
+/**
+ * Long enough to decide and reach. At under three seconds the bar was gone
+ * before a thumb had crossed the screen, which turns every use of it into two
+ * taps: one to bring it back, one to press what you wanted.
+ */
+const CHROME_IDLE_MS = 7000;
 /** Apple and Android both put the floor at 44pt / 48dp. */
 const TOUCH = 44;
 
@@ -72,6 +80,7 @@ export default function Reader() {
   }>();
   const { t } = useTranslation();
   const { height, width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   const [book, setBook] = useState<Book | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -106,6 +115,10 @@ export default function Reader() {
   const [target, setTarget] = useState<string | null>(null);
   const [translated, setTranslated] = useState<Map<number, string>>(new Map());
   const [verses, setVerses] = useState<Verse[]>([]);
+  /** A chapter of a book whose words are not here: fetched, then kept. */
+  const [remoteText, setRemoteText] = useState('');
+  const [remoteError, setRemoteError] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(false);
   /**
    * Long-press still works, but it misses on the white between sentences and
    * on a short word. The button is the way in that never misses.
@@ -167,6 +180,12 @@ export default function Reader() {
 
       const target = at ? Number(at) : null;
       const requested = chapterParam ? Number(chapterParam) : null;
+      // A book with no text has no offsets either, so where it was left is a
+      // chapter rather than a position inside one.
+      if (loadedBook?.text_source) {
+        setIndex(requested ?? Math.min(Math.max(0, saved), loadedChapters.length - 1));
+        return;
+      }
       const resumed = loadedChapters.findIndex((c) => saved >= c.start && saved < c.end);
       // A search result knows an offset but not a chapter; find it rather than
       // dropping the reader wherever they last were.
@@ -196,14 +215,21 @@ export default function Reader() {
 
   /** The words themselves, behind the chrome that is already on screen. */
   useEffect(() => {
-    if (!id) return;
+    if (!id || book?.text_source) return;
     getDocumentText(id).then(setText);
-  }, [id]);
+  }, [id, book?.text_source]);
+
+  // A fetched book has nothing to re-anchor against and nothing that drifts:
+  // its chapters are asked for by name and come back the same every time.
+  useEffect(() => {
+    if (!id || !book?.text_source) return;
+    listAnnotations(id).then(setAnnotations);
+  }, [id, book?.text_source]);
 
   // Offsets drift when a book is re-split; the words are what find them. This
   // needs the whole text, so it waits for it rather than holding it up.
   useEffect(() => {
-    if (!id || !text) return;
+    if (!id || !text || book?.text_source) return;
     listAnnotations(id).then((rows) => {
       const { placed } = repairAll(text, rows);
       setAnnotations(placed);
@@ -250,16 +276,76 @@ export default function Reader() {
     listVerses(chapter.id).then(setVerses);
   }, [chapter, book?.kind]);
 
+  const remote = Boolean(book?.text_source);
+  /**
+   * What the page is drawn from. A manuscript for an ordinary book; the
+   * chapter just fetched for one whose words are not kept here. Everything
+   * that reads a span reads it from this, or it reads from the wrong string.
+   */
+  const source = remote ? remoteText : text;
+
+  /** The marks that belong to what is on screen. */
+  const marks = useMemo(
+    () => (remote ? annotations.filter((entry) => entry.chapter_id === chapter?.id) : annotations),
+    [remote, annotations, chapter?.id]
+  );
+
+  /**
+   * One chapter of a licensed edition: from the device if it has been read
+   * before, from the source if not, and kept either way. A chapter already
+   * here needs no signal, which is the whole point of keeping it.
+   */
+  useEffect(() => {
+    if (!remote || !chapter) return;
+    let live = true;
+    setFetching(true);
+    setRemoteError(null);
+    (async () => {
+      try {
+        const token = await esvKey();
+        const passage = await esvChapterText(chapter.title, token);
+        if (!live) return;
+        setRemoteText(passage.text);
+        // The way a reader goes next is nearly always one of these two, and
+        // having them already here is the difference between a page and a wait.
+        void (async () => {
+          for (const next of neighbouringChapters(chapter.title)) {
+            try {
+              await esvChapterText(next, token);
+            } catch {
+              return;
+            }
+          }
+        })();
+      } catch (problem) {
+        if (!live) return;
+        setRemoteText('');
+        setRemoteError(problem instanceof EsvError ? problem.code : 'offline');
+      } finally {
+        if (live) setFetching(false);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [remote, chapter?.id]);
+
   /** Where a verse begins is where its number is printed. */
   const numberAt = useMemo(
     () => new Map(verses.map((verse) => [verse.start, verse.number] as const)),
     [verses]
   );
 
-  const paragraphs = useMemo(
-    () => (chapter && text ? layoutChapter(text, chapter, language) : []),
-    [chapter, text, language]
-  );
+  const paragraphs = useMemo(() => {
+    // A fetched chapter is its own document: it starts at nothing and ends at
+    // its own length, which is all the layout ever needed.
+    if (remote) {
+      return remoteText
+        ? layoutChapter(remoteText, { start: 0, end: remoteText.length } as Chapter, language)
+        : [];
+    }
+    return chapter && text ? layoutChapter(text, chapter, language) : [];
+  }, [remote, remoteText, chapter, text, language]);
 
   const palette = readingThemes[settings.theme];
   const script = scriptOf(language);
@@ -320,14 +406,18 @@ export default function Reader() {
       }
     : null;
 
-  const selected = range ? annotationAt(annotations, range) : undefined;
+  const selected = range ? annotationAt(marks, range) : undefined;
 
   async function onCopy() {
     if (!range) return;
     // "Hebrews 3:1-10. [1] … [2] …" — a bible quoted without its reference is
     // a quote nobody can look up.
     const cited = verses.length ? quoteWithVerses(text, range, verses, chapter.title) : null;
-    await Clipboard.setStringAsync(cited ?? text.slice(range.start, range.end));
+    const plain = source.slice(range.start, range.end);
+    // A fetched edition is quoted the way its licence asks: with the reference
+    // and the edition, so what was copied can always be looked up again.
+    const attributed = remote ? `${plain}\n\n— ${chapter.title} (${t('reader.esvShort')})` : plain;
+    await Clipboard.setStringAsync(cited ?? attributed);
     endSelection();
     flash(t('reader.copied'));
   }
@@ -343,7 +433,7 @@ export default function Reader() {
 
   async function onHighlight() {
     if (!range || !id) return;
-    const existing = annotationAt(annotations, range);
+    const existing = annotationAt(marks, range);
     if (existing && existing.kind === 'highlight') await removeAnnotation(existing.id);
     else if (existing) await updateAnnotation(existing.id, { color: settings.highlight });
     else await save(range, { kind: 'highlight', color: settings.highlight });
@@ -355,7 +445,7 @@ export default function Reader() {
 
   async function onBookmark() {
     if (!range || !id) return;
-    const existing = annotationAt(annotations, range);
+    const existing = annotationAt(marks, range);
     if (existing?.kind === 'bookmark') await removeAnnotation(existing.id);
     else if (existing) await updateAnnotation(existing.id, { kind: 'bookmark' });
     else await save(range, { kind: 'bookmark', color: null });
@@ -368,7 +458,7 @@ export default function Reader() {
   async function onColor(color: HighlightColor) {
     if (!range || !id) return;
     remember(color);
-    const existing = annotationAt(annotations, range);
+    const existing = annotationAt(marks, range);
     if (existing) await updateAnnotation(existing.id, { color });
     else await save(range, { kind: 'highlight', color });
     await refreshAnnotations();
@@ -377,7 +467,7 @@ export default function Reader() {
 
   async function saveNote(body: string) {
     if (!noteFor || !id) return;
-    const existing = annotationAt(annotations, noteFor);
+    const existing = annotationAt(marks, noteFor);
     if (existing) {
       await updateAnnotation(existing.id, { note: body || null, kind: body ? 'note' : 'highlight' });
     } else if (body) {
@@ -390,9 +480,10 @@ export default function Reader() {
   function save(span: Span, extra: { kind: 'highlight' | 'note' | 'bookmark'; color: string | null; note?: string }) {
     return addAnnotation({
       bookId: id!,
+      chapterId: remote ? chapter?.id ?? null : null,
       start: span.start,
       end: span.end,
-      quote: text.slice(span.start, span.end),
+      quote: source.slice(span.start, span.end),
       ...fingerprint(text, span.start, span.end),
       ...extra,
     });
@@ -412,16 +503,6 @@ export default function Reader() {
         onPress: () => {
           setMoreOpen(false);
           setListOpen(true);
-        },
-      },
-      {
-        label: selecting || selection ? t('reader.selectDone') : t('reader.select'),
-        onPress: () => {
-          setMoreOpen(false);
-          if (selecting || selection) return endSelection();
-          setSelecting(true);
-          setChrome(true);
-          flash(t('reader.selectHint'));
         },
       },
       {
@@ -466,11 +547,11 @@ export default function Reader() {
 
   function quoteFor(span: Span) {
     return {
-      text: text.slice(span.start, span.end),
+      text: source.slice(span.start, span.end),
       title: book?.title ?? '',
       author: book?.author,
       chapter: chapter?.title.trim() || null,
-      note: annotationAt(annotations, span)?.note ?? null,
+      note: annotationAt(marks, span)?.note ?? null,
     };
   }
 
@@ -480,21 +561,16 @@ export default function Reader() {
     endSelection();
     pendingScroll.current = within;
     const target = chapters[next];
-    if (id && target) {
-      const landing = target.start + Math.round(within * (target.end - target.start));
-      setOffset(landing);
-      saveProgress(id, landing);
+    if (!id || !target) return;
+    if (remote) {
+      // Where you were is which chapter you were in; there is nothing finer.
+      setOffset(next);
+      saveProgress(id, next);
+      return;
     }
-  }
-
-  /** The scrubber addresses the whole book, so a seek is an offset, not a page. */
-  function seek(fraction: number) {
-    if (!text) return;
-    const target = Math.round(fraction * Math.max(1, text.length));
-    const next = chapters.findIndex((entry) => target >= entry.start && target < entry.end);
-    const to = next >= 0 ? next : chapters.length - 1;
-    const within = (target - chapters[to].start) / Math.max(1, chapters[to].end - chapters[to].start);
-    goToChapter(to, within);
+    const landing = target.start + Math.round(within * (target.end - target.start));
+    setOffset(landing);
+    saveProgress(id, landing);
   }
 
   function pageBy(direction: -1 | 1) {
@@ -517,10 +593,6 @@ export default function Reader() {
     );
   }
 
-  // char_count is the book's own length, known before its text is read — the
-  // scrubber is in the right place on the first frame rather than at zero.
-  const length = text.length || book.char_count;
-  const bookFraction = Math.min(1, offset / Math.max(1, length));
 
   // The selection bar replaces the reading controls rather than stacking on
   // top of them: both at once is two rows of buttons over the same thumb.
@@ -537,7 +609,7 @@ export default function Reader() {
     spans.map((span) => translated.get(span.start) ?? '').join(' ').trim();
 
   function renderSentence(span: Span, useTarget: boolean) {
-    const marked = annotationAt(annotations, span);
+    const marked = annotationAt(marks, span);
     const active = range !== null && span.start >= range.start && span.end <= range.end;
     const flashing = flashAt !== null && flashAt >= span.start && flashAt < span.end;
     const body = useTarget ? translated.get(span.start) : undefined;
@@ -562,7 +634,7 @@ export default function Reader() {
           color: useTarget && !body ? palette.dim : palette.text,
         }}
       >
-        {runsIn(body || text.slice(span.start, span.end)).map((run, at) => (
+        {runsIn(body || source.slice(span.start, span.end)).map((run, at) => (
           <Text
             key={at}
             style={{
@@ -605,6 +677,7 @@ export default function Reader() {
             const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
             scrolledY.current = contentOffset.y;
             viewport.current = { content: contentSize.height, layout: layoutMeasurement.height };
+            if (remote) return;
             const ratio = contentOffset.y / Math.max(1, contentSize.height - layoutMeasurement.height);
             const at = chapter.start + Math.round(Math.min(1, Math.max(0, ratio)) * (chapter.end - chapter.start));
             setOffset(at);
@@ -631,13 +704,19 @@ export default function Reader() {
               if (!selection) setChrome(!chromeShown.current);
             }}
           >
-            {!text ? (
+            {remote && fetching ? (
+              <ActivityIndicator style={{ marginTop: space.xxl }} />
+            ) : remote && remoteError ? (
+              <Text style={{ color: palette.dim, marginTop: space.xxl, lineHeight: 24 }}>
+                {t(`lookup.${remoteError}`)}
+              </Text>
+            ) : !remote && !text ? (
               <ActivityIndicator style={{ marginTop: space.xxl }} />
             ) : paragraphs.length === 0 ? (
               <Text style={{ color: palette.dim, marginTop: space.xxl }}>{t('reader.empty')}</Text>
             ) : (
               paragraphs.map((paragraph) => {
-                const body = text.slice(
+                const body = source.slice(
                   paragraph.start,
                   paragraph.sentences.at(-1)?.end ?? paragraph.start
                 );
@@ -750,6 +829,95 @@ export default function Reader() {
         />
       </View>
 
+      {selection ? null : (
+      <Animated.View
+        style={[
+          styles.footer,
+          {
+            opacity: chromeOpacity,
+            backgroundColor: palette.bg,
+            // Clear of the home indicator, the way the selection bar is.
+            paddingBottom: Math.max(insets.bottom, space.md),
+          },
+        ]}
+        pointerEvents={selection ? 'none' : 'box-none'}
+      >
+        <View style={styles.controls}>
+          {/* Chapter by chapter is the move this bar is for, so its arrows are
+              the widest targets on it and heavy enough to read at a glance. */}
+          <Pressable
+            onPress={() => index > 0 && goToChapter(index - 1)}
+            style={styles.arrowButton}
+            disabled={index === 0}
+          >
+            <Text style={[styles.arrow, { color: index > 0 ? palette.text : palette.dim }]}>‹</Text>
+          </Pressable>
+          <Pressable onPress={() => setSettingsOpen(true)} style={styles.barButton}>
+            <Text style={{ color: palette.text, fontSize: 20 }}>Aa</Text>
+          </Pressable>
+          {/* Drawn rather than set in a glyph: a box that fills in is what a
+              mode being on looks like, at whatever size the bar is. Absent on
+              a book whose text is fetched, where a mark has no offset to
+              anchor to. */}
+          {(
+            <Pressable
+              onPress={() => {
+                if (selecting || selection) return endSelection();
+                setSelecting(true);
+                setChrome(true);
+                flash(t('reader.selectHint'));
+              }}
+              style={styles.barButton}
+            >
+              <View
+                style={[
+                  styles.check,
+                  { borderColor: selecting ? palette.accent : palette.text },
+                  selecting && { backgroundColor: palette.accent },
+                ]}
+              >
+                {selecting ? (
+                  <Text style={{ color: palette.bg, fontSize: 13, lineHeight: 15, fontWeight: '700' }}>
+                    ✓
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
+          )}
+          {/* One button for everything that isn't turning a page or resizing
+              the type. The bar had five; the two it kept are the two a thumb
+              reaches for without looking, and the rest are a list that can say
+              what they do in words. Accent while selecting, because that is a
+              mode the page is in and the bar has to admit it. */}
+          <Pressable onPress={() => setMoreOpen(true)} style={styles.barButton}>
+            <Text
+              style={{
+                color: selecting ? palette.accent : palette.text,
+                fontSize: 26,
+                lineHeight: 30,
+              }}
+            >
+              ⋯
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => index < chapters.length - 1 && goToChapter(index + 1)}
+            style={styles.arrowButton}
+            disabled={index >= chapters.length - 1}
+          >
+            <Text
+              style={[
+                styles.arrow,
+                { color: index < chapters.length - 1 ? palette.text : palette.dim },
+              ]}
+            >
+              ›
+            </Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+      )}
+
       {selection && (
         <SentenceMenu
           dark={settings.theme === 'night'}
@@ -791,72 +959,6 @@ export default function Reader() {
         />
       )}
 
-      <Animated.View
-        style={[styles.footer, { opacity: chromeOpacity }]}
-        pointerEvents={selection ? 'none' : 'box-none'}
-      >
-        <View style={{ paddingHorizontal: space.lg }}>
-          <Scrubber
-            value={bookFraction}
-            tint={palette.text}
-            dim={palette.dim}
-            onCommit={seek}
-            label={(fraction) =>
-              t('reader.scrub', {
-                percent: Math.round(fraction * 100),
-                chapter: chapterAt(chapters, fraction * length) + 1,
-                total: chapters.length,
-              })
-            }
-          />
-        </View>
-
-        <View style={styles.controls}>
-          {/* Chapter by chapter is the move this bar is for, so its arrows are
-              the widest targets on it and heavy enough to read at a glance. */}
-          <Pressable
-            onPress={() => index > 0 && goToChapter(index - 1)}
-            style={styles.arrowButton}
-            disabled={index === 0}
-          >
-            <Text style={[styles.arrow, { color: index > 0 ? palette.text : palette.dim }]}>‹</Text>
-          </Pressable>
-          <Pressable onPress={() => setSettingsOpen(true)} style={styles.barButton}>
-            <Text style={{ color: palette.text, fontSize: 20 }}>Aa</Text>
-          </Pressable>
-          {/* One button for everything that isn't turning a page or resizing
-              the type. The bar had five; the two it kept are the two a thumb
-              reaches for without looking, and the rest are a list that can say
-              what they do in words. Accent while selecting, because that is a
-              mode the page is in and the bar has to admit it. */}
-          <Pressable onPress={() => setMoreOpen(true)} style={styles.barButton}>
-            <Text
-              style={{
-                color: selecting ? palette.accent : palette.text,
-                fontSize: 26,
-                lineHeight: 30,
-              }}
-            >
-              ⋯
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => index < chapters.length - 1 && goToChapter(index + 1)}
-            style={styles.arrowButton}
-            disabled={index >= chapters.length - 1}
-          >
-            <Text
-              style={[
-                styles.arrow,
-                { color: index < chapters.length - 1 ? palette.text : palette.dim },
-              ]}
-            >
-              ›
-            </Text>
-          </Pressable>
-        </View>
-      </Animated.View>
-
       <ReadingSettingsSheet
         visible={settingsOpen}
         settings={settings}
@@ -872,8 +974,8 @@ export default function Reader() {
 
       <NoteSheet
         visible={noteFor !== null}
-        quote={noteFor ? text.slice(noteFor.start, noteFor.end) : ''}
-        note={noteFor ? annotationAt(annotations, noteFor)?.note ?? null : null}
+        quote={noteFor ? source.slice(noteFor.start, noteFor.end) : ''}
+        note={noteFor ? annotationAt(marks, noteFor)?.note ?? null : null}
         onSave={saveNote}
         onClose={() => setNoteFor(null)}
       />
@@ -924,10 +1026,6 @@ export default function Reader() {
   );
 }
 
-function chapterAt(chapters: Chapter[], offset: number): number {
-  const at = chapters.findIndex((chapter) => offset >= chapter.start && offset < chapter.end);
-  return at >= 0 ? at : Math.max(0, chapters.length - 1);
-}
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -946,11 +1044,24 @@ const styles = StyleSheet.create({
   /** The back chevron carries a header's worth of weight, so it gets the room. */
   backButton: { width: TOUCH + 8, height: TOUCH + 8, alignItems: 'center', justifyContent: 'center' },
   arrowButton: { width: TOUCH + 28, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
+  check: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   arrow: { fontSize: 34, lineHeight: 38, fontWeight: '700' },
   zone: { position: 'absolute', top: 0, bottom: 0 },
   /** Code is set apart by a rule, not a box: a box on a reading page is a form. */
   code: { borderLeftWidth: 2, paddingLeft: space.md, paddingVertical: space.xs },
-  footer: { paddingBottom: space.xs },
+  /**
+   * Over the page, not beside it. As a row in the column its height stayed
+   * reserved even at zero opacity, leaving a strip of bare background under
+   * the text that read as a bar that had not quite gone.
+   */
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: space.sm },
   /** Evenly spread, outermost first: the arrows fall under either thumb. */
   controls: {
     flexDirection: 'row',

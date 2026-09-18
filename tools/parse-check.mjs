@@ -42,8 +42,9 @@ const { papersFrom, queryFor, authorLine, fileNameFor: paperFileName, absolute }
   await import(join(build, 'sources/arxiv.js'));
 const { quoteWithVerses, referenceOf, versesIn } = await import(join(build, 'scripture/reference.js'));
 const { escapeLike, looseLike, score } = await import(join(build, 'sources/matching.js'));
-const { passageFrom, retryDelay } = await import(join(build, 'sources/esv.js'));
-const { parseChapterRef, neighbouringChapters } = await import(join(build, 'scripture/canon.js'));
+const { passageFrom, retryDelay, cleanToken } = await import(join(build, 'sources/esv.js'));
+const { parseChapterRef, neighbouringChapters, canonChapters } =
+  await import(join(build, 'scripture/canon.js'));
 const { parseCsv, forEachCsvRow } = await import(join(build, 'sources/csv.js'));
 
 let failures = 0;
@@ -537,6 +538,17 @@ console.log('the chapter either side of this one');
   check('and so does the last', neighbouringChapters('John 21'), ['John 20']);
   check('a one-chapter book has none', neighbouringChapters('Jude 1'), []);
   check('a verse asks for nothing', neighbouringChapters('John 3:16'), []);
+
+  // A bible whose words are elsewhere is still a bible with a shape.
+  const built = canonChapters();
+  check('every chapter of the canon is a row', built.length, 1189);
+  check('the first is the first', built[0].title, 'Genesis 1');
+  check('and the last is the last', built[built.length - 1].title, 'Revelation 22');
+  check('each sits under the book it belongs to', built[0].part_title, 'Genesis');
+  check('books are numbered in canon order',
+    built[built.length - 1].part_idx, 65);
+  check('nothing has a length, because nothing is here yet',
+    built.every((row) => row.start === 0 && row.end === 0), true);
 }
 
 console.log('a passage asked for, not owned');
@@ -555,6 +567,15 @@ console.log('a passage asked for, not owned');
   check('and is capped', retryDelay(20, () => 1) <= 8000, true);
   check('jitter keeps two of them apart', retryDelay(2, () => 0) < retryDelay(2, () => 1), true);
   check('a wait is never nothing', retryDelay(0, () => 0) > 0, true);
+
+  // The page that issues a key shows the whole header, so that is what gets
+  // pasted. Any of these is the same key.
+  const token = '59e333187956442fadadf8881fbe7e9204f39f50';
+  check('a bare token is a token', cleanToken(token), token);
+  check('with the scheme on it', cleanToken(`Token ${token}`), token);
+  check('with the whole header on it', cleanToken(`Authorization: Token ${token}`), token);
+  check('and with the spacing somebody else chose',
+    cleanToken(`  authorization:   token  ${token}  `), token);
 }
 
 console.log('finding a book in a kept list');

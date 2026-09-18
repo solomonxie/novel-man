@@ -1,5 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
+import { cleanToken } from './esv';
+
 /**
  * The key is this device's, like every other secret here: never synced, never
  * in a backup, gone when the app is. Kept apart from the client so the client
@@ -16,7 +18,7 @@ export async function esvKey(): Promise<string | null> {
 }
 
 export async function saveEsvKey(token: string): Promise<void> {
-  await SecureStore.setItemAsync(KEY, token.trim(), SECRET_OPTIONS);
+  await SecureStore.setItemAsync(KEY, cleanToken(token), SECRET_OPTIONS);
 }
 
 export async function forgetEsvKey(): Promise<void> {

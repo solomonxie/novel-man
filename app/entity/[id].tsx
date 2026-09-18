@@ -296,7 +296,15 @@ export default function EntityPage() {
         </Block>
       )}
 
-      {timeline.length > 0 && span ? (
+      {/* Counting where a name occurs is `indexOf` over the manuscript, and a
+          fetched edition has none here. The section stays, because its absence
+          would read as this person never appearing rather than as the count
+          being unavailable. */}
+      {book?.text_source ? (
+        <Block title={t('entity.timeline')}>
+          <Empty text={t('entity.timelineFetched')} />
+        </Block>
+      ) : timeline.length > 0 && span ? (
         <Block title={t('entity.timeline')}>
           <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             <Sparkline
