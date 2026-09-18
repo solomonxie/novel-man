@@ -454,8 +454,10 @@ function EntitySection({ title, entities, onAdd, extra }: {
           {shown.map((entity) => (
             <Chip
               key={entity.id}
+              // The name alone: a row of chips is scanned for who is in the
+              // book, and a second line under some of them and not others
+              // makes the row ragged for information nobody came here for.
               label={entity.name}
-              detail={entity.alias ?? undefined}
               hue={hueFrom(entity.name)}
               onPress={() =>
                 router.push(entity.kind === 'place' ? `/place/${entity.id}` : `/entity/${entity.id}`)

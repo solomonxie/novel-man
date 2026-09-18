@@ -41,32 +41,25 @@ export type Translation = {
 export type Catalog = { fetchedAt: number; translations: Translation[] };
 
 /**
- * The editions offered, in the order they are offered. The catalog carries
- * 1,550; a list that long is a search problem nobody wanted, and it is mostly
- * languages this app has no reader for — right-to-left among them. So the
- * shelf is a chosen list.
+ * Every edition the source says may be redistributed. A chosen shortlist came
+ * first, when the only way through the list was to scroll it — but the list is
+ * now kept on the device and searched, loosely, so 1,400 editions is a search
+ * problem rather than a wall, and choosing for somebody which bible they are
+ * allowed to want was never ours to do.
  *
- * The ones asked for by name and missing here are missing for one reason: NIV,
- * NKJV, NASB and 吕振中 are licensed so that no one may redistribute them, and
- * the catalog's `Redistributable` flag says so. They cannot be downloaded from
- * here at any price, and offering a row that always fails would be worse than
- * the absence.
+ * NIV, NKJV, NASB and 吕振中 are still not here, and that is not a choice: the
+ * catalog's `Redistributable` column says no source may serve them.
  */
-const EDITIONS: { id: string; abbr: string }[] = [
-  { id: 'eng-kjv', abbr: 'KJV' },
-  { id: 'eng-asv', abbr: 'ASV' },
-  { id: 'engwebp', abbr: 'WEB' },
-  { id: 'engbsb', abbr: 'BSB' },
-  { id: 'engnet', abbr: 'NET' },
-  { id: 'engylt', abbr: 'YLT' },
-  { id: 'cmn-cu89s', abbr: '和合本 简' },
-  { id: 'cmn-cu89t', abbr: '和合本 繁' },
-  { id: 'cmncbs', abbr: '当代译本' },
-  { id: 'cmncbt', abbr: '當代譯本' },
-  { id: 'cmnswcb', abbr: '世界中文' },
-];
 
-const offered = new Map(EDITIONS.map((edition, order) => [edition.id, { ...edition, order }]));
+/**
+ * The reader has no right-to-left mode, and Hebrew and Arabic editions are in
+ * this catalog. Listing them would be offering a book this app lays out
+ * backwards, so they are filtered here rather than discovered by a reader.
+ */
+const RTL = new Set([
+  'heb', 'hbo', 'arb', 'arz', 'apc', 'acm', 'aeb', 'ary', 'ars', 'arq', 'acx',
+  'pes', 'prs', 'urd', 'ckb', 'div', 'syr', 'yid', 'snd', 'uig', 'pbu',
+]);
 
 /** Books beyond the 66 — the canon question, and the only download option. */
 const DEUTEROCANON = new Set([
@@ -114,7 +107,7 @@ export async function refreshCatalog(): Promise<Catalog> {
       title: translation.title,
       author: translation.abbr,
       language: translation.language,
-      extra: `${translation.abbr} ${translation.languageCode}`,
+      extra: `${translation.abbr} ${translation.languageCode} ${translation.language}`,
     }))
   );
   return catalog;
@@ -122,30 +115,31 @@ export async function refreshCatalog(): Promise<Catalog> {
 
 export function translationsFrom(csv: string): Translation[] {
   const rows = parseCsv(csv);
-  const found: { order: number; translation: Translation }[] = [];
+  const found: Translation[] = [];
   for (const row of rows) {
-    const edition = offered.get(row.translationId ?? '');
-    if (!edition) continue;
+    const id = row.translationId?.trim();
+    if (!id) continue;
     if ((row.Redistributable ?? '').toLowerCase() !== 'true') continue;
+    if (RTL.has((row.languageCode ?? '').toLowerCase())) continue;
     const books = number(row.OTbooks) + number(row.NTbooks) + number(row.DCbooks);
     if (!books) continue;
+    const title = row.title?.trim() || id;
     found.push({
-      order: edition.order,
-      translation: {
-        id: edition.id,
-        title: row.title?.trim() || edition.abbr,
-        abbr: edition.abbr,
-        language: row.languageNameInEnglish?.trim() || row.languageName?.trim() || '',
-        languageCode: row.languageCode ?? '',
-        copyright: row.Copyright?.trim() || '',
-        books,
-        chapters: number(row.OTchapters) + number(row.NTchapters) + number(row.DCchapters),
-        verses: number(row.OTverses) + number(row.NTverses) + number(row.DCverses),
-        extraBooks: number(row.DCbooks),
-      },
+      id,
+      title,
+      // What people call it, when the catalog says: its own short title, and
+      // its id when it does not.
+      abbr: row.shortTitle?.trim() || id,
+      language: row.languageNameInEnglish?.trim() || row.languageName?.trim() || '',
+      languageCode: row.languageCode ?? '',
+      copyright: row.Copyright?.trim() || '',
+      books,
+      chapters: number(row.OTchapters) + number(row.NTchapters) + number(row.DCchapters),
+      verses: number(row.OTverses) + number(row.NTverses) + number(row.DCverses),
+      extraBooks: number(row.DCbooks),
     });
   }
-  return found.sort((a, b) => a.order - b.order).map((entry) => entry.translation);
+  return found.sort((a, b) => a.title.localeCompare(b.title));
 }
 
 function number(value: string | undefined): number {

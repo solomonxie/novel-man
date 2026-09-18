@@ -196,7 +196,7 @@ type DeepResult = {
   brief?: string;
   scenes?: SceneResult[];
   characters?: Character[];
-  places?: { name: string; note?: string }[];
+  places?: { name: string; note?: string; details?: Detail[] }[];
   relations?: Tie[];
 };
 
@@ -237,6 +237,23 @@ const PROFILE_RULES =
   'tracks — as short label/value pairs in the language of the book. ' +
   'Leave a field out rather than inventing it.';
 
+/**
+ * A place is only useful if it can be found. "The camp" tells a reader nothing
+ * a week later; the camp outside Ji'an, in Jiangxi, is somewhere you can put a
+ * pin. So the geography is asked for explicitly and from the outside in, and
+ * what the text does not say is left out rather than guessed at — an invented
+ * country is worse than a missing one.
+ */
+const PLACE_RULES =
+  '"places" are where this chapter happens. "details" must carry, wherever the ' +
+  'text states or plainly implies it: what sort of place it is (country, region, ' +
+  'province, city, town, district, neighbourhood, building, camp, base, park, ' +
+  'road, landmark — or the word this book uses), and the geography around it ' +
+  'from the outside in: country, region or province, city or town, and what it ' +
+  'sits inside. Short label/value pairs in the language of the book. A place ' +
+  'nobody could put a pin in — a world, an era, an afterlife — says so as its ' +
+  'sort. Omit what the text does not establish; never invent a location.';
+
 const RELATION_RULES =
   '"relations" are the ties this chapter shows between two of its people — ' +
   'family, rank, allegiance, rivalry, who works for whom. "from" and "to" are ' +
@@ -273,10 +290,18 @@ async function recordCharacters(bookId: string, chapterIdx: number, characters: 
  * by counting which place names its text happens to spell — which is how a
  * chapter ends up listing somewhere it never visits.
  */
-async function recordPlaces(bookId: string, chapterIdx: number, places: { name?: string; note?: string }[]) {
+async function recordPlaces(
+  bookId: string,
+  chapterIdx: number,
+  places: { name?: string; note?: string; details?: Detail[] }[]
+) {
   for (const place of places) {
     if (!place?.name?.trim()) continue;
     const entityId = await findOrCreateEntity(bookId, 'place', place.name.trim(), []);
+    // Where it is belongs to the place itself, not to the chapter that named
+    // it: a camp does not move between chapters, and the first chapter to say
+    // which province it is in has said it for good.
+    if (Array.isArray(place.details)) await mergeFields(entityId, place.details);
     await addObservation({
       book_id: bookId,
       entity_id: entityId,
@@ -372,7 +397,7 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
     '"brief":"one or two sentences on what happens"',
     wantsScenes && '"scenes":[{"start":0,"title","summary"}]',
     wantsCast && `"characters":[${PROFILE_SHAPE}]`,
-    wantsCast && '"places":[{"name","note"}]',
+    wantsCast && '"places":[{"name","note","details":[{"label","value"}]}]',
     wantsCast && '"relations":[{"from","to","label"}]',
   ]
     .filter(Boolean)
@@ -392,6 +417,7 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
         'spelling of someone already there; put any new form in "aliases". ' +
         '"appearance" and "voice" carry only what *this* chapter states. ' +
         `${PROFILE_RULES} Skip people only mentioned in passing.`,
+    wantsCast && PLACE_RULES,
     wantsCast && RELATION_RULES,
     // Without this a profile of Paul reads like a character study of an
     // invented person: motives assigned, arc predicted, traits embellished.
@@ -518,8 +544,9 @@ async function castChapter(job: WorkJob, signal: AbortSignal) {
         content:
           'You catalog the cast of one chapter of a novel. Reply with JSON only: ' +
           `{"characters":[${PROFILE_SHAPE}],` +
-          '"places":[{"name","note"}]}. Reuse the exact names already known; put a new ' +
-          `form in "aliases". ${PROFILE_RULES}`,
+          '"places":[{"name","note","details":[{"label","value"}]}]}. Reuse the exact ' +
+          'names already known; put a new form in "aliases". ' +
+          `${PROFILE_RULES} ${PLACE_RULES}`,
       },
       {
         role: 'user',
