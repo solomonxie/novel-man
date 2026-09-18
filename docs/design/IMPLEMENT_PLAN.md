@@ -45,11 +45,11 @@ pipeline's shape is fixed here and never revisited.
 - [x] T2.5 `.epub` importer: unzip, OPF spine, XHTML per item — `src/import/formats/` — depends: T2.1, T2.2 (partial: cover still not extracted)
 - [x] T2.6 `.pdf` importer: pdf.js text extraction in a hidden WebView, with the extracted-text preview gate — `src/import/extractor.tsx` — depends: T2.1, T2.2 (partial: pdf.js loads from a CDN, so PDF is the one import that needs a network)
 - [x] T2.7a System document picker — `src/import/sources/` — depends: T2.1
-- [x] T2.7b Share-sheet ingestion (both platforms) and URL fetch, with the Google Docs `export?format=docx` rewrite and sign-in-page detection — `src/import/sources/` — depends: T2.7a (partial: share-sheet types are declared in app.json, but the extension itself needs a dev build)
+- [x] T2.7b Share-sheet ingestion (both platforms) and URL fetch, with the Google Docs `export?format=docx` rewrite and sign-in-page detection — `src/import/sources/` — depends: T2.7a (partial: share-sheet types are declared in app.json, but the extension itself is not written)
 - [x] T2.9 Linear `indexOf` XML scanning, entity/regex guards, no per-paragraph `RegExp` — a lazy-quantifier scan never finished on Hermes for a 27MB `document.xml` — `src/import/xml.ts` — depends: T2.4
 - [x] T2.10 Import queue: sequential jobs, per-stage progress, retry, clear, visible strip and sheet — `src/import/queue.ts`, `src/ui/ImportQueue.tsx` — depends: T2.1 (partial: still in memory, so a kill mid-import loses the job; no cancel)
 - [x] T2.11 Yield to the UI thread between parse chunks, and batch chapter inserts — `src/async/`, `src/db/repo.ts` — depends: T2.9
-- [ ] T2.12 Move parsing off the JS thread — `unzip` + `TextDecoder` are ~2.8s of atomic work on a 3.4MB docx and cannot be chunked. Needs a worklet or a native module, so it also needs a dev build — `src/import/` — depends: T2.9
+- [ ] T2.12 Move parsing off the JS thread — `unzip` + `TextDecoder` are ~2.8s of atomic work on a 3.4MB docx and cannot be chunked. Needs a worklet or a native module — `src/import/` — depends: T2.9
 - [x] T2.8 Import sheet UI: per-step progress, preview gate, inline errors that keep the file — `src/ui/ImportQueue.tsx` — depends: T2.1, T1.6 (the queue sheet *is* the import sheet; a second screen would have been the same list twice)
 
 ## Phase 3: Structure detection

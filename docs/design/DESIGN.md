@@ -53,6 +53,8 @@ scattered across hundreds of pages.
   manuscripts the user imported — no catalog, no store, no DRM formats.
 - No social layer. Sharing produces a shareable artifact (image/text); it does
   not post anywhere or show other readers' notes.
+- No sandbox runtime. The compiled build is the only build — see
+  [No sandbox runtime](#no-sandbox-runtime).
 
 
 ## Options considered
@@ -246,6 +248,8 @@ built structure-first.**
   maintained Expo module. A phone-first tool for writers doesn't need custom
   native code, and paying the two-platform cost for it would delay everything
   downstream.
+- *Expo's tooling, not its sandbox runtime*: the SDK and the modules, compiled
+  into an app this repo builds. One way to run it — see below.
 - *Structure before characters*: chapters and scenes are the index every later
   feature reads from — a character's "first appearance" is meaningless without
   them. Shipping detection alone is also independently useful, which keeps v1
@@ -330,6 +334,36 @@ built structure-first.**
   the unit of interaction — tap a sentence, get copy/highlight/note/share —
   because it's the smallest span a reader actually wants to act on and the
   largest one that needs no drag handles.
+
+
+## No sandbox runtime
+
+**The compiled build is the only way to run this app.** `npm run ios` builds
+the native project, installs it, and serves the bundle. Nothing lighter is
+offered or supported.
+
+A pre-built sandbox app that loads your JS over the network is the usual
+second path, and it was tried. Removed, because for a one-person project it
+costs more than it returns:
+
+- **It needs an account.** A sign-in stands between the repo and a running
+  app, for a project that otherwise has no account anywhere — the same
+  local-first, no-sign-up principle the product itself is built on.
+- **It is a different app than the one that ships.** Its native surface is
+  fixed: the iCloud module can't be in it, a share extension can't be in it,
+  a worklet can't be in it. Three of this app's features are invisible there,
+  so "it works" in the sandbox proves less every time the app grows.
+- **Two runtimes means two truths.** Every native-touching decision needed a
+  hidden branch, a `status === 'unsupported'` state, or a doc caveat. That
+  bookkeeping was a real and recurring cost, paid on every feature, to keep a
+  runtime nobody shipped from.
+- **It was unreliable on its own terms** — version skew against the installed
+  client, stale bundles, connection drops — so a failure was ambiguous: the
+  app, or the sandbox? Debugging the harness is time not spent on the app.
+
+The trade accepted: a first run now compiles (minutes, once) and a native
+dependency change means a rebuild. For a personal project that already owns
+its native project, that is cheaper than the overhead removed.
 
 
 ## Data & integrations
@@ -609,7 +643,8 @@ assets/
 - **The container is document-scope public** (`NSUbiquitousContainers`), so
   the folder is reachable in Files under the app's name. A backup the user
   can't open is worse than a local file.
-- **Five states, not two.** Unsupported (Android, Expo Go) hides the row;
+- **Five states, not two.** Unsupported (Android, or a build without the
+  module) hides the row;
   unentitled build states the reason with no instruction; iCloud Drive off
   gets the full Settings path; not-ready says try again shortly. The
   entitlement is checked *before* `ubiquityIdentityToken`, which itself needs

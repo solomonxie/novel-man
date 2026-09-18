@@ -30,8 +30,8 @@ export function IcloudRows() {
 
   useFocusEffect(load);
 
-  // Hidden rather than disabled: on Android, or in Expo Go where the native
-  // module isn't built in, this row could never work at all.
+  // Hidden rather than disabled: on Android, or in a build without the native
+  // module, this row could never work at all.
   if (!status || status === 'unsupported') return null;
 
   const blocked = status !== 'available';
