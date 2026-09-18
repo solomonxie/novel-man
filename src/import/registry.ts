@@ -3,6 +3,7 @@ import { txtImporter, markdownImporter } from './formats/plain';
 import { docxImporter } from './formats/docx';
 import { epubImporter } from './formats/epub';
 import { pdfImporter } from './formats/pdf';
+import { htmlImporter } from './formats/html';
 
 export const importers: Importer[] = [
   txtImporter,
@@ -10,6 +11,7 @@ export const importers: Importer[] = [
   docxImporter,
   epubImporter,
   pdfImporter,
+  htmlImporter,
 ];
 
 /** Formats the picker offers — and the ones the empty state promises. */
