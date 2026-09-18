@@ -25,6 +25,10 @@ export function NoteSheet({ visible, quote, note, onSave, onClose }: {
   const [draft, setDraft] = useState(note ?? '');
   useEffect(() => setDraft(note ?? ''), [note, visible]);
 
+  // Hidden is not mounted: a Modal left in the tree keeps a sheet-sized
+  // view on the page, which is the white band under everything.
+  if (!visible) return null;
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={[styles.scrim, { backgroundColor: palette.scrim }]} onPress={onClose}>

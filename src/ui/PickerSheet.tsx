@@ -1,4 +1,4 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { radius, space, usePalette } from '../theme';
 
 export type PickerOption = { id: string; label: string; detail?: string };
@@ -15,6 +15,13 @@ export function PickerSheet({ visible, title, options, selectedId, onPick, onClo
   onDismiss?: () => void;
 }) {
   const palette = usePalette();
+  // A sheet grows with its list, and a list of 21 categories grows past the
+  // screen. Past half the page it scrolls inside the sheet instead.
+  const { height } = useWindowDimensions();
+  // Hidden is not mounted: a Modal left in the tree keeps a sheet-sized
+  // view on the page, which is the white band under everything.
+  if (!visible) return null;
+
   return (
     <Modal
       visible={visible}
@@ -30,6 +37,7 @@ export function PickerSheet({ visible, title, options, selectedId, onPick, onClo
         >
           <View style={[styles.grabber, { backgroundColor: palette.faint }]} />
           <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
+          <ScrollView style={{ maxHeight: height * 0.55 }} bounces={false}>
           {options.map((option, index) => (
             <Pressable
               key={option.id}
@@ -53,6 +61,7 @@ export function PickerSheet({ visible, title, options, selectedId, onPick, onClo
               )}
             </Pressable>
           ))}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
