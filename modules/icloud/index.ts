@@ -19,5 +19,5 @@ type NativeDrive = {
   remove(name: string): Promise<void>;
 };
 
-/** Null in Expo Go and on Android: the module is only built into a dev build. */
+/** Null on Android, and in any build this module was not compiled into. */
 export const drive = requireOptionalNativeModule<NativeDrive>('IcloudDrive');
