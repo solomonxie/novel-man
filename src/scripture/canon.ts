@@ -1,3 +1,5 @@
+import type { ChapterInsert } from '../db/repo';
+
 /**
  * How many chapters each book has, and what the books are called. Facts about
  * the shape of a bible rather than any edition of its text, which is what lets
@@ -66,4 +68,27 @@ export function neighbouringChapters(reference: string): string[] {
   return [found.chapter - 1, found.chapter + 1]
     .filter((chapter) => chapter >= 1 && chapter <= last)
     .map((chapter) => `${found.book} ${chapter}`);
+}
+
+/**
+ * Every chapter of the canon as a row, in order, each under the book it
+ * belongs to. This is what lets a bible exist on the shelf before a word of it
+ * has been fetched: the structure is a fact, and only the text is licensed.
+ */
+export function canonChapters(): ChapterInsert[] {
+  const chapters: ChapterInsert[] = [];
+  Object.entries(CHAPTERS).forEach(([book, count], part) => {
+    for (let chapter = 1; chapter <= count; chapter++) {
+      // The reference is the title, and the title is how it is asked for.
+      chapters.push({
+        title: `${book} ${chapter}`,
+        start: 0,
+        end: 0,
+        confident: true,
+        part_idx: part,
+        part_title: book,
+      });
+    }
+  });
+  return chapters;
 }

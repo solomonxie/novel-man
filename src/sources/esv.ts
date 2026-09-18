@@ -12,6 +12,20 @@
  */
 const API = 'https://api.esv.org/v3/passage/text/';
 
+/**
+ * The page that issues a key shows it as `Authorization: Token 59e3…`, so the
+ * whole line is what gets copied — and a key with the header still attached is
+ * a key the source refuses, with no clue as to why. Whatever was pasted, what
+ * is kept is the token.
+ */
+export function cleanToken(pasted: string): string {
+  return pasted
+    .trim()
+    .replace(/^authorization\s*:\s*/i, '')
+    .replace(/^token\s+/i, '')
+    .trim();
+}
+
 export type Passage = {
   /** How the source itself spells what you asked for: "John 3:16–17". */
   reference: string;

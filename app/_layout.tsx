@@ -41,7 +41,6 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="add" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="job/[id]" options={{ headerShown: true, title: '' }} />
-          <Stack.Screen name="lookup" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="source/find" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="source/ebible" options={{ headerShown: true, title: '' }} />
           <Stack.Screen name="source/arxiv" options={{ headerShown: true, title: '' }} />

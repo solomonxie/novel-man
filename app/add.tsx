@@ -29,6 +29,10 @@ import { authorLine } from '../src/sources/arxiv';
 import { sourcesFor } from '../src/sources/registry';
 import { takeChoice, type Choice } from '../src/sources/chosen';
 import { esvKey, forgetEsvKey, saveEsvKey } from '../src/sources/esvKey';
+import { addEsvBook, ESV_SOURCE, ESV_TITLE } from '../src/sources/esvBook';
+import { clearCached, countCached } from '../src/sources/passages';
+import { EsvError, lookUpEsv } from '../src/sources/esv';
+import { findRemoteBook } from '../src/db/repo';
 import { Hint, Row, Section } from '../src/ui/primitives';
 import { PickerSheet } from '../src/ui/PickerSheet';
 import { radius, space, usePalette } from '../src/theme';
@@ -68,6 +72,15 @@ export default function AddBook() {
   const [esvKeyed, setEsvKeyed] = useState(false);
   const [esvOpen, setEsvOpen] = useState(false);
   const [esvDraft, setEsvDraft] = useState('');
+  const [esvTested, setEsvTested] = useState<string | null>(null);
+  /** Tested and answered, not merely present: a refused key buys 1,189 empty chapters. */
+  const [esvOk, setEsvOk] = useState(false);
+  /** The last four characters of what is actually stored — enough to tell two
+   *  keys apart without ever showing one. */
+  const [esvTail, setEsvTail] = useState('');
+  const [esvBusy, setEsvBusy] = useState(false);
+  const [esvOnShelf, setEsvOnShelf] = useState<string | null>(null);
+  const [esvSaved, setEsvSaved] = useState(0);
 
   const kind = kindOf(kindId);
   const sources = sourcesFor(kind.sources);
@@ -105,8 +118,47 @@ export default function AddBook() {
   );
 
   useEffect(() => {
-    if (wantsCatalog) esvKey().then((token) => setEsvKeyed(Boolean(token)));
+    if (!wantsCatalog) return;
+    esvKey().then((token) => {
+      setEsvKeyed(Boolean(token));
+      setEsvTail(token ? token.slice(-4) : '');
+    });
+    findRemoteBook(ESV_SOURCE).then((found) => setEsvOnShelf(found?.id ?? null));
+    countCached(ESV_SOURCE).then(setEsvSaved);
   }, [wantsCatalog]);
+
+  /** One verse, which is how you find out whether a key works at all. */
+  async function testEsvKey() {
+    setEsvBusy(true);
+    setEsvTested(null);
+    try {
+      await lookUpEsv('John 1:1', await esvKey());
+      setEsvOk(true);
+      setEsvTested(null);
+    } catch (problem) {
+      setEsvOk(false);
+      setEsvTested(t(`lookup.${problem instanceof EsvError ? problem.code : 'offline'}`));
+    } finally {
+      setEsvBusy(false);
+    }
+  }
+
+  /**
+   * The whole book at once, and none of its words. Every chapter is known in
+   * advance, so the shelf gets a bible with its structure and fetches each
+   * chapter as it is opened.
+   */
+  async function putEsvOnShelf() {
+    setEsvBusy(true);
+    try {
+      const existing = await findRemoteBook(ESV_SOURCE);
+      const bookId = existing?.id ?? (await addEsvBook());
+      setEsvOnShelf(bookId);
+      router.replace(`/book/${bookId}`);
+    } finally {
+      setEsvBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (wantsCatalog && !catalog) {
@@ -189,6 +241,7 @@ export default function AddBook() {
       style={{ backgroundColor: palette.bg }}
       contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
       keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
     >
       <Stack.Screen options={{ title: t('add.title'), headerBackTitle: ' ' }} />
 
@@ -309,17 +362,93 @@ export default function AddBook() {
       {wantsCatalog && !file ? (
         <Section title={t('add.esvTitle')}>
           <Row
-            label={t('lookup.title')}
-            detail={t('add.esvWhy')}
-            value="›"
-            onPress={() => router.push('/lookup')}
-          />
-          <Row
             label={t('add.esvKeyRow')}
-            value={esvKeyed ? t('add.esvKeySet') : t('add.esvKeyNone')}
+            detail={t('add.esvWhy')}
+            value={esvKeyed ? t('add.esvKeySet', { tail: esvTail }) : t('add.esvKeyNone')}
             onPress={() => setEsvOpen((was) => !was)}
+          />
+          {/* Under the row it belongs to, inside the same card: a field that
+              opens a screen away from what was tapped reads as a different
+              question. */}
+          {esvOpen ? (
+            <View style={[styles.keyBox, { borderColor: palette.border }]}>
+              <TextInput
+                value={esvDraft}
+                onChangeText={setEsvDraft}
+                placeholder={t('lookup.paste')}
+                placeholderTextColor={palette.faint}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
+                style={[styles.input, { color: palette.text, borderColor: palette.border }]}
+              />
+              <Text style={{ color: palette.dim, fontSize: 12 }}>{t('lookup.keyStaysHere')}</Text>
+              <Pressable
+                onPress={() => {
+                  if (!esvDraft.trim()) return;
+                  saveEsvKey(esvDraft).then(async () => {
+                    setEsvKeyed(true);
+                    setEsvTail(((await esvKey()) ?? '').slice(-4));
+                    setEsvDraft('');
+                    setEsvOpen(false);
+                    setEsvOk(false);
+                    void testEsvKey();
+                  });
+                }}
+                style={styles.fetch}
+              >
+                <Text style={{ color: palette.accent, fontSize: 16 }}>{t('lookup.save')}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {esvKeyed ? (
+            <Row
+              label={t('add.esvTest')}
+              // Why it failed is a sentence, and a sentence goes under the
+              // label rather than into the narrow column beside it.
+              detail={esvTested ?? undefined}
+              alarm={Boolean(esvTested)}
+              value={
+                esvBusy
+                  ? t('add.esvTesting')
+                  : esvOk
+                    ? t('add.esvKeyWorks')
+                    : esvTested
+                      ? t('add.esvRetest')
+                      : t('add.esvTestNow')
+              }
+              onPress={esvBusy ? undefined : testEsvKey}
+            />
+          ) : null}
+          {/* A book of 1,189 chapters that can never fetch one is worse than no
+              book at all, so this waits for the key to have answered. */}
+          <Row
+            label={esvOnShelf ? t('add.esvOnShelf') : t('add.esvAdd', { title: ESV_TITLE })}
+            detail={esvOnShelf ? undefined : t('add.esvAddWhat')}
+            value={
+              esvOnShelf || esvOk
+                ? '›'
+                : esvKeyed
+                  ? t('add.esvTestFirst')
+                  : t('add.esvNeedsKey')
+            }
+            onPress={
+              esvBusy || !(esvOk || esvOnShelf)
+                ? undefined
+                : esvOnShelf
+                  ? () => router.replace(`/book/${esvOnShelf}`)
+                  : putEsvOnShelf
+            }
             last={!esvKeyed}
           />
+          {esvSaved ? (
+            <Row
+              label={t('lookup.savedCount', { count: esvSaved })}
+              detail={t('lookup.savedHint')}
+              value={t('lookup.clear')}
+              onPress={() => clearCached(ESV_SOURCE).then(() => setEsvSaved(0))}
+            />
+          ) : null}
           {esvKeyed ? (
             <Row
               label={t('lookup.forget')}
@@ -327,6 +456,9 @@ export default function AddBook() {
                 forgetEsvKey().then(() => {
                   setEsvKeyed(false);
                   setEsvOpen(false);
+                  setEsvTested(null);
+                  setEsvOk(false);
+                  setEsvTail('');
                 })
               }
               danger
@@ -334,34 +466,6 @@ export default function AddBook() {
             />
           ) : null}
         </Section>
-      ) : null}
-
-      {esvOpen && wantsCatalog && !file ? (
-        <View style={[styles.link, { borderColor: palette.border, backgroundColor: palette.surface }]}>
-          <TextInput
-            value={esvDraft}
-            onChangeText={setEsvDraft}
-            placeholder={t('lookup.paste')}
-            placeholderTextColor={palette.faint}
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={[styles.input, { color: palette.text, borderColor: palette.border }]}
-          />
-          <Text style={{ color: palette.dim, fontSize: 12 }}>{t('lookup.keyStaysHere')}</Text>
-          <Pressable
-            onPress={() => {
-              if (!esvDraft.trim()) return;
-              saveEsvKey(esvDraft).then(() => {
-                setEsvKeyed(true);
-                setEsvDraft('');
-                setEsvOpen(false);
-              });
-            }}
-            style={styles.fetch}
-          >
-            <Text style={{ color: palette.accent, fontSize: 16 }}>{t('lookup.save')}</Text>
-          </Pressable>
-        </View>
       ) : null}
 
       {/* A page of its own, not a field down here: a field at the foot of a
@@ -547,6 +651,12 @@ const styles = StyleSheet.create({
     marginBottom: space.sm,
   },
   fetch: { paddingVertical: space.md, alignItems: 'center' },
+  /** Inside the card, under its row, separated by a rule rather than a gap. */
+  keyBox: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+  },
   commit: {
     marginTop: space.xl,
     paddingVertical: space.lg,

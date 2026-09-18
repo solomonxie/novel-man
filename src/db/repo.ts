@@ -13,6 +13,11 @@ export type Book = {
   language: string;
   /** Which kind of book this is, and so which features it gets. See `books/kinds`. */
   kind: string;
+  /**
+   * Set when the text is fetched a chapter at a time rather than held here —
+   * a licensed edition the app may read but not keep. Null for everything else.
+   */
+  text_source: string | null;
   source_name: string;
   source_hash: string;
   source_path: string;
@@ -70,6 +75,8 @@ export type AnnotationKind = 'highlight' | 'note' | 'bookmark';
 export type Annotation = {
   id: string;
   book_id: string;
+  /** Set only where offsets cannot say it: a chapter fetched, not held. */
+  chapter_id: string | null;
   kind: AnnotationKind;
   color: string | null;
   start: number;
@@ -227,7 +234,7 @@ export async function listChapters(bookId: string): Promise<Chapter[]> {
 
 export type ImportedBook = Omit<
   Book,
-  'id' | 'created_at' | 'year' | 'edition' | 'cover_path' | 'summary'
+  'id' | 'created_at' | 'year' | 'edition' | 'cover_path' | 'summary' | 'text_source'
 >;
 
 export async function saveImportedBook(input: {
@@ -283,6 +290,65 @@ export async function saveImportedBook(input: {
       'INSERT INTO reading_state (book_id, offset, updated_at) VALUES (?, 0, ?)',
       id,
       now
+    );
+  });
+  return id;
+}
+
+/**
+ * A book with structure and no text: the chapters are known in advance and
+ * each one's words are fetched when it is opened. There is no manuscript to
+ * measure, so every offset is zero and stays that way — what addresses a
+ * chapter here is its name, which is also how it is asked for.
+ */
+export async function findRemoteBook(source: string): Promise<Book | null> {
+  const database = await db();
+  const row = await database.getFirstAsync<Book>(
+    'SELECT * FROM books WHERE text_source = ? LIMIT 1',
+    source
+  );
+  return row ?? null;
+}
+
+export async function saveRemoteBook(input: {
+  book: Omit<ImportedBook, 'word_count' | 'char_count'> & { text_source: string };
+  chapters: ChapterInsert[];
+  partNames?: { part_idx: number; names: string[] }[];
+}): Promise<string> {
+  const database = await db();
+  const id = newId();
+  const now = Date.now();
+  await transaction(async () => {
+    await database.runAsync(
+      `INSERT INTO books (id, title, author, language, kind, source_name, source_hash, source_path,
+                          source_ext, word_count, char_count, cover_hue, text_source, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)`,
+      id,
+      input.book.title,
+      input.book.author,
+      input.book.language,
+      input.book.kind,
+      input.book.source_name,
+      input.book.source_hash,
+      input.book.source_path,
+      input.book.source_ext,
+      input.book.cover_hue,
+      input.book.text_source,
+      now
+    );
+    await database.runAsync('INSERT INTO documents (book_id, text, hints) VALUES (?, ?, ?)', id, '', '[]');
+    await insertChapters(database, id, input.chapters);
+    for (const part of input.partNames ?? []) {
+      for (const name of part.names) {
+        await database.runAsync(
+          'INSERT OR IGNORE INTO part_names (book_id, part_idx, name) VALUES (?, ?, ?)',
+          id, part.part_idx, name
+        );
+      }
+    }
+    await database.runAsync(
+      'INSERT INTO reading_state (book_id, offset, updated_at) VALUES (?, 0, ?)',
+      id, now
     );
   });
   return id;
@@ -609,6 +675,7 @@ export async function listAnnotations(bookId: string): Promise<Annotation[]> {
 
 export async function addAnnotation(input: {
   bookId: string;
+  chapterId?: string | null;
   kind: AnnotationKind;
   start: number;
   end: number;
@@ -621,10 +688,11 @@ export async function addAnnotation(input: {
   const database = await db();
   const id = newId();
   await database.runAsync(
-    `INSERT INTO annotations (id, book_id, kind, color, start, end, quote, note, prefix, suffix, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO annotations (id, book_id, chapter_id, kind, color, start, end, quote, note, prefix, suffix, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.bookId,
+    input.chapterId ?? null,
     input.kind,
     input.color,
     input.start,

@@ -28,13 +28,19 @@ export function Section({ title, action, flush, children }: {
   );
 }
 
-export function Row({ label, value, detail, onPress, danger, last }: {
+export function Row({ label, value, detail, onPress, danger, alarm, last }: {
   label: string;
   value?: string;
   /** A second line under the label, for what the row is rather than where it goes. */
   detail?: string;
   onPress?: () => void;
+  /** The row itself is destructive: its label is the warning. */
   danger?: boolean;
+  /**
+   * The row is fine, but what it is reporting went wrong — so the state and
+   * the reason are red and the label stays what it always was.
+   */
+  alarm?: boolean;
   last?: boolean;
 }) {
   const palette = usePalette();
@@ -47,12 +53,17 @@ export function Row({ label, value, detail, onPress, danger, last }: {
       <View style={{ flexShrink: 1, flex: 1 }}>
         <Text style={{ color: danger ? palette.danger : palette.text, fontSize: 16 }}>{label}</Text>
         {detail ? (
-          <Text numberOfLines={2} style={{ color: palette.dim, fontSize: 13, marginTop: 2 }}>
+          <Text
+            numberOfLines={3}
+            style={{ color: alarm ? palette.danger : palette.dim, fontSize: 13, marginTop: 2 }}
+          >
             {detail}
           </Text>
         ) : null}
       </View>
-      {value ? <Text style={{ color: palette.dim, fontSize: 15 }}>{value}</Text> : null}
+      {value ? (
+        <Text style={{ color: alarm ? palette.danger : palette.dim, fontSize: 15 }}>{value}</Text>
+      ) : null}
     </Pressable>
   );
 }
