@@ -1,4 +1,4 @@
-import * as Linking from 'expo-linking';
+import { Linking } from 'react-native';
 import { extensionOf } from '../../storage/files';
 import { supportedExtensions } from '../registry';
 import { enqueueImport } from '../queue';
@@ -18,13 +18,33 @@ export function handleIncoming(url: string): boolean {
     return true;
   }
 
-  const parsed = Linking.parse(url);
-  const remote = parsed.queryParams?.url;
-  if (parsed.path?.replace(/^\//, '') === 'import' && typeof remote === 'string') {
+  const { path, query } = splitLink(url);
+  const remote = queryValue(query, 'url');
+  if (path === 'import' && remote) {
     void fetchManuscript(remote).then(enqueueImport).catch(() => undefined);
     return true;
   }
   return false;
+}
+
+/**
+ * `novelman://import?url=…` pulled apart by hand. The platform URL parser is
+ * built for http, and a custom scheme puts the word that matters in whichever
+ * of host or path it feels like.
+ */
+function splitLink(url: string): { path: string; query: string } {
+  const [rest, query = ''] = url.replace(/^[a-zA-Z][\w+.-]*:\/\//, '').split('?');
+  return { path: rest.replace(/^\/+|\/+$/g, ''), query };
+}
+
+function queryValue(query: string, key: string): string | null {
+  for (const pair of query.split('&')) {
+    const at = pair.indexOf('=');
+    if (at > 0 && decodeURIComponent(pair.slice(0, at)) === key) {
+      return decodeURIComponent(pair.slice(at + 1));
+    }
+  }
+  return null;
 }
 
 /** Both doors: the link that launched the app, and any that arrive after. */

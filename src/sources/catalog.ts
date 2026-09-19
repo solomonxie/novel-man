@@ -17,6 +17,13 @@ export type IndexRow = {
   language: string;
   /** Subjects, shelves — whatever else the source publishes to search on. */
   extra?: string;
+  /**
+   * What this row is downloaded from, and the licence line it comes under,
+   * when the source stated both in the list itself. Left off by a source whose
+   * books have a feed of their own to read at the moment of asking.
+   */
+  href?: string;
+  terms?: string;
 };
 
 export type IndexedBook = IndexRow & { source: string };
@@ -25,10 +32,10 @@ export type IndexState = { fetchedAt: number; count: number };
 
 /**
  * Rows are written in bites, so a 78,000-row catalog never blocks the UI — and
- * small enough that six bound values a row stays under SQLite's older limit of
- * 999 parameters per statement, whatever build is underneath.
+ * small enough that eight bound values a row stays under SQLite's older limit
+ * of 999 parameters per statement, whatever build is underneath.
  */
-const CHUNK = 150;
+const CHUNK = 120;
 
 export async function replaceIndex(
   source: string,
@@ -39,7 +46,7 @@ export async function replaceIndex(
   await database.runAsync('DELETE FROM catalog WHERE source = ?', source);
   for (let at = 0; at < rows.length; at += CHUNK) {
     const batch = rows.slice(at, at + CHUNK);
-    const values = batch.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+    const values = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
     const args = batch.flatMap((row) => [
       source,
       row.extId,
@@ -47,10 +54,12 @@ export async function replaceIndex(
       row.author,
       row.language,
       `${row.title} ${row.author} ${row.extra ?? ''}`.toLowerCase(),
+      row.href ?? null,
+      row.terms ?? null,
     ]);
     await transaction(() =>
       database.runAsync(
-        `INSERT OR REPLACE INTO catalog (source, ext_id, title, author, language, needle)
+        `INSERT OR REPLACE INTO catalog (source, ext_id, title, author, language, needle, href, terms)
          VALUES ${values}`,
         args
       )
@@ -120,8 +129,10 @@ async function select(sources: string[], patterns: string[], limit: number): Pro
     title: string;
     author: string;
     language: string;
+    href: string | null;
+    terms: string | null;
   }>(
-    `SELECT source, ext_id, title, author, language FROM catalog
+    `SELECT source, ext_id, title, author, language, href, terms FROM catalog
       WHERE ${where}
       ORDER BY length(title)
       LIMIT ?`,
@@ -133,6 +144,8 @@ async function select(sources: string[], patterns: string[], limit: number): Pro
     title: row.title,
     author: row.author,
     language: row.language,
+    href: row.href ?? undefined,
+    terms: row.terms ?? undefined,
   }));
 }
 

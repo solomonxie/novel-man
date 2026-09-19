@@ -1,4 +1,4 @@
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File, Paths } from '../../storage/fs';
 
 /**
  * Where a book waits between arriving and being imported. It is the cache, not

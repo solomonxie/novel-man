@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
-import * as Clipboard from 'expo-clipboard';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 import {
   getBook,
@@ -10,11 +10,13 @@ import {
   listChapters,
   removeAnnotation,
   removeAnnotations,
+  updateAnnotation,
   type Annotation,
   type Book,
   type Chapter,
 } from '../../../src/db/repo';
 import { shareQuoteText } from '../../../src/share/quote';
+import { NoteSheet } from '../../../src/ui/NoteSheet';
 import { radius, space, usePalette } from '../../../src/theme';
 
 type Filter = 'all' | 'highlight' | 'note' | 'bookmark';
@@ -34,6 +36,8 @@ export default function Notes() {
    */
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  /** Tapping a mark opens what you wrote on it; the book is a button away. */
+  const [editing, setEditing] = useState<Annotation | null>(null);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -43,6 +47,14 @@ export default function Notes() {
   }, [id]);
 
   useFocusEffect(load);
+
+  function openInBook(entry: Annotation, chapter: Chapter | null) {
+    router.push(
+      entry.chapter_id
+        ? `/reader/${id}?chapter=${chapter?.idx ?? 0}`
+        : `/reader/${id}?chapter=${chapter?.idx ?? 0}&at=${entry.start}`
+    );
+  }
 
   function toggle(id: string) {
     setPicked((was) => {
@@ -195,15 +207,7 @@ export default function Notes() {
               {items.map((entry) => (
                 <Pressable
                   key={entry.id}
-                  onPress={() =>
-                    selecting
-                      ? toggle(entry.id)
-                      : router.push(
-                          entry.chapter_id
-                            ? `/reader/${id}?chapter=${chapter?.idx ?? 0}`
-                            : `/reader/${id}?chapter=${chapter?.idx ?? 0}&at=${entry.start}`
-                        )
-                  }
+                  onPress={() => (selecting ? toggle(entry.id) : setEditing(entry))}
                   // The long-press that deleted one is now the way into picking
                   // several — with the one pressed already picked.
                   onLongPress={() => {
@@ -235,11 +239,13 @@ export default function Notes() {
                       </View>
                     ) : null}
                     <View style={{ width: 3, borderRadius: 2, backgroundColor: entry.color ?? palette.accent }} />
-                    <Text style={{ color: palette.text, fontSize: 15, flex: 1 }}>{entry.quote}</Text>
+                    <View style={{ flex: 1, gap: space.sm }}>
+                      {entry.note ? (
+                        <Text style={{ color: palette.dim, fontSize: 14 }}>{entry.note}</Text>
+                      ) : null}
+                      <Text style={{ color: palette.text, fontSize: 15 }}>{entry.quote}</Text>
+                    </View>
                   </View>
-                  {entry.note ? (
-                    <Text style={{ color: palette.dim, fontSize: 14, marginTop: space.sm }}>{entry.note}</Text>
-                  ) : null}
                   <View style={styles.cardFoot}>
                     <Text style={{ color: palette.faint, fontSize: 11 }}>
                       {new Date(entry.created_at).toLocaleDateString()}
@@ -247,8 +253,13 @@ export default function Notes() {
                     <View style={{ flexDirection: 'row', gap: space.lg }}>
                       {selecting ? null : (
                         <>
-                      <Pressable onPress={() => Clipboard.setStringAsync(entry.quote)} hitSlop={8}>
+                      <Pressable onPress={() => Clipboard.setString(entry.quote)} hitSlop={8}>
                         <Text style={{ color: palette.accent, fontSize: 12 }}>{t('reader.copy')}</Text>
+                      </Pressable>
+                      <Pressable onPress={() => confirmRemove(entry)} hitSlop={8}>
+                        <Text style={{ color: palette.danger, fontSize: 12 }}>
+                          {t('settings.delete')}
+                        </Text>
                       </Pressable>
                       <Pressable
                         onPress={() =>
@@ -263,6 +274,13 @@ export default function Notes() {
                         hitSlop={8}
                       >
                         <Text style={{ color: palette.accent, fontSize: 12 }}>{t('reader.share')}</Text>
+                      </Pressable>
+                      {/* The jump the card itself used to be: still here, but
+                          it has to be asked for now. */}
+                      <Pressable onPress={() => openInBook(entry, chapter)} hitSlop={8}>
+                        <Text style={{ color: palette.accent, fontSize: 12 }}>
+                          {t('notes.inBook')}  ›
+                        </Text>
                       </Pressable>
                         </>
                       )}
@@ -293,6 +311,24 @@ export default function Notes() {
           </Pressable>
         </View>
       ) : null}
+
+      {/* A bookmark stays a bookmark; for the rest, what you write is what
+          decides whether it is a note or just a highlight. */}
+      <NoteSheet
+        visible={editing !== null}
+        quote={editing?.quote ?? ''}
+        note={editing?.note ?? null}
+        onSave={(note) => {
+          const mark = editing;
+          setEditing(null);
+          if (!mark) return;
+          void updateAnnotation(mark.id, {
+            note: note || null,
+            kind: mark.kind === 'bookmark' ? 'bookmark' : note ? 'note' : 'highlight',
+          }).then(load);
+        }}
+        onClose={() => setEditing(null)}
+      />
     </View>
   );
 }

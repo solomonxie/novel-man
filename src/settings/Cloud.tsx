@@ -7,9 +7,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from '../navigation/router';
 import { useTranslation } from 'react-i18next';
-import * as Clipboard from 'expo-clipboard';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 import {
   clearFinishedJobs,
@@ -194,7 +194,7 @@ export function CloudSettings() {
 
       {adding && (
         <View style={{ marginTop: space.lg }}>
-          <Pressable onPress={async () => paste(await Clipboard.getStringAsync())}>
+          <Pressable onPress={async () => paste(await Clipboard.getString())}>
             <Text style={{ color: palette.accent, fontSize: 15 }}>{t('cloud.paste')}</Text>
           </Pressable>
           <Hint>{t('cloud.pasteHint')}</Hint>

@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next';
 
 import { answerPreview, clearFinished, retryJob, type ImportJob } from '../import/queue';
 import { ImportError } from '../import/pipeline';
+import { StandardEbooksError } from '../sources/standardEbooks';
 import { radius, space, usePalette } from '../theme';
 
 /** The one-line summary that lives on the shelf while anything is running. */
@@ -162,6 +163,8 @@ export function JobPreview({ job }: { job: ImportJob }) {
 }
 
 export function describeImportError(error: unknown, t: TFunction): string {
+  // A source's own refusal is not an import failure, and reads nothing like one.
+  if (error instanceof StandardEbooksError) return t(`add.se_${error.code}`);
   if (error instanceof ImportError) {
     if (error.code === 'unsupported') return t('import.unsupported', { ext: `.${error.detail}` });
     if (error.code === 'no-text') return t('import.noText');

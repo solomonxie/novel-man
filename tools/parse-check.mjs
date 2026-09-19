@@ -36,6 +36,16 @@ const { fountainExporter, finalDraftExporter } = await import(join(build, 'expor
 const { bundleName, dateOf, isBundleName } = await import(join(build, 'backup/format.js'));
 const { parseUsfm, layoutBible, cleanLine } = await import(join(build, 'scripture/usfm.js'));
 const { booksFrom, editionFrom, fileNameFor } = await import(join(build, 'sources/gutenberg.js'));
+const {
+  booksFrom: seBooksFrom,
+  catalogLinkFrom,
+  epubLinkFrom,
+  pathOf,
+  nextLinkFrom,
+  authHeader,
+  bookFromIndex: seBookFromIndex,
+  fileNameFor: seFileName,
+} = await import(join(build, 'sources/standardEbooks.js'));
 const { chapterMaterial } = await import(join(build, 'analysis/context.js'));
 const { blocksFromHtml, bytesFromBase64 } = await import(join(build, 'import/formats/html.js'));
 const { papersFrom, queryFor, authorLine, fileNameFor: paperFileName, absolute } =
@@ -746,6 +756,74 @@ console.log('gutenberg');
   check('and its language', edition.language, 'en');
   check('the title names the file, because the url does not', fileNameFor(book), 'A Book.epub');
   check('a book with no epub is not an edition', editionFrom('<feed></feed>', book), null);
+}
+
+console.log('standard ebooks');
+{
+  const nav = [
+    '<feed>',
+    '<link rel="start" type="application/atom+xml;profile=opds-catalog;kind=navigation" href="/feeds/opds"/>',
+    '<entry><title>New Releases</title>',
+    '<link rel="subsection" type="application/atom+xml;profile=opds-catalog;kind=acquisition" href="/feeds/opds/new-releases"/>',
+    '</entry>',
+    '<entry><title>All Ebooks</title>',
+    '<link rel="subsection" type="application/atom+xml;profile=opds-catalog;kind=acquisition" href="/feeds/opds/all"/>',
+    '</entry>',
+    '</feed>',
+  ].join('\n');
+  check('the whole shelf is preferred over a slice of it',
+    catalogLinkFrom(nav), 'https://standardebooks.org/feeds/opds/all');
+  check('the newest fifteen is never mistaken for the shelf',
+    catalogLinkFrom(nav.replace('/feeds/opds/all', '/feeds/opds/subjects')),
+    'https://standardebooks.org/feeds/opds/subjects');
+  check('paging is followed in the feed\'s own words',
+    nextLinkFrom('<feed><link rel="next" href="/feeds/opds/all?page=2"/></feed>'),
+    'https://standardebooks.org/feeds/opds/all?page=2');
+  check('a last page says nothing about a next one', nextLinkFrom('<feed></feed>'), null);
+  check('a navigation link is not a catalog',
+    catalogLinkFrom('<feed><link rel="start" type="application/atom+xml;profile=opds-catalog;kind=navigation" href="/x"/></feed>'),
+    null);
+
+  const entry = [
+    '<entry>',
+    '<id>url:https://standardebooks.org/ebooks/jane-austen/persuasion</id>',
+    '<title>Persuasion</title>',
+    '<author><name>Jane Austen</name></author>',
+    '<rights>Public domain in the United States.</rights>',
+    '<dcterms:language>en-GB</dcterms:language>',
+    '<category scheme="http://purl.org/dc/terms/LCSH" term="Love stories"/>',
+    '<link rel="http://opds-spec.org/acquisition" type="application/kepub+zip" href="/ebooks/jane-austen/persuasion/downloads/jane-austen_persuasion.kepub.epub"/>',
+    '<link rel="http://opds-spec.org/acquisition" type="application/epub+zip" href="/ebooks/jane-austen/persuasion/downloads/jane-austen_persuasion_advanced.epub"/>',
+    '<link rel="http://opds-spec.org/acquisition" type="application/epub+zip" href="/ebooks/jane-austen/persuasion/downloads/jane-austen_persuasion.epub"/>',
+    '</entry>',
+  ].join('\n');
+  check('the plain epub wins over the advanced one', epubLinkFrom(entry),
+    'https://standardebooks.org/ebooks/jane-austen/persuasion/downloads/jane-austen_persuasion.epub');
+  check('a kepub is not an epub this app reads',
+    epubLinkFrom(entry.replace(/^.*_advanced\.epub.*$/m, '').replace(/^.*persuasion\.epub.*$/m, '')),
+    null);
+
+  const feed = `<feed><entry><title>Nav</title></entry>${entry}</feed>`;
+  const rows = seBooksFrom(feed);
+  check('an entry with nothing to fetch is not a book', rows.length, 1);
+  check('the id is the path the site files it under', rows[0].extId, 'jane-austen/persuasion');
+  check('the url is the one stated, never built from the id',
+    rows[0].href,
+    'https://standardebooks.org/ebooks/jane-austen/persuasion/downloads/jane-austen_persuasion.epub');
+  check('its terms are quoted', rows[0].terms, 'Public domain in the United States.');
+  check('and its language', rows[0].language, 'en-GB');
+  check('subjects are searchable without being shown', rows[0].extra, 'Love stories');
+
+  check('a download url still reduces to the book it belongs to',
+    pathOf('https://standardebooks.org/ebooks/a/b/downloads/a_b.epub'), 'a/b');
+
+  // Their instruction: the email in the username, nothing in the password.
+  check('the credential is basic auth with an empty password',
+    authHeader('reader@example.com'), 'Basic cmVhZGVyQGV4YW1wbGUuY29tOg==');
+
+  const book = seBookFromIndex(rows[0]);
+  check('a kept row is the whole download', book.url, rows[0].href);
+  check('the title names the file', seFileName(book), 'Persuasion.epub');
 }
 
 console.log('citing a passage');

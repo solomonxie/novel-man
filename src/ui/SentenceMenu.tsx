@@ -11,9 +11,9 @@ export type MenuAction = { key: string; label: string; onPress: () => void };
  * the same place. At the bottom it covers nothing, and the thumb already knows
  * where it is.
  *
- * The colors are always out: a swatch is a way to highlight, not just a way to
- * recolor something already highlighted, and the marked one says which colour
- * Highlight itself would use.
+ * The colors are always out, and they are the whole of highlighting: tapping
+ * one marks the passage, tapping the one already on it takes the mark off.
+ * There is no Highlight button because there is nothing left for it to say.
  */
 export function SentenceMenu({ actions, activeColor, onColor, onDismiss, dismissLabel, dark }: {
   actions: MenuAction[];
@@ -85,21 +85,20 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.18)',
   },
   /**
-   * Sized to its word, not to an equal share of the bar. Five equal shares of
-   * what is left after the Done button is about fifty points each, which cuts
-   * "Highlight" and "Bookmark" in half — and a control whose name is cut is a
-   * control you have to remember rather than read.
+   * Sized to its word, not to an equal share of the bar — a control whose
+   * name is cut is one you have to remember rather than read. Three of them
+   * and the way out fit a line at any width the app runs at.
    */
   item: {
     minHeight: ROW,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: space.md,
+    paddingHorizontal: space.sm,
   },
   /**
-   * Wider than an action and set apart by a rule: leaving a mode is the one
-   * thing someone does in a hurry, and a glyph the size of a full stop is the
-   * wrong target for it.
+   * Last on the row and set apart by a rule: leaving a mode is the one thing
+   * someone does in a hurry, so it is wider than the word it holds and never
+   * sits between two actions.
    */
   dismiss: {
     minWidth: 84,

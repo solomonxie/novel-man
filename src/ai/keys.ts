@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../storage/secrets';
 import { chat, type ChatMessage, type ChatOptions } from './client';
 import { modelFor, vendorById } from './vendors';
 import { recordRequest } from '../db/requests';
@@ -15,7 +15,7 @@ const secretKey = (id: string) => `ai.key.${id}`;
  * The secret lives in the Keychain and is pinned to this device, so it never
  * rides an iCloud Keychain sync to another phone — or into a backup.
  */
-const SECRET_OPTIONS: SecureStore.SecureStoreOptions = {
+const SECRET_OPTIONS: SecureStore.SecretOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
 

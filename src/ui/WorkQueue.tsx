@@ -43,12 +43,14 @@ export function WorkStrip({ feed, onPress }: { feed: WorkFeed; onPress: () => vo
   const palette = usePalette();
   const { counts, units } = feed;
   const waiting = counts.pending + counts.running;
-  if (!waiting && !counts.failed) return null;
+  // A run served from cache settles in milliseconds. Without this the strip
+  // never appears at all and the pass reads as never having happened.
+  if (!waiting && !counts.failed && !counts.done) return null;
 
   const current = units.find((unit) => unit.status === 'running') ?? units.find(isActive);
   const total = waiting + counts.done + counts.failed;
   const settled = counts.done + counts.failed;
-  const alarming = !waiting;
+  const alarming = counts.failed > 0 && !waiting;
   return (
     <Pressable
       onPress={onPress}
@@ -63,11 +65,19 @@ export function WorkStrip({ feed, onPress }: { feed: WorkFeed; onPress: () => vo
     >
       <View style={{ flex: 1 }}>
         <Text numberOfLines={1} style={{ color: palette.onAccent, fontSize: 15, fontWeight: '600' }}>
-          {current ? taskLabel(current, t) : t('work.failedCount', { count: counts.failed })}
+          {current
+            ? taskLabel(current, t)
+            : counts.failed
+              ? t('work.failedCount', { count: counts.failed })
+              : t('work.doneCount', { count: counts.done })}
         </Text>
         <Text numberOfLines={1} style={{ color: palette.onAccent, fontSize: 12, opacity: 0.85 }}>
-          {waiting ? t('work.progress', { done: settled, total }) : ''}
-          {counts.failed ? `  ·  ${t('work.failedCount', { count: counts.failed })}` : ''}
+          {waiting
+            ? t('work.progress', { done: settled, total })
+            : counts.failed
+              ? t('work.doneCount', { count: counts.done })
+              : t('work.seeWhat')}
+          {waiting && counts.failed ? `  ·  ${t('work.failedCount', { count: counts.failed })}` : ''}
         </Text>
         <View style={[styles.track, { backgroundColor: palette.onAccent, opacity: 0.35 }]}>
           <View
@@ -110,8 +120,19 @@ function Task({ unit }: { unit: WorkUnit }) {
         >
           {taskLabel(unit, t)}
         </Text>
-        <Text numberOfLines={1} style={{ color: palette.faint, fontSize: 12, marginTop: 1 }}>
-          {[unit.title, t(`work.engine_${unit.engine}`)].filter(Boolean).join('  ·  ')}
+        <Text
+          numberOfLines={2}
+          style={{
+            color: unit.status === 'failed' ? palette.danger : palette.faint,
+            fontSize: 12,
+            marginTop: 1,
+          }}
+        >
+          {/* Why it failed is the only thing a failed row is for. Without it
+              the queue says a pass did not happen and never says why. */}
+          {unit.status === 'failed' && unit.error
+            ? unit.error
+            : [unit.title, t(`work.engine_${unit.engine}`)].filter(Boolean).join('  ·  ')}
         </Text>
       </View>
       {unit.status === 'failed' && (
@@ -252,6 +273,8 @@ export function WorkOverlay() {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();
 
+  const [lingering, setLingering] = useState(false);
+
   useEffect(() => subscribeToWork(setFeed), []);
   useEffect(() => {
     opener = () => setOpen(true);
@@ -260,7 +283,20 @@ export function WorkOverlay() {
     };
   }, []);
 
-  const showing = feed.counts.pending + feed.counts.running + feed.counts.failed > 0;
+  const busy = feed.counts.pending + feed.counts.running + feed.counts.failed > 0;
+  // Work that finishes while you are looking at it should not vanish in the
+  // same frame. It stays long enough to be read, and to be tapped.
+  useEffect(() => {
+    if (busy) {
+      setLingering(true);
+      return;
+    }
+    if (!lingering) return;
+    const timer = setTimeout(() => setLingering(false), LINGER_MS);
+    return () => clearTimeout(timer);
+  }, [busy, lingering]);
+
+  const showing = busy || lingering;
   return (
     <>
       {showing && (
@@ -281,6 +317,9 @@ export function WorkOverlay() {
  * than a second modal — two of them would fight over which is on top.
  */
 let opener: (() => void) | null = null;
+
+/** Long enough to read a line and reach for it, short enough not to sit there. */
+const LINGER_MS = 8000;
 
 export function openWorkQueue() {
   opener?.();

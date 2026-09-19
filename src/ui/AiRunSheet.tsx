@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { router } from '../navigation/router';
 
 import { formatUsd, type Estimate } from '../ai/cost';
 import { Canceled } from '../ai/run';
@@ -75,9 +76,16 @@ export function AiRunSheet({ visible, title, description, estimate, hasKey, onRu
           </Text>
 
           {!hasKey ? (
-            <Text style={{ color: palette.danger, fontSize: 14, marginTop: space.lg }}>
-              {t('ai.noKey')}
-            </Text>
+            // Naming the problem is half an answer; the other half is the way
+            // to fix it, on the same line that raises it.
+            <Pressable onPress={() => { onClose(false); router.push('/?addKey=1'); }}>
+              <Text style={{ color: palette.danger, fontSize: 14, marginTop: space.lg }}>
+                {t('ai.noKey')}
+              </Text>
+              <Text style={{ color: palette.accent, fontSize: 15, marginTop: space.sm }}>
+                {t('ai.addKey')}  ›
+              </Text>
+            </Pressable>
           ) : (
             <Text style={{ color: palette.text, fontSize: 14, marginTop: space.lg }}>
               {estimate

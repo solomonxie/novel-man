@@ -111,6 +111,13 @@
     "searchParts_volume": "Search volumes"
   },
   "reader": {
+    "go": "Go",
+    "prevChapter": "Previous chapter",
+    "nextChapter": "Next chapter",
+    "chapterPage": "Chapter",
+    "bookPage": "Book",
+    "endOfChapter": "End of {{name}}",
+    "copyHint": "The passage, and where it is from.",
     "empty": "This chapter is empty.",
     "chapterList": "Chapters",
     "hint": "Tap any sentence to highlight, note or share it.",
@@ -134,8 +141,8 @@
     "spacing_loose": "Loose",
     "sans": "Sans",
     "serif": "Serif",
-    "bookmark": "Bookmark",
-    "unbookmark": "Unbookmark",
+    "bookmark": "Mark",
+    "unbookmark": "Unmark",
     "bookmarked": "Bookmarked",
     "notePlaceholder": "What do you want to remember about this?",
     "shareText": "Share as text",
@@ -267,12 +274,9 @@
     "timeline": "Where they appear",
     "timelineFetched": "Counted from the text on this device. This edition arrives a chapter at a time, so a graph would show where you have read rather than where they appear.",
     "perChapter": "Chapter by chapter",
-    "appears": "First in {{first}}, last in {{last}} · {{count}} chapters",
     "polish": "Polish with AI",
     "polishWhat": "Turns {{count}} chapter notes about this character into a profile: summary, role, appearance, voice and arc. The per-chapter notes stay as they are underneath, so you can run it again or check what it drew on.",
     "open": "Open the profile",
-    "barDetail": "{{range}} · {{count}} mentions",
-    "barScale": "Each bar covers {{count}} chapters — tap one",
     "tapToRead": "Tap a line to read it where it happens.",
     "age": "Age",
     "gender": "Gender",
@@ -307,7 +311,8 @@
     "selectHint": "Tap the ones you want gone.",
     "deleteSelected": "Delete {{count}}",
     "deleteSelectedConfirm": "Delete {{count}} marks? The words stay in the book.",
-    "filter_bookmark": "Bookmarks"
+    "filter_bookmark": "Bookmarks",
+    "inBook": "In book"
   },
   "structure": {
     "title": "Structure",
@@ -401,6 +406,8 @@
     "tooNew": "This backup was made by a newer version (v{{version}}). Update the app first."
   },
   "ai": {
+    "noKeyTitle": "No AI key",
+    "addKey": "Add a key",
     "run": "Run",
     "stop": "Stop",
     "done": "Done",
@@ -411,7 +418,8 @@
     "estimateHint": "An estimate, not a quote. Billed to your own account. Results are cached, so a repeat run is free.",
     "progress": "{{done}} of {{total}}",
     "estimateLine": "est. {{tokens}} tokens · {{cost}}",
-    "estimateNoKey": "add an AI key to see the cost"
+    "estimateNoKey": "add an AI key to see the cost",
+    "estimateFor": "{{action}} · est. {{tokens}} tokens · {{cost}}"
   },
   "cast": {
     "analysis": "Analysis",
@@ -568,7 +576,11 @@
     "andMore": "{{count}} more not shown",
     "open": "Analysis queue",
     "idle": "Nothing running",
-    "busy": "{{count}} running"
+    "busy": "{{count}} running",
+    "queuedOpen": "Queued — open the queue ›",
+    "queueFailed": "Couldn’t queue it: {{error}}",
+    "doneCount": "{{count}} finished",
+    "seeWhat": "Tap to see what it did"
   },
   "chapter": {
     "title": "Chapter",
@@ -634,6 +646,8 @@
     "times": "appears {{count}}×"
   },
   "place": {
+    "timeline": "Where it appears",
+    "timelineFetched": "Counted from the text on this device. This edition arrives a chapter at a time, so a graph would show where you have read rather than where it appears.",
     "name": "Name",
     "alias": "Also called",
     "aliasPlaceholder": "Other names, separated by commas",
@@ -657,6 +671,9 @@
     "eyebrow": "Place"
   },
   "scene": {
+    "timeline": "Where it recurs",
+    "timelineFetched": "Counted from the text on this device. This edition arrives a chapter at a time, so there is nothing here to count yet.",
+    "tapToOpen": "Tap one to open it.",
     "title": "Scene",
     "position": "Scene {{index}} of {{total}}",
     "byAi": "found by AI",
@@ -686,7 +703,9 @@
     "arxivField_ti": "Title",
     "arxivField_au": "Author",
     "arxivField_cat": "Category",
-    "arxivHint": "Search arXiv by subject, title or author — or pick a category and read what was filed there most recently."
+    "arxivHint": "Search arXiv by subject, title or author — or pick a category and read what was filed there most recently.",
+    "standardebooks": "Standard Ebooks",
+    "standardebooksDetail": "The same out-of-copyright books, typeset and proofread by hand"
   },
   "find": {
     "prompt": "Type what you are looking for, then Search.",
@@ -707,6 +726,12 @@
     "paperHint": "One academic paper. Sections rather than chapters, and a pass that weighs what it claims."
   },
   "add": {
+    "listFirst": "Get the list first",
+    "directImport": "Direct import",
+    "listRow": "The list",
+    "searchList": "Search this list",
+    "browse": "Browse",
+    "sourceClosed": "Set up",
     "title": "Add a book",
     "kindTitle": "What kind",
     "whereFrom": "Where from",
@@ -725,7 +750,6 @@
     "indexMissing": "No list yet — fetch it once, then search it offline",
     "getList": "Get the list",
     "findTitle": "Find a book",
-    "findAcross": "Across the lists you have: {{sources}}",
     "esvTitle": "ESV",
     "esvWhy": "Licensed by Crossway and not downloadable \u2014 but with a key of your own you can look up any passage.",
     "esvKeyRow": "Your API key",
@@ -756,6 +780,31 @@
     "canonAll": "With {{count}} more",
     "canonAllHint": "The deuterocanonical books this edition carries.",
     "willGet": "{{books}} books · {{chapters}} chapters · {{verses}} verses",
-    "structureIncluded": "Structure included — its chapters and verses are published, not detected."
+    "structureIncluded": "Structure included — its chapters and verses are published, not detected.",
+    "standardebooksWhat": "One EPUB, with the chapters its own spine states — nothing here has to guess them.",
+    "seNeedsEmail": "Needs your email",
+    "seEmailRow": "Your Patrons Circle email",
+    "seWhy": "Their feeds are a membership benefit, so the credential has to be yours — this app has none to give.",
+    "seEmailPlaceholder": "you@example.com",
+    "seStaysHere": "The address stays on this device — never synced, never in a backup.",
+    "seSave": "Save the address",
+    "seForget": "Forget this address",
+    "seTest": "Test the address",
+    "seHowToGet": "Access comes with a donation to the Patrons Circle, with producing an ebook for them, or with a sponsorship. standardebooks.org/feeds/opds says which.",
+    "se_no-email": "Add your Patrons Circle email first.",
+    "se_rejected": "That address was refused. Feed access needs a current membership.",
+    "se_offline": "Couldn’t reach standardebooks.org. This one needs a signal.",
+    "se_no-feed": "Their feed answered but listed no catalog to read.",
+    "seSet": "Added",
+    "seNotSet": "Not set",
+    "seTestNow": "Test",
+    "seRetest": "Try again",
+    "seTesting": "Testing…",
+    "seWorks": "Works"
+  },
+  "graph": {
+    "barDetail": "{{range}} · {{count}} mentions",
+    "appears": "First in {{first}}, last in {{last}} · {{count}} chapters",
+    "barScale": "Each bar covers {{count}} chapters — tap one"
   }
 }

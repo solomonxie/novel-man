@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from '../navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -36,6 +36,15 @@ export function AiKeysSettings() {
   const [keys, setKeys] = useState<StoredKey[]>([]);
   const [strategy, setStrategyState] = useState<Strategy>('sequential');
   const [adding, setAdding] = useState(false);
+  /** Sent here by an analysis that had no key to run on: open the editor. */
+  const { addKey } = useLocalSearchParams<{ addKey?: string }>();
+  const answered = useRef(false);
+  useEffect(() => {
+    if (addKey && !answered.current) {
+      answered.current = true;
+      setAdding(true);
+    }
+  }, [addKey]);
 
   const load = useCallback(() => {
     listKeys().then(setKeys);

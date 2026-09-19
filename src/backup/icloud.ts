@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { File, Paths } from 'expo-file-system';
+import { File, Paths } from '../storage/fs';
 
 import { drive, type DriveStatus } from '../../modules/icloud';
 import { contentHash } from '../ai/cache';

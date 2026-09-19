@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../storage/secrets';
 
 import { cleanToken } from './esv';
 
@@ -9,7 +9,7 @@ import { cleanToken } from './esv';
  */
 const KEY = 'esv.apiKey';
 
-const SECRET_OPTIONS: SecureStore.SecureStoreOptions = {
+const SECRET_OPTIONS: SecureStore.SecretOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
 

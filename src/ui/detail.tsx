@@ -9,7 +9,7 @@ import { radius, space, usePalette } from '../theme';
  * it, and what you can do to it — in that order, and in three different
  * weights.
  */
-export function Hero({ eyebrow, avatar, children, facts, actions, note }: {
+export function Hero({ eyebrow, avatar, children, facts, actions, note, onNotePress }: {
   eyebrow?: string;
   /** A face, when the page is about someone. It leads the line rather than floating above it. */
   avatar?: React.ReactNode;
@@ -18,6 +18,8 @@ export function Hero({ eyebrow, avatar, children, facts, actions, note }: {
   actions?: React.ReactNode;
   /** What a button would have had to wrap to say: where Continue resumes, what a pass costs. */
   note?: string;
+  /** When the note is also the way somewhere — "Queued" is only useful if it leads to the queue. */
+  onNotePress?: () => void;
 }) {
   const palette = usePalette();
   const head = (
@@ -41,7 +43,16 @@ export function Hero({ eyebrow, avatar, children, facts, actions, note }: {
       {facts ? <View style={styles.facts}>{facts}</View> : null}
       {actions ? <View style={styles.actions}>{actions}</View> : null}
       {note ? (
-        <Text numberOfLines={2} style={{ color: palette.dim, fontSize: 12, marginTop: space.sm }}>
+        <Text
+          numberOfLines={2}
+          onPress={onNotePress}
+          suppressHighlighting={!onNotePress}
+          style={{
+            color: onNotePress ? palette.accent : palette.dim,
+            fontSize: 12,
+            marginTop: space.sm,
+          }}
+        >
           {note}
         </Text>
       ) : null}

@@ -1,27 +1,68 @@
-import * as SQLite from 'expo-sqlite';
+import { openDatabase, type Scalar } from './driver';
 import { noticeChange } from '../backup/changes';
 import { migrations } from './migrations';
 
-let handle: Promise<SQLite.SQLiteDatabase> | null = null;
+/**
+ * The four calls the app makes of a database, over whichever driver is
+ * underneath. Every write goes through `runAsync`, which is why the change
+ * signal can live in one place rather than at each new call site.
+ */
+export type Database = {
+  execAsync(sql: string): Promise<void>;
+  runAsync(sql: string, ...params: unknown[]): Promise<{ changes: number }>;
+  getFirstAsync<T>(sql: string, ...params: unknown[]): Promise<T | null>;
+  getAllAsync<T>(sql: string, ...params: unknown[]): Promise<T[]>;
+};
+
+/** Callers pass bindings loose or as one array; the driver wants an array. */
+function bind(params: unknown[]): Scalar[] {
+  const loose = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
+  return loose as Scalar[];
+}
+
+let handle: Promise<Database> | null = null;
 
 /**
  * Handed in by the backup layer rather than imported: a migration rewrites
  * rows nobody asked it to, and is the one failure no row-level undo reaches —
  * but the database must not depend on the thing that copies it.
  */
-let beforeMigrations: ((database: SQLite.SQLiteDatabase) => Promise<unknown>) | null = null;
+let beforeMigrations: ((database: Database) => Promise<unknown>) | null = null;
 
 export function setBeforeMigrations(hook: typeof beforeMigrations) {
   beforeMigrations = hook;
 }
 
-export function db(): Promise<SQLite.SQLiteDatabase> {
+export function db(): Promise<Database> {
   if (!handle) handle = open();
   return handle;
 }
 
 async function open() {
-  const database = await SQLite.openDatabaseAsync('novelman.db');
+  // The same file, in the same place expo-sqlite kept it. Opening anywhere
+  // else would silently start an empty library.
+  const driver = openDatabase('novelman.db');
+  const database: Database = {
+    async execAsync(sql) {
+      // Migrations arrive as several statements at once; the driver takes one.
+      for (const statement of sql.split(';')) {
+        if (statement.trim()) await driver.execute(statement);
+      }
+    },
+    async runAsync(sql, ...params) {
+      const { rowsAffected } = await driver.execute(sql, bind(params));
+      noticeChange();
+      return { changes: rowsAffected ?? 0 };
+    },
+    async getFirstAsync<T>(sql: string, ...params: unknown[]) {
+      const { rows } = await driver.execute(sql, bind(params));
+      return (rows?.[0] as T) ?? null;
+    },
+    async getAllAsync<T>(sql: string, ...params: unknown[]) {
+      const { rows } = await driver.execute(sql, bind(params));
+      return (rows ?? []) as T[];
+    },
+  };
   await database.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   const row = await database.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;
@@ -32,30 +73,13 @@ async function open() {
     version += 1;
     await database.execAsync(`PRAGMA user_version = ${version}`);
   }
-  return announceWrites(database);
-}
-
-/**
- * Everything the app stores goes through this one connection, so raising the
- * change signal here is what keeps it from being forgotten at the next new
- * call site. Patched after the migrations, which nobody backs up.
- */
-function announceWrites(database: SQLite.SQLiteDatabase): SQLite.SQLiteDatabase {
-  // Cast past the overloads: every one of them is a write, which is all this
-  // wrapper cares about.
-  const runAsync = database.runAsync.bind(database) as (...args: never[]) => Promise<unknown>;
-  database.runAsync = ((...args: never[]) => {
-    const result = runAsync(...args);
-    noticeChange();
-    return result;
-  }) as typeof database.runAsync;
   return database;
 }
 
 let tail: Promise<unknown> = Promise.resolve();
 
 /**
- * expo-sqlite's `withTransactionAsync` runs BEGIN/COMMIT on the one shared
+ * A driver's own transaction helper runs BEGIN/COMMIT on the one shared
  * connection, so two overlapping calls — a drain claiming a job while the
  * caller queues the next run — make the second BEGIN throw. Transactions queue
  * here instead. Never call this from inside another one.
