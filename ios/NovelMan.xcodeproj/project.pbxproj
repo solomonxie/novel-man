@@ -301,7 +301,6 @@
 					"-ObjC",
 					"-lc++",
 				);
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.solomonxie.novelman;
 				PRODUCT_NAME = NovelMan;
 				SWIFT_OBJC_BRIDGING_HEADER = "NovelMan/NovelMan-Bridging-Header.h";
@@ -321,6 +320,7 @@
 				CODE_SIGN_ENTITLEMENTS = NovelMan/NovelMan.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEPLOYMENT_POSTPROCESSING = YES;
 				DEVELOPMENT_TEAM = REPLACE_WITH_YOUR_TEAM_ID;
 				INFOPLIST_FILE = NovelMan/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
@@ -335,9 +335,10 @@
 					"-ObjC",
 					"-lc++",
 				);
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.solomonxie.novelman;
 				PRODUCT_NAME = NovelMan;
+				STRIP_INSTALLED_PRODUCT = YES;
+				STRIP_STYLE = "non-global";
 				SWIFT_OBJC_BRIDGING_HEADER = "NovelMan/NovelMan-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
