@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { clearRequests, listRequests, type AiRequest } from '../../src/db/requests';

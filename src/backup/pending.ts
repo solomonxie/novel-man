@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { File, Paths } from 'expo-file-system';
+import { File, Paths } from '../storage/fs';
 import { attachBookRecord, type BookRecord } from '../db/repo';
 import { writeImage } from '../storage/files';
 import { openBundle } from './bundle';

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Text, View } from 'react-native';
-import { File } from 'expo-file-system';
+import { File } from '../storage/fs';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 

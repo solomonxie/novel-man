@@ -1,4 +1,4 @@
-import { requireOptionalNativeModule } from 'expo';
+import { NativeModules } from 'react-native';
 
 /**
  * Five states, not two. A row that could never work here (no native module,
@@ -20,4 +20,7 @@ type NativeDrive = {
 };
 
 /** Null on Android, and in any build this module was not compiled into. */
-export const drive = requireOptionalNativeModule<NativeDrive>('IcloudDrive');
+/** Absent in any build without the native module, which is a state the
+ *  settings row already knows how to show. */
+export const drive: NativeDrive | null =
+  (NativeModules.IcloudDrive as NativeDrive | undefined) ?? null;

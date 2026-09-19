@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -18,6 +18,7 @@ import {
   type Scene,
 } from '../../src/db/repo';
 import { namesOf } from '../../src/cast/mentions';
+import { AppearanceGraph, chapterLabel, type Range } from '../../src/ui/AppearanceGraph';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item, Quote } from '../../src/ui/detail';
@@ -27,6 +28,18 @@ import { formatCount } from '../../src/text/counts';
 import { space, usePalette } from '../../src/theme';
 
 const EXCERPT = 600;
+
+/** One scene name, counted per chapter — the same shape a mention timeline has. */
+function recurrences(entries: { chapter: Chapter | undefined }[]) {
+  const perChapter = new Map<number, number>();
+  for (const { chapter } of entries) {
+    if (!chapter) continue;
+    perChapter.set(chapter.idx, (perChapter.get(chapter.idx) ?? 0) + 1);
+  }
+  return [...perChapter]
+    .sort(([a], [b]) => a - b)
+    .map(([chapter_idx, count]) => ({ chapter_idx, count }));
+}
 
 /**
  * One scene: what happens in it, who is in it, and the text itself. The cast
@@ -45,6 +58,11 @@ export default function ScenePage() {
   const [language, setLanguage] = useState('en');
   /** Every scene in the book carrying this same name, in reading order. */
   const [appearances, setAppearances] = useState<{ scene: Scene; chapter: Chapter | undefined }[]>([]);
+  /** Every chapter of the book, so the graph has a length to spread across. */
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [fetched, setFetched] = useState(false);
+  /** The recurrences inside the tapped stretch of the graph. */
+  const [shown, setShown] = useState<{ scene: Scene; chapter: Chapter | undefined }[]>([]);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -53,7 +71,10 @@ export default function ScenePage() {
       if (!found) return;
       const owner = await getChapter(found.chapter_id);
       setChapter(owner);
-      setLanguage((await getBook(found.book_id))?.language ?? 'en');
+      const owned = await getBook(found.book_id);
+      setLanguage(owned?.language ?? 'en');
+      setFetched(Boolean(owned?.text_source));
+      setChapters(await listChapters(found.book_id));
       const text = await getDocumentText(found.book_id);
       const slice = text.slice(found.start, found.end);
       setBody(slice);
@@ -171,6 +192,52 @@ export default function ScenePage() {
         )}
       </Block>
 
+      {/* A scene that happens once has nowhere to recur, so there is no shape
+          to draw — the list above already says everything a bar would. */}
+      {appearances.length > 1 && (
+        <AppearanceGraph
+          title={t('scene.timeline')}
+          fetchedNote={fetched ? t('scene.timelineFetched') : null}
+          timeline={recurrences(appearances)}
+          chapters={chapters}
+          onPick={(range) =>
+            setShown(
+              range
+                ? appearances.filter(
+                    (entry) =>
+                      entry.chapter !== undefined &&
+                      entry.chapter.idx >= range.from &&
+                      entry.chapter.idx <= range.to
+                  )
+                : []
+            )
+          }
+        >
+          {shown.length > 0 && (
+            <View style={{ marginTop: space.md, gap: space.sm }}>
+              {shown.slice(0, 6).map((entry) => (
+                <Pressable
+                  key={entry.scene.id}
+                  onPress={() => router.push(`/scene/${entry.scene.id}`)}
+                  style={({ pressed }) => [
+                    styles.quote,
+                    { borderColor: palette.border, opacity: pressed ? 0.6 : 1 },
+                  ]}
+                >
+                  <Text style={{ color: palette.faint, fontSize: 11 }}>
+                    {chapterLabel(chapters, entry.chapter?.idx ?? 0)}
+                  </Text>
+                  <Text numberOfLines={2} style={{ color: palette.text, fontSize: 13, lineHeight: 19 }}>
+                    {entry.scene.summary?.trim() || t('scenes.noSummary')}
+                  </Text>
+                </Pressable>
+              ))}
+              <Text style={{ color: palette.faint, fontSize: 12 }}>{t('scene.tapToOpen')}</Text>
+            </View>
+          )}
+        </AppearanceGraph>
+      )}
+
       {appearances.length > 1 && (
         <Block title={t('scene.appearances')} count={appearances.length}>
           {appearances.map((entry) => {
@@ -204,6 +271,12 @@ export default function ScenePage() {
 }
 
 const styles = StyleSheet.create({
+  quote: {
+    borderLeftWidth: 2,
+    paddingLeft: space.md,
+    paddingVertical: 2,
+    gap: 2,
+  },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   body: { fontSize: 15, lineHeight: 24 },
 });

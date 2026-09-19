@@ -1,7 +1,16 @@
 {
-  "extends": "expo/tsconfig.base",
+  "extends": "@react-native/typescript-config",
   "compilerOptions": {
     "strict": true,
+    "jsx": "react-jsx",
+    "lib": ["esnext", "dom"],
+    "types": [],
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
     "paths": {
       "@/*": [
         "./src/*"
@@ -11,5 +20,9 @@
   "include": [
     "**/*.ts",
     "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    ".parse-check"
   ]
 }

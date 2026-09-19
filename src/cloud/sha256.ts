@@ -1,8 +1,8 @@
 /**
- * SHA-256 and HMAC-SHA256 in plain JS. `expo-crypto` can hash a string but
- * cannot key a hash, and SigV4 is four chained HMACs — so the primitive has to
- * exist here. Only small strings ever go through it: request payloads are sent
- * with `UNSIGNED-PAYLOAD`, which S3 allows over HTTPS.
+ * SHA-256 and HMAC-SHA256 in plain JS, and the only hash the app has: SigV4
+ * is four chained HMACs, which no platform digest API exposes. Only small
+ * strings ever go through it — request payloads are sent with
+ * `UNSIGNED-PAYLOAD`, which S3 allows over HTTPS.
  */
 
 const K = new Uint32Array([

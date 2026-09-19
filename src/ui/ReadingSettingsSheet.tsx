@@ -135,6 +135,13 @@ export function ReadingSettingsSheet({ visible, settings, targets, target, onTar
               )}
             </>
           )}
+
+          {/* A grabber is a hint and the scrim is a guess. One button says it. */}
+          <Pressable onPress={onClose} style={[styles.done, { borderColor: ink + '33' }]}>
+            <Text style={{ color: palette.accent, fontSize: 16, fontWeight: '600' }}>
+              {t('reader.done')}
+            </Text>
+          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>
@@ -185,6 +192,12 @@ const styles = StyleSheet.create({
     paddingBottom: space.xxl,
   },
   grabber: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: space.lg },
+  done: {
+    marginTop: space.xl,
+    paddingVertical: space.md + 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+  },
   stepperRow: {
     flexDirection: 'row',
     alignItems: 'center',

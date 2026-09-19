@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -23,6 +23,7 @@ import {
 import { castNoun } from '../../../src/books/kinds';
 import { estimateCast } from '../../../src/cast/extract';
 import { estimateDeep, queueChapterRun, queuePolish } from '../../../src/analysis/runs';
+import { stoppedWithoutKey } from '../../../src/ai/guard';
 import { coOccurring, estimateRelations, extractRelations } from '../../../src/cast/relations';
 import { checkContinuity, estimateContinuity, subjectsFor, type Subject } from '../../../src/cast/continuity';
 import { appearances, byFrequency, timelineFor } from '../../../src/cast/mentions';
@@ -275,6 +276,7 @@ export default function Cast() {
             onPress: async () => {
               const entity = menuFor!;
               setMenuFor(null);
+              if (await stoppedWithoutKey(t)) return;
               await queuePolish(id!, entity.id, entity.name);
             },
           },

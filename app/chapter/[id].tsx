@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -16,14 +16,15 @@ import {
   type Scene,
 } from '../../src/db/repo';
 import { estimateDeep, queueChapterRun } from '../../src/analysis/runs';
+import { stoppedWithoutKey } from '../../src/ai/guard';
 import { sceneOpening } from '../../src/structure/scenes';
 import { formatUsd, type Estimate } from '../../src/ai/cost';
 import { getBook, getDocumentText } from '../../src/db/repo';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item } from '../../src/ui/detail';
 import { Hint } from '../../src/ui/primitives';
+import { openWorkQueue } from '../../src/ui/WorkQueue';
 import { hueFrom } from '../../src/ui/fields';
-import { formatCount } from '../../src/text/counts';
 import { space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
 
@@ -42,8 +43,8 @@ export default function ChapterPage() {
   const [places, setPlaces] = useState<ChapterPlace[]>([]);
   const [cost, setCost] = useState<Estimate | null>(null);
   const [text, setText] = useState('');
-  const [language, setLanguage] = useState('en');
   const [queued, setQueued] = useState(false);
+  const [queueError, setQueueError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -54,7 +55,6 @@ export default function ChapterPage() {
       setCast(await listChapterCast(found.book_id, found.idx));
       setPlaces(await listChapterPlaces(found.book_id, found.idx));
       const book = await getBook(found.book_id);
-      setLanguage(book?.language ?? 'en');
       const body = await getDocumentText(found.book_id);
       setText(body);
       if (book) setCost(await estimateDeep(body, [found], book));
@@ -91,7 +91,6 @@ export default function ChapterPage() {
         eyebrow={namesItself(chapter.title) ? undefined : t('chapter.number', { index: chapter.idx + 1 })}
         facts={
           <>
-            <Fact value={formatCount(chapter.end - chapter.start, language)} label={t('units.unit_long')} />
             {/* A fact that reads "0 places" is not a fact anyone needed. */}
             {scenes.length > 0 && <Fact value={scenes.length} label={t('units.unit_scenes')} />}
             {cast.length > 0 && <Fact value={cast.length} label={t('units.unit_cast')} />}
@@ -104,22 +103,35 @@ export default function ChapterPage() {
             <Action
               label={t('chapter.analyzeShort')}
               onPress={async () => {
-                await queueChapterRun(chapter.book_id, 'deep-analyze', [chapter]);
-                setQueued(true);
+                setQueueError(null);
+                if (await stoppedWithoutKey(t)) return;
+                try {
+                  await queueChapterRun(chapter.book_id, 'deep-analyze', [chapter]);
+                  setQueued(true);
+                } catch (problem) {
+                  // A tap that quietly does nothing is the worst answer there is.
+                  setQueueError(String(problem));
+                }
               }}
             />
           </>
         }
+        // A price under two buttons reads as belonging to the loud one. Only
+        // the pass costs anything, so the line says whose price it is.
         note={
-          queued
-            ? t('work.queued', { count: 1 })
-            : cost
-              ? t('ai.estimateLine', {
-                  tokens: cost.inputTokens.toLocaleString(),
-                  cost: formatUsd(cost.usd),
-                })
-              : t('ai.estimateNoKey')
+          queueError
+            ? t('work.queueFailed', { error: queueError })
+            : queued
+              ? t('work.queuedOpen')
+              : cost
+                ? t('ai.estimateFor', {
+                    action: t('chapter.analyzeShort'),
+                    tokens: cost.inputTokens.toLocaleString(),
+                    cost: formatUsd(cost.usd),
+                  })
+                : t('ai.estimateNoKey')
         }
+        onNotePress={queued ? openWorkQueue : undefined}
       >
         <EditableLine
           value={chapter.title}

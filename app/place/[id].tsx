@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import {
   deleteEntity,
   getDocumentText,
+  getBook,
   getEntity,
   listChapters,
+  listMentions,
   listPlaceCompany,
   listPlaceVisits,
   listScenesAtPlace,
   parseFields,
   updateEntity,
+  type Book,
   type Chapter,
   type CustomField,
   type Entity,
@@ -22,6 +25,8 @@ import {
 } from '../../src/db/repo';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
 import { queuePlacePolish } from '../../src/analysis/runs';
+import { appearancesIn, namesOf, timelineFor, type Appearance } from '../../src/cast/mentions';
+import { AppearanceGraph, chapterLabel, type Range } from '../../src/ui/AppearanceGraph';
 import { sceneOpening } from '../../src/structure/scenes';
 import { hasAnyKey } from '../../src/ai/keys';
 import { useWorkRefresh } from '../../src/work/refresh';
@@ -47,6 +52,11 @@ export default function PlacePage() {
   const [company, setCompany] = useState<PlaceCompany[]>([]);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [text, setText] = useState('');
+  const [book, setBook] = useState<Book | null>(null);
+  const [timeline, setTimeline] = useState<{ chapter_idx: number; count: number }[]>([]);
+  /** What the tapped stretch of the graph actually says, once asked for. */
+  const [shown, setShown] = useState<Appearance[]>([]);
+  const [scrubbing, setScrubbing] = useState(false);
   const [polishOpen, setPolishOpen] = useState(false);
   const [keyed, setKeyed] = useState(false);
   const latest = useRef<Entity | null>(null);
@@ -70,6 +80,8 @@ export default function PlacePage() {
       setCompany(await listPlaceCompany(found.id));
       setScenes(await listScenesAtPlace(found.id));
       setText(await getDocumentText(found.book_id));
+      setBook(await getBook(found.book_id));
+      setTimeline(timelineFor(await listMentions(found.book_id), found.id));
     });
   }, [id]);
 
@@ -218,6 +230,43 @@ export default function PlacePage() {
         )}
       </Block>
 
+      <AppearanceGraph
+        title={t('place.timeline')}
+        fetchedNote={book?.text_source ? t('place.timelineFetched') : null}
+        timeline={timeline}
+        chapters={chapters}
+        onPick={(range, dragging) => {
+          setScrubbing(dragging);
+          if (!range) return setShown([]);
+          setShown(appearancesIn(text, chapters, namesOf(place), range));
+        }}
+      >
+        {shown.length > 0 && (
+          <View style={{ marginTop: space.md, gap: space.sm }}>
+            {shown.slice(0, scrubbing ? 1 : 6).map((appearance) => (
+              <Pressable
+                key={appearance.offset}
+                onPress={() => router.push(`/reader/${place.book_id}?at=${appearance.offset}`)}
+                style={({ pressed }) => [
+                  styles.quote,
+                  { borderColor: palette.border, opacity: pressed ? 0.6 : 1 },
+                ]}
+              >
+                <Text style={{ color: palette.faint, fontSize: 11 }}>
+                  {chapterLabel(chapters, appearance.chapterIdx)}
+                </Text>
+                <Text numberOfLines={2} style={{ color: palette.text, fontSize: 13, lineHeight: 19 }}>
+                  {appearance.quote}
+                </Text>
+              </Pressable>
+            ))}
+            {!scrubbing && (
+              <Text style={{ color: palette.faint, fontSize: 12 }}>{t('entity.tapToRead')}</Text>
+            )}
+          </View>
+        )}
+      </AppearanceGraph>
+
       <FieldsSection
         title={t('place.fields')}
         fields={parseFields(place.fields)}
@@ -258,5 +307,11 @@ function isBlank(entity: Entity): boolean {
 }
 
 const styles = StyleSheet.create({
+  quote: {
+    borderLeftWidth: 2,
+    paddingLeft: space.md,
+    paddingVertical: 2,
+    gap: 2,
+  },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect } from '../navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { isAuto, lastBackupAt, setAuto, useDriveStatus } from '../backup/icloud';

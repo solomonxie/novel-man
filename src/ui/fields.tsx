@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { radius, space, usePalette } from '../theme';
 
 /** Edits commit on blur — a Save button on every field would be five taps a page. */
@@ -74,15 +74,15 @@ export function Portrait({ name, path, hue, size, onPick }: {
 }
 
 export async function pickImage(): Promise<string | null> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) return null;
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    allowsEditing: true,
-    aspect: [1, 1],
+  // The library sheet asks for its own permission, so there is none to request
+  // here — a refusal comes back as a cancelled pick.
+  const result = await launchImageLibrary({
+    mediaType: 'photo',
+    selectionLimit: 1,
     quality: 0.8,
   });
-  return result.canceled ? null : result.assets[0].uri;
+  if (result.didCancel || result.errorCode) return null;
+  return result.assets?.[0]?.uri ?? null;
 }
 
 export function initials(name: string): string {

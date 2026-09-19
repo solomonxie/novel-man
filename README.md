@@ -76,18 +76,23 @@ screenplay conversion out to `.fountain` and `.fdx`.
 **Books you name instead of find** — public sources searched from the Add page,
 each stating its own terms before anything is fetched. **Project Gutenberg**
 for novels and nonfiction, over its own OPDS search: the EPUB without plates,
-with the size and rights line its feed states. **arXiv** for papers, searched
-by title, by author, or by category browsed newest-first — what it states about
-a paper becomes the book's title, authors, year and abstract. **eBible.org**
-for a bible, below. A book that lives at a url — a chapter in a repository, a file in a
-drive — comes in through the link box, which rewrites a GitHub page to its raw
-file the way it already rewrites a Google Doc to `.docx`.
+with the size and rights line its feed states. **Standard Ebooks** for the same
+books produced by hand — typeset, proofread, with a spine that states its
+chapters instead of leaving them to be detected. Its feeds are a Patrons Circle
+benefit rather than an open endpoint, so that row takes an email address of
+yours and says so plainly instead of pretending otherwise. **arXiv** for
+papers, searched by title, by author, or by category browsed newest-first —
+what it states about a paper becomes the book's title, authors, year and
+abstract. **eBible.org** for a bible, below. A book that lives at a url — a
+chapter in a repository, a file in a drive — comes in through the link box,
+which rewrites a GitHub page to its raw file the way it already rewrites a
+Google Doc to `.docx`.
 
 **A bible** asks two questions — which translation, which canon — and downloads
-from eBible.org as USFM. Eleven editions, not the whole catalog: KJV, ASV, WEB,
-BSB, NET, YLT, 和合本 简/繁, 当代译本 简/繁, 世界中文. NIV, NKJV, NASB and 吕振中
-are absent because their licences forbid redistribution, so no source can serve
-them. Books, chapters and verses arrive published rather than detected, and
+from eBible.org as USFM: every edition its catalog marks redistributable, which
+is most of them, in whatever language. NIV, NKJV, NASB and 吕振中 are absent
+because their licences forbid redistribution, so no source can serve them.
+Books, chapters and verses arrive published rather than detected, and
 `John 3:16` or `约 3:16` is a lookup. Verse numbers, headings and red letter are
 reading settings over that text, never another download.
 

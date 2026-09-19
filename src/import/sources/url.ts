@@ -10,12 +10,17 @@ export { FetchError, looksLikeSignIn, nameFor, rewrite } from './links';
  * does. `named` is for a source that knows what the book is called better than
  * its url does — Gutenberg serves an epub from `/ebooks/1342.epub.noimages`,
  * which is a title nobody wrote and an extension nothing downstream reads.
+ * `headers` is for a source whose files are behind a credential.
  */
-export async function fetchManuscript(input: string, named?: string): Promise<{ uri: string; name: string }> {
+export async function fetchManuscript(
+  input: string,
+  named?: string,
+  headers?: Record<string, string>
+): Promise<{ uri: string; name: string }> {
   const target = rewrite(input.trim());
   let response: Response;
   try {
-    response = await fetch(target.url, { headers: { accept: '*/*' } });
+    response = await fetch(target.url, { headers: { accept: '*/*', ...headers } });
   } catch (error) {
     throw new FetchError('http', String(error));
   }

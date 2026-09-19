@@ -1,6 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import { getLocales } from 'expo-localization';
+import { getLocales } from 'react-native-localize';
 
 import en from './en.json';
 import zhHans from './zh-Hans.json';

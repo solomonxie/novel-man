@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../storage/secrets';
 import { Bucket } from './client';
 import type { Connection } from './providers';
 
@@ -6,7 +6,7 @@ const INDEX = 'cloud.connections';
 const secretKey = (id: string) => `cloud.secret.${id}`;
 
 /** Same rule as an AI key: the secret is pinned to this device and never synced. */
-const SECRET_OPTIONS: SecureStore.SecureStoreOptions = {
+const SECRET_OPTIONS: SecureStore.SecretOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
 

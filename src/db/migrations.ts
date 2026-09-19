@@ -406,4 +406,12 @@ export const migrations: string[] = [
   // chapter at a time, where every chapter starts at zero and the offsets
   // alone would put all of them on top of each other.
   `ALTER TABLE annotations ADD COLUMN chapter_id TEXT;`,
+
+  // The url a source stated for a row of its index, and the licence it stated
+  // beside it. Gutenberg re-reads a book's own feed for both at the moment of
+  // asking; a source that publishes them once, in the list, has nowhere to
+  // re-read them from — and deriving either from an id would be guessing,
+  // which is the one thing a download and its terms are never subject to.
+  `ALTER TABLE catalog ADD COLUMN href TEXT;`,
+  `ALTER TABLE catalog ADD COLUMN terms TEXT;`,
 ];

@@ -1,11 +1,12 @@
 node_modules/
+ios/build/
+ios/Pods/
 .expo/
 dist/
 web-build/
 *.tsbuildinfo
 .env
 .env.local
-/ios/
 android/
 *.log
 .DS_Store
