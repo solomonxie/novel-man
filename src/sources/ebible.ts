@@ -1,4 +1,4 @@
-import { File, Paths } from 'expo-file-system';
+import { File, Paths } from '../storage/fs';
 import { unzipSync, strFromU8 } from 'fflate';
 
 import { saveImportedBook } from '../db/repo';

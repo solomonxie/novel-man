@@ -1,4 +1,4 @@
-import * as DocumentPicker from 'expo-document-picker';
+import { errorCodes, isErrorWithCode, pick as pickDocument, types } from '@react-native-documents/picker';
 import { supportedMimeTypes } from '../registry';
 
 export type PickedFile = { uri: string; name: string };
@@ -8,11 +8,13 @@ export type PickedFile = { uri: string; name: string };
 // so a second tap can never wedge it.
 let inFlight: Promise<PickedFile | null> | null = null;
 
-function pick(options: Parameters<typeof DocumentPicker.getDocumentAsync>[0]) {
-  inFlight ??= DocumentPicker.getDocumentAsync(options)
-    .then((result) => {
-      const asset = result.canceled ? null : result.assets[0];
-      return asset ? { uri: asset.uri, name: asset.name } : null;
+function pick(type: string[]) {
+  inFlight ??= pickDocument({ type, mode: 'import', allowMultiSelection: false })
+    .then(([picked]) => (picked ? { uri: picked.uri, name: picked.name ?? '' } : null))
+    // Backing out is an answer, not a failure.
+    .catch((problem) => {
+      if (isErrorWithCode(problem) && problem.code === errorCodes.OPERATION_CANCELED) return null;
+      throw problem;
     })
     .finally(() => {
       inFlight = null;
@@ -25,13 +27,9 @@ function pick(options: Parameters<typeof DocumentPicker.getDocumentAsync>[0]) {
  * provider shows up here, with no OAuth and nowhere to keep a token.
  */
 export function pickManuscript(): Promise<PickedFile | null> {
-  return pick({
-    type: [...supportedMimeTypes, 'text/*', 'application/octet-stream'],
-    copyToCacheDirectory: true,
-    multiple: false,
-  });
+  return pick([...supportedMimeTypes, 'text/*', 'application/octet-stream']);
 }
 
 export function pickBackupBundle(): Promise<PickedFile | null> {
-  return pick({ type: '*/*', copyToCacheDirectory: true });
+  return pick([types.allFiles]);
 }

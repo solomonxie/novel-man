@@ -1,4 +1,5 @@
 import type { GutenbergBook } from './gutenberg';
+import type { StandardEbook } from './standardEbooks';
 import type { Paper } from './arxiv';
 import type { Translation } from './ebible';
 
@@ -10,6 +11,7 @@ import type { Translation } from './ebible';
 export type Choice =
   | { source: 'ebible'; translation: Translation }
   | { source: 'gutenberg'; book: GutenbergBook }
+  | { source: 'standardebooks'; book: StandardEbook }
   | { source: 'arxiv'; paper: Paper };
 
 let held: Choice | null = null;

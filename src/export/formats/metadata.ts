@@ -1,4 +1,4 @@
-import * as Print from 'expo-print';
+import * as Print from '../print';
 import { safeFileName, type ExportInput, type Exporter } from '../types';
 import { toHtml, toMarkdown, type Section } from './sections';
 

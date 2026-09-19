@@ -8,7 +8,14 @@ import {
   type Paper,
 } from '../sources/arxiv';
 import { readGutenbergBook, type GutenbergBook } from '../sources/gutenberg';
-import { fetchManuscript } from './sources/url';
+import {
+  authHeader,
+  fileNameFor as standardEbookFileName,
+  StandardEbooksError,
+  type StandardEbook,
+} from '../sources/standardEbooks';
+import { standardEbooksEmail } from '../sources/standardEbooksEmail';
+import { fetchManuscript, FetchError } from './sources/url';
 import { saveDownload } from './sources/downloads';
 import { importFile, type ImportPreview, type ImportProgress } from './pipeline';
 
@@ -37,6 +44,7 @@ export type QueuedSource =
   | { via: 'file'; uri: string; name: string; kind?: string }
   | { via: 'ebible'; translation: Translation; apocrypha: boolean }
   | { via: 'gutenberg'; book: GutenbergBook; kind?: string }
+  | { via: 'standardebooks'; book: StandardEbook; kind?: string }
   | { via: 'arxiv'; paper: Paper; kind?: string };
 
 const jobs: ImportJob[] = [];
@@ -82,6 +90,10 @@ export function enqueueTranslation(translation: Translation, apocrypha: boolean)
 
 export function enqueueGutenberg(book: GutenbergBook, kind?: string): string {
   return enqueue({ via: 'gutenberg', book, kind }, book.title);
+}
+
+export function enqueueStandardEbook(book: StandardEbook, kind?: string): string {
+  return enqueue({ via: 'standardebooks', book, kind }, book.title);
 }
 
 export function enqueuePaper(paper: Paper, kind?: string): string {
@@ -161,6 +173,29 @@ async function runJob(job: ImportJob, source: QueuedSource) {
     // in a screen's state from whenever the list was last searched.
     const edition = await readGutenbergBook(source.book);
     const file = await fetchManuscript(edition.url, edition.fileName);
+    return importFrom({ ...file, kind: source.kind }, job);
+  }
+
+  if (source.via === 'standardebooks') {
+    job.stage = 'reading';
+    publish();
+    // The url came from the feed with the rest of the row, so there is nothing
+    // to re-read — but the file is behind the same credential the feed was.
+    const email = await standardEbooksEmail();
+    if (!email || !source.book.url) throw new StandardEbooksError('no-email');
+    let file;
+    try {
+      file = await fetchManuscript(source.book.url, standardEbookFileName(source.book), {
+        authorization: authHeader(email),
+      });
+    } catch (problem) {
+      // A membership that lapsed between the list and the download is the one
+      // failure here that isn't "try again" — say which it was.
+      if (problem instanceof FetchError && /^(401|403)$/.test(problem.detail ?? '')) {
+        throw new StandardEbooksError('rejected');
+      }
+      throw problem;
+    }
     return importFrom({ ...file, kind: source.kind }, job);
   }
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { FlatList, Text, View } from 'react-native';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { readCatalog, type Translation } from '../../src/sources/ebible';

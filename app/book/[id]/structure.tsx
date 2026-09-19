@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -47,6 +47,7 @@ import { hasAnyKey } from '../../../src/ai/keys';
 import type { Estimate } from '../../../src/ai/cost';
 import { AiRunSheet } from '../../../src/ui/AiRunSheet';
 import { estimateBriefs, queueChapterRun, unbriefed } from '../../../src/analysis/runs';
+import { stoppedWithoutKey } from '../../../src/ai/guard';
 import { Hint, Row, Search, SEARCHABLE_FROM, Section } from '../../../src/ui/primitives';
 import { ActionMenu, type MenuAction } from '../../../src/ui/ActionMenu';
 import { useDocument } from '../../../src/ui/useDocument';
@@ -126,6 +127,7 @@ export default function StructurePage() {
   async function runOne(index: number, kind: 'deep-analyze' | 'chapter-brief') {
     setActionsFor(null);
     if (!chapters) return;
+    if (await stoppedWithoutKey(t)) return;
     await queueChapterRun(id!, kind, [chapters[index]]);
   }
 

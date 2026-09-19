@@ -1,4 +1,5 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space, usePalette } from '../theme';
 
 export type PickerOption = { id: string; label: string; detail?: string };
@@ -15,6 +16,9 @@ export function PickerSheet({ visible, title, options, selectedId, onPick, onClo
   onDismiss?: () => void;
 }) {
   const palette = usePalette();
+  // A short sheet otherwise ends at the home indicator, which puts its last
+  // option on the one strip of glass a thumb has to reach around.
+  const insets = useSafeAreaInsets();
   // A sheet grows with its list, and a list of 21 categories grows past the
   // screen. Past half the page it scrolls inside the sheet instead.
   const { height } = useWindowDimensions();
@@ -32,7 +36,14 @@ export function PickerSheet({ visible, title, options, selectedId, onPick, onClo
     >
       <Pressable style={[styles.scrim, { backgroundColor: palette.scrim }]} onPress={onClose}>
         <Pressable
-          style={[styles.sheet, { backgroundColor: palette.surface, borderColor: palette.border }]}
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: palette.surface,
+              borderColor: palette.border,
+              paddingBottom: Math.max(insets.bottom, space.md) + space.lg,
+            },
+          ]}
           onPress={(event) => event.stopPropagation()}
         >
           <View style={[styles.grabber, { backgroundColor: palette.faint }]} />
@@ -75,7 +86,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.lg,
     // In dark, a surface on a black page needs an edge to read as raised.
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingBottom: space.xxl,
     paddingHorizontal: space.lg,
   },
   grabber: {
@@ -86,5 +96,6 @@ const styles = StyleSheet.create({
     marginTop: space.sm,
   },
   title: { fontSize: 15, fontWeight: '600', marginTop: space.lg, marginBottom: space.sm },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.md },
+  // A row you choose from is a target, not a line of text.
+  row: { flexDirection: 'row', alignItems: 'center', minHeight: 52, paddingVertical: space.md },
 });

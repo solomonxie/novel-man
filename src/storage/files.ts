@@ -1,5 +1,5 @@
-import { Directory, File, Paths } from 'expo-file-system';
-import * as Crypto from 'expo-crypto';
+import { Directory, File, Paths } from './fs';
+import { sha256Hex } from '../cloud/sha256';
 import { extensionOf } from './paths';
 
 export { extensionOf };
@@ -20,10 +20,7 @@ function sourcesDir(): Directory {
 export async function adoptSourceFile(uri: string, originalName: string) {
   const picked = new File(uri);
   const bytes = await picked.bytes();
-  const hash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    bytesFingerprint(bytes)
-  );
+  const hash = sha256Hex(bytesFingerprint(bytes));
   const ext = extensionOf(originalName);
   const stored = new File(sourcesDir(), ext ? `${hash}.${ext}` : hash);
   if (!stored.exists) stored.write(bytes);
@@ -32,10 +29,7 @@ export async function adoptSourceFile(uri: string, originalName: string) {
 
 /** The same shelf, for a file the app fetched rather than one someone picked. */
 export async function storeSourceBytes(bytes: Uint8Array, name: string) {
-  const hash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    bytesFingerprint(bytes)
-  );
+  const hash = sha256Hex(bytesFingerprint(bytes));
   const ext = extensionOf(name);
   const stored = new File(sourcesDir(), ext ? `${hash}.${ext}` : hash);
   if (!stored.exists) stored.write(bytes);

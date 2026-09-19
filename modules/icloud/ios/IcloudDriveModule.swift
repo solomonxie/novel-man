@@ -1,4 +1,5 @@
-import ExpoModulesCore
+import Foundation
+import React
 
 /**
  The app's own iCloud Drive container — the one destination that outlives the
@@ -9,21 +10,26 @@ import ExpoModulesCore
  pointed at a cloud drive: it syncs file-at-a-time and knows nothing about
  write-ahead logs, so it would collect `novel-man 2.db` conflict copies.
  */
-public class IcloudDriveModule: Module {
-  public func definition() -> ModuleDefinition {
-    Name("IcloudDrive")
+@objc(IcloudDrive)
+public class IcloudDrive: NSObject {
 
-    // Every call is async: asking for the container touches the file
-    // coordination daemon and blocks for long enough to drop frames.
-    AsyncFunction("status") { () -> String in
-      return self.status()
-    }
+  /// Nothing here touches the UI, and asking for the container blocks on the
+  /// file coordination daemon for long enough to drop frames.
+  @objc static func requiresMainQueueSetup() -> Bool { false }
 
-    AsyncFunction("copyIn") { (fromPath: String, name: String) -> Double in
-      guard let documents = self.documentsURL() else {
-        throw DriveUnavailable()
-      }
-      let target = documents.appendingPathComponent(name)
+  @objc(status:reject:)
+  func status(_ resolve: @escaping RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    resolve(driveStatus())
+  }
+
+  @objc(copyIn:name:resolve:reject:)
+  func copyIn(
+    _ fromPath: String, name: String,
+    resolve: @escaping RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock
+  ) {
+    guard let documents = documentsURL() else { return reject(UNAVAILABLE, UNAVAILABLE_TEXT, nil) }
+    let target = documents.appendingPathComponent(name)
+    do {
       try FileManager.default.createDirectory(
         at: target.deletingLastPathComponent(), withIntermediateDirectories: true
       )
@@ -34,45 +40,59 @@ public class IcloudDriveModule: Module {
         try FileManager.default.removeItem(at: target)
       }
       try FileManager.default.copyItem(at: URL(fileURLWithPath: fromPath), to: target)
-      return Date().timeIntervalSince1970 * 1000
+      resolve(Date().timeIntervalSince1970 * 1000)
+    } catch {
+      reject("copy_failed", error.localizedDescription, error)
     }
+  }
 
-    AsyncFunction("latest") { () -> DriveFile? in
-      guard let newest = self.newestBundle() else { return nil }
-      let file = DriveFile()
-      file.name = newest.name
-      file.modifiedAt = newest.at.timeIntervalSince1970 * 1000
-      return file
-    }
+  @objc(latest:reject:)
+  func latest(_ resolve: @escaping RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    guard let newest = newestBundle() else { return resolve(nil) }
+    resolve(["name": newest.name, "modifiedAt": newest.at.timeIntervalSince1970 * 1000])
+  }
 
-    // Retention is decided in JS, which knows what the policy is; this only
-    // reports what is there and removes what it is told to.
-    AsyncFunction("list") { () -> [DriveFile] in
-      return self.bundles().map { found in
-        let file = DriveFile()
-        file.name = found.name
-        file.modifiedAt = found.at.timeIntervalSince1970 * 1000
-        return file
-      }
-    }
+  // Retention is decided in JS, which knows what the policy is; this only
+  // reports what is there and removes what it is told to.
+  @objc(list:reject:)
+  func list(_ resolve: @escaping RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    resolve(bundles().map { ["name": $0.name, "modifiedAt": $0.at.timeIntervalSince1970 * 1000] })
+  }
 
-    AsyncFunction("remove") { (name: String) -> Void in
-      guard let documents = self.documentsURL() else { throw DriveUnavailable() }
-      let target = documents.appendingPathComponent(name)
+  @objc(remove:resolve:reject:)
+  func remove(
+    _ name: String,
+    resolve: @escaping RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock
+  ) {
+    guard let documents = documentsURL() else { return reject(UNAVAILABLE, UNAVAILABLE_TEXT, nil) }
+    let target = documents.appendingPathComponent(name)
+    do {
       if FileManager.default.fileExists(atPath: target.path) {
         try FileManager.default.removeItem(at: target)
       }
+      resolve(nil)
+    } catch {
+      reject("remove_failed", error.localizedDescription, error)
     }
+  }
 
-    AsyncFunction("copyOut") { (name: String, toPath: String) -> Void in
-      guard let documents = self.documentsURL() else { throw DriveUnavailable() }
-      let source = documents.appendingPathComponent(name)
-      try self.download(source)
+  @objc(copyOut:toPath:resolve:reject:)
+  func copyOut(
+    _ name: String, toPath: String,
+    resolve: @escaping RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock
+  ) {
+    guard let documents = documentsURL() else { return reject(UNAVAILABLE, UNAVAILABLE_TEXT, nil) }
+    let source = documents.appendingPathComponent(name)
+    do {
+      try download(source)
       let target = URL(fileURLWithPath: toPath)
       if FileManager.default.fileExists(atPath: target.path) {
         try FileManager.default.removeItem(at: target)
       }
       try FileManager.default.copyItem(at: source, to: target)
+      resolve(nil)
+    } catch {
+      reject("download_failed", error.localizedDescription, error)
     }
   }
 
@@ -97,7 +117,7 @@ public class IcloudDriveModule: Module {
    `ubiquityIdentityToken` itself needs the entitlement, so in an unentitled
    build it reads nil and is indistinguishable from a signed-out account.
    */
-  private func status() -> String {
+  private func driveStatus() -> String {
     if containerURL() != nil { return "available" }
     if !isEntitled() { return "notEntitled" }
     if FileManager.default.ubiquityIdentityToken == nil { return "driveOff" }
@@ -176,16 +196,11 @@ public class IcloudDriveModule: Module {
   }
 }
 
-/// The newest bundle in the folder, named by the key a `copyOut` asks for.
-internal struct DriveFile: Record {
-  @Field var name: String = ""
-  @Field var modifiedAt: Double = 0
-}
+private let UNAVAILABLE = "drive_unavailable"
+private let UNAVAILABLE_TEXT = "iCloud Drive is not available on this device"
 
-internal final class DriveUnavailable: Exception, @unchecked Sendable {
-  override var reason: String { "iCloud Drive is not available on this device" }
-}
-
-internal final class DownloadTimedOut: Exception, @unchecked Sendable {
-  override var reason: String { "The backup is still downloading from iCloud" }
+/// The bytes are still in the cloud; asking for them without waiting reads an
+/// empty zip.
+struct DownloadTimedOut: LocalizedError {
+  var errorDescription: String? { "The backup is still downloading from iCloud" }
 }

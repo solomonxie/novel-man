@@ -11,9 +11,9 @@ import {
   type GestureResponderEvent,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
-import * as Clipboard from 'expo-clipboard';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 import {
   addAnnotation,
@@ -45,7 +45,7 @@ import { quoteWithVerses } from '../../src/scripture/reference';
 import { fingerprint, repairAll } from '../../src/reader/anchor';
 import type { Span } from '../../src/text/segment';
 import { scriptOf } from '../../src/text/language';
-import { readingThemes, space, useScheme, type HighlightColor } from '../../src/theme';
+import { markOn, radius, readingThemes, space, useScheme, type HighlightColor } from '../../src/theme';
 import {
   defaultSettings,
   lineHeightFor,
@@ -59,16 +59,16 @@ import { SentenceMenu } from '../../src/ui/SentenceMenu';
 import { NoteSheet } from '../../src/ui/NoteSheet';
 import { PickerSheet } from '../../src/ui/PickerSheet';
 import { ChapterSheet } from '../../src/ui/ChapterSheet';
+import { JumpWheel } from '../../src/ui/JumpWheel';
 import { shareQuoteCard, shareQuoteText } from '../../src/share/quote';
 import { listTargets, listUnits } from '../../src/db/translation';
-import { queueChapterRun } from '../../src/analysis/runs';
 
 /**
  * Long enough to decide and reach. At under three seconds the bar was gone
  * before a thumb had crossed the screen, which turns every use of it into two
  * taps: one to bring it back, one to press what you wanted.
  */
-const CHROME_IDLE_MS = 7000;
+const CHROME_IDLE_MS = 10000;
 /** Apple and Android both put the floor at 44pt / 48dp. */
 const TOUCH = 44;
 
@@ -106,6 +106,8 @@ export default function Reader() {
    */
   const [selection, setSelection] = useState<{ anchor: Span; focus: Span; y: number } | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  /** The title's own menu, unfolded under the bar it belongs to. */
+  const [jumpOpen, setJumpOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [noteFor, setNoteFor] = useState<Span | null>(null);
   const [shareFor, setShareFor] = useState<Span | null>(null);
@@ -347,6 +349,13 @@ export default function Reader() {
     return chapter && text ? layoutChapter(text, chapter, language) : [];
   }, [remote, remoteText, chapter, text, language]);
 
+  /** Every sentence on the page in reading order — what walking the far end
+   *  of a selection back by one needs. */
+  const spans = useMemo(
+    () => paragraphs.flatMap((paragraph) => paragraph.sentences),
+    [paragraphs]
+  );
+
   const palette = readingThemes[settings.theme];
   const script = scriptOf(language);
   const lineHeight = lineHeightFor(settings, script);
@@ -393,10 +402,34 @@ export default function Reader() {
     setSelecting(false);
   }
 
-  /** The far end moves; the anchor stays where the press landed. */
+  /**
+   * The far end moves; the anchor stays where the press landed. Tapping the
+   * far end itself takes it back rather than doing nothing — the selection
+   * gives up that sentence and ends at the one before it, so a tap too far is
+   * undone by the same tap that made it.
+   */
   function extendSelect(span: Span, event: GestureResponderEvent) {
     const y = event.nativeEvent.pageY;
-    setSelection((current) => (current ? { ...current, focus: span, y } : current));
+    setSelection((current) => {
+      if (!current) return current;
+      if (span.start !== current.focus.start) return { ...current, focus: span, y };
+      const back = stepBack(current.anchor, current.focus);
+      // Nothing left to give back: the one sentence was the whole selection,
+      // so tapping it again is done with it.
+      if (!back) {
+        endSelection();
+        return null;
+      }
+      return { ...current, focus: back, y };
+    });
+  }
+
+  /** One sentence back towards the anchor; null when the far end is the anchor. */
+  function stepBack(anchor: Span, focus: Span): Span | null {
+    const at = spans.findIndex((entry) => entry.start === focus.start);
+    const anchorAt = spans.findIndex((entry) => entry.start === anchor.start);
+    if (at < 0 || anchorAt < 0 || at === anchorAt) return null;
+    return spans[at + (at > anchorAt ? -1 : 1)] ?? null;
   }
 
   const range: Span | null = selection
@@ -417,7 +450,7 @@ export default function Reader() {
     // A fetched edition is quoted the way its licence asks: with the reference
     // and the edition, so what was copied can always be looked up again.
     const attributed = remote ? `${plain}\n\n— ${chapter.title} (${t('reader.esvShort')})` : plain;
-    await Clipboard.setStringAsync(cited ?? attributed);
+    await Clipboard.setString(cited ?? attributed);
     endSelection();
     flash(t('reader.copied'));
   }
@@ -431,18 +464,6 @@ export default function Reader() {
     });
   }
 
-  async function onHighlight() {
-    if (!range || !id) return;
-    const existing = annotationAt(marks, range);
-    if (existing && existing.kind === 'highlight') await removeAnnotation(existing.id);
-    else if (existing) await updateAnnotation(existing.id, { color: settings.highlight });
-    else await save(range, { kind: 'highlight', color: settings.highlight });
-    await refreshAnnotations();
-    // Marking a line is the whole gesture: staying in select mode afterwards
-    // only asks for a second decision nobody was making.
-    endSelection();
-  }
-
   async function onBookmark() {
     if (!range || !id) return;
     const existing = annotationAt(marks, range);
@@ -454,12 +475,18 @@ export default function Reader() {
     flash(t('reader.bookmarked'));
   }
 
-  /** A swatch is the same gesture as Highlight, with the colour said out loud. */
+  /**
+   * The swatches are the whole of highlighting now. Tapping one marks the
+   * passage; tapping the colour it already carries takes the mark off, which
+   * is what the Highlight button used to be for.
+   */
   async function onColor(color: HighlightColor) {
     if (!range || !id) return;
     remember(color);
     const existing = annotationAt(marks, range);
-    if (existing) await updateAnnotation(existing.id, { color });
+    if (existing?.kind === 'highlight' && existing.color === color) {
+      await removeAnnotation(existing.id);
+    } else if (existing) await updateAnnotation(existing.id, { color });
     else await save(range, { kind: 'highlight', color });
     await refreshAnnotations();
     endSelection();
@@ -475,6 +502,7 @@ export default function Reader() {
     }
     await refreshAnnotations();
     setNoteFor(null);
+    endSelection();
   }
 
   function save(span: Span, extra: { kind: 'highlight' | 'note' | 'bookmark'; color: string | null; note?: string }) {
@@ -497,14 +525,9 @@ export default function Reader() {
   function moreActions(): MenuAction[] {
     if (!chapter) return [];
     const partIdx = chapter.part_idx;
+    // Leaving the page is a decision, not a reach — so the pages this one sits
+    // inside are named in a list rather than crowded onto the bar.
     const actions: MenuAction[] = [
-      {
-        label: t('reader.jumpTo'),
-        onPress: () => {
-          setMoreOpen(false);
-          setListOpen(true);
-        },
-      },
       {
         label: t('reader.openChapter'),
         onPress: () => {
@@ -524,24 +547,13 @@ export default function Reader() {
         },
       });
     }
-    actions.push(
-      {
-        label: t('reader.openBook', { name: book?.title ?? '' }),
-        onPress: () => {
-          setMoreOpen(false);
-          router.push(`/book/${id}`);
-        },
+    actions.push({
+      label: t('reader.openBook', { name: book?.title ?? '' }),
+      onPress: () => {
+        setMoreOpen(false);
+        router.push(`/book/${id}`);
       },
-      {
-        label: t('reader.analyzeChapter'),
-        onPress: async () => {
-          setMoreOpen(false);
-          if (!id) return;
-          await queueChapterRun(id, 'deep-analyze', [chapter]);
-          flash(t('work.queued', { count: 1 }));
-        },
-      }
-    );
+    });
     return actions;
   }
 
@@ -578,8 +590,8 @@ export default function Reader() {
     const max = Math.max(0, viewport.current.content - viewport.current.layout);
     const current = scrolledY.current;
     const next = current + direction * step;
-    if (next < 0 && index > 0) return goToChapter(index - 1, 0.98);
-    if (next > max && index < chapters.length - 1) return goToChapter(index + 1, 0);
+    // Stops at the chapter's own ends: changing chapter is a decision, not
+    // something a tap near the margin does on your behalf.
     scrollRef.current?.scrollTo({ y: Math.min(max, Math.max(0, next)), animated: true });
   }
 
@@ -613,6 +625,7 @@ export default function Reader() {
     const active = range !== null && span.start >= range.start && span.end <= range.end;
     const flashing = flashAt !== null && flashAt >= span.start && flashAt < span.end;
     const body = useTarget ? translated.get(span.start) : undefined;
+    const mark = marked?.color ? markOn(marked.color, settings.theme) : null;
     return (
       <Text
         key={span.start}
@@ -628,10 +641,10 @@ export default function Reader() {
           setChrome(!chromeShown.current);
         }}
         style={{
-          backgroundColor: active || flashing ? palette.tint : marked?.color ?? 'transparent',
+          backgroundColor: active || flashing ? palette.tint : mark?.bg ?? 'transparent',
           textDecorationLine: marked?.kind === 'bookmark' ? 'underline' : 'none',
           // An untranslated sentence still reads, just visibly unfinished.
-          color: useTarget && !body ? palette.dim : palette.text,
+          color: useTarget && !body ? palette.dim : mark?.ink ?? palette.text,
         }}
       >
         {runsIn(body || source.slice(span.start, span.end)).map((run, at) => (
@@ -655,7 +668,11 @@ export default function Reader() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
-      <Animated.View style={[styles.bar, { opacity: chrome }]} pointerEvents="box-none">
+      <View style={[styles.top, { paddingTop: insets.top }]} pointerEvents="box-none">
+      <Animated.View
+        style={[styles.bar, { opacity: chrome, backgroundColor: palette.bg }]}
+        pointerEvents="box-none"
+      >
         {/* The way out of every other page, drawn the same way here: the
             accent chevron at the header's own size, not a grey hint of one. */}
         <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
@@ -663,16 +680,41 @@ export default function Reader() {
             ‹
           </Text>
         </Pressable>
-        <Text numberOfLines={1} style={{ color: palette.dim, fontSize: 13, flex: 1, textAlign: 'center' }}>
-          {chapter.title.trim() || `${index + 1}`}
-        </Text>
+        {/* The chapter's name is also the way out of it: tapping unfolds the
+            wheels, so the bar answers "where am I" and "where to" in one place. */}
+        <Pressable onPress={() => setJumpOpen((was) => !was)} style={styles.title} hitSlop={8}>
+          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 17, fontWeight: '600' }}>
+            {chapter.title.trim() || `${index + 1}`}
+          </Text>
+          <Text style={{ color: palette.accent, fontSize: 24, lineHeight: 26 }}>
+            {jumpOpen ? ' ▴' : ' ▾'}
+          </Text>
+        </Pressable>
         <View style={{ width: TOUCH }} />
       </Animated.View>
+
+      {jumpOpen && !selection ? (
+        <JumpWheel
+          chapters={chapters}
+          index={index}
+          palette={palette}
+          onGo={(toIdx) => {
+            setJumpOpen(false);
+            goToChapter(toIdx, 0);
+          }}
+          onClose={() => setJumpOpen(false)}
+        />
+      ) : null}
+      </View>
 
       <View style={{ flex: 1 }}>
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={{ paddingHorizontal: settings.margin, paddingBottom: space.xxl * 3 }}
+          contentContainerStyle={{
+            paddingHorizontal: settings.margin,
+            paddingTop: TOUCH + space.lg,
+            paddingBottom: space.xxl * 3,
+          }}
           onScroll={(event) => {
             const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
             scrolledY.current = contentOffset.y;
@@ -779,7 +821,8 @@ export default function Reader() {
                     }
                   >
                     {/* Raised, small and dim: a number to find a verse by, not
-                        a word in the sentence it opens. */}
+                        a word in the sentence it opens — so it is set off by
+                        more than the space between two words. */}
                     {numberAt.has(paragraph.start) ? (
                       <Text
                         style={{
@@ -788,7 +831,8 @@ export default function Reader() {
                           lineHeight,
                         }}
                       >
-                        {numberAt.get(paragraph.start)}{' '}
+                        {numberAt.get(paragraph.start)}
+                        {'  '}
                       </Text>
                     ) : null}
                     {paragraph.sentences.map((span) =>
@@ -816,6 +860,39 @@ export default function Reader() {
               })
             )}
           </Pressable>
+
+          {/* The end of the words is where the next chapter belongs — reached
+              by finishing this one, not by a thumb near an edge. Part of the
+              page, so it scrolls away with the text rather than hovering. */}
+          {paragraphs.length > 0 ? (
+            <View style={styles.ends}>
+              <Text style={{ color: palette.dim, fontSize: 13, textAlign: 'center' }}>
+                {t('reader.endOfChapter', { name: chapter.title.trim() || `${index + 1}` })}
+              </Text>
+              <View style={styles.endButtons}>
+                {index > 0 ? (
+                  <Pressable
+                    onPress={() => goToChapter(index - 1, 0)}
+                    style={[styles.endButton, { borderColor: palette.tint }]}
+                  >
+                    <Text numberOfLines={1} style={{ color: palette.accent, fontSize: 15 }}>
+                      ‹  {t('reader.prevChapter')}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {index < chapters.length - 1 ? (
+                  <Pressable
+                    onPress={() => goToChapter(index + 1, 0)}
+                    style={[styles.endButton, { borderColor: palette.tint, backgroundColor: palette.tint }]}
+                  >
+                    <Text numberOfLines={1} style={{ color: palette.accent, fontSize: 15, fontWeight: '600' }}>
+                      {t('reader.nextChapter')}  ›
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
         </ScrollView>
 
         {/* The margin is the tap zone: it never sits over a word. */}
@@ -843,15 +920,9 @@ export default function Reader() {
         pointerEvents={selection ? 'none' : 'box-none'}
       >
         <View style={styles.controls}>
-          {/* Chapter by chapter is the move this bar is for, so its arrows are
-              the widest targets on it and heavy enough to read at a glance. */}
-          <Pressable
-            onPress={() => index > 0 && goToChapter(index - 1)}
-            style={styles.arrowButton}
-            disabled={index === 0}
-          >
-            <Text style={[styles.arrow, { color: index > 0 ? palette.text : palette.dim }]}>‹</Text>
-          </Pressable>
+          {/* Turning a chapter is not on this bar at all: it happens at the end
+              of the words, or from the title above. What is left is what you
+              reach for while reading. */}
           <Pressable onPress={() => setSettingsOpen(true)} style={styles.barButton}>
             <Text style={{ color: palette.text, fontSize: 20 }}>Aa</Text>
           </Pressable>
@@ -889,31 +960,23 @@ export default function Reader() {
               reaches for without looking, and the rest are a list that can say
               what they do in words. Accent while selecting, because that is a
               mode the page is in and the bar has to admit it. */}
-          <Pressable onPress={() => setMoreOpen(true)} style={styles.barButton}>
-            <Text
-              style={{
-                color: selecting ? palette.accent : palette.text,
-                fontSize: 26,
-                lineHeight: 30,
-              }}
-            >
-              ⋯
-            </Text>
+          {/* The list of chapters, by name rather than by wheel. */}
+          <Pressable onPress={() => setListOpen(true)} style={styles.barButton}>
+            <Text style={{ color: palette.text, fontSize: 22, lineHeight: 26 }}>≡</Text>
           </Pressable>
-          <Pressable
-            onPress={() => index < chapters.length - 1 && goToChapter(index + 1)}
-            style={styles.arrowButton}
-            disabled={index >= chapters.length - 1}
-          >
-            <Text
-              style={[
-                styles.arrow,
-                { color: index < chapters.length - 1 ? palette.text : palette.dim },
-              ]}
-            >
-              ›
-            </Text>
-          </Pressable>
+          {moreActions().length > 0 ? (
+            <Pressable onPress={() => setMoreOpen(true)} style={styles.barButton}>
+              <Text
+                style={{
+                  color: selecting ? palette.accent : palette.text,
+                  fontSize: 26,
+                  lineHeight: 30,
+                }}
+              >
+                ⋯
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </Animated.View>
       )}
@@ -928,19 +991,12 @@ export default function Reader() {
           onColor={onColor}
           onDismiss={endSelection}
           actions={[
-            { key: 'copy', label: t('reader.copy'), onPress: onCopy },
-            {
-              key: 'highlight',
-              label: selected?.kind === 'highlight' ? t('reader.unhighlight') : t('reader.highlight'),
-              onPress: onHighlight,
-            },
             {
               key: 'note',
               label: t('reader.note'),
-              onPress: () => {
-                setNoteFor(range!);
-                endSelection();
-              },
+              // The selection stays while the sheet is open: backing out of a
+              // note is a change of mind about the note, not about the words.
+              onPress: () => setNoteFor(range!),
             },
             {
               key: 'bookmark',
@@ -950,10 +1006,9 @@ export default function Reader() {
             {
               key: 'share',
               label: t('reader.share'),
-              onPress: () => {
-                setShareFor(range!);
-                endSelection();
-              },
+              // The selection outlives the sheet: dismissing it is a change of
+              // mind about sharing, not about the words.
+              onPress: () => setShareFor(range!),
             },
           ]}
         />
@@ -984,6 +1039,7 @@ export default function Reader() {
         visible={shareFor !== null}
         title={t('reader.share')}
         options={[
+          { id: 'copy', label: t('reader.copy'), detail: t('reader.copyHint') },
           { id: 'text', label: t('reader.shareText') },
           { id: 'card', label: t('reader.shareCard'), detail: t('reader.shareCardHint') },
         ]}
@@ -992,11 +1048,14 @@ export default function Reader() {
           setShareFor(null);
           if (!span) return;
           try {
-            if (choice === 'text') await shareQuoteText(quoteFor(span));
+            if (choice === 'copy') await onCopy();
+            else if (choice === 'text') await shareQuoteText(quoteFor(span));
             else await shareQuoteCard(quoteFor(span), settings.theme, settings.serif);
           } catch (error) {
             flash(String(error));
           }
+          // Done with the words, whichever way they left.
+          endSelection();
         }}
         onClose={() => setShareFor(null)}
       />
@@ -1029,11 +1088,28 @@ export default function Reader() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  /**
+   * Over the page, not above it. As a row in the column its height stayed
+   * reserved at zero opacity, leaving a band of bare background across the top
+   * that read as a bar which had not quite gone — the same fault the footer
+   * had.
+   */
+  top: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2 },
+
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: space.sm,
-    paddingVertical: space.xs,
+    paddingVertical: space.sm,
+  },
+  /** The widest thing on the bar, because it is the one you read and the one
+   *  you press — a chapter's name is long and deserves the room. */
+  title: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: TOUCH,
   },
   /**
    * Every control in the bar is a full touch target, not a glyph with hitSlop
@@ -1043,7 +1119,6 @@ const styles = StyleSheet.create({
   barButton: { width: TOUCH, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
   /** The back chevron carries a header's worth of weight, so it gets the room. */
   backButton: { width: TOUCH + 8, height: TOUCH + 8, alignItems: 'center', justifyContent: 'center' },
-  arrowButton: { width: TOUCH + 28, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
   check: {
     width: 20,
     height: 20,
@@ -1052,8 +1127,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  arrow: { fontSize: 34, lineHeight: 38, fontWeight: '700' },
   zone: { position: 'absolute', top: 0, bottom: 0 },
+  /** Set well below the last line: a button touching the text is a button hit
+   *  by the scroll that was meant to read the end of it. */
+  ends: { marginTop: space.xxl * 2, gap: space.md },
+  endButtons: { flexDirection: 'row', gap: space.md, justifyContent: 'center' },
+  endButton: {
+    flex: 1,
+    maxWidth: 220,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    paddingVertical: space.md + 2,
+    alignItems: 'center',
+  },
   /** Code is set apart by a rule, not a box: a box on a reading page is a form. */
   code: { borderLeftWidth: 2, paddingLeft: space.md, paddingVertical: space.xs },
   /**

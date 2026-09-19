@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { base64 } from './base64';
 import type { Block, ParseContext } from './types';
 
 /**
@@ -112,23 +113,6 @@ export function Extractor() {
       />
     </View>
   );
-}
-
-const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-/** Hermes has no `btoa`, and the payload is bytes going over a string bridge. */
-export function base64(bytes: Uint8Array): string {
-  let out = '';
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i];
-    const b = bytes[i + 1];
-    const c = bytes[i + 2];
-    out += CHARS[a >> 2];
-    out += CHARS[((a & 3) << 4) | ((b ?? 0) >> 4)];
-    out += b === undefined ? '=' : CHARS[((b & 15) << 2) | ((c ?? 0) >> 6)];
-    out += c === undefined ? '=' : CHARS[c & 63];
-  }
-  return out;
 }
 
 const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build';

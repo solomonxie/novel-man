@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -37,7 +37,7 @@ import {
   type RelationEdge,
 } from '../../src/db/repo';
 import { appearances, appearancesIn, namesOf, timelineFor, type Appearance } from '../../src/cast/mentions';
-import { bucketize, Sparkline, type SparkBar } from '../../src/ui/Sparkline';
+import { AppearanceGraph, chapterLabel, type Range } from '../../src/ui/AppearanceGraph';
 import { useDocument } from '../../src/ui/useDocument';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
 import { ExportSheet } from '../../src/ui/ExportSheet';
@@ -135,21 +135,17 @@ export default function EntityPage() {
 
   const fields = parseFields(entity.fields);
   const span = appearances(timeline);
-  const bars = bucketize(timeline, chapters.length);
-  const picked = bars.find((entry) => entry.index === bar) ?? null;
-  const perBar = bars.length ? bars[0].to - bars[0].from + 1 : 1;
 
   /**
    * The bar says how often; this says what. The manuscript is megabytes, so it
    * is read on the first touch of the graph rather than on every visit to the
    * page — and once read it stays for as long as the page does.
    */
-  function showAppearances(found: SparkBar | null) {
-    if (!found || !entity) {
+  function showAppearances(range: Range | null) {
+    if (!range || !entity) {
       setShown([]);
       return;
     }
-    const range = { from: found.from, to: found.to };
     if (!text) {
       void document.read().then(({ text: body }) => {
         setText(body);
@@ -300,48 +296,16 @@ export default function EntityPage() {
           fetched edition has none here. The section stays, because its absence
           would read as this person never appearing rather than as the count
           being unavailable. */}
-      {book?.text_source ? (
-        <Block title={t('entity.timeline')}>
-          <Empty text={t('entity.timelineFetched')} />
-        </Block>
-      ) : timeline.length > 0 && span ? (
-        <Block title={t('entity.timeline')}>
-          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-            <Sparkline
-              bars={bars}
-              tint={palette.accent}
-              dim={palette.faint}
-              height={30}
-              selected={bar}
-              onScrub={(next) => {
-                setScrubbing(next !== null);
-                if (next) showAppearances(next);
-              }}
-              onSelect={(next) => {
-                setBar(next?.index ?? null);
-                showAppearances(next);
-              }}
-            />
-            <Text style={{ color: palette.dim, fontSize: 13, marginTop: space.sm }}>
-              {picked
-                ? t('entity.barDetail', {
-                    range:
-                      picked.from === picked.to
-                        ? chapterLabel(chapters, picked.from)
-                        : `${chapterLabel(chapters, picked.from)} – ${chapterLabel(chapters, picked.to)}`,
-                    count: picked.count,
-                  })
-                : t('entity.appears', {
-                    first: chapterLabel(chapters, span.first),
-                    last: chapterLabel(chapters, span.last),
-                    count: timeline.length,
-                  })}
-            </Text>
-            {perBar > 1 && !picked && (
-              <Text style={{ color: palette.faint, fontSize: 12, marginTop: 2 }}>
-                {t('entity.barScale', { count: perBar })}
-              </Text>
-            )}
+      <AppearanceGraph
+        title={t('entity.timeline')}
+        fetchedNote={book?.text_source ? t('entity.timelineFetched') : null}
+        timeline={timeline}
+        chapters={chapters}
+        onPick={(range, dragging) => {
+          setScrubbing(dragging);
+          if (range || !dragging) showAppearances(range);
+        }}
+      >
             {/* Lifting the finger leaves these here: the moments themselves,
                 each one a way back into the book at the word it was found. */}
             {shown.length > 0 && (
@@ -368,9 +332,7 @@ export default function EntityPage() {
                 )}
               </View>
             )}
-          </View>
-        </Block>
-      ) : null}
+      </AppearanceGraph>
 
       {observations.length > 0 && (
         <Block title={t('entity.perChapter')} count={observations.length}>
@@ -657,11 +619,6 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
   },
 });
-
-function chapterLabel(chapters: Chapter[], idx: number): string {
-  const chapter = chapters.find((entry) => entry.idx === idx);
-  return chapter?.title.trim() || `${idx + 1}`;
-}
 
 /** Nothing typed, nothing picked, nothing extracted — there is no profile here. */
 function isBlank(entity: Entity): boolean {

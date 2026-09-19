@@ -1,0 +1,38 @@
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+# Fabric-only features from react-native-screens, which expo-router used to set.
+ENV['RNS_GAMMA_ENABLED'] ||= '1'
+
+MIN_IOS = '16.4'
+platform :ios, MIN_IOS
+prepare_react_native_project!
+
+target 'NovelMan' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => true,
+    :app_path => "#{Pod::Config.instance.installation_root}/..",
+  )
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+    )
+
+    # Several pods still declare iOS 13.4, which Xcode now refuses outright.
+    # Expo's Podfile used to raise them; nothing does it here but this.
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |build|
+        build.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = MIN_IOS
+      end
+    end
+  end
+end

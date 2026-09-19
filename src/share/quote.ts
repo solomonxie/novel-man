@@ -1,6 +1,5 @@
 import { Share } from 'react-native';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
+import * as Print from '../export/print';
 import { readingThemes, type ReadingTheme } from '../theme';
 import { escapeHtml } from '../text/escape';
 
@@ -30,11 +29,7 @@ export async function shareQuoteText(quote: Quote) {
  */
 export async function shareQuoteCard(quote: Quote, theme: ReadingTheme, serif: boolean) {
   const { uri } = await Print.printToFileAsync({ html: cardHtml(quote, theme, serif), base64: false });
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
-  } else {
-    await Share.share({ url: uri, message: quoteAsText(quote) });
-  }
+  await Share.share({ url: uri, message: quoteAsText(quote) });
   return uri;
 }
 

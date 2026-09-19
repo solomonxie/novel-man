@@ -1,7 +1,7 @@
 import { AppState } from 'react-native';
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File, Paths } from '../storage/fs';
 
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { Database } from '../db';
 
 import { db, setBeforeMigrations } from '../db';
 import { lastUploadedAnywhere, recordUpload } from '../db/jobs';
@@ -39,7 +39,7 @@ function folder(): Directory {
  * it a copy of the present: without it the newest writes are still sitting in
  * the write-ahead log beside the file, and the copy is silently behind.
  */
-export async function snapshotDatabase(open?: SQLiteDatabase): Promise<boolean> {
+export async function snapshotDatabase(open?: Database): Promise<boolean> {
   try {
     const database = open ?? (await db());
     await database.execAsync('PRAGMA wal_checkpoint(FULL)');

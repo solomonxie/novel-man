@@ -111,6 +111,13 @@
     "searchParts_volume": "搜索卷"
   },
   "reader": {
+    "go": "前往",
+    "prevChapter": "上一章",
+    "nextChapter": "下一章",
+    "chapterPage": "本章",
+    "bookPage": "本书",
+    "endOfChapter": "{{name}} 完",
+    "copyHint": "这段文字，以及它的出处。",
     "empty": "本章没有内容。",
     "chapterList": "章节",
     "hint": "点按任意句子，即可标注、写想法或分享。",
@@ -134,8 +141,8 @@
     "spacing_loose": "宽松",
     "sans": "黑体",
     "serif": "宋体",
-    "bookmark": "书签",
-    "unbookmark": "取消书签",
+    "bookmark": "标记",
+    "unbookmark": "取消标记",
     "bookmarked": "已加书签",
     "notePlaceholder": "关于这句，你想记住什么？",
     "shareText": "分享文字",
@@ -267,12 +274,9 @@
     "timeline": "出场分布",
     "timelineFetched": "\u51fa\u573a\u7edf\u8ba1\u6765\u81ea\u672c\u673a\u4fdd\u5b58\u7684\u6b63\u6587\u3002\u8fd9\u4e2a\u7248\u672c\u6309\u7ae0\u83b7\u53d6\uff0c\u6240\u4ee5\u56fe\u8868\u53ea\u4f1a\u53cd\u6620\u4f60\u8bfb\u8fc7\u54ea\u91cc\uff0c\u800c\u4e0d\u662f\u4eba\u7269\u771f\u6b63\u51fa\u73b0\u5728\u54ea\u91cc\u3002",
     "perChapter": "逐章记录",
-    "appears": "首次出现在{{first}}，最后出现在{{last}} · 共 {{count}} 章",
     "polish": "用 AI 整理",
     "polishWhat": "把 {{count}} 条逐章记录整理成完整资料：简介、身份、外貌、语言风格与人物弧线。逐章记录会原样保留，可随时重跑或核对来源。",
     "open": "打开资料",
-    "barDetail": "{{range}} · 提及 {{count}} 次",
-    "barScale": "每根柱子代表 {{count}} 章 — 点一下看看",
     "tapToRead": "点任意一条，回到它在书里的位置。",
     "age": "年龄",
     "gender": "性别",
@@ -307,7 +311,8 @@
     "selectHint": "点选要删除的条目。",
     "deleteSelected": "删除 {{count}} 条",
     "deleteSelectedConfirm": "删除这 {{count}} 条标注？书中的文字不受影响。",
-    "filter_bookmark": "书签"
+    "filter_bookmark": "书签",
+    "inBook": "在书中"
   },
   "structure": {
     "title": "结构",
@@ -401,6 +406,8 @@
     "tooNew": "该备份来自更新的版本（v{{version}}），请先升级应用。"
   },
   "ai": {
+    "noKeyTitle": "没有 AI 密钥",
+    "addKey": "添加密钥",
     "run": "运行",
     "stop": "停止",
     "done": "完成",
@@ -411,7 +418,8 @@
     "estimateHint": "这是估算，不是报价。费用计入你自己的账户。结果会缓存，重复运行不再收费。",
     "progress": "{{done}} / {{total}}",
     "estimateLine": "约 {{tokens}} tokens · {{cost}}",
-    "estimateNoKey": "添加 AI 密钥后可估算费用"
+    "estimateNoKey": "添加 AI 密钥后可估算费用",
+    "estimateFor": "{{action}} · 约 {{tokens}} tokens · {{cost}}"
   },
   "cast": {
     "analysis": "分析",
@@ -568,7 +576,11 @@
     "andMore": "另有 {{count}} 项未显示",
     "open": "任务队列",
     "idle": "暂无任务",
-    "busy": "{{count}} 项进行中"
+    "busy": "{{count}} 项进行中",
+    "queuedOpen": "已排队 — 打开队列 ›",
+    "queueFailed": "无法排队：{{error}}",
+    "doneCount": "已完成 {{count}} 项",
+    "seeWhat": "点按查看做了什么"
   },
   "chapter": {
     "title": "章节",
@@ -634,6 +646,8 @@
     "times": "出现 {{count}} 次"
   },
   "place": {
+    "timeline": "出现分布",
+    "timelineFetched": "统计来自本机保存的正文。这个版本按章获取，所以图表只会反映你读过哪里，而不是它真正出现在哪里。",
     "name": "名称",
     "alias": "别称",
     "aliasPlaceholder": "其他称呼，用逗号分隔",
@@ -657,6 +671,9 @@
     "eyebrow": "地点"
   },
   "scene": {
+    "timeline": "重现分布",
+    "timelineFetched": "统计来自本机保存的正文。这个版本按章获取，眼下还没有可统计的内容。",
+    "tapToOpen": "点一下打开。",
     "title": "场景",
     "position": "第 {{index}} / {{total}} 个场景",
     "byAi": "AI 识别",
@@ -686,7 +703,9 @@
     "arxivField_ti": "标题",
     "arxivField_au": "作者",
     "arxivField_cat": "分类",
-    "arxivHint": "按主题、标题或作者搜索 arXiv — 也可以选一个分类，读它最新收录的论文。"
+    "arxivHint": "按主题、标题或作者搜索 arXiv — 也可以选一个分类，读它最新收录的论文。",
+    "standardebooks": "Standard Ebooks",
+    "standardebooksDetail": "同样是已过版权期的书，但逐本手工排版、校对"
   },
   "find": {
     "prompt": "\u8f93\u5165\u8981\u627e\u7684\u5185\u5bb9\uff0c\u7136\u540e\u641c\u7d22\u3002",
@@ -707,6 +726,12 @@
     "paperHint": "一篇学术论文。分节而非分章，AI 会衡量它提出了什么主张。"
   },
   "add": {
+    "listFirst": "先获取列表",
+    "directImport": "直接导入",
+    "listRow": "书目列表",
+    "searchList": "搜索这个列表",
+    "browse": "浏览",
+    "sourceClosed": "去设置",
     "title": "添加书籍",
     "kindTitle": "什么类型",
     "whereFrom": "来源",
@@ -725,7 +750,6 @@
     "indexMissing": "还没有列表 — 获取一次，之后可离线搜索",
     "getList": "获取列表",
     "findTitle": "找一本书",
-    "findAcross": "在已有的列表中搜索：{{sources}}",
     "esvTitle": "ESV",
     "esvWhy": "\u7248\u6743\u5c5e\u4e8e Crossway\uff0c\u65e0\u6cd5\u4e0b\u8f7d \u2014 \u4f46\u7528\u4f60\u81ea\u5df1\u7684\u5bc6\u94a5\u53ef\u4ee5\u968f\u65f6\u67e5\u9605\u7ecf\u6587\u3002",
     "esvKeyRow": "\u4f60\u7684 API \u5bc6\u94a5",
@@ -756,6 +780,31 @@
     "canonAll": "另加 {{count}} 卷",
     "canonAllHint": "这个版本收录的次经。",
     "willGet": "{{books}} 卷 · {{chapters}} 章 · {{verses}} 节",
-    "structureIncluded": "结构随书附带 — 卷、章、节都是发布好的，无需识别。"
+    "structureIncluded": "结构随书附带 — 卷、章、节都是发布好的，无需识别。",
+    "standardebooksWhat": "一个 EPUB，章节由书本身的目录给出 — 这里无需再去识别。",
+    "seNeedsEmail": "需要你的邮箱",
+    "seEmailRow": "你的 Patrons Circle 邮箱",
+    "seWhy": "他们的订阅源是会员权益，凭据必须是你自己的 — 本应用没有可以代给的。",
+    "seEmailPlaceholder": "you@example.com",
+    "seStaysHere": "邮箱只存在这台设备上 — 不同步，也不进备份。",
+    "seSave": "保存邮箱",
+    "seForget": "删除这个邮箱",
+    "seTest": "测试邮箱",
+    "seHowToGet": "捐助加入 Patrons Circle、为他们制作一本电子书，或成为赞助方，都可获得访问权限。详见 standardebooks.org/feeds/opds。",
+    "se_no-email": "请先填写你的 Patrons Circle 邮箱。",
+    "se_rejected": "邮箱被拒绝。访问订阅源需要有效的会员资格。",
+    "se_offline": "连不上 standardebooks.org，这一项需要网络。",
+    "se_no-feed": "对方响应了，但没有列出可读的目录。",
+    "seSet": "已添加",
+    "seNotSet": "未设置",
+    "seTestNow": "测试",
+    "seRetest": "重试",
+    "seTesting": "测试中…",
+    "seWorks": "可用"
+  },
+  "graph": {
+    "barDetail": "{{range}} · 提及 {{count}} 次",
+    "appears": "首次出现在{{first}}，最后出现在{{last}} · 共 {{count}} 章",
+    "barScale": "每根柱子代表 {{count}} 章 — 点一下看看"
   }
 }

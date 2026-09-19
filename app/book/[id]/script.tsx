@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams } from '../../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { getBook, getDocumentText, listChapters, type Book, type Chapter } from '../../../src/db/repo';

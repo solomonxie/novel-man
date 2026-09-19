@@ -16,6 +16,27 @@ export const readingThemes: Record<ReadingTheme, ReadingPalette> = {
 export const highlightColors = ['#FFE58A', '#BFE3B4', '#BBD9F5', '#F2C2D6'] as const;
 export type HighlightColor = (typeof highlightColors)[number];
 
+/**
+ * The same four marks mixed into a night page rather than laid on top of it.
+ * A paper-bright block on near-black is a lamp, and the page's own light ink
+ * disappears into it — so night keeps the hue and gives up the brightness.
+ */
+const nightMarks: Record<string, string> = {
+  '#FFE58A': '#5F4E12',
+  '#BFE3B4': '#2F5738',
+  '#BBD9F5': '#25496E',
+  '#F2C2D6': '#6E3653',
+};
+
+/** A mark, and the ink that stays readable on it. */
+export function markOn(color: string, theme: ReadingTheme): { bg: string; ink: string } {
+  const ink = readingThemes[theme].text;
+  if (theme !== 'night') return { bg: color, ink };
+  const night = nightMarks[color];
+  // A colour with no night counterpart keeps itself and brings its own ink.
+  return night ? { bg: night, ink } : { bg: color, ink: '#1A1A1A' };
+}
+
 const light = {
   bg: '#F2F2F7',
   surface: '#FFFFFF',

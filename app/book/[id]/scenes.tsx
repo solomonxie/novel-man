@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { getDocumentText, listChapters, listScenes, type Chapter, type Scene } from '../../../src/db/repo';

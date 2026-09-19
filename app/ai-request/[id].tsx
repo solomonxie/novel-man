@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
-import * as Clipboard from 'expo-clipboard';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 import { getRequest, type AiRequest } from '../../src/db/requests';
 import { formatUsd } from '../../src/ai/cost';
@@ -40,7 +40,7 @@ export default function AiRequestPage() {
   const messages = parseMessages(request.prompt);
 
   async function copyAll() {
-    await Clipboard.setStringAsync(
+    await Clipboard.setString(
       messages.map((message) => `[${message.role}]\n${message.content}`).join('\n\n')
     );
     setCopied(true);

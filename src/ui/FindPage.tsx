@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack } from '../navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { Row, Search } from './primitives';

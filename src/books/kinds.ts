@@ -17,7 +17,13 @@ export type BookFeature = 'cast' | 'scenes' | 'script' | 'visuals' | 'verses';
  * technical book written in a repository needs no source of its own: its url
  * is the book.
  */
-export type BookSource = 'files' | 'link' | 'ebible' | 'gutenberg' | 'arxiv';
+export type BookSource =
+  | 'files'
+  | 'link'
+  | 'ebible'
+  | 'gutenberg'
+  | 'standardebooks'
+  | 'arxiv';
 
 /** A section of the book page, in the order the kind lists them. */
 export type BookSection =
@@ -66,7 +72,7 @@ export const bookKinds: BookKind[] = [
     fiction: true,
     features: ['cast', 'scenes', 'script', 'visuals'],
     part: 'volume',
-    sources: ['gutenberg', 'files', 'link'],
+    sources: ['gutenberg', 'standardebooks', 'files', 'link'],
     sections: ['chapters', 'scenes', 'notes', 'cast', 'places', 'translations', 'script', 'visuals'],
   },
   {
@@ -74,7 +80,7 @@ export const bookKinds: BookKind[] = [
     subject: 'a work of nonfiction',
     fiction: false,
     features: ['cast'],
-    sources: ['gutenberg', 'files', 'link'],
+    sources: ['gutenberg', 'standardebooks', 'files', 'link'],
     sections: ['chapters', 'notes', 'cast', 'places', 'translations'],
   },
   {
