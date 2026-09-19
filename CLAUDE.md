@@ -7,8 +7,10 @@
 - **Always install on the physical phone**: `npm run ios` (which is
   `react-native run-ios --device`; pick the connected device when prompted).
   To name one, it is `--device <udid>` — `--udid` resolves against simulators
-  only and errors out. For a standalone build with the JS bundle baked in, add
-  `--mode Release`.
+  only and errors out.
+- **For a standalone build**, `npm run ios:release`: the bundle is baked in, and
+  `--no-packager` keeps the CLI from starting a Metro that such a build never
+  reads and that then sits on port 8081.
 - **No device connected → stop and say so.** Do not reach for a simulator
   instead; ask, and let the answer come back before trying again.
 - A simulator is only ever in scope when explicitly asked for, that one time.
