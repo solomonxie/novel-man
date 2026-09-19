@@ -55,12 +55,12 @@ class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
     bundleURL()
   }
 
+  /**
+   The bundle inside the app, in every configuration. There is no development
+   server to fall back to and nothing here looks for one: the build phase
+   bundles `index.js` into `main.jsbundle` and this reads that.
+   */
   override func bundleURL() -> URL? {
-#if DEBUG
-    // `index.js`, the entry this app registers itself from.
-    return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
-#else
     return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
-#endif
   }
 }
