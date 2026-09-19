@@ -24,6 +24,37 @@ Everything short of running — `npm run check`, typecheck, the fixture tests,
 reading the code — carries on as normal and is the default way to verify a
 change.
 
+## Light and fast, as a constraint
+
+This is a reader. It has to open instantly, scroll without a stutter, and not
+cost a fifth of a gigabyte to keep installed. Treat that as a requirement the
+same way the tests are one.
+
+Where it stands, measured on a Release build for arm64:
+
+    NovelMan.app   31 MB    React 12 · Hermes 4.9 · RN deps 1.2
+                            app binary 10 (every pod, statically linked)
+                            main.jsbundle 3.0 · assets 0.4
+
+Most of that is React Native itself and is not ours to shrink. What is ours:
+
+- **A dependency is weight.** 23 runtime packages now; each new one lands in
+  the binary whether or not a screen uses it. Prefer what React Native already
+  ships, then what the repo already has (`src/cloud/sha256.ts` replaced
+  `expo-crypto` for nothing), then a package.
+- **Any list that can grow is a `FlatList`.** A bible's chapter sheet is 1,189
+  rows and a Gutenberg search is 78,000; both virtualise. A `.map()` is fine
+  only where the count has a ceiling.
+- **Queries get an index.** 20 in `src/db/migrations.ts` — a new hot query
+  should arrive with its own.
+- **Know what you are loading.** `getDocumentText` reads a whole manuscript
+  into memory, and `src/storage/fs.ts` moves bytes as base64. Both are
+  deliberate and both are megabytes; don't add a third on a path that runs
+  while someone is reading.
+
+If a change makes the app slower or heavier, that is a cost to state and
+justify, not a detail to leave for later.
+
 ## No Expo
 
 Bare React Native: no SDK, no modules, no CLI, no `app.json`. `ios/` is checked
