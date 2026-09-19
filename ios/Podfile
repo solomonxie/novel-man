@@ -4,6 +4,13 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
+# React Native ships prebuilt dynamic frameworks by default: whole-framework,
+# nothing dead-stripped, 18 MB of the app. Built from source they link
+# statically into the binary and the linker keeps only what is reached.
+# The cost is a long first build.
+ENV['RCT_USE_RN_DEP'] = '0'
+ENV['RCT_USE_PREBUILT_RNCORE'] = '0'
+
 MIN_IOS = '16.4'
 platform :ios, MIN_IOS
 prepare_react_native_project!
