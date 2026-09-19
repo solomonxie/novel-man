@@ -32,11 +32,24 @@ same way the tests are one.
 
 Where it stands, measured on a Release build for arm64:
 
-    NovelMan.app   31 MB    React 12 · Hermes 4.9 · RN deps 1.2
-                            app binary 10 (every pod, statically linked)
+    NovelMan.app   16 MB    app binary 7.4 (React Native and every pod,
+                                            statically linked and dead-stripped)
+                            hermesvm.framework 4.9
                             main.jsbundle 3.0 · assets 0.4
 
-Most of that is React Native itself and is not ours to shrink. What is ours:
+It was 31 MB. Three things account for the difference, and all three are
+settings rather than sacrifices — keep them:
+
+- `RCT_USE_PREBUILT_RNCORE` and `RCT_USE_RN_DEP` are `0` in the Podfile, so
+  React Native is compiled from source and linked statically. The prebuilt
+  frameworks are dynamic and whole: all of React Native ships whether or not
+  it is reached. This is the 8 MB, and it costs a much slower clean build.
+- Release strips its symbols (`STRIP_INSTALLED_PRODUCT`), which Xcode otherwise
+  only does when archiving.
+- Nothing unused is installed. Three libraries arrived with the Expo template
+  and were never imported.
+
+What is left is the floor: Hermes, our JavaScript, our icons. What is ours:
 
 - **A dependency is weight.** 23 runtime packages now; each new one lands in
   the binary whether or not a screen uses it. Prefer what React Native already
