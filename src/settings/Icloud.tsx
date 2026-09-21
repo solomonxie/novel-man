@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from '../navigation/router';
+import { router, useFocusEffect } from '../navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { isAuto, lastBackupAt, setAuto, useDriveStatus } from '../backup/icloud';
@@ -66,11 +66,15 @@ export function IcloudRows() {
         directions={status === 'driveOff' ? t('backup.icloudDirections') : undefined}
         value={auto}
         onChange={toggle}
+        // The switch says whether it keeps itself up to date; the row says
+        // what is up there, and how to come back from any of it.
+        onPress={blocked ? undefined : () => router.push('/settings/icloud-backups')}
         disabled={blocked || busy}
       />
       {waiting > 0 ? (
         <Row label={t('backup.waiting', { count: waiting })} detail={t('backup.waitingDetail')} />
       ) : null}
+
     </>
   );
 }

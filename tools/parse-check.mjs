@@ -46,14 +46,23 @@ const {
   bookFromIndex: seBookFromIndex,
   fileNameFor: seFileName,
 } = await import(join(build, 'sources/standardEbooks.js'));
-const { chapterMaterial } = await import(join(build, 'analysis/context.js'));
+const { chapterMaterial, quotable } = await import(join(build, 'analysis/context.js'));
 const { blocksFromHtml, bytesFromBase64 } = await import(join(build, 'import/formats/html.js'));
 const { papersFrom, queryFor, authorLine, fileNameFor: paperFileName, absolute } =
   await import(join(build, 'sources/arxiv.js'));
 const { quoteWithVerses, referenceOf, versesIn } = await import(join(build, 'scripture/reference.js'));
 const { escapeLike, looseLike, score } = await import(join(build, 'sources/matching.js'));
+const {
+  cleanIsbn,
+  isIsbn,
+  googleCover,
+  looksLikeImage,
+  candidatesFromOpenLibrary,
+  candidatesFromGoogle,
+  mergeCandidates,
+} = await import(join(build, 'sources/identify.js'));
 const { passageFrom, retryDelay, cleanToken } = await import(join(build, 'sources/esv.js'));
-const { parseChapterRef, neighbouringChapters, canonChapters } =
+const { parseChapterRef, neighbouringChapters, canonChapters, isBible } =
   await import(join(build, 'scripture/canon.js'));
 const { parseCsv, forEachCsvRow } = await import(join(build, 'sources/csv.js'));
 const { worksFromSearch, worksFromSubject, languageOf, rowOf, workOf, subjectOf } =
@@ -549,6 +558,15 @@ console.log('a picture on the page');
   // Relative to what? The book is text by the time anyone reads it.
   check('a path with nothing to resolve against is left as text',
     imageIn('![fig](images/fig1.png)'), null);
+  // A name this app wrote itself is resolved against its own directory, which
+  // is the only way a picture survives the app moving between installs.
+  check('a stored name is a picture', imageIn('![fig](epub-1.jpg)'), {
+    uri: 'epub-1.jpg',
+    alt: 'fig',
+  });
+  check('and an old absolute path still is',
+    imageIn('![fig](file:///var/old/images/epub-1.jpg)').uri,
+    'file:///var/old/images/epub-1.jpg');
 }
 
 console.log('the chapter either side of this one');
@@ -577,6 +595,20 @@ console.log('the chapter either side of this one');
     built[built.length - 1].part_idx, 65);
   check('nothing has a length, because nothing is here yet',
     built.every((row) => row.start === 0 && row.end === 0), true);
+
+  // Which titles that shape is the right answer for.
+  check('a translation by its initials is a bible', isBible('NIV Bible'), true);
+  check('initials alone are enough', isBible('KJV'), true);
+  check('and so is the name spelled out', isBible('New International Version'), true);
+  check('the book itself, named and nothing else', isBible('The Holy Bible'), true);
+  check('half of it, likewise', isBible('The New Testament'), true);
+  check('a novel is not one, whatever the word in its title',
+    isBible('The Poisonwood Bible'), false);
+  check('an edition carrying more books is not this canon',
+    isBible('Douay-Rheims Bible'), false);
+  check('nor is one with the apocrypha bound in',
+    isBible('King James Version + Apocrypha'), false);
+  check('scripture that is not a bible is not one', isBible('The Quran'), false);
 }
 
 console.log('a passage asked for, not owned');
@@ -741,6 +773,143 @@ console.log('what a pass is given to read');
   const novel = { kind: 'novel', title: 'A Novel', language: 'en' };
   check('a novel is still sent, because nobody has read it',
     chapterMaterial(novel, chapter, text, undefined), text);
+
+  // A book on the shelf with no words behind it: nothing to send, so what
+  // goes out is everything that says which chapter this is.
+  const record = {
+    kind: 'novel',
+    title: 'Life and Fate',
+    author: 'Vasily Grossman',
+    language: 'en',
+    word_count: 0,
+    text_source: null,
+  };
+  const named = {
+    idx: 6,
+    title: '',
+    brief: 'The crossing of the Volga under fire.',
+    part_title: 'Part Two',
+    start: 0,
+    end: 0,
+  };
+  const asked = chapterMaterial(record, named, '', undefined);
+  check('a book with no words is named rather than sent',
+    asked.includes('Life and Fate by Vasily Grossman'), true);
+  check('the chapter is placed by its number', asked.includes('Chapter 7'), true);
+  check('and by the part it sits in', asked.includes('Part Two'), true);
+  check('its own line from the contents is what makes it answerable',
+    asked.includes('The crossing of the Volga under fire.'), true);
+  check('and the model is told not to hold out for a text nobody can send',
+    asked.includes('do not decline for want of'), true);
+
+  // Scripture is quotable whatever it was filed as, and a bible kept as a
+  // record is a bible before it is a book nobody can look up.
+  check('a title naming an edition is quotable',
+    quotable({ kind: 'novel', title: 'NIV Bible' }), true);
+  check('so is anything filed as scripture',
+    quotable({ kind: 'scripture', title: 'Some Edition' }), true);
+  check('a novel is not', quotable({ kind: 'novel', title: 'Life and Fate' }), false);
+
+  const shelvedBible = {
+    kind: 'novel',
+    title: 'NIV Bible',
+    language: 'en',
+    word_count: 0,
+    text_source: null,
+  };
+  const quoted = chapterMaterial(shelvedBible, { ...chapter, brief: null }, '', passage);
+  check('a bible with no words here is still cited as an edition',
+    quoted.includes('Edition: NIV Bible'), true);
+  check('rather than as a book the model may not know',
+    quoted.includes('{\"unknown\":true}'), false);
+}
+
+console.log('one book, looked up in the catalogs');
+{
+  check('an isbn is its digits', cleanIsbn('978-0-14-044913-6'), '9780140449136');
+  check('and that one checks out', isIsbn('978-0-14-044913-6'), true);
+  check('a transposed pair does not', isIsbn('9780140449163'), false);
+  check('ten digits are an isbn too', isIsbn('0-14-044913-2'), true);
+  check('with the wrong check digit, no', isIsbn('0-14-044913-3'), false);
+  check('X is a check digit, not a letter', isIsbn('043942089X'), true);
+  check('a year is not an isbn', isIsbn('1997'), false);
+
+  const ol = candidatesFromOpenLibrary({
+    docs: [
+      {
+        key: '/works/OL45804W',
+        title: 'Fantastic Mr Fox',
+        author_name: ['Roald Dahl'],
+        first_publish_year: 1970,
+        cover_i: 6498519,
+        language: ['eng'],
+        edition_key: ['OL7353617M'],
+      },
+      { key: '/works/OL1W', title: 'No Cover Here' },
+      { title: 'Nameless' },
+    ],
+  });
+  check('a work with everything on it', ol.length, 2);
+  check('the cover is a url, not an id', ol[0].thumb.includes('/b/id/6498519-M.jpg'), true);
+  check('a big one is kept for keeping', ol[0].cover.includes('-L.jpg'), true);
+  check('the edition is held for the fields a search leaves out', ol[0].edition, 'OL7353617M');
+  check('a row with no cover is still a row', ol[1].thumb, null);
+
+  const google = candidatesFromGoogle({
+    items: [
+      {
+        id: 'zyTCAlFPjgYC',
+        volumeInfo: {
+          title: 'The Google Story',
+          subtitle: 'Inside the Hottest Business',
+          authors: ['David A. Vise'],
+          publishedDate: '2005-11-15',
+          industryIdentifiers: [
+            { type: 'ISBN_10', identifier: '055380457X' },
+            { type: 'ISBN_13', identifier: '9780553804577' },
+          ],
+          imageLinks: {
+            thumbnail:
+              'http://books.google.com/books/content?id=zyTCAlFPjgYC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api',
+          },
+          language: 'en',
+          description: 'What it is about.',
+        },
+      },
+    ],
+  });
+  check('the subtitle belongs to the title',
+    google[0].title, 'The Google Story: Inside the Hottest Business');
+  check('thirteen digits where there are both', google[0].isbn, '9780553804577');
+  check('the date is a year', google[0].year, '2005');
+  check('the fold is taken off the cover', google[0].cover.includes('edge=curl'), false);
+  check('and it is fetched over https', google[0].cover.startsWith('https://'), true);
+  check('the thumbnail stays small', googleCover(google[0].thumb, 1).includes('zoom=1'), true);
+  check('what it keeps is bigger', google[0].cover.includes('zoom=0'), true);
+
+  const pad = (head) => Uint8Array.from([...head, ...new Array(64).fill(0)]);
+  check('a jpeg is a picture', looksLikeImage(pad([0xff, 0xd8, 0xff, 0xe0])), true);
+  check('so is a png', looksLikeImage(pad([0x89, 0x50, 0x4e, 0x47])), true);
+  check('and a webp', looksLikeImage(pad([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50])), true);
+  check('an html error page is not', looksLikeImage(pad([0x3c, 0x21, 0x44, 0x4f])), false);
+  check('nor is a riff that is not a webp',
+    looksLikeImage(pad([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x41, 0x56, 0x49, 0x20])), false);
+  check('nor is a file too small to be one', looksLikeImage(Uint8Array.from([0xff, 0xd8, 0xff])), false);
+
+  const merged = mergeCandidates([ol, google, google]);
+  check('the same printing is not offered twice', merged.length, 3);
+  check('a row with a cover comes first', merged[0].thumb !== null, true);
+  check('and one without sinks', merged[merged.length - 1].thumb, null);
+  check('ten is the most anybody looks at', mergeCandidates([ol, google], 1).length, 1);
+
+  // A catalog thinks a book *about* the King James Version answers "KJV"; the
+  // grid is put back in the order of what was actually asked for.
+  const asked = [
+    { id: 'a', source: 'google', title: 'The King James Only Controversy', author: 'James R. White', thumb: 'x', cover: 'x', isbn: null, year: null, language: null, summary: null, edition: null },
+    { id: 'b', source: 'google', title: 'Holy Bible', author: 'King James Version', thumb: 'y', cover: 'y', isbn: null, year: null, language: null, summary: null, edition: null },
+  ];
+  check('the book itself outranks a book about it',
+    mergeCandidates([asked], 10, 'Holy Bible KJV')[0].title, 'Holy Bible');
 }
 
 console.log('gutenberg');

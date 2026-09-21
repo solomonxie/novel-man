@@ -366,6 +366,52 @@ dependency change means a rebuild. For a personal project that already owns
 its native project, that is cheaper than the overhead removed.
 
 
+## No whole-book analysis
+
+**There is no button that analyzes a book.** A pass over a chapter is queued
+from that chapter — its own page, or its row in the contents. There is no
+button anywhere that queues more than one.
+
+Four of them existed and were removed: the book page's *Analyze*, the cast
+page's *Find the people* and *Read every chapter closely*, the contents page's
+*Brief all remaining chapters*, and a part's *Analyze* — a part being a set of
+chapters, which is a whole-book run in miniature, 50 chapters of Genesis on one
+tap.
+
+Why:
+
+- **It is the one tap in the app that can spend real money.** A 500-chapter
+  novel is 500 requests, queued before anyone has seen what one costs.
+- **It is spent at the wrong moment.** It gets tapped on the day the book is
+  added — the moment the reader knows least about whether they will read it.
+  Twelve chapters later the book is abandoned and the other 488 were paid for.
+- **It answers a question nobody has yet.** A brief is worth reading just
+  before a chapter or just after it, while the chapter is the thing being
+  thought about. Arriving months early it is either forgotten or a spoiler,
+  and it was bought either way.
+- **Chapter by chapter is how the app is meant to be read.** The pass belongs
+  in the reading, not ahead of it.
+
+What is kept. Per chapter: the deep pass and the brief, from the chapter page
+or its row. Per book, three passes that read the title rather than the text,
+all of them one small request:
+
+- `book-lookup` — what this book is. Fills only what the shelf is missing.
+- `book-correct` — the title, author, year and edition as they should read.
+  This one may overwrite, because the commonest way a record is wrong is a
+  title typed from memory. It may not translate a title or turn the record
+  into a different work.
+- `book-summary` — built from the briefs the chapters already carry, so it
+  costs the same on a 12-chapter novel and a 1,189-chapter bible.
+
+And `book-outline`, for a book whose pages are not here: its contents page is
+the one thing no catalog publishes.
+
+The cast page keeps the two passes that work on what those chapter runs already
+wrote down — relations and the continuity check — because neither re-reads the
+book.
+
+
 ## Data & integrations
 
 **Stored on device** — SQLite (`expo-sqlite`, with a `user_version` migration

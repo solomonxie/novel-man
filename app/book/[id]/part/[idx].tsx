@@ -16,11 +16,6 @@ import {
   type Chapter,
   type Part,
 } from '../../../../src/db/repo';
-import { estimateDeep, queueChapterRun } from '../../../../src/analysis/runs';
-import { hasAnyKey } from '../../../../src/ai/keys';
-import type { Estimate } from '../../../../src/ai/cost';
-import { AiRunSheet } from '../../../../src/ui/AiRunSheet';
-import { useDocument } from '../../../../src/ui/useDocument';
 import { kindOf, supports } from '../../../../src/books/kinds';
 import { Action, Badge, Block, Empty, Fact, Hero, Item, Writable } from '../../../../src/ui/detail';
 import { Cover, Hint, Search, SEARCHABLE_FROM } from '../../../../src/ui/primitives';
@@ -42,7 +37,6 @@ export default function PartPage() {
   const partIdx = Number(idx);
   const { t } = useTranslation();
   const palette = usePalette();
-  const document = useDocument(id);
 
   const [book, setBook] = useState<Book | null>(null);
   const [part, setPart] = useState<Part | null>(null);
@@ -50,9 +44,6 @@ export default function PartPage() {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [verses, setVerses] = useState(0);
   const [query, setQuery] = useState('');
-  const [analyzeOpen, setAnalyzeOpen] = useState(false);
-  const [estimate, setEstimate] = useState<Estimate | null>(null);
-  const [keyed, setKeyed] = useState(false);
 
   const load = useCallback(() => {
     if (!id || !Number.isFinite(partIdx)) return;
@@ -67,10 +58,6 @@ export default function PartPage() {
 
   useFocusEffect(load);
   useWorkRefresh(load);
-
-  useEffect(() => {
-    hasAnyKey().then(setKeyed);
-  }, []);
 
   // Notes are kept per book, at book offsets — so the ones that belong to this
   // part are the ones that fall inside it. Nothing had to be filed twice.
@@ -106,13 +93,6 @@ export default function PartPage() {
         ? `/reader/${book.id}?chapter=${chapter.idx}`
         : `/reader/${book.id}?at=${part.start}`
     );
-
-  async function openAnalyze() {
-    setAnalyzeOpen(true);
-    setEstimate(null);
-    const { text } = await document.read();
-    estimateDeep(text, chapters, book!).then(setEstimate).catch(() => undefined);
-  }
 
   async function pickPicture() {
     const uri = await pickImage();
@@ -150,13 +130,10 @@ export default function PartPage() {
             {notes.length > 0 && <Fact value={notes.length} label={t('units.unit_notes')} />}
           </>
         }
-        actions={
-          <>
-            <Action label={t('part.read')} tone="loud" onPress={() => read()} />
-            <Action label={t('book.analyzeShort')} onPress={openAnalyze} />
-          </>
-        }
-        note={t('part.analyzeScope', { count: chapters.length, name: part.title })}
+        // A part is a set of chapters, so a pass over one is a whole-book run
+        // in miniature — 50 chapters of Genesis on one tap. Analysis is asked
+        // for from the chapter being read. See `docs/design/DESIGN.md`.
+        actions={<Action label={t('part.read')} tone="loud" onPress={() => read()} />}
       >
         <InlineText
           value={part.title}
@@ -234,21 +211,6 @@ export default function PartPage() {
 
       {supports(book.kind, 'verses') ? <Hint>{t('part.hint')}</Hint> : null}
 
-      <AiRunSheet
-        visible={analyzeOpen}
-        title={t('book.analyze')}
-        description={t(
-          supports(book.kind, 'verses') ? 'part.analyzeWhatCited' : 'part.analyzeWhat',
-          { count: chapters.length, name: part.title }
-        )}
-        estimate={estimate}
-        hasKey={keyed}
-        onRun={async () => {
-          await queueChapterRun(book.id, 'deep-analyze', chapters);
-          return t('work.queued', { count: chapters.length });
-        }}
-        onClose={() => setAnalyzeOpen(false)}
-      />
     </ScrollView>
   );
 }

@@ -65,22 +65,45 @@ function imagesDir(): Directory {
 }
 
 /**
+ * The name of a stored image, whatever form the database happens to hold.
+ *
+ * Only the name is durable. iOS gives the app a new container on install, so
+ * an absolute path written by yesterday's build names a directory that no
+ * longer exists — and an `Image` pointed at a missing file draws nothing at
+ * all, which is a cover that has turned into a black rectangle. Resolving
+ * through the name fixes today's covers and every one written before it.
+ */
+export function imageName(stored: string | null | undefined): string {
+  const raw = (stored ?? '').split('?')[0];
+  return raw.slice(raw.lastIndexOf('/') + 1);
+}
+
+/** Where that image is *now*, for anything that has to display or read it. */
+export function imageUri(stored: string | null | undefined): string | undefined {
+  const name = imageName(stored);
+  return name ? new File(imagesDir(), name).uri : undefined;
+}
+
+/**
  * A picked image lives in a cache the OS may empty, so a cover or portrait is
- * copied into app storage before its path is written to the database — and
+ * copied into app storage before its name is written to the database — and
  * that copy is also what a backup bundle can carry.
  */
 export function adoptImage(uri: string, hint = 'img'): string {
   const source = new File(uri);
   if (!source.exists) return uri;
   const ext = extensionOf(uri) || 'jpg';
-  const target = new File(imagesDir(), `${hint}-${Date.now().toString(36)}.${ext}`);
-  source.copy(target);
-  return target.uri;
+  const name = `${hint}-${Date.now().toString(36)}.${ext}`;
+  source.copy(new File(imagesDir(), name));
+  return name;
 }
 
 export function readImage(path: string): Uint8Array | null {
-  const file = new File(path);
-  return file.exists ? file.bytesSync() : null;
+  const here = new File(imagesDir(), imageName(path));
+  if (here.exists) return here.bytesSync();
+  // Not one of ours: a bundle being restored names its own assets.
+  const direct = new File(path);
+  return direct.exists ? direct.bytesSync() : null;
 }
 
 export function writeImage(name: string, bytes: Uint8Array): string {
@@ -88,5 +111,5 @@ export function writeImage(name: string, bytes: Uint8Array): string {
   if (target.exists) target.delete();
   target.create();
   target.write(bytes);
-  return target.uri;
+  return name;
 }

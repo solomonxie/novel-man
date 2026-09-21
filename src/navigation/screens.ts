@@ -15,6 +15,7 @@ import Scene from '../../app/scene/[id]';
 import AiKey from '../../app/ai-key/[id]';
 import AiRequest from '../../app/ai-request/[id]';
 import CloudLibrary from '../../app/settings/cloud-library';
+import IcloudBackups from '../../app/settings/icloud-backups';
 import Notes from '../../app/book/[id]/notes';
 import Structure from '../../app/book/[id]/structure';
 import Cast from '../../app/book/[id]/cast';
@@ -27,6 +28,8 @@ import Terms from '../../app/book/[id]/terms';
 import Mapping from '../../app/book/[id]/mapping';
 import Script from '../../app/book/[id]/script';
 import Reader from '../../app/reader/[id]';
+import BookListScreen from '../../app/list/[id]';
+import Tag from '../../app/tag/[name]';
 
 export type Screen = {
   /** The path the app writes: `/book/[id]/notes`, with `[…]` for a value. */
@@ -60,6 +63,7 @@ export const screens: Screen[] = [
   { path: '/ai-key/[id]', component: AiKey, header: true },
   { path: '/ai-request/[id]', component: AiRequest, header: true },
   { path: '/settings/cloud-library', component: CloudLibrary, header: true },
+  { path: '/settings/icloud-backups', component: IcloudBackups, header: true },
   { path: '/book/[id]/notes', component: Notes, header: true },
   { path: '/book/[id]/structure', component: Structure, header: true },
   { path: '/book/[id]/cast', component: Cast, header: true },
@@ -71,6 +75,8 @@ export const screens: Screen[] = [
   { path: '/book/[id]/terms', component: Terms, header: true },
   { path: '/book/[id]/mapping', component: Mapping, header: true },
   { path: '/book/[id]/script', component: Script, header: true },
+  { path: '/list/[id]', component: BookListScreen, header: true },
+  { path: '/tag/[name]', component: Tag, header: true },
   { path: '/reader/[id]', component: Reader, animation: 'fade' },
 ];
 

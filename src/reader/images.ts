@@ -9,12 +9,16 @@ const IMAGE = /^!\[([^\]]*)\]\(\s*(\S+?)\s*\)$/;
 
 export type ReaderImage = { uri: string; alt: string };
 
+/** A picture this app stored: a bare file name, resolved against its own directory. */
+const STORED = /^[\w.-]+\.[a-z0-9]{2,5}$/i;
+
 export function imageIn(paragraph: string): ReaderImage | null {
   const found = IMAGE.exec(paragraph.trim());
   if (!found) return null;
   const uri = found[2];
-  // A relative path has nothing to resolve against once the book is text.
-  if (!/^(https?:|file:|data:|content:)/i.test(uri)) return null;
+  // An address the app can open, or a name it wrote itself. Anything else is
+  // a relative path with nothing to resolve against once the book is text.
+  if (!/^(https?:|file:|data:|content:)/i.test(uri) && !STORED.test(uri)) return null;
   return { uri, alt: found[1].trim() };
 }
 

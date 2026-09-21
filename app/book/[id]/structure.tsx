@@ -46,7 +46,7 @@ import { breaksOf } from '../../../src/structure/scenes';
 import { hasAnyKey } from '../../../src/ai/keys';
 import type { Estimate } from '../../../src/ai/cost';
 import { AiRunSheet } from '../../../src/ui/AiRunSheet';
-import { estimateBriefs, queueBookOutline, queueChapterRun, unbriefed } from '../../../src/analysis/runs';
+import { queueBookOutline, queueChapterRun } from '../../../src/analysis/runs';
 import { stoppedWithoutKey } from '../../../src/ai/guard';
 import { Hint, Row, Search, SEARCHABLE_FROM, Section } from '../../../src/ui/primitives';
 import { ActionMenu, type MenuAction } from '../../../src/ui/ActionMenu';
@@ -78,9 +78,6 @@ export default function StructurePage() {
   const [sceneFor, setSceneFor] = useState<number | null>(null);
   const [aiEstimate, setAiEstimate] = useState<Estimate | null>(null);
   const [sceneEstimate, setSceneEstimate] = useState<Estimate | null>(null);
-  const [briefOpen, setBriefOpen] = useState(false);
-  /** A single chapter's own AI action, opened from its ⋯ menu. */
-  const [briefEstimate, setBriefEstimate] = useState<Estimate | null>(null);
   const [keyed, setKeyed] = useState(false);
   /** A book with no words has its contents asked for rather than detected. */
   const [outlineOpen, setOutlineOpen] = useState(false);
@@ -105,7 +102,7 @@ export default function StructurePage() {
    * focus read the whole manuscript, rebuilt every paragraph of it and walked
    * all five hundred chapters — to answer three questions nobody had asked.
    */
-  async function openSheet(which: 'chapters' | 'scenes' | 'briefs') {
+  async function openSheet(which: 'chapters' | 'scenes') {
     const { text: body, hints } = await document.read();
     setText(body);
     if (which === 'chapters') {
@@ -113,18 +110,8 @@ export default function StructurePage() {
       estimateDetection(reconstruct(body, hints), language).then(setAiEstimate).catch(() => undefined);
       return;
     }
-    if (which === 'scenes') {
-      setSceneAiOpen(true);
-      estimateScenes(body, chapters ?? [], language).then(setSceneEstimate).catch(() => undefined);
-      return;
-    }
-    setBriefOpen(true);
-    // Nothing to price until the book is here: what a chapter costs to read
-    // depends on whether its words are here to send at all.
-    if (!book) return;
-    estimateBriefs(body, unbriefed(chapters ?? []), book)
-      .then(setBriefEstimate)
-      .catch(() => undefined);
+    setSceneAiOpen(true);
+    estimateScenes(body, chapters ?? [], language).then(setSceneEstimate).catch(() => undefined);
   }
 
   /**
@@ -264,8 +251,6 @@ export default function StructurePage() {
       )
     : chapters;
   const unsure = chapters.filter((chapter) => !chapter.confident).length;
-  // A chapter already briefed costs nothing to skip and everything to redo.
-  const pending = unbriefed(chapters);
 
   // Scene counts are looked up per row; filtering the whole list inside the
   // row would be five hundred passes over it on every render.
@@ -391,12 +376,6 @@ export default function StructurePage() {
               />
             </>
           )}
-          <Row
-            label={t('structure.aiBriefs', { count: pending.length })}
-            value={t('structure.aiDetectValue')}
-            onPress={pending.length ? () => openSheet('briefs') : undefined}
-            last
-          />
         </Section>
         <Hint>{t(record ? 'structure.recordHint' : 'structure.redetectHint')}</Hint>
 
@@ -452,19 +431,6 @@ export default function StructurePage() {
           setOutlineOpen(false);
           if (changed) load();
         }}
-      />
-
-      <AiRunSheet
-        visible={briefOpen}
-        title={t('structure.aiBriefs', { count: pending.length })}
-        description={t('structure.aiBriefsWhat')}
-        estimate={briefEstimate}
-        hasKey={keyed}
-        onRun={async () => {
-          await queueChapterRun(id!, 'chapter-brief', pending);
-          return t('work.queued', { count: pending.length });
-        }}
-        onClose={() => setBriefOpen(false)}
       />
 
       <AiRunSheet
@@ -650,6 +616,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     fontWeight: '600',
     paddingHorizontal: space.xs,
+    // It is the first thing under the navigation bar, and a heading pressed
+    // against a bar reads as part of it.
+    marginTop: space.md,
     marginBottom: space.sm,
   },
   row: {

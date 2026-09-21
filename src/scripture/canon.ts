@@ -59,6 +59,33 @@ export function codeOf(book: string): string {
   return CODE_OF.get(book) ?? book.replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
 }
 
+/**
+ * Whether the canon above is the right answer for a book with this title.
+ *
+ * The shape of a bible is a fact the app already holds, down to how many
+ * chapters each book has, so a record of one has its contents from here rather
+ * than from a model, which would charge for a less certain answer to a
+ * question with a known one.
+ *
+ * The title has to carry this on its own: what the reader filed the book as
+ * cannot be asked, because somebody who types "NIV Bible" on the Add page
+ * leaves the kind at whatever it opened on. So a bible is a title naming a
+ * translation, or the book itself and nothing else — which is what keeps The
+ * Poisonwood Bible out, where a test for the word "bible" would not.
+ *
+ * The 66 are the Protestant canon, so an edition carrying the deuterocanon is
+ * not one of these, and is left to be asked about instead.
+ */
+const EDITION = /\b(?:kjv|nkjv|niv|tniv|nasb|esv|nlt|nrsv|rsv|asv|csb|hcsb|web|ylt|net|erv|cev|gnt|amp)\b|\b(?:king james|new international|english standard|new living|new revised standard|revised standard|american standard|christian standard|good news|world english|young'?s literal)\b/i;
+const WHOLE = /^(?:the\s+)?(?:holy\s+)?bible$|^(?:the\s+)?(?:old|new)\s+testament$/i;
+const WIDER_CANON = /\b(?:catholic|douay|rheims|nabre|jerusalem|orthodox|apocrypha|deuterocanon\w*|vulgate|septuagint)\b/i;
+
+export function isBible(title: string): boolean {
+  const name = title.trim();
+  if (WIDER_CANON.test(name)) return false;
+  return WHOLE.test(name) || EDITION.test(name);
+}
+
 export type ChapterRef = { book: string; chapter: number };
 
 /**

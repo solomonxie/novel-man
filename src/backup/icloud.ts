@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from '../storage/fs';
 
-import { drive, type DriveStatus } from '../../modules/icloud';
+import { drive, type DriveFile, type DriveStatus } from '../../modules/icloud';
 import { contentHash } from '../ai/cache';
 import { lastUploadedAnywhere, lastUploadHash, recordUpload } from '../db/jobs';
 import { listBookIds } from '../db/repo';
@@ -34,7 +34,7 @@ const LEDGER = 'icloud';
 
 let running = false;
 
-export type { DriveStatus };
+export type { DriveFile, DriveStatus };
 
 export async function isAuto(): Promise<boolean> {
   return (await AsyncStorage.getItem(AUTO)) === 'on';
@@ -147,6 +147,38 @@ async function prune(): Promise<void> {
   } catch {
     // A backup that was written is a backup that worked; tidying is not.
   }
+}
+
+/**
+ * Every backup in the container, newest first — the ten the app keeps, and
+ * anything a reader dropped in the folder themselves.
+ */
+export async function listBackups(): Promise<DriveFile[]> {
+  if (!drive?.list) return [];
+  return (await drive.list())
+    .filter((file) => isBundleName(file.name))
+    .sort((a, b) => b.modifiedAt - a.modifiedAt);
+}
+
+/**
+ * One of them, as bytes. It comes down through a file because that is what
+ * the native side speaks, and because a bundle iCloud has only a placeholder
+ * for has to be pulled down before it can be read at all.
+ */
+export async function readBackup(name: string): Promise<Uint8Array> {
+  if (!drive) throw new Error('unsupported');
+  const staged = new File(Paths.cache, 'icloud-restore.zip');
+  if (staged.exists) staged.delete();
+  await drive.copyOut(name, nativePath(staged));
+  try {
+    return staged.bytesSync();
+  } finally {
+    staged.delete();
+  }
+}
+
+export async function removeBackup(name: string): Promise<void> {
+  if (drive?.remove) await drive.remove(name);
 }
 
 export async function backUpIfAuto(): Promise<void> {

@@ -3,6 +3,7 @@ import { formatCount } from '../text/counts';
 import { namesOf } from '../cast/mentions';
 import { supports } from '../books/kinds';
 import { isRecord } from '../books/record';
+import { isBible } from '../scripture/canon';
 
 /**
  * What a chapter pass is allowed to know. Everything here is cheap next to the
@@ -64,13 +65,27 @@ export function citedNotSent(book: Citable): boolean {
 }
 
 /**
+ * A book the model can already recite, word for word. Scripture is the only
+ * one — every edition of it has been read by everything — and it counts here
+ * whether it was filed as scripture or merely titled as an edition, because
+ * somebody who types "KJV" on the Add page leaves the kind wherever it opened.
+ *
+ * It matters because a bible kept as a record has no words here either, and
+ * being asked about Genesis 5 as though it were chapter five of a book nobody
+ * can look up is how a model ends up saying it cannot place the chapter.
+ */
+export function quotable(book: Pick<Book, 'kind' | 'title'>): boolean {
+  return supports(book.kind, 'verses') || isBible(book.title);
+}
+
+/**
  * The passage, named rather than sent. Genesis 5 is ~4,000 tokens of text this
  * app would otherwise pay to hand a model that can already recite it. The
  * edition is named because the wording is not the same in all of them, and the
  * model is told to say so rather than quietly answer about a different one.
  */
 export function passageBody(book: Book, chapter: Chapter, passage?: Passage): string {
-  if (isRecord(book)) return knownWorkBody(book, chapter);
+  if (!quotable(book)) return knownWorkBody(book, chapter);
   const reference = chapter.title.trim() || `${chapter.idx + 1}`;
   const verses = passage ? `${reference}:${passage.first}-${passage.last}` : reference;
   return [
@@ -96,17 +111,25 @@ export function passageBody(book: Book, chapter: Chapter, passage?: Passage): st
  */
 export function knownWorkBody(book: Book, chapter: Chapter): string {
   const named = chapter.title.trim();
+  const part = chapter.part_title?.trim();
+  // Everything the shelf knows that says *which* chapter this is. Its own
+  // line from the contents page is the one that does the work: "Chapter 7" of
+  // a novel is a number a model cannot place, and "Chapter 7 — the crossing
+  // of the Bug" is a chapter it either knows or honestly does not.
+  const brief = chapter.brief?.trim();
   return [
     `Work: ${book.title}${book.author ? ` by ${book.author}` : ''}`,
     book.year ? `Published: ${book.year}` : '',
     `Language: ${book.language}`,
-    `Chapter ${chapter.idx + 1}${named ? `: ${named}` : ''}`,
-    'This app does not hold the text of this book and none of it is included. ' +
-      'Answer from your own knowledge of this published work. If you do not know ' +
-      'this book, or know it but cannot place this chapter within it, reply with ' +
-      'exactly {"unknown":true} and nothing else. Never invent a plot, a name, an ' +
-      'event or a chapter, and never answer about a different book with a similar ' +
-      'title.',
+    `Chapter ${chapter.idx + 1}${named ? `: ${named}` : ''}${part ? ` (in ${part})` : ''}`,
+    brief ? `What the contents say it covers: ${brief.slice(0, CAPS.briefLength)}` : '',
+    'This app holds no copy of this book: none of its text is included here and ' +
+      'none can be fetched, so do not ask for it and do not decline for want of ' +
+      'it. Answer from your own knowledge of this published work, as far as that ' +
+      'knowledge reaches and no further. If you do not know this book, or know it ' +
+      'but cannot place this chapter within it, reply with exactly {"unknown":true} ' +
+      'and nothing else. Never invent a plot, a name, an event or a chapter, and ' +
+      'never answer about a different book with a similar title.',
   ]
     .filter(Boolean)
     .join('\n');
