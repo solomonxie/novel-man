@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -21,6 +22,7 @@ import {
   getBook,
   getEntity,
   listChapters,
+  liftWikiField,
   listEntities,
   listMentions,
   listObservations,
@@ -41,12 +43,16 @@ import { AppearanceGraph, chapterLabel, type Range } from '../../src/ui/Appearan
 import { useDocument } from '../../src/ui/useDocument';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
 import { ExportSheet } from '../../src/ui/ExportSheet';
-import { queuePolish } from '../../src/analysis/runs';
+import { queuePersonLinks, queuePolish } from '../../src/analysis/runs';
+import { hasWiki } from '../../src/cast/lookup';
+import { kindOf } from '../../src/books/kinds';
 import { hasAnyKey } from '../../src/ai/keys';
 import { FieldsSection } from '../../src/ui/FieldsSection';
+import { PickerSheet } from '../../src/ui/PickerSheet';
+import { TIES, tieOf } from '../../src/cast/ties';
 import { Row, Section } from '../../src/ui/primitives';
 import { EditableRow, hueFrom, pickImage, Portrait } from '../../src/ui/fields';
-import { Action, Badge, Block, Empty, Fact, Hero, Item, Writable } from '../../src/ui/detail';
+import { Action, Badge, Block, Empty, Fact, Hero, Item, LinkLine, Writable } from '../../src/ui/detail';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { adoptImage } from '../../src/storage/files';
 import { radius, space, usePalette } from '../../src/theme';
@@ -112,8 +118,14 @@ export default function EntityPage() {
       setTimeline(timelineFor(await listMentions(found.book_id), found.id));
       setObservations(await listObservations(found.id));
       setRelations(await listRelationsFor(found.id));
-      setCast((await listEntities(found.book_id, 'character')).filter((row) => row.id !== found.id));
-      setBook(await getBook(found.book_id));
+      const people = await listEntities(found.book_id, 'character');
+      setCast(people.filter((row) => row.id !== found.id));
+      const owner = await getBook(found.book_id);
+      setBook(owner);
+      // A real person has an article somewhere; nobody should have to go and
+      // find it. One run covers everyone in the book who is still missing one.
+      if (!found.wiki && (await liftWikiField(found))) return load();
+      void linkAll(owner, found, people, (count) => t('entity.linking', { count }));
     });
   }, [id]);
 
@@ -133,6 +145,8 @@ export default function EntityPage() {
     );
   }
 
+  // An invented person has no article anywhere; a real one usually does.
+  const real = book ? !kindOf(book.kind).fiction : false;
   const fields = parseFields(entity.fields);
   const span = appearances(timeline);
 
@@ -191,6 +205,11 @@ export default function EntityPage() {
     <ScrollView
       style={{ backgroundColor: palette.bg }}
       contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
+      keyboardShouldPersistTaps="handled"
+      // A profile is edited in place and its fields are at the bottom of it,
+      // which is exactly where the keyboard lands.
+      automaticallyAdjustKeyboardInsets
+      keyboardDismissMode="interactive"
     >
       <Stack.Screen options={{ title: entity.name, headerBackTitle: ' ' }} />
 
@@ -249,6 +268,15 @@ export default function EntityPage() {
             numberOfLines={10}
           />
         </Writable>
+        {real ? (
+          <LinkLine
+            value={entity.wiki}
+            placeholder={t('entity.wikiPlaceholder')}
+            glyph="🔗"
+            onCommit={(value) => save({ wiki: value.trim() || null })}
+            onOpen={(value) => Linking.openURL(value)}
+          />
+        ) : null}
       </View>
 
       {entity.kind === 'character' && (
@@ -481,8 +509,11 @@ function RelationRow({ relation, last, onOpen, onLabel, onRemove }: {
 }) {
   const { t } = useTranslation();
   const palette = usePalette();
-  const [label, setLabel] = useState(relation.label);
-  useEffect(() => setLabel(relation.label), [relation.label]);
+  // The tie is one of sixteen words, so it is chosen rather than typed: two
+  // passes and a reader all writing "father" differently is what made the
+  // graph redraw itself every time the book was opened.
+  const [picking, setPicking] = useState(false);
+  const tie = tieOf(relation.label);
   return (
     <View
       style={[
@@ -498,13 +529,19 @@ function RelationRow({ relation, last, onOpen, onLabel, onRemove }: {
           <Text style={{ color: palette.faint, fontSize: 11 }}>{t('entity.byAi')}</Text>
         )}
       </Pressable>
-      <TextInput
-        value={label}
-        onChangeText={setLabel}
-        onBlur={() => label !== relation.label && onLabel(label)}
-        placeholder={t('entity.relationLabel')}
-        placeholderTextColor={palette.faint}
-        style={{ color: palette.text, fontSize: 16, flex: 1 }}
+      <Pressable onPress={() => setPicking(true)} hitSlop={6} style={{ flex: 1 }}>
+        <Text style={{ color: palette.text, fontSize: 16 }}>{t(`tie.${tie}`)}</Text>
+      </Pressable>
+      <PickerSheet
+        visible={picking}
+        title={t('entity.relationLabel')}
+        options={TIES.map((entry) => ({ id: entry, label: t(`tie.${entry}`) }))}
+        selectedId={tie}
+        onPick={(id) => {
+          setPicking(false);
+          if (id !== relation.label) onLabel(id);
+        }}
+        onClose={() => setPicking(false)}
       />
       <Pressable onPress={onOpen} hitSlop={8}>
         <Text style={{ color: palette.dim, fontSize: 16 }}>›</Text>
@@ -619,6 +656,28 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
   },
 });
+
+/**
+ * One request covers the whole cast, so a book asks once: the second profile
+ * opened already has its answer. Module-level for the same reason the places
+ * one is — it is a fact about the book, not about a mounted page.
+ */
+const asked = new Set<string>();
+
+async function linkAll(
+  book: Book | null,
+  person: Entity,
+  people: Entity[],
+  label: (count: number) => string
+) {
+  if (!book || kindOf(book.kind).fiction || asked.has(book.id)) return;
+  if (person.wiki || hasWiki(parseFields(person.fields)) || !(await hasAnyKey())) return;
+  asked.add(book.id);
+  const missing = people.filter((entry) => !entry.wiki && !hasWiki(parseFields(entry.fields)));
+  if (missing.length) {
+    await queuePersonLinks(book.id, label(missing.length), missing.map((entry) => entry.id));
+  }
+}
 
 /** Nothing typed, nothing picked, nothing extracted — there is no profile here. */
 function isBlank(entity: Entity): boolean {

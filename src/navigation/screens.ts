@@ -1,13 +1,16 @@
 import Index from '../../app/index';
-import Add from '../../app/add';
 import Job from '../../app/job/[id]';
 import SourceFind from '../../app/source/find';
 import SourceEbible from '../../app/source/ebible';
+import SourceRepo from '../../app/source/repo';
 import SourceArxiv from '../../app/source/arxiv';
+import SourceOpenLibrary from '../../app/source/openlibrary';
+import SourceGoodreads from '../../app/source/goodreads';
 import Book from '../../app/book/[id]';
 import Entity from '../../app/entity/[id]';
 import Chapter from '../../app/chapter/[id]';
 import Place from '../../app/place/[id]';
+import Term from '../../app/term/[id]';
 import Scene from '../../app/scene/[id]';
 import AiKey from '../../app/ai-key/[id]';
 import AiRequest from '../../app/ai-request/[id]';
@@ -21,6 +24,7 @@ import Part from '../../app/book/[id]/part/[idx]';
 import Graph from '../../app/book/[id]/graph';
 import Translation from '../../app/book/[id]/translation';
 import Terms from '../../app/book/[id]/terms';
+import Mapping from '../../app/book/[id]/mapping';
 import Script from '../../app/book/[id]/script';
 import Reader from '../../app/reader/[id]';
 
@@ -40,15 +44,18 @@ export type Screen = {
  */
 export const screens: Screen[] = [
   { path: '/', component: Index },
-  { path: '/add', component: Add, header: true },
   { path: '/job/[id]', component: Job, header: true },
   { path: '/source/find', component: SourceFind, header: true },
   { path: '/source/ebible', component: SourceEbible, header: true },
+  { path: '/source/repo', component: SourceRepo, header: true },
   { path: '/source/arxiv', component: SourceArxiv, header: true },
+  { path: '/source/openlibrary', component: SourceOpenLibrary, header: true },
+  { path: '/source/goodreads', component: SourceGoodreads, header: true },
   { path: '/book/[id]', component: Book, header: true },
   { path: '/entity/[id]', component: Entity, header: true },
   { path: '/chapter/[id]', component: Chapter, header: true },
   { path: '/place/[id]', component: Place, header: true },
+  { path: '/term/[id]', component: Term, header: true },
   { path: '/scene/[id]', component: Scene, header: true },
   { path: '/ai-key/[id]', component: AiKey, header: true },
   { path: '/ai-request/[id]', component: AiRequest, header: true },
@@ -62,6 +69,7 @@ export const screens: Screen[] = [
   { path: '/book/[id]/graph', component: Graph, header: true },
   { path: '/book/[id]/translation', component: Translation, header: true },
   { path: '/book/[id]/terms', component: Terms, header: true },
+  { path: '/book/[id]/mapping', component: Mapping, header: true },
   { path: '/book/[id]/script', component: Script, header: true },
   { path: '/reader/[id]', component: Reader, animation: 'fade' },
 ];

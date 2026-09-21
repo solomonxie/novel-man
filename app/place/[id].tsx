@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +22,7 @@ import {
   listPlaceCompany,
   listPlaceVisits,
   listScenesAtPlace,
+  listUnlocatedPlaces,
   parseFields,
   updateEntity,
   type Book,
@@ -24,8 +34,10 @@ import {
   type Scene,
 } from '../../src/db/repo';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
-import { queuePlacePolish } from '../../src/analysis/runs';
+import { queuePlaceLocate, queuePlacePolish } from '../../src/analysis/runs';
 import { appearancesIn, namesOf, timelineFor, type Appearance } from '../../src/cast/mentions';
+import { mapUrl } from '../../src/cast/location';
+import { kindOf, supports } from '../../src/books/kinds';
 import { AppearanceGraph, chapterLabel, type Range } from '../../src/ui/AppearanceGraph';
 import { sceneOpening } from '../../src/structure/scenes';
 import { hasAnyKey } from '../../src/ai/keys';
@@ -33,9 +45,17 @@ import { useWorkRefresh } from '../../src/work/refresh';
 import { hueFrom } from '../../src/ui/fields';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { FieldsSection } from '../../src/ui/FieldsSection';
-import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item } from '../../src/ui/detail';
+import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item, LinkLine } from '../../src/ui/detail';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { space, usePalette } from '../../src/theme';
+
+/**
+ * One request places every place in the book, so a book only has to ask once —
+ * the second place page opened already has its answer, and the third costs
+ * nothing. Module-level because it is a fact about the book, not about which
+ * page happens to be mounted.
+ */
+const asked = new Set<string>();
 
 /**
  * A place is not a person with the person parts blanked out. It has no face,
@@ -80,8 +100,12 @@ export default function PlacePage() {
       setCompany(await listPlaceCompany(found.id));
       setScenes(await listScenesAtPlace(found.id));
       setText(await getDocumentText(found.book_id));
-      setBook(await getBook(found.book_id));
+      const owner = await getBook(found.book_id);
+      setBook(owner);
       setTimeline(timelineFor(await listMentions(found.book_id), found.id));
+      // Nowhere on a real place is something to fix, not something to ask the
+      // reader to type: the run fills this one and every other unplaced place.
+      void locateAll(owner, found, (count) => t('place.locating', { count }));
     });
   }, [id]);
 
@@ -128,10 +152,20 @@ export default function PlacePage() {
     ? { first: visits[0].chapter_idx, last: visits[visits.length - 1].chapter_idx }
     : null;
 
+  // Somewhere on a map, or nowhere: a novel's places are nowhere, and so are
+  // the real ones nobody has agreed on the site of.
+  // A novel's places are nowhere, so nothing on this page should ask where.
+  const real = book ? !kindOf(book.kind).fiction : false;
+
   return (
     <ScrollView
       style={{ backgroundColor: palette.bg }}
       contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
+      keyboardShouldPersistTaps="handled"
+      // A profile is edited in place and its fields are at the bottom of it,
+      // which is exactly where the keyboard lands.
+      automaticallyAdjustKeyboardInsets
+      keyboardDismissMode="interactive"
     >
       <Stack.Screen options={{ title: place.name, headerBackTitle: ' ' }} />
 
@@ -172,8 +206,18 @@ export default function PlacePage() {
           multiline
           numberOfLines={8}
         />
+        {real ? (
+          <LinkLine
+            value={place.located}
+            placeholder={t('place.todayPlaceholder')}
+            glyph="📍"
+            onCommit={(value) => save({ located: value.trim() || null })}
+            onOpen={(value) => Linking.openURL(mapUrl(value))}
+          />
+        ) : null}
       </Hero>
 
+      {supports(book?.kind, 'scenes') ? (
       <Block title={t('place.scenes')} count={scenes.length || undefined}>
         {scenes.length === 0 ? (
           <Empty text={t('place.noScenes')} />
@@ -195,6 +239,8 @@ export default function PlacePage() {
           })
         )}
       </Block>
+
+      ) : null}
 
       <Block title={t('place.company')} count={company.length || undefined}>
         {company.length === 0 ? (
@@ -293,6 +339,20 @@ export default function PlacePage() {
       </Section>
     </ScrollView>
   );
+}
+
+async function locateAll(
+  book: Book | null,
+  place: Entity,
+  label: (count: number) => string
+) {
+  if (!book || kindOf(book.kind).fiction || place.located || asked.has(book.id)) return;
+  if (!(await hasAnyKey())) return;
+  asked.add(book.id);
+  const missing = await listUnlocatedPlaces(book.id);
+  if (missing.length) {
+    await queuePlaceLocate(book.id, label(missing.length), missing.map((entry) => entry.id));
+  }
 }
 
 /** Nothing typed and nothing extracted — there is no place here. */

@@ -15,8 +15,12 @@ annotation · `!` destructive · `·` disabled · `[brackets]` = sheet.
    │
    ▼
  app/index.tsx — Shelf: search, library grid, then Settings as sections
-   │  ＋ ─▶ app/add.tsx — kind first, then source, then that kind's options
-   │         └─ source/find ─▶ source/work ─▶ [Import preview]
+   │  [[ ＋ Add a book ]] ⌄ — the whole flow, on this page and nowhere else:
+   │         │      type ▸ where from ▸ a title, a link, a key   (ui/AddFlow)
+   │         ├─ source/find?source=… — the source's own page: its list, its
+   │         │    credential, its search        ─▶ [Import preview]
+   │         ├─ source/openlibrary — records, by kept category or live
+   │         └─ source/goodreads — your shelves, from their export or RSS
    │  Analysis queue ─▶ [Work]  Language / Appearance ─▶ [pickers]
    │  Public sources ─▶ settings/source/[id]
    │  AI keys ─▶ ai-key/[id]    Cloud ─▶ settings/cloud-library

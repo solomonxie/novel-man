@@ -1,6 +1,7 @@
 import { estimate, type Estimate } from '../ai/cost';
 import { parseJson, runUnits } from '../ai/run';
 import { listEntities, listMentions, replaceRelations, type Entity, type Mention } from '../db/repo';
+import { parseTie, TIES } from './ties';
 
 /** Only pairs that share a chapter can have a relation worth asking about. */
 export type Pair = { a: Entity; b: Entity; first: number; last: number };
@@ -66,9 +67,13 @@ export async function extractRelations(
         {
           role: 'system',
           content:
-            'You label relationships between characters in a novel, using only what their ' +
-            'profiles state. Reply with JSON only: [{"pair":<number>,"label":"<two or three words>"}]. ' +
-            'Omit a pair entirely rather than guessing at one.',
+            'You label relationships between the people of a book, using only what their ' +
+            'profiles state. Reply with JSON only: [{"pair":<number>,"label":"<word>"}], where ' +
+            `the label is exactly one of ${TIES.filter((tie) => tie !== 'other').join(', ')} ` +
+            '— that word alone, in English, lower case. It reads left to right: the first of ' +
+            'the pair is the <label> of the second, so "parent" says the left one is the ' +
+            "parent of the right one. Omit a pair entirely rather than guessing at one, and " +
+            'where none of the words fits, omit it rather than stretching one.',
         },
         { role: 'user', content: render(group) },
       ],
@@ -83,11 +88,12 @@ export async function extractRelations(
   results.forEach((result, groupIndex) => {
     for (const row of result.value ?? []) {
       const pair = groups[groupIndex][row.pair];
-      if (!pair || !row.label?.trim()) continue;
+      const label = parseTie(row.label);
+      if (!pair || !label) continue;
       relations.push({
         from_id: pair.a.id,
         to_id: pair.b.id,
-        label: row.label.trim(),
+        label,
         first_chapter: pair.first,
         last_chapter: pair.last,
       });

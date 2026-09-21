@@ -31,6 +31,34 @@ const ALIASES: Record<string, string> = {
   canticles: 'Song of Solomon',
 };
 
+/**
+ * The three-letter codes USFM, OSIS and USFX name their books by. An edition
+ * published as data says `JHN` or `Gen` as often as it says John or Genesis,
+ * and both are the same fact about the same book.
+ */
+const CODES: Record<string, string> = {
+  GEN: 'Genesis', EXO: 'Exodus', LEV: 'Leviticus', NUM: 'Numbers', DEU: 'Deuteronomy',
+  JOS: 'Joshua', JDG: 'Judges', RUT: 'Ruth', '1SA': '1 Samuel', '2SA': '2 Samuel',
+  '1KI': '1 Kings', '2KI': '2 Kings', '1CH': '1 Chronicles', '2CH': '2 Chronicles',
+  EZR: 'Ezra', NEH: 'Nehemiah', EST: 'Esther', JOB: 'Job', PSA: 'Psalms', PRO: 'Proverbs',
+  ECC: 'Ecclesiastes', SNG: 'Song of Solomon', ISA: 'Isaiah', JER: 'Jeremiah',
+  LAM: 'Lamentations', EZK: 'Ezekiel', DAN: 'Daniel', HOS: 'Hosea', JOL: 'Joel', AMO: 'Amos',
+  OBA: 'Obadiah', JON: 'Jonah', MIC: 'Micah', NAM: 'Nahum', HAB: 'Habakkuk', ZEP: 'Zephaniah',
+  HAG: 'Haggai', ZEC: 'Zechariah', MAL: 'Malachi', MAT: 'Matthew', MRK: 'Mark', LUK: 'Luke',
+  JHN: 'John', ACT: 'Acts', ROM: 'Romans', '1CO': '1 Corinthians', '2CO': '2 Corinthians',
+  GAL: 'Galatians', EPH: 'Ephesians', PHP: 'Philippians', COL: 'Colossians',
+  '1TH': '1 Thessalonians', '2TH': '2 Thessalonians', '1TI': '1 Timothy', '2TI': '2 Timothy',
+  TIT: 'Titus', PHM: 'Philemon', HEB: 'Hebrews', JAS: 'James', '1PE': '1 Peter',
+  '2PE': '2 Peter', '1JN': '1 John', '2JN': '2 John', '3JN': '3 John', JUD: 'Jude',
+  REV: 'Revelation',
+};
+
+const CODE_OF = new Map(Object.entries(CODES).map(([code, book]) => [book, code] as const));
+
+export function codeOf(book: string): string {
+  return CODE_OF.get(book) ?? book.replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
+}
+
 export type ChapterRef = { book: string; chapter: number };
 
 /**
@@ -53,7 +81,16 @@ export function bookNamed(name: string): string | null {
   const lowered = cleaned.toLowerCase();
   if (ALIASES[lowered]) return ALIASES[lowered];
   const matched = Object.keys(CHAPTERS).find((book) => book.toLowerCase() === lowered);
-  return matched ?? null;
+  if (matched) return matched;
+  if (CODES[cleaned.toUpperCase()]) return CODES[cleaned.toUpperCase()];
+  // `Gen`, `Exod`, `1Sam`, `Matt` — an abbreviation is an answer only while it
+  // names one book. `Phil` is Philippians and Philemon, so it names neither.
+  const squashed = lowered.replace(/[^a-z0-9]/g, '');
+  if (squashed.length < 2) return null;
+  const starting = Object.keys(CHAPTERS).filter((book) =>
+    book.toLowerCase().replace(/[^a-z0-9]/g, '').startsWith(squashed)
+  );
+  return starting.length === 1 ? starting[0] : null;
 }
 
 /**

@@ -2,6 +2,8 @@ import { db, newId, transaction } from './index';
 import { scenesFromBreaks } from '../structure/scenes';
 import { DEFAULT_KIND } from '../books/kinds';
 import { reconstruct, parseHints, type StructureHint } from '../structure/document';
+import type { Certainty, Pin } from '../cast/location';
+import { reverseTie } from '../cast/ties';
 
 export type Book = {
   id: string;
@@ -27,6 +29,13 @@ export type Book = {
   cover_hue: number;
   /** A few sentences on what the book is. Context for every later pass. */
   summary: string | null;
+  /** What the reader made of it: one to five, or null while unrated. */
+  stars: number | null;
+  /** Their own words about it, as long as they like. Not the summary — the verdict. */
+  review: string | null;
+  rated_at: number | null;
+  /** Where it stands with them: see `books/record`. Null for a book nobody has said. */
+  status: string | null;
   created_at: number;
 };
 
@@ -46,7 +55,12 @@ export type Chapter = {
   part_title: string | null;
 };
 
-export type EntityKind = 'character' | 'place';
+/**
+ * A book names three kinds of thing worth a page of its own: people, places,
+ * and the things it treats as things — an ark, a covenant, a feast, a rank.
+ * One table for all three, because they differ only in what a page shows.
+ */
+export type EntityKind = 'character' | 'place' | 'term';
 
 export type CustomField = { label: string; value: string };
 
@@ -65,6 +79,11 @@ export type Entity = {
   appearance: string | null;
   voice: string | null;
   arc: string | null;
+  /** What a real place is called now. Null for a person, and for the unidentified. */
+  located: string | null;
+  /** The encyclopedia article a real person has. Null for a place. */
+  wiki: string | null;
+  located_certainty: Certainty | null;
   source: 'manual' | 'ai';
   sort_index: number;
   created_at: number;
@@ -85,6 +104,8 @@ export type Annotation = {
   note: string | null;
   prefix: string;
   suffix: string;
+  /** A note about the book rather than about a sentence in it: nothing quoted. */
+  standalone: number;
   created_at: number;
 };
 
@@ -232,9 +253,20 @@ export async function listChapters(bookId: string): Promise<Chapter[]> {
   );
 }
 
+/** What an importer has to know. What the reader thought of it is never its business. */
 export type ImportedBook = Omit<
   Book,
-  'id' | 'created_at' | 'year' | 'edition' | 'cover_path' | 'summary' | 'text_source'
+  | 'id'
+  | 'created_at'
+  | 'year'
+  | 'edition'
+  | 'cover_path'
+  | 'summary'
+  | 'text_source'
+  | 'stars'
+  | 'review'
+  | 'rated_at'
+  | 'status'
 >;
 
 export async function saveImportedBook(input: {
@@ -354,6 +386,129 @@ export async function saveRemoteBook(input: {
   return id;
 }
 
+/**
+ * A book with no words at all, and none coming: a record of one read on paper,
+ * borrowed, or only meant to be read. It is an ordinary row in every other
+ * respect — it takes notes, chapters, a cast, a rating — so nothing downstream
+ * has to learn a second kind of book; what marks it is a manuscript of zero
+ * length and no source to fetch one from. See `books/record`.
+ */
+export type RecordedBook = {
+  title: string;
+  author?: string | null;
+  year?: string | null;
+  language?: string;
+  kind: string;
+  /** Where the details came from: a catalog, an export, or the reader. */
+  source_name: string;
+  /** The catalog's own id, when there is one, so the same book is only added once. */
+  source_hash?: string;
+  cover_hue?: number;
+  cover_path?: string | null;
+  summary?: string | null;
+  stars?: number | null;
+  review?: string | null;
+  rated_at?: number | null;
+  status?: string | null;
+};
+
+export async function saveRecordBook(input: RecordedBook): Promise<string> {
+  const database = await db();
+  const id = newId();
+  const now = Date.now();
+  await transaction(async () => {
+    await database.runAsync(
+      `INSERT INTO books (id, title, author, year, language, kind, source_name, source_hash,
+                          source_path, source_ext, word_count, char_count, cover_hue, cover_path,
+                          summary, stars, review, rated_at, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '', 0, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id,
+      input.title,
+      input.author ?? null,
+      input.year ?? null,
+      input.language ?? 'en',
+      input.kind,
+      input.source_name,
+      input.source_hash ?? '',
+      input.cover_hue ?? 0,
+      input.cover_path ?? null,
+      input.summary ?? null,
+      input.stars ?? null,
+      input.review ?? null,
+      input.rated_at ?? null,
+      input.status ?? null,
+      now
+    );
+    // Empty, but there: everything that reads a book expects a document row.
+    await database.runAsync('INSERT INTO documents (book_id, text, hints) VALUES (?, ?, ?)', id, '', '[]');
+    await database.runAsync(
+      'INSERT INTO reading_state (book_id, offset, updated_at) VALUES (?, 0, ?)',
+      id, now
+    );
+  });
+  return id;
+}
+
+/**
+ * The same book, already on the shelf. An imported library is mostly books the
+ * reader has been adding for years, and adding a second row for one of them is
+ * worse than skipping it: the notes go to one and the rating to the other.
+ *
+ * The title has to match, case and outer space aside, and the author has to
+ * either match or be missing here. Deliberately strict: two books with the
+ * same title are common, and merging the wrong pair puts somebody's review on
+ * a book they never read — a duplicate is the cheaper mistake.
+ */
+export async function findBookNamed(title: string, author?: string | null): Promise<Book | null> {
+  const database = await db();
+  const row = await database.getFirstAsync<Book>(
+    `SELECT * FROM books
+      WHERE LOWER(TRIM(title)) = ?
+        AND (? = '' OR author IS NULL OR LOWER(TRIM(author)) = ?)
+      LIMIT 1`,
+    title.trim().toLowerCase(),
+    (author ?? '').trim().toLowerCase(),
+    (author ?? '').trim().toLowerCase()
+  );
+  return row ?? null;
+}
+
+/** Already here under the id the catalog knows it by. */
+export async function findRecordFrom(sourceName: string, sourceHash: string): Promise<Book | null> {
+  const database = await db();
+  const row = await database.getFirstAsync<Book>(
+    'SELECT * FROM books WHERE source_name = ? AND source_hash = ? LIMIT 1',
+    sourceName,
+    sourceHash
+  );
+  return row ?? null;
+}
+
+/**
+ * Stars and the review are one act, not two settings: rating a book is saying
+ * what you thought of it, and the date is when you said so.
+ */
+export async function rateBook(
+  id: string,
+  changes: { stars?: number | null; review?: string | null }
+) {
+  const database = await db();
+  const fields: string[] = [];
+  const values: (string | number | null)[] = [];
+  if ('stars' in changes) {
+    fields.push('stars = ?');
+    values.push(changes.stars ?? null);
+  }
+  if ('review' in changes) {
+    fields.push('review = ?');
+    values.push(changes.review?.trim() || null);
+  }
+  if (!fields.length) return;
+  fields.push('rated_at = ?');
+  values.push(Date.now());
+  await database.runAsync(`UPDATE books SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
+}
+
 /** A novel can carry 500+ chapters; one statement per row is 6x the round trips. */
 const CHAPTER_BATCH = 200;
 
@@ -448,7 +603,9 @@ async function insertScenes(
   }
 }
 
-const BOOK_FIELDS = ['title', 'author', 'year', 'edition', 'cover_path', 'summary', 'kind'] as const;
+const BOOK_FIELDS = [
+  'title', 'author', 'year', 'edition', 'cover_path', 'summary', 'kind', 'review', 'status',
+] as const;
 export type EditableBookField = (typeof BOOK_FIELDS)[number];
 
 export async function updateBook(id: string, changes: Partial<Record<EditableBookField, string | null>>) {
@@ -467,6 +624,17 @@ export async function listEntities(bookId: string, kind: EntityKind): Promise<En
     'SELECT * FROM entities WHERE book_id = ? AND kind = ? ORDER BY sort_index, name',
     bookId,
     kind
+  );
+}
+
+/** The places this book has never been able to put on a map. */
+export async function listUnlocatedPlaces(bookId: string): Promise<Entity[]> {
+  const database = await db();
+  return database.getAllAsync<Entity>(
+    `SELECT * FROM entities
+      WHERE book_id = ? AND kind = 'place' AND located IS NULL
+      ORDER BY sort_index`,
+    bookId
   );
 }
 
@@ -500,12 +668,14 @@ export async function createEntity(bookId: string, kind: EntityKind, name: strin
   return id;
 }
 
-const ENTITY_FIELDS = ['name', 'alias', 'summary', 'portrait_path', 'fields'] as const;
+const ENTITY_FIELDS = [
+  'name', 'alias', 'summary', 'portrait_path', 'fields', 'located', 'located_certainty', 'wiki',
+] as const;
 export type EditableEntityField = (typeof ENTITY_FIELDS)[number];
 
 export async function updateEntity(
   id: string,
-  changes: Partial<Record<EditableEntityField, string | null>>
+  changes: Partial<Record<EditableEntityField, string | number | null>>
 ) {
   const entries = ENTITY_FIELDS.filter((field) => field in changes);
   if (!entries.length) return;
@@ -514,6 +684,50 @@ export async function updateEntity(
     `UPDATE entities SET ${entries.map((field) => `${field} = ?`).join(', ')} WHERE id = ?`,
     [...entries.map((field) => changes[field] ?? null), id]
   );
+}
+
+/**
+ * The first chapter to place a site has placed it. A later chapter would only
+ * write the same coordinate again — or a worse one, or over the one you fixed
+ * by hand — so a pin that exists is left alone.
+ */
+export async function setPinIfUnset(entityId: string, pin: Pin) {
+  const database = await db();
+  await database.runAsync(
+    `UPDATE entities SET located = ?, located_certainty = ?
+      WHERE id = ? AND located IS NULL`,
+    pin.located,
+    pin.located_certainty,
+    entityId
+  );
+}
+
+/** Written once, by whichever run got there first, and never over an edit. */
+export async function setWikiIfUnset(entityId: string, url: string) {
+  const database = await db();
+  await database.runAsync(
+    'UPDATE entities SET wiki = ? WHERE id = ? AND wiki IS NULL',
+    url,
+    entityId
+  );
+}
+
+/**
+ * A link written into the details before it had a column of its own. Moved
+ * rather than copied: two places showing the same address, one of them
+ * editable and one of them not, is a bug waiting to be reported.
+ */
+export async function liftWikiField(entity: Entity): Promise<boolean> {
+  const fields = parseFields(entity.fields);
+  const found = fields.find(
+    (field) => field.label.trim().toLowerCase() === 'wikipedia' && field.value.trim()
+  );
+  if (!found) return false;
+  await updateEntity(entity.id, {
+    wiki: found.value.trim(),
+    fields: JSON.stringify(fields.filter((field) => field !== found)),
+  });
+  return true;
 }
 
 export async function deleteEntity(id: string) {
@@ -573,6 +787,20 @@ export async function listChapterPlaces(bookId: string, chapterIdx: number): Pro
     `SELECT e.*, o.note AS observed_note
        FROM observations o JOIN entities e ON e.id = o.entity_id
       WHERE o.book_id = ? AND o.chapter_idx = ? AND e.kind = 'place'
+      ORDER BY e.name`,
+    bookId,
+    chapterIdx
+  );
+}
+
+export type ChapterTerm = Entity & { observed_note: string | null };
+
+export async function listChapterTerms(bookId: string, chapterIdx: number): Promise<ChapterTerm[]> {
+  const database = await db();
+  return database.getAllAsync<ChapterTerm>(
+    `SELECT e.*, o.note AS observed_note
+       FROM observations o JOIN entities e ON e.id = o.entity_id
+      WHERE o.book_id = ? AND o.chapter_idx = ? AND e.kind = 'term'
       ORDER BY e.name`,
     bookId,
     chapterIdx
@@ -684,12 +912,15 @@ export async function addAnnotation(input: {
   note?: string | null;
   prefix: string;
   suffix: string;
+  /** Set for a note that quotes nothing — see the column. */
+  standalone?: boolean;
 }) {
   const database = await db();
   const id = newId();
   await database.runAsync(
-    `INSERT INTO annotations (id, book_id, chapter_id, kind, color, start, end, quote, note, prefix, suffix, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO annotations (id, book_id, chapter_id, kind, color, start, end, quote, note,
+                             prefix, suffix, standalone, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.bookId,
     input.chapterId ?? null,
@@ -701,9 +932,35 @@ export async function addAnnotation(input: {
     input.note ?? null,
     input.prefix,
     input.suffix,
+    input.standalone ? 1 : 0,
     Date.now()
   );
   return id;
+}
+
+/**
+ * A note about the book itself, or about one of its chapters — the shape a
+ * reading journal is made of, and the only kind of note a book with no words
+ * can have. It quotes nothing, so it has no offsets to be lost with.
+ */
+export function addStandaloneNote(input: {
+  bookId: string;
+  chapterId?: string | null;
+  note: string;
+}) {
+  return addAnnotation({
+    bookId: input.bookId,
+    chapterId: input.chapterId ?? null,
+    kind: 'note',
+    start: 0,
+    end: 0,
+    quote: '',
+    color: null,
+    note: input.note,
+    prefix: '',
+    suffix: '',
+    standalone: true,
+  });
 }
 
 const ANNOTATION_FIELDS = ['kind', 'color', 'note', 'start', 'end'] as const;
@@ -744,6 +1001,22 @@ export async function saveProgress(bookId: string, offset: number) {
      ON CONFLICT(book_id) DO UPDATE SET offset = excluded.offset, updated_at = excluded.updated_at`,
     bookId,
     offset,
+    Date.now()
+  );
+}
+
+/**
+ * Opening a book is reading it. The shelf is ordered by when a book was last
+ * read, and the offset alone could not say it: a chapter read without a scroll
+ * writes nothing, and a fetched edition has no offsets to write — so both left
+ * the book sitting where it was, under books nobody had opened in weeks.
+ */
+export async function touchRead(bookId: string) {
+  const database = await db();
+  await database.runAsync(
+    `INSERT INTO reading_state (book_id, offset, updated_at) VALUES (?, 0, ?)
+     ON CONFLICT(book_id) DO UPDATE SET updated_at = excluded.updated_at`,
+    bookId,
     Date.now()
   );
 }
@@ -953,12 +1226,16 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
     await database.runAsync(
       `INSERT INTO books (id, title, author, year, edition, cover_path, language, kind, source_name,
                           source_hash, source_path, source_ext, word_count, char_count, cover_hue,
-                          summary, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                          summary, text_source, stars, review, rated_at, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id, book.title, book.author, book.year, book.edition, book.cover_path, book.language,
       book.kind ?? DEFAULT_KIND, book.source_name, book.source_hash, book.source_path,
       book.source_ext, book.word_count, book.char_count, book.cover_hue, book.summary,
-      book.created_at || now
+      // Whether the words are fetched or simply absent is what a record *is*,
+      // and a rating is the reason a shelf was kept at all — a restore that
+      // dropped either would hand back a different book.
+      book.text_source ?? null, book.stars ?? null, book.review ?? null, book.rated_at ?? null,
+      book.status ?? null, book.created_at || now
     );
     await database.runAsync(
       'INSERT INTO documents (book_id, text, hints) VALUES (?, ?, ?)',
@@ -984,19 +1261,22 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
     );
     for (const annotation of record.annotations) {
       await database.runAsync(
-        `INSERT INTO annotations (id, book_id, kind, color, start, end, quote, note, prefix, suffix, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO annotations (id, book_id, kind, color, start, end, quote, note, prefix, suffix,
+                                  standalone, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         newId(), id, annotation.kind, annotation.color, annotation.start, annotation.end,
         annotation.quote, annotation.note, annotation.prefix ?? '', annotation.suffix ?? '',
-        annotation.created_at
+        annotation.standalone ?? 0, annotation.created_at
       );
     }
     for (const entity of record.entities) {
       await database.runAsync(
-        `INSERT INTO entities (id, book_id, kind, name, alias, summary, portrait_path, fields, sort_index, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO entities (id, book_id, kind, name, alias, summary, portrait_path, fields,
+                               located, located_certainty, wiki, sort_index, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         newId(), id, entity.kind, entity.name, entity.alias, entity.summary, entity.portrait_path,
-        entity.fields, entity.sort_index, entity.created_at
+        entity.fields, entity.located ?? null, entity.located_certainty ?? null,
+        entity.wiki ?? null, entity.sort_index, entity.created_at
       );
     }
     await database.runAsync(
@@ -1020,9 +1300,11 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
     const book = record.book;
     await database.runAsync(
       `UPDATE books SET title = ?, author = ?, year = ?, edition = ?, cover_path = ?,
-                        kind = ?, cover_hue = ?, summary = ? WHERE id = ?`,
+                        kind = ?, cover_hue = ?, summary = ?, stars = ?, review = ?,
+                        rated_at = ?, status = ? WHERE id = ?`,
       book.title, book.author, book.year, book.edition, book.cover_path,
-      book.kind ?? DEFAULT_KIND, book.cover_hue, book.summary, bookId
+      book.kind ?? DEFAULT_KIND, book.cover_hue, book.summary, book.stars ?? null,
+      book.review ?? null, book.rated_at ?? null, book.status ?? null, bookId
     );
     await database.runAsync('DELETE FROM scenes WHERE book_id = ?', bookId);
     await database.runAsync('DELETE FROM chapters WHERE book_id = ?', bookId);
@@ -1049,19 +1331,22 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
     );
     for (const annotation of record.annotations) {
       await database.runAsync(
-        `INSERT INTO annotations (id, book_id, kind, color, start, end, quote, note, prefix, suffix, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO annotations (id, book_id, kind, color, start, end, quote, note, prefix, suffix,
+                                  standalone, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         newId(), bookId, annotation.kind, annotation.color, annotation.start, annotation.end,
         annotation.quote, annotation.note, annotation.prefix ?? '', annotation.suffix ?? '',
-        annotation.created_at
+        annotation.standalone ?? 0, annotation.created_at
       );
     }
     for (const entity of record.entities) {
       await database.runAsync(
-        `INSERT INTO entities (id, book_id, kind, name, alias, summary, portrait_path, fields, sort_index, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO entities (id, book_id, kind, name, alias, summary, portrait_path, fields,
+                               located, located_certainty, wiki, sort_index, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         newId(), bookId, entity.kind, entity.name, entity.alias, entity.summary,
-        entity.portrait_path, entity.fields, entity.sort_index, entity.created_at
+        entity.portrait_path, entity.fields, entity.located ?? null,
+        entity.located_certainty ?? null, entity.wiki ?? null, entity.sort_index, entity.created_at
       );
     }
     await database.runAsync(
@@ -1268,9 +1553,12 @@ export async function recordRelation(input: {
     );
     return;
   }
+  // The pair is stored in the order it was first seen. Told about it the other
+  // way round, the word has to turn round with it: Isaac is Abraham's child.
+  const said = existing.from_id === input.from_id ? input.label : reverseTie(input.label);
   await database.runAsync(
     'UPDATE relations SET label = ?, first_chapter = ?, last_chapter = ? WHERE id = ?',
-    existing.source === 'manual' ? existing.label : input.label,
+    existing.source === 'manual' ? existing.label : said,
     Math.min(existing.first_chapter, input.chapter_idx),
     Math.max(existing.last_chapter, input.chapter_idx),
     existing.id

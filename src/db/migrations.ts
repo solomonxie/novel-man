@@ -414,4 +414,34 @@ export const migrations: string[] = [
   // which is the one thing a download and its terms are never subject to.
   `ALTER TABLE catalog ADD COLUMN href TEXT;`,
   `ALTER TABLE catalog ADD COLUMN terms TEXT;`,
+
+  // Where a place is today, for the books whose places are real ones: the name
+  // it goes by now and how sure that identification is. A name rather than a
+  // coordinate because a map searches names, and because a name the model got
+  // wrong can be read and corrected. Null for a novel, whose places are
+  // nowhere, and for any site nobody has agreed on.
+  `ALTER TABLE entities ADD COLUMN located TEXT;
+   ALTER TABLE entities ADD COLUMN located_certainty TEXT;`,
+
+  // The article a real person has outside this book. A column rather than one
+  // of the free-form details, because it belongs beside the summary and not in
+  // a list of whatever else a genre happens to track.
+  `ALTER TABLE entities ADD COLUMN wiki TEXT;`,
+
+  // A book whose words are nowhere and never will be: one read on paper, one
+  // borrowed, one only meant to be read. Everything else the app keeps about a
+  // book still applies — chapters, notes, a cast, a summary — so a record is
+  // not a second kind of row, it is a book with no manuscript behind it. What
+  // fills the gap is what the reader thought of it: the stars, the review, and
+  // where it stands.
+  `ALTER TABLE books ADD COLUMN stars INTEGER;
+   ALTER TABLE books ADD COLUMN review TEXT;
+   ALTER TABLE books ADD COLUMN rated_at INTEGER;
+   ALTER TABLE books ADD COLUMN status TEXT;
+   CREATE INDEX IF NOT EXISTS books_status ON books(status);`,
+
+  // A note that is about the book rather than about a sentence in it. The
+  // reader's own writing has always lived here; what is new is that it no
+  // longer has to quote anything to exist.
+  `ALTER TABLE annotations ADD COLUMN standalone INTEGER NOT NULL DEFAULT 0;`,
 ];

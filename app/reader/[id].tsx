@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Pressable,
   ScrollView,
@@ -25,6 +26,7 @@ import {
   listVerses,
   removeAnnotation,
   saveProgress,
+  touchRead,
   updateAnnotation,
   type Annotation,
   type Book,
@@ -57,6 +59,7 @@ import { ReadingSettingsSheet } from '../../src/ui/ReadingSettingsSheet';
 import { ActionMenu, type MenuAction } from '../../src/ui/ActionMenu';
 import { SentenceMenu } from '../../src/ui/SentenceMenu';
 import { NoteSheet } from '../../src/ui/NoteSheet';
+import { Toast, useFlash } from '../../src/ui/primitives';
 import { PickerSheet } from '../../src/ui/PickerSheet';
 import { ChapterSheet } from '../../src/ui/ChapterSheet';
 import { JumpWheel } from '../../src/ui/JumpWheel';
@@ -111,7 +114,6 @@ export default function Reader() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [noteFor, setNoteFor] = useState<Span | null>(null);
   const [shareFor, setShareFor] = useState<Span | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [targets, setTargets] = useState<string[]>([]);
   const [target, setTarget] = useState<string | null>(null);
@@ -170,6 +172,8 @@ export default function Reader() {
    */
   useEffect(() => {
     if (!id) return;
+    // The shelf orders by this, and it is true the moment the page opens.
+    void touchRead(id);
     (async () => {
       const [loadedBook, loadedChapters, saved] = await Promise.all([
         getBook(id),
@@ -360,10 +364,7 @@ export default function Reader() {
   const script = scriptOf(language);
   const lineHeight = lineHeightFor(settings, script);
 
-  const flash = useCallback((message: string) => {
-    setToast(message);
-    setTimeout(() => setToast(null), 1200);
-  }, []);
+  const { message: toast, flash } = useFlash();
 
   const refreshAnnotations = useCallback(async () => {
     if (id) setAnnotations(await listAnnotations(id));
@@ -503,6 +504,25 @@ export default function Reader() {
     await refreshAnnotations();
     setNoteFor(null);
     endSelection();
+  }
+
+  /** Takes the whole mark off — the highlight and whatever was written on it. */
+  function confirmRemoveMark(span: Span) {
+    const existing = annotationAt(marks, span);
+    if (!existing) return;
+    Alert.alert(t('notes.deleteConfirm'), undefined, [
+      { text: t('settings.cancel'), style: 'cancel' },
+      {
+        text: t('settings.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          await removeAnnotation(existing.id);
+          await refreshAnnotations();
+          setNoteFor(null);
+          endSelection();
+        },
+      },
+    ]);
   }
 
   function save(span: Span, extra: { kind: 'highlight' | 'note' | 'bookmark'; color: string | null; note?: string }) {
@@ -1032,6 +1052,10 @@ export default function Reader() {
         quote={noteFor ? source.slice(noteFor.start, noteFor.end) : ''}
         note={noteFor ? annotationAt(marks, noteFor)?.note ?? null : null}
         onSave={saveNote}
+        // Nothing to delete on a passage that has never been marked.
+        onDelete={
+          noteFor && annotationAt(marks, noteFor) ? () => confirmRemoveMark(noteFor) : undefined
+        }
         onClose={() => setNoteFor(null)}
       />
 
@@ -1076,11 +1100,7 @@ export default function Reader() {
         onClose={() => setListOpen(false)}
       />
 
-      {toast && (
-        <View style={styles.toast}>
-          <Text style={{ color: '#FFFFFF', fontSize: 13 }}>{toast}</Text>
-        </View>
-      )}
+      <Toast message={toast} />
     </SafeAreaView>
   );
 }
@@ -1154,14 +1174,5 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingHorizontal: space.lg,
-  },
-  toast: {
-    position: 'absolute',
-    bottom: 80,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    paddingHorizontal: space.lg,
-    paddingVertical: space.sm,
-    borderRadius: 16,
   },
 });

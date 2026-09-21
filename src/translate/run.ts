@@ -46,8 +46,12 @@ export async function prepare(
   return units.length;
 }
 
-export async function pendingSpans(bookId: string, target: string): Promise<Span[]> {
-  const units = await listUnits(bookId, target);
+export async function pendingSpans(
+  bookId: string,
+  target: string,
+  chapterIdx?: number
+): Promise<Span[]> {
+  const units = await listUnits(bookId, target, chapterIdx);
   const pending = units.filter((unit) => !unit.machine || unit.stale);
   const byChapter = new Map<number, Sentence[]>();
   for (const unit of pending) {
@@ -81,9 +85,14 @@ export async function translate(
   target: string,
   documentText: string,
   sourceLanguage: string,
-  hooks: { onProgress?: (done: number, total: number) => void; signal?: AbortSignal } = {}
+  hooks: {
+    onProgress?: (done: number, total: number) => void;
+    signal?: AbortSignal;
+    /** One chapter at a time, when the work is a queued job rather than a sheet. */
+    chapterIdx?: number;
+  } = {}
 ): Promise<TranslationRun> {
-  const spans = await pendingSpans(bookId, target);
+  const spans = await pendingSpans(bookId, target, hooks.chapterIdx);
   if (!spans.length) return { translated: 0, failed: 0, spans: 0 };
 
   const terms = await listTerms(bookId, target);

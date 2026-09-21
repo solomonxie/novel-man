@@ -1,15 +1,10 @@
 import { File, Paths } from '../storage/fs';
 import { unzipSync, strFromU8 } from 'fflate';
 
-import { saveImportedBook } from '../db/repo';
-import { applyToImport } from '../backup/pending';
-import { hintsOf } from '../structure/document';
-import { normalize } from '../import/normalize';
-import { countUnits } from '../text/counts';
-import { detectLanguage } from '../text/language';
+import { hueOf, saveBible } from '../scripture/save';
 import { storeSourceBytes } from '../storage/files';
 import { yieldToUI } from '../async/yield';
-import { inCanonOrder, layoutBible, parseUsfm, type UsfmBook } from '../scripture/usfm';
+import { inCanonOrder, parseUsfm, type UsfmBook } from '../scripture/usfm';
 import { parseCsv } from './csv';
 import { replaceIndex } from './catalog';
 
@@ -178,70 +173,15 @@ export async function downloadTranslation(
   }
   if (!books.length) throw new Error('no books in this edition');
 
-  const structure = layoutBible(books);
-  const doc = normalize(structure.blocks);
-  const offsetOf = new Map(doc.blocks.map((block) => [block.source, block] as const));
-  await yieldToUI();
-
   onProgress?.('saving', 0);
-  const chapters = structure.chapters.map((chapter, index) => {
-    const start = offsetOf.get(chapter.block)?.start ?? 0;
-    const next = structure.chapters[index + 1];
-    const end = next ? offsetOf.get(next.block)?.start ?? doc.text.length : doc.text.length;
-    return {
-      // The reference is the title: "John 3" is what the reader is looking at.
-      title: `${chapter.partName} ${chapter.number}`,
-      start,
-      end,
-      confident: true,
-      part_idx: chapter.part,
-      part_title: chapter.partName,
-    };
-  });
-
-  const chapterAt = new Map(
-    structure.chapters.map((chapter, index) => [`${chapter.part}:${chapter.number}`, index] as const)
-  );
-  const verses = structure.verses.flatMap((verse) => {
-    const placed = offsetOf.get(verse.block);
-    const chapterIndex = chapterAt.get(`${verse.part}:${verse.chapter}`);
-    if (!placed || chapterIndex === undefined) return [];
-    return [{ chapterIndex, number: verse.number, start: placed.start, end: placed.end }];
-  });
-
-  const { language } = detectLanguage(doc.text);
   const name = `${translation.id}_usfm.zip`;
   const stored = await storeSourceBytes(zip, name);
-  const counts = countUnits(doc.text, language);
-
-  const bookId = await saveImportedBook({
-    book: {
-      title: translation.title,
-      author: null,
-      language,
-      kind: 'scripture',
-      source_name: name,
-      source_hash: stored.hash,
-      source_path: stored.path,
-      source_ext: 'zip',
-      word_count: counts.words,
-      char_count: doc.text.length,
-      cover_hue: hueOf(translation.id),
-    },
-    text: doc.text,
-    hints: hintsOf(doc),
-    chapters,
-    scenes: [],
-    verses,
-    partNames: structure.parts.map((part) => ({ part_idx: part.idx, names: part.names })),
+  const saved = await saveBible({
+    title: translation.title,
+    books,
+    source: { name, hash: stored.hash, path: stored.path, ext: 'zip' },
+    hue: hueOf(translation.id),
   });
-  await applyToImport(bookId, stored.hash);
   onProgress?.('saving', 1);
-  return { bookId, chapters: chapters.length };
-}
-
-function hueOf(seed: string): number {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) % 360;
-  return hash;
+  return saved;
 }
