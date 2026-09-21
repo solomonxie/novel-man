@@ -61,14 +61,14 @@ export function ChapterSheet({ visible, chapters, current, palette, onPick, onCl
             Animated.timing(drag, {
               toValue: sheetHeight,
               duration: 140,
-              useNativeDriver: true,
+              useNativeDriver: false,
             }).start(onClose);
             return;
           }
-          Animated.spring(drag, { toValue: 0, useNativeDriver: true, bounciness: 2 }).start();
+          Animated.spring(drag, { toValue: 0, useNativeDriver: false, bounciness: 2 }).start();
         },
         onPanResponderTerminate: () =>
-          Animated.spring(drag, { toValue: 0, useNativeDriver: true }).start(),
+          Animated.spring(drag, { toValue: 0, useNativeDriver: false }).start(),
       });
     // The handle is not a scroll view and always drags; the list only where it
     // has nothing left to give, or a flick through the chapters would close it.

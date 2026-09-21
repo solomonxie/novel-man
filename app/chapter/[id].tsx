@@ -17,6 +17,7 @@ import {
   listChapterScenes,
   renameChapterTitle,
   setChapterBrief,
+  setChapterRecap,
   type Chapter,
   type ChapterCast,
   type ChapterPlace,
@@ -25,13 +26,13 @@ import {
   type Book,
   type Scene,
 } from '../../src/db/repo';
-import { estimateDeep, queueChapterRun } from '../../src/analysis/runs';
+import { estimateDeep, queueChapterRecap, queueChapterRun } from '../../src/analysis/runs';
 import { stoppedWithoutKey } from '../../src/ai/guard';
 import { sceneOpening } from '../../src/structure/scenes';
 import { formatUsd, type Estimate } from '../../src/ai/cost';
 import { getBook, getDocumentText } from '../../src/db/repo';
 import { EditableLine } from '../../src/ui/EditableLine';
-import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item } from '../../src/ui/detail';
+import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item, Writable } from '../../src/ui/detail';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { openWorkQueue } from '../../src/ui/WorkQueue';
 import { hueFrom } from '../../src/ui/fields';
@@ -149,12 +150,32 @@ export default function ChapterPage() {
         }
         actions={
           <>
-            {record ? (
-              <Action label={t('chapter.note')} onPress={() => setWriting(true)} tone="loud" />
-            ) : (
+            {/* A record has nothing to open. Writing a note is not the second
+                thing offered here either — the notes block below already has
+                a ＋ and an empty state that both say it. */}
+            {record ? null : (
               <Action label={t('chapter.read')} onPress={() => read()} tone="loud" />
             )}
+            {/* Only where there is nothing to read: a book the app holds
+                needs no account of a chapter it can open. */}
+            {record ? (
+              <Action
+                tone="loud"
+                label={chapter.recap?.trim() ? t('chapter.recapAgain') : t('chapter.recapShort')}
+                onPress={async () => {
+                  setQueueError(null);
+                  if (await stoppedWithoutKey(t)) return;
+                  try {
+                    await queueChapterRecap(chapter.book_id, chapter);
+                    setQueued(true);
+                  } catch (problem) {
+                    setQueueError(String(problem));
+                  }
+                }}
+              />
+            ) : null}
             <Action
+              tone="quiet"
               label={t('chapter.analyzeShort')}
               onPress={async () => {
                 setQueueError(null);
@@ -178,7 +199,7 @@ export default function ChapterPage() {
             : queued
               ? t('work.queuedOpen')
               : cost
-                ? t('ai.estimateFor', {
+                ? t(record ? 'ai.estimateForCited' : 'ai.estimateFor', {
                     action: t('chapter.analyzeShort'),
                     tokens: cost.inputTokens.toLocaleString(),
                     cost: formatUsd(cost.usd),
@@ -225,6 +246,27 @@ export default function ChapterPage() {
           ))
         )}
       </Block>
+      ) : null}
+
+      {/* The chapter as a model remembers it, for a book whose pages are not
+          here. Set apart and labelled, because the one thing this must never
+          become is something a reader later mistakes for the book. */}
+      {record && chapter.recap?.trim() ? (
+        <Block title={t('chapter.recap')}>
+          <Writable empty={false}>
+            <EditableLine
+              value={chapter.recap}
+              placeholder={t('chapter.recapShort')}
+              onCommit={(value) => setChapterRecap(chapter.id, value.trim() || null).then(load)}
+              style={{ color: palette.text, fontSize: 15, lineHeight: 23 }}
+              multiline
+              numberOfLines={40}
+            />
+          </Writable>
+          <Text style={{ color: palette.faint, fontSize: 12, marginTop: space.sm }}>
+            {t('chapter.recapWhose')}
+          </Text>
+        </Block>
       ) : null}
 
       {/* What the reader wrote here. On a book with no text this is the page's
@@ -318,14 +360,21 @@ export default function ChapterPage() {
         visible={writing}
         quote=""
         note={null}
-        onSave={(note) => {
+        onSave={async (note) => {
           setWriting(false);
           if (!note.trim()) return;
-          void addStandaloneNote({
-            bookId: chapter.book_id,
-            chapterId: chapter.id,
-            note,
-          }).then(load);
+          try {
+            await addStandaloneNote({
+              bookId: chapter.book_id,
+              chapterId: chapter.id,
+              note,
+            });
+          } catch (problem) {
+            // It used to be a floating promise, so a note that failed to save
+            // looked exactly like one that saved and did not appear.
+            setQueueError(String(problem));
+          }
+          load();
         }}
         onClose={() => setWriting(false)}
       />

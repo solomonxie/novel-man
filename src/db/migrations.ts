@@ -444,4 +444,88 @@ export const migrations: string[] = [
   // reader's own writing has always lived here; what is new is that it no
   // longer has to quote anything to exist.
   `ALTER TABLE annotations ADD COLUMN standalone INTEGER NOT NULL DEFAULT 0;`,
+
+  // What the reader would say about the book if asked, kept apart from the
+  // review that belongs to the stars. The two are written at different
+  // moments and read differently: an overview is what this book is to them,
+  // and a review is the verdict they would give it.
+  `ALTER TABLE books ADD COLUMN impressions TEXT;`,
+
+  // Shelves the reader makes: a list is a name and the books put in it, in the
+  // order they were put there. Favourites ships with the app under a fixed id
+  // — the heart on a book page has to have somewhere to go on a shelf nobody
+  // has organised yet — and `system` is what stops it being deleted. The name
+  // stored here is only a fallback; a shipped list is shown in the language
+  // the app is being read in.
+  `CREATE TABLE book_lists (
+     id TEXT PRIMARY KEY NOT NULL,
+     name TEXT NOT NULL,
+     system INTEGER NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL
+   );
+   CREATE TABLE list_books (
+     list_id TEXT NOT NULL REFERENCES book_lists(id) ON DELETE CASCADE,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     added_at INTEGER NOT NULL,
+     PRIMARY KEY (list_id, book_id)
+   );
+   CREATE INDEX IF NOT EXISTS list_books_book ON list_books(book_id);
+   INSERT OR IGNORE INTO book_lists (id, name, system, created_at)
+     VALUES ('favorites', 'Favorites', 1, 0);`,
+
+  // What a model remembers of a chapter whose words are not here. Kept apart
+  // from everything else a chapter has, and never merged into the manuscript:
+  // an account of a chapter and the chapter itself must stay two things, or
+  // nothing later can tell which one is being read.
+  `ALTER TABLE chapters ADD COLUMN recap TEXT;`,
+
+  // The one number that names a printing rather than a work, and so the one
+  // that can be looked up rather than searched for. Empty for everything until
+  // somebody types it or scans it off the back of the book.
+  `ALTER TABLE books ADD COLUMN isbn TEXT;`,
+
+  // A word the reader files a book under. There is no table of tags: a tag is
+  // the rows that carry it, so one nothing is filed under stops existing
+  // rather than lingering in a list nobody can clear.
+  `CREATE TABLE book_tags (
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     tag TEXT NOT NULL,
+     PRIMARY KEY (book_id, tag)
+   );
+   CREATE INDEX IF NOT EXISTS book_tags_tag ON book_tags(tag);`,
+
+  // Everything the four migrations above add, said again.
+  //
+  // Those four were written into the middle of this list rather than appended
+  // to it, and the version is an index: a phone already past that point was
+  // renumbered forward over changes it had never run, and ended up claiming a
+  // schema it did not have. This is the repair, and it is only safe to write
+  // because a statement that finds its work already done is now skipped — see
+  // `db/index`. On a device that has all of this, it does nothing at all.
+  //
+  // The rule it exists to enforce: this list is appended to, never edited.
+  `ALTER TABLE books ADD COLUMN impressions TEXT;
+   ALTER TABLE books ADD COLUMN isbn TEXT;
+   ALTER TABLE chapters ADD COLUMN recap TEXT;
+   CREATE TABLE IF NOT EXISTS book_lists (
+     id TEXT PRIMARY KEY NOT NULL,
+     name TEXT NOT NULL,
+     system INTEGER NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL
+   );
+   CREATE TABLE IF NOT EXISTS list_books (
+     list_id TEXT NOT NULL REFERENCES book_lists(id) ON DELETE CASCADE,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     added_at INTEGER NOT NULL,
+     PRIMARY KEY (list_id, book_id)
+   );
+   CREATE INDEX IF NOT EXISTS list_books_book ON list_books(book_id);
+   CREATE TABLE IF NOT EXISTS book_tags (
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     tag TEXT NOT NULL,
+     PRIMARY KEY (book_id, tag)
+   );
+   CREATE INDEX IF NOT EXISTS book_tags_tag ON book_tags(tag);
+   INSERT OR IGNORE INTO book_lists (id, name, system, created_at)
+     VALUES ('favorites', 'Favorites', 1, 0);`,
 ];

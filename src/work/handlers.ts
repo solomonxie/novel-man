@@ -21,6 +21,7 @@ import {
   replaceMentions,
   replaceScenes,
   setChapterBrief,
+  setChapterRecap,
   setPinIfUnset,
   setWikiIfUnset,
   updateBook,
@@ -37,6 +38,7 @@ import { parseTie, TIES } from '../cast/ties';
 import { translate } from '../translate/run';
 import { kindOf } from '../books/kinds';
 import { isRecord } from '../books/record';
+import { canonChapters, isBible } from '../scripture/canon';
 import type { WorkJob, WorkKind } from '../db/work';
 import {
   assemble,
@@ -62,7 +64,9 @@ export const handlers: Record<WorkKind, Handler> = {
   'book-summary': summarizeBook,
   'book-lookup': lookUpBook,
   'book-outline': outlineBook,
+  'book-correct': correctBook,
   'chapter-brief': briefChapter,
+  'chapter-recap': recapChapter,
   'deep-analyze': deepAnalyze,
   'cast-chapter': castChapter,
   'cast-wrapup': wrapUpCast,
@@ -79,13 +83,21 @@ async function notHere(): Promise<void> {
   throw new Error('no handler registered');
 }
 
-/** Shared by every handler: ask once, keep the answer, never pay twice. */
+/**
+ * Shared by every handler: ask once, keep the answer, never pay twice.
+ *
+ * A refusal is the one answer not worth keeping. It is a successful reply, so
+ * it used to be cached like any other — and then Retry read it back and failed
+ * in the same instant without asking anybody, which looks exactly like a
+ * button that does nothing. It is also the answer most likely to change: the
+ * reader adds the author, or the pass stops asking for the impossible.
+ */
 async function ask(kind: string, messages: ChatMessage[], maxTokens: number, signal: AbortSignal) {
   const hash = contentHash(kind, ...messages.map((message) => message.content));
   const cached = await readCache(hash);
-  if (cached !== null) return cached;
+  if (cached !== null && !refused(cached)) return cached;
   const answer = await runChat(messages, { maxTokens, signal });
-  await writeCache(hash, kind, answer);
+  if (!refused(answer)) await writeCache(hash, kind, answer);
   return answer;
 }
 
@@ -153,15 +165,50 @@ const KNOWN_BOOK_RULES =
   'cannot place at all: an invented answer is worse than none, because nothing ' +
   'here can tell the two apart later.';
 
-/** `{"unknown":true}` and nothing else — fenced or not, and nothing looser. */
+/**
+ * `{"unknown":true}`, whether it arrives alone, fenced, or wrapped in the
+ * sentence of explanation some models cannot help adding. The token is the
+ * contract; where it appears is not something worth failing a chapter over.
+ */
 function refused(answer: string): boolean {
   const body = answer.replace(/```(?:json)?/gi, '').trim();
-  return /^\{\s*"?unknown"?\s*:\s*true\s*,?\s*\}?$/i.test(body);
+  return /\{\s*"?unknown"?\s*:\s*true\s*,?\s*\}?/i.test(body);
 }
 
 /** The one error a reader has to be able to read off the queue row, and act on. */
 const UNKNOWN =
   'the model could not place this title — try the fuller title, or add the author';
+
+/**
+ * The same, one level down. A chapter of a book the app has no copy of is
+ * asked about by name, so there are two ways to get nothing back: the model
+ * does not know the book, or it knows it and cannot tell which chapter this
+ * is. The second is the one the reader can do something about, and a line in
+ * the chapter's brief is what does it.
+ */
+const UNKNOWN_CHAPTER =
+  'the model could not place this chapter — a line in its brief saying what it covers is usually enough';
+
+/**
+ * The answer to a question about a book whose words were never sent. Three
+ * shapes all mean the same thing — the token, `unknown` among the fields, and
+ * the prose a model writes when it would rather explain than answer — and all
+ * three are a failure the reader can see rather than a chapter that quietly
+ * comes back empty. Nothing here can tell an invented chapter from a real one
+ * later, so nothing invented may be written down now.
+ */
+function readCited<T>(answer: string): T {
+  if (refused(answer)) throw new Error(UNKNOWN_CHAPTER);
+  let result: T & { unknown?: boolean };
+  try {
+    result = parseJson<T & { unknown?: boolean }>(answer);
+  } catch {
+    // Not JSON at all: an apology, or a request for the text nobody can send.
+    throw new Error(UNKNOWN_CHAPTER);
+  }
+  if (result.unknown) throw new Error(UNKNOWN_CHAPTER);
+  return result;
+}
 
 async function lookUpBook(job: WorkJob, signal: AbortSignal) {
   const book = await getBook(job.book_id);
@@ -210,6 +257,84 @@ async function lookUpBook(job: WorkJob, signal: AbortSignal) {
 }
 
 /**
+ * The details as they should read, rather than the gaps in them. A lookup only
+ * writes where the shelf is blank, which is right for a book nobody has
+ * touched and useless for the commonest way a record is wrong: a title typed
+ * from memory, an author down to an initial, a year off by one, a subtitle
+ * dropped. This pass is allowed to overwrite, and pays for that by being told
+ * exactly what it may not do — turn the record into a different book, or
+ * translate a title out of the language it was published in.
+ */
+type Correction = {
+  unknown?: boolean;
+  title?: string;
+  author?: string;
+  year?: string | number;
+  edition?: string;
+};
+
+const CORRECT_FIELDS = ['title', 'author', 'year', 'edition'] as const;
+
+async function correctBook(job: WorkJob, signal: AbortSignal) {
+  const book = await getBook(job.book_id);
+  if (!book) throw new Error('book is gone');
+  const answer = await ask(
+    'book-correct',
+    [
+      {
+        role: 'system',
+        content:
+          'You are a reference desk. You are given a shelf record of a published work, ' +
+          'which may be wrong: a title typed from memory, an author given by initial or ' +
+          'surname alone, a missing subtitle, a wrong year, a translation credited to the ' +
+          'wrong person. Reply with JSON only: {"title","author","year","edition"}. Give ' +
+          'every field as it should read, corrected where it is wrong and copied exactly ' +
+          'where it is right. "year" is the year this work was first published, four ' +
+          'digits. "edition" is the translation, revision or named edition this record is ' +
+          'of, and is left out where the record names none. ' +
+          // Without this it "corrects" 三体 to The Three-Body Problem, which is a
+          // different book on this shelf: the reader's copy is the one they read.
+          'Keep every field in the language it is published in and never translate a ' +
+          'title or a name. Never turn the record into a different work: correct what is ' +
+          'written, and where the record names a work you cannot identify at all, reply ' +
+          'with exactly {"unknown":true} and nothing else.',
+      },
+      {
+        role: 'user',
+        content: [
+          `Title: ${book.title}`,
+          `Author: ${book.author ?? ''}`,
+          `First published: ${book.year ?? ''}`,
+          `Edition: ${book.edition ?? ''}`,
+          `Language of this copy: ${book.language}`,
+          book.summary?.trim() ? `What it is: ${book.summary.trim().slice(0, 400)}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      },
+    ],
+    400,
+    signal
+  );
+  if (refused(answer)) throw new Error(UNKNOWN);
+
+  const found = parseJson<Correction>(answer);
+  if (found.unknown) throw new Error(UNKNOWN);
+  const changes: Record<string, string> = {};
+  for (const field of CORRECT_FIELDS) {
+    const raw = field === 'year' ? String(found.year ?? '').match(/\d{3,4}/)?.[0] : found[field];
+    const next = String(raw ?? '').trim();
+    // Only a real difference. A pass that rewrites a field with the same
+    // string is a pass that says it changed something when it did not.
+    if (next && next !== (book[field] ?? '').trim()) changes[field] = next;
+  }
+  if (!Object.keys(changes).length) {
+    throw new Error('nothing to correct — the details already match the book');
+  }
+  await updateBook(job.book_id, changes);
+}
+
+/**
  * What the book is made of, for a book whose pages are not here: its chapters,
  * in order, each with a line on what it covers. That is what makes the rest of
  * the app work on a record — a note, a brief and a rating all hang off a
@@ -228,6 +353,15 @@ type Outline = {
 async function outlineBook(job: WorkJob, signal: AbortSignal) {
   const book = await getBook(job.book_id);
   if (!book) throw new Error('book is gone');
+  // A bible's contents are the same in every edition of the canon: 66 books
+  // and 1,189 chapters, already here. Asking a model costs money to be told
+  // something less certain — and asked for all 1,189 at once it answers that
+  // it does not know how the work is divided, which is what a reader who typed
+  // "NIV Bible" was told.
+  if (isBible(book.title)) {
+    await replaceChapters(job.book_id, canonChapters());
+    return;
+  }
   const kind = kindOf(book.kind);
   const unit = kind.unit ?? 'chapter';
   const answer = await ask(
@@ -316,6 +450,14 @@ async function summarizeBook(job: WorkJob, signal: AbortSignal) {
   const briefed = chapters.filter((chapter) => chapter.brief?.trim());
   const text = await getDocumentText(job.book_id);
 
+  // Neither the book's words nor a word about them: whatever came back from
+  // that would be a summary of an empty page, invented under a real title.
+  // The pass that answers from the title alone is the lookup, and saying so
+  // is more use than a made-up blurb.
+  if (!briefed.length && !text.trim()) {
+    throw new Error('nothing has been read or briefed yet — ask what this book is instead');
+  }
+
   const material = briefed.length
     ? briefed
         .map((chapter) => `${chapter.idx + 1}. ${chapter.title.trim()} — ${chapter.brief!.trim()}`)
@@ -381,8 +523,64 @@ async function briefChapter(job: WorkJob, signal: AbortSignal) {
   );
   // A book the model does not know comes back saying so, and that sentence is
   // not a brief — see `knownWorkBody`.
-  if (isRecord(book) && refused(answer)) throw new Error(UNKNOWN);
+  if (citedNotSent(book) && refused(answer)) throw new Error(UNKNOWN_CHAPTER);
   await setChapterBrief(chapter.id, answer.trim() || null);
+}
+
+/**
+ * The chapter itself, as far as anyone remembers it.
+ *
+ * Every other pass here refuses to write prose that could be mistaken for the
+ * book. This one is asked for exactly that and is therefore the most careful:
+ * it is only ever offered for a book the app has no copy of, what it writes is
+ * kept in a column of its own rather than merged into a manuscript, and the
+ * page that shows it says whose words they are. A reader who wants to know
+ * what happened in chapter twelve of a book they lent out is asking a
+ * reasonable question; the danger is not the answer but forgetting where it
+ * came from a month later.
+ *
+ * So: recounted rather than reconstructed. It is told to say plainly where its
+ * memory thins out instead of writing over the gap, and never to produce a
+ * line as though quoting.
+ */
+async function recapChapter(job: WorkJob, signal: AbortSignal) {
+  const { book, chapters, chapter, text, passage } = await loadChapter(job);
+  const before = recentBriefs(chapters, chapter);
+  const answer = await ask(
+    'chapter-recap',
+    [
+      {
+        role: 'system',
+        content:
+          'You recount one chapter of a published work for a reader who has read the book ' +
+          'and wants to be back inside that chapter. Several paragraphs of plain prose: what ' +
+          'happens, in order, who is there, where it takes place, and how the chapter ends. ' +
+          'Past tense, the names and terms the book uses, the language asked for below. ' +
+          'You are recalling, not reconstructing: where your memory of this chapter is thin, ' +
+          'say so in the open — "the middle of this chapter I do not recall in detail" — ' +
+          'rather than writing something plausible over the gap. Never present a sentence as ' +
+          "the book's own words, never invent an event, a name or an ending, and never " +
+          'recount a different chapter. Reply with the account only — no heading, no preamble.',
+      },
+      {
+        role: 'user',
+        content: [
+          bookHeader(book, chapters),
+          before && `THE CHAPTERS JUST BEFORE THIS ONE\n${before}`,
+          chapterMaterial(book, chapter, text, passage),
+          `Answer in ${book.language}.`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      },
+    ],
+    1200,
+    signal
+  );
+  if (refused(answer)) throw new Error(UNKNOWN_CHAPTER);
+  const recap = answer.trim();
+  if (!recap) throw new Error(UNKNOWN_CHAPTER);
+  await setChapterRecap(chapter.id, recap);
 }
 
 type Detail = { label: string; value: string };
@@ -798,8 +996,7 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
     signal
   );
 
-  if (isRecord(book) && refused(answer)) throw new Error(UNKNOWN);
-  const result = parseJson<DeepResult>(answer);
+  const result = citedNotSent(book) ? readCited<DeepResult>(answer) : parseJson<DeepResult>(answer);
   if (result.brief?.trim()) await setChapterBrief(chapter.id, result.brief.trim());
 
   if (wantsCast) {
@@ -916,7 +1113,10 @@ async function castChapter(job: WorkJob, signal: AbortSignal) {
     signal
   );
 
-  const result = parseJson<DeepResult>(answer);
+  // A refusal here used to parse to nothing and finish as a success, so a
+  // chapter nobody could answer for came back with an empty cast and no sign
+  // that anything had gone wrong.
+  const result = citedNotSent(book) ? readCited<DeepResult>(answer) : parseJson<DeepResult>(answer);
   await recordCharacters(job.book_id, chapter.idx, result.characters ?? []);
   await recordPlaces(job.book_id, chapter.idx, result.places ?? []);
 }

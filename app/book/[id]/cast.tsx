@@ -20,8 +20,7 @@ import {
   type Mention,
   type Relation,
 } from '../../../src/db/repo';
-import { estimateCast } from '../../../src/cast/extract';
-import { estimateDeep, queueChapterRun, queuePolish } from '../../../src/analysis/runs';
+import { queuePolish } from '../../../src/analysis/runs';
 import { stoppedWithoutKey } from '../../../src/ai/guard';
 import { coOccurring, estimateRelations, extractRelations } from '../../../src/cast/relations';
 import { checkContinuity, estimateContinuity, subjectsFor, type Subject } from '../../../src/cast/continuity';
@@ -32,11 +31,17 @@ import { AiRunSheet, type RunHooks } from '../../../src/ui/AiRunSheet';
 import { ActionMenu } from '../../../src/ui/ActionMenu';
 import { Hint, Row, Section } from '../../../src/ui/primitives';
 import { bucketize, Sparkline } from '../../../src/ui/Sparkline';
-import { useDocument } from '../../../src/ui/useDocument';
 import { space, usePalette } from '../../../src/theme';
 import { useWorkRefresh } from '../../../src/work/refresh';
 
-type Pass = 'extract' | 'deep' | 'relations' | 'continuity';
+/**
+ * What this page can still ask for, and what it deliberately cannot. Reading
+ * every chapter to build a cast was two of these rows, and it was a whole-book
+ * run under another name — see `docs/design/DESIGN.md`. The cast is built a
+ * chapter at a time, from the chapter's own page; these two work on what those
+ * passes already wrote down.
+ */
+type Pass = 'relations' | 'continuity';
 
 export default function Cast() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -44,7 +49,6 @@ export default function Cast() {
   const palette = usePalette();
 
   const [book, setBook] = useState<Book | null>(null);
-  const document = useDocument(id);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [mentions, setMentions] = useState<Mention[]>([]);
@@ -83,14 +87,6 @@ export default function Cast() {
   async function openPass(which: Pass) {
     setPass(which);
     if (!book) return;
-    if (which === 'extract' || which === 'deep') {
-      const { text } = await document.read();
-      const price = await (which === 'deep'
-        ? estimateDeep(text, chapters, book)
-        : estimateCast(text, chapters, book.language));
-      setEstimates((was) => ({ ...was, [which]: price }));
-      return;
-    }
     const price = await (which === 'relations'
       ? estimateRelations(coOccurring(entities, mentions), book.language)
       : estimateContinuity(subjects, book.language));
@@ -122,10 +118,6 @@ export default function Cast() {
   }
 
   async function runPass(which: Pass, hooks: RunHooks): Promise<string> {
-    if (which === 'extract' || which === 'deep') {
-      await queueChapterRun(id!, which === 'deep' ? 'deep-analyze' : 'cast-chapter', chapters);
-      return t('work.queued', { count: chapters.length });
-    }
     if (which === 'relations') {
       const run = await extractRelations(id!, hooks);
       return t('cast.relationsFound', { count: run.found, failed: run.failed });
@@ -144,16 +136,6 @@ export default function Cast() {
       <Stack.Screen options={{ title: t('book.people'), headerBackTitle: ' ' }} />
 
       <Section title={t('cast.analysis')}>
-        <Row
-          label={t('cast.deep')}
-          value={t('cast.costs')}
-          onPress={chapters.length ? () => openPass('deep') : undefined}
-        />
-        <Row
-          label={entities.length ? t('cast.reanalyze') : t('cast.analyze')}
-          value={t('cast.costs')}
-          onPress={chapters.length ? () => openPass('extract') : undefined}
-        />
         <Row
           label={t('cast.findRelations')}
           value={relations.length ? `${relations.length}` : t('cast.costs')}
@@ -311,8 +293,8 @@ export default function Cast() {
 
       <AiRunSheet
         visible={pass !== null}
-        title={t(`cast.title_${pass ?? 'extract'}`)}
-        description={t(`cast.what_${pass ?? 'extract'}`)}
+        title={t(`cast.title_${pass ?? 'relations'}`)}
+        description={t(`cast.what_${pass ?? 'relations'}`)}
         estimate={pass ? estimates[pass] ?? null : null}
         hasKey={keyed}
         onRun={(hooks) => runPass(pass!, hooks)}

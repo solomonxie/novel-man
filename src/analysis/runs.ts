@@ -95,6 +95,19 @@ export async function queueChapterRun(
   return runId;
 }
 
+/**
+ * What a chapter with no words says, from what a model remembers of the book.
+ * One chapter at a time like every other pass, and offered only where there is
+ * nothing to read — see `handlers.recapChapter`.
+ */
+export function queueChapterRecap(bookId: string, chapter: Chapter): Promise<string> {
+  return queueWork({
+    bookId,
+    kind: 'chapter-recap',
+    units: [{ label: label(chapter), chapterIdx: chapter.idx }],
+  });
+}
+
 export function queuePolish(bookId: string, entityId: string, name: string): Promise<string> {
   return queueWork({
     bookId,
@@ -169,6 +182,11 @@ export function queueBookSummary(bookId: string): Promise<string> {
  */
 export function queueBookLookup(bookId: string, title: string): Promise<string> {
   return queueWork({ bookId, kind: 'book-lookup', units: [{ label: title }] });
+}
+
+/** The details checked against the work rather than filled in where blank. */
+export function queueBookCorrection(bookId: string, title: string): Promise<string> {
+  return queueWork({ bookId, kind: 'book-correct', units: [{ label: title }] });
 }
 
 export function queueBookOutline(bookId: string, title: string): Promise<string> {

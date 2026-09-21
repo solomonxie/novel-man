@@ -8,6 +8,7 @@ import {
   type Book,
 } from '../db/repo';
 import { coverUrl, type Work } from '../sources/openLibrary';
+import { looksLikeImage } from '../sources/identify';
 import type { Shelved } from '../sources/goodreads';
 import { writeImage } from '../storage/files';
 import { hueFrom } from '../ui/fields';
@@ -39,22 +40,29 @@ export function keepByHand(input: {
 }
 
 /**
- * A cover is the only thing a shelf is read by, and Open Library serves one
- * for most of what it lists. It is fetched at the moment the book is added and
- * never again — 20 KB once, kept where a backup can carry it — and a book
- * whose cover will not come still goes on the shelf.
+ * A cover is the only thing a shelf is read by, and the catalogs serve one for
+ * most of what they list. It is fetched at the moment it is chosen and never
+ * again — 20 KB once, kept where a backup can carry it — and a book whose
+ * cover will not come still goes on the shelf.
  */
-async function keepCover(coverId: number, key: string): Promise<string | null> {
+export async function keepCoverFrom(url: string, key: string): Promise<string | null> {
   try {
-    const response = await fetch(coverUrl(coverId, 'M'));
+    const response = await fetch(url);
     if (!response.ok) return null;
     const bytes = new Uint8Array(await response.arrayBuffer());
-    // Open Library answers a missing cover with a 1×1 rather than a 404.
-    if (bytes.length < 1000) return null;
+    // Open Library answers a missing cover with a 1×1 rather than a 404, and
+    // Google answers a size it does not have with something that is not a
+    // picture at all. Both arrive as 200s; neither is worth a row on the
+    // shelf, and a file that is not an image is a black rectangle later.
+    if (bytes.length < 1000 || !looksLikeImage(bytes)) return null;
     return writeImage(`cover-${key}.jpg`, bytes);
   } catch {
     return null;
   }
+}
+
+function keepCover(coverId: number, key: string): Promise<string | null> {
+  return keepCoverFrom(coverUrl(coverId, 'M'), key);
 }
 
 /** Already on the shelf under the id this catalog knows it by, or by its name. */

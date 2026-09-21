@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
+import { imageUri } from '../storage/files';
 import { radius, space, usePalette } from '../theme';
 
 /** Edits commit on blur — a Save button on every field would be five taps a page. */
@@ -47,8 +48,9 @@ export function Portrait({ name, path, hue, size, onPick }: {
   onPick?: (uri: string) => void;
 }) {
   const palette = usePalette();
-  const body = path ? (
-    <Image source={{ uri: path }} style={{ width: size, height: size, borderRadius: size / 2 }} />
+  const uri = path ? imageUri(path) : undefined;
+  const body = uri ? (
+    <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} />
   ) : (
     <View
       style={[

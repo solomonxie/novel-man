@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -6,8 +6,8 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
+  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -19,11 +19,11 @@ import {
   countEntities,
   listParts,
   listScenes,
-  countVerses,
   createEntity,
   deleteBook,
   getBook,
   getProgress,
+  lastReadAt,
   listAnnotations,
   listChapters,
   listEntities,
@@ -42,19 +42,19 @@ import {
   type Relation,
 } from '../../src/db/repo';
 import { Cover, PrimaryAction, Row, Section } from '../../src/ui/primitives';
-import { Action, Block, Chip, ChipRow, Empty, Fact, Hero, Item, Tile, Tiles, Writable } from '../../src/ui/detail';
+import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item, Writable } from '../../src/ui/detail';
 import { hueFrom } from '../../src/ui/fields';
 import { ExportSheet } from '../../src/ui/ExportSheet';
 import { byFrequency } from '../../src/cast/mentions';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
 import {
-  estimateDeep,
+  estimateBookSummary,
   estimateLookup,
   estimateOutline,
+  queueBookCorrection,
   queueBookLookup,
   queueBookOutline,
   queueBookSummary,
-  queueChapterRun,
 } from '../../src/analysis/runs';
 import { hasAnyKey } from '../../src/ai/keys';
 import { useDocument } from '../../src/ui/useDocument';
@@ -62,7 +62,6 @@ import type { Estimate } from '../../src/ai/cost';
 import { pickImage } from '../../src/ui/fields';
 import { adoptImage } from '../../src/storage/files';
 import { InlineText } from '../../src/ui/inline';
-import { formatCount, formatDuration, readingMinutes } from '../../src/text/counts';
 import { radius, space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { KindList } from '../../src/ui/KindList';
@@ -70,8 +69,18 @@ import { OptionRows } from '../../src/ui/OptionRows';
 import { kindOf, shows, supports, unitOf } from '../../src/books/kinds';
 import { isRecord, statusOf, STATUSES } from '../../src/books/record';
 import { Stars } from '../../src/ui/Stars';
+import { IdentifySheet } from '../../src/ui/IdentifySheet';
+import { TagsBlock } from '../../src/ui/Shelving';
+import { ListPicker } from '../../src/ui/ListPicker';
+import { CoverViewer } from '../../src/ui/CoverViewer';
+import { isFavorite, setFavorite } from '../../src/db/shelves';
 import { ESV_SOURCE } from '../../src/sources/esvBook';
 import { EsvKeyRows } from '../../src/settings/EsvKey';
+
+/** One line of anything written on this page, and how many lines each box gets. */
+const LINE = 22;
+const BLURB_LINES = 3;
+const IMPRESSION_LINES = 3;
 
 export default function BookPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -83,20 +92,37 @@ export default function BookPage() {
   const [places, setPlaces] = useState<Entity[]>([]);
   const [terms, setTerms] = useState<Entity[]>([]);
   const [offset, setOffset] = useState(0);
+  const [readAt, setReadAt] = useState<number | null>(null);
   const [noteCount, setNoteCount] = useState(0);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
-  const [verses, setVerses] = useState(0);
-  const [jumpOpen, setJumpOpen] = useState(false);
   const [kindOpen, setKindOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryEstimate, setSummaryEstimate] = useState<Estimate | null>(null);
   /** The two passes a book with no words can have — see `analysis/runs`. */
-  const [lookupOpen, setLookupOpen] = useState(false);
   const [outlineOpen, setOutlineOpen] = useState(false);
+  const [correctOpen, setCorrectOpen] = useState(false);
+  const [identifyOpen, setIdentifyOpen] = useState(false);
+  const [listsOpen, setListsOpen] = useState(false);
+  const [coverOpen, setCoverOpen] = useState(false);
   const [askEstimate, setAskEstimate] = useState<Estimate | null>(null);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [favorite, setFavorited] = useState(false);
+  /** The blurb is three lines until somebody asks for the rest of it. */
+  const [blurbOpen, setBlurbOpen] = useState(false);
+  const [summaryLines, setSummaryLines] = useState(0);
+  const [writingSummary, setWritingSummary] = useState(false);
+  const [summaryDraft, setSummaryDraft] = useState('');
+  /** The page scrolls itself to the stars when the count of them is tapped. */
+  const page = useRef<ScrollView>(null);
+  const ratingY = useRef(0);
+  const notesY = useRef(0);
+  const scenesY = useRef(0);
+  const [openScenes, setOpenScenes] = useState<string | null>(null);
+  /** One chapter's notes at a time: a book's worth at once is a page nobody reads. */
+  const [openNotes, setOpenNotes] = useState<string | null>(null);
   const [keyed, setKeyed] = useState(false);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [text, setText] = useState('');
@@ -112,15 +138,16 @@ export default function BookPage() {
     listEntities(id, 'place').then(setPlaces);
     listEntities(id, 'term').then(setTerms);
     getProgress(id).then(setOffset);
+    lastReadAt(id).then(setReadAt);
     listAnnotations(id).then((rows) => {
       setAnnotations(rows);
       setNoteCount(rows.length);
     });
     listMentions(id).then(setMentions);
     listRelations(id).then(setRelations);
+    isFavorite(id).then(setFavorited).catch(() => undefined);
     listScenes(id).then(setScenes);
     listParts(id).then(setParts);
-    countVerses(id).then(setVerses);
   }, [id]);
 
   useFocusEffect(load);
@@ -131,7 +158,62 @@ export default function BookPage() {
     hasAnyKey().then(setKeyed);
   }, []);
 
+  /** One tap, and the shelf it lands on is the one that was always there. */
+  async function toggleFavorite() {
+    if (!id) return;
+    await setFavorite(id, !favorite);
+    setFavorited(!favorite);
+  }
 
+
+
+  /**
+   * Notes under the chapter they were made in, in reading order — which is
+   * how anybody looks for one. A note that quotes nothing and names no
+   * chapter is about the book itself, so it goes first, before chapter one.
+   */
+  const noteGroups = useMemo(() => {
+    const byChapter = new Map<string, { key: string; title: string; notes: Annotation[] }>();
+    for (const note of annotations) {
+      const chapter = note.chapter_id
+        ? chapters.find((entry) => entry.id === note.chapter_id)
+        : note.standalone
+          ? undefined
+          : chapters.find((entry) => note.start >= entry.start && note.start < entry.end);
+      const key = chapter?.id ?? 'book';
+      const title = chapter
+        ? `${chapter.idx + 1}. ${chapter.title.trim() || t('structure.untitled')}`
+        : t('book.notesAboutBook');
+      if (!byChapter.has(key)) byChapter.set(key, { key, title, notes: [] });
+      byChapter.get(key)!.notes.push(note);
+    }
+    const order = new Map(chapters.map((chapter, at) => [chapter.id, at]));
+    return [...byChapter.values()].sort(
+      (a, b) => (order.get(a.key) ?? -1) - (order.get(b.key) ?? -1)
+    );
+  }, [annotations, chapters, t]);
+
+  /** The same fold as the notes: a chapter, and what it was split into. */
+  const sceneGroups = useMemo(() => {
+    const byChapter = new Map<string, { key: string; title: string; scenes: Scene[] }>();
+    for (const scene of scenes) {
+      const chapter = chapters.find((entry) => entry.id === scene.chapter_id);
+      if (!chapter) continue;
+      const key = chapter.id;
+      if (!byChapter.has(key)) {
+        byChapter.set(key, {
+          key,
+          title: `${chapter.idx + 1}. ${chapter.title.trim() || t('structure.untitled')}`,
+          scenes: [],
+        });
+      }
+      byChapter.get(key)!.scenes.push(scene);
+    }
+    const order = new Map(chapters.map((chapter, at) => [chapter.id, at]));
+    return [...byChapter.values()].sort(
+      (a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0)
+    );
+  }, [chapters, scenes, t]);
 
   if (!book) {
     return (
@@ -141,30 +223,112 @@ export default function BookPage() {
     );
   }
 
-  const current = chapters.find((chapter) => offset >= chapter.start && offset < chapter.end);
-  const minutes = readingMinutes(book.word_count, book.language);
+  /**
+   * Where the reading got to. What is saved depends on what there is to save:
+   * a book this app holds keeps a character offset, and one whose text is
+   * fetched a chapter at a time keeps the chapter — its chapters all begin and
+   * end at zero, so an offset could never point into one. Comparing offsets
+   * against those zeroes is why a bible always said "Start reading".
+   *
+   * And a row written when the book was added is not a reading: the state is
+   * only a resumption once it has been touched after the book itself.
+   */
+  const started = readAt !== null && readAt > book.created_at + 1000;
+  const current = !started
+    ? undefined
+    : book.text_source
+      ? chapters.find((chapter) => chapter.idx === offset)
+      : chapters.find((chapter) => offset >= chapter.start && offset < chapter.end);
   // A book with no words behind it: no reader to open, no text to export, and
   // everything the app knows about it either typed or asked for. See
   // `books/record`.
   const record = isRecord(book);
 
-  // Priced when the sheet opens, not on every visit: an estimate needs the
-  // whole manuscript, and nobody asked for one by walking past.
   /**
-   * One entry point for "read this book": every chapter, then the summary
-   * built from what they said. Priced before it runs, because this is the one
-   * action in the app that can cost real money on a 500-chapter novel.
+   * The counts in the head, as one list rather than an arrangement per kind of
+   * book. Every book is asked the same questions in the same order and answers
+   * the ones it can: a record has no length, a paper has no parts, a manual has
+   * no scenes. Four fit across, so the first four that apply are the ones shown
+   * — which is what keeps a bible, a novel and a book somebody typed the name
+   * of looking like the same page.
    */
-  async function openAnalyze() {
+  const scrollTo = (where: { current: number }) => () =>
+    page.current?.scrollTo({ y: Math.max(0, where.current - space.lg), animated: true });
+
+  type HeadFact = { value: string | number; label: string; onPress?: () => void };
+
+  /**
+   * Four boxes, always, and the same four questions of every book: what it is
+   * divided into, what it is made of, what you wrote in it, and what you
+   * thought of it. The rating is the one on the right whatever happens.
+   *
+   * A book with parts spends its third box on them. One without has a box
+   * going spare, so it goes to whatever that book actually has — scenes for a
+   * novel, people for a history, terms for a manual — which is how four fixed
+   * positions still say something on every kind of book.
+   */
+  const spare: HeadFact | null =
+    !record && supports(book.kind, 'scenes')
+      ? { value: scenes.length, label: t('units.unit_scenes'), onPress: scrollTo(scenesY) }
+      : supports(book.kind, 'cast')
+        ? {
+            value: characters.length,
+            label: t('units.unit_cast'),
+            onPress: () => router.push(`/book/${book.id}/cast`),
+          }
+        : supports(book.kind, 'terms')
+          ? {
+              value: terms.length,
+              label: t('book.terms').toLowerCase(),
+              onPress: () => router.push(`/book/${book.id}/terms`),
+            }
+          : null;
+
+  const facts: HeadFact[] = [
+    ...([
+      parts.length > 0 && {
+        value: parts.length,
+        label: t(`units.unit_${kindOf(book.kind).part ?? 'volume'}s`),
+        onPress: () => router.push(`/book/${book.id}/parts`),
+      },
+      {
+        value: chapters.length,
+        label: t(`units.unit_${unitOf(book.kind)}s`),
+        onPress: () => router.push(`/book/${book.id}/structure`),
+      },
+      { value: noteCount, label: t('units.unit_notes'), onPress: scrollTo(notesY) },
+      parts.length === 0 && spare,
+    ] as (HeadFact | false | null)[])
+      .filter((fact): fact is HeadFact => Boolean(fact))
+      .slice(0, 3),
+    {
+      value: book.stars ? '★'.repeat(book.stars) : '—',
+      label: t('book.ratingShort'),
+      onPress: scrollTo(ratingY),
+    },
+  ];
+
+  /**
+   * The blurb, written by a model. Two passes behind one ✨, because from the
+   * reader's side it is one question: once the chapters have briefs it is
+   * built from those and costs a single small request; before that there is
+   * nothing to build from, so the title is asked instead. Neither of them
+   * reads the book — see `docs/design/DESIGN.md`.
+   */
+  const briefed = chapters.some((chapter) => chapter.brief?.trim());
+
+  function openSummary() {
     setSummaryOpen(true);
     setSummaryEstimate(null);
-    const { text: body } = await document.read();
-    estimateDeep(body, chapters, book!).then(setSummaryEstimate).catch(() => undefined);
+    const priced = briefed
+      ? estimateBookSummary(book!, chapters, '')
+      : estimateLookup(book!);
+    priced.then(setSummaryEstimate).catch(() => undefined);
   }
 
-  /** What this book is, from a model that may have read it. One small request. */
-  function openLookup() {
-    setLookupOpen(true);
+  /** The details as they should read. Priced like a lookup: it is the same ask. */
+  function openCorrect() {
+    setCorrectOpen(true);
     setAskEstimate(null);
     estimateLookup(book!).then(setAskEstimate).catch(() => undefined);
   }
@@ -187,7 +351,10 @@ export default function BookPage() {
     estimateOutline(book!).then(setAskEstimate).catch(() => undefined);
   }
 
-  async function edit(field: 'title' | 'author' | 'year' | 'edition' | 'summary', value: string) {
+  async function edit(
+    field: 'title' | 'author' | 'year' | 'edition' | 'summary' | 'impressions' | 'isbn',
+    value: string
+  ) {
     await updateBook(book!.id, { [field]: value.trim() || null });
     load();
   }
@@ -229,77 +396,81 @@ export default function BookPage() {
 
   return (
     <ScrollView
+      ref={page}
       style={{ backgroundColor: palette.bg }}
       contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
     >
       <Stack.Screen options={{ title: book.title, headerBackTitle: ' ' }} />
 
       <Hero
+        // Nothing sits on the cover any more. It is a picture, so tapping it
+        // shows the picture; what you can *do* to it is written underneath in
+        // words, where a 24px glyph was a guess either way.
         avatar={
-          <Pressable onPress={pickCover}>
-            <Cover title={book.title} hue={book.cover_hue} width={92} path={book.cover_path} />
-            <View style={[styles.coverBadge, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-              <Text style={{ fontSize: 11 }}>✎</Text>
-            </View>
-          </Pressable>
+          <View style={{ alignItems: 'center', gap: space.xs }}>
+            <Pressable onPress={() => setCoverOpen(true)}>
+              <Cover title={book.title} hue={book.cover_hue} width={92} path={book.cover_path} />
+            </Pressable>
+            {/* One word, and it is always the one that applies: a cover is
+                taken off, and then a cover is added. Two links side by side
+                asked the reader to pick between them every time. */}
+            <Text
+              onPress={async () => {
+                if (!book.cover_path) return pickCover();
+                await updateBook(book.id, { cover_path: null });
+                load();
+              }}
+              suppressHighlighting
+              style={{ color: book.cover_path ? palette.dim : palette.accent, fontSize: 11 }}
+            >
+              {t(book.cover_path ? 'book.removePhoto' : 'book.addPhoto')}
+            </Text>
+          </View>
         }
-        facts={
-          record ? (
-            // Nothing here is a length. What a record has instead is what the
-            // reader has done with it.
-            <>
-              <Fact value={chapters.length} label={t(`units.unit_${unitOf(book.kind)}s`)} />
-              <Fact value={noteCount} label={t('book.notesShort')} />
-              <Fact
-                value={book.stars ? '★'.repeat(book.stars) : '—'}
-                label={t('book.ratingShort')}
-              />
-            </>
-          ) : (
-            <>
-              {parts.length > 0 ? (
-                <Fact value={parts.length} label={t(`units.unit_${kindOf(book.kind).part ?? 'volume'}s`)} />
-              ) : (
-                <Fact value={formatCount(book.word_count, book.language)} label={t('units.unit_long')} />
-              )}
-              <Fact value={chapters.length} label={t(`units.unit_${unitOf(book.kind)}s`)} />
-              {verses > 0 ? (
-                <Fact value={formatCount(verses, 'en')} label={t('units.unit_verses')} />
-              ) : (
-                <Fact value={formatDuration(minutes)} label={t('units.unit_toRead')} />
-              )}
-            </>
-          )
-        }
+        facts={facts.map((fact) => (
+          <Fact key={fact.label} value={fact.value} label={fact.label} onPress={fact.onPress} />
+        ))}
+        // One row for every book: where the reading is, where the chapters
+        // are, and the two glyphs. A record has no reading, so its row starts
+        // at the chapters — which is also where its contents are asked for,
+        // so there is no button here for that either.
         actions={
-          record ? (
-            // There is nothing to open, so the first action is the one that
-            // makes the page worth opening: ask what this book is.
-            <>
+          <View style={{ flex: 1, gap: space.sm }}>
+            {/* A record has nothing to read, so it has no first row at all. */}
+            {record ? null : (
+              <View style={{ flexDirection: 'row' }}>
+                <Action
+                  // Where it resumes, said on the button rather than in a line
+                  // under it: a note that only ever repeats the button is a
+                  // line of type doing nothing.
+                  label={
+                    current
+                      ? `${t('book.continue')} · ${shorten(label(current, t))}`
+                      : t('book.start')
+                  }
+                  tone="loud"
+                  onPress={() => router.push(`/reader/${book.id}`)}
+                />
+              </View>
+            )}
+            {/* The chapters have a tile of their own under Inside; a second
+                door to them in the hero was the same door twice. */}
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              {/* Named, not just drawn. Three share the row, so each label is
+                  one short word — a glyph alone is a guess, and a guess on the
+                  button that rewrites the title is an expensive one. */}
               <Action
-                label={book.summary?.trim() ? t('book.lookUpAgain') : t('book.lookUp')}
-                tone={book.summary?.trim() ? 'quiet' : 'loud'}
-                onPress={openLookup}
+                label={`${favorite ? '♥' : '♡'}  ${t('book.favorite')}`}
+                onPress={toggleFavorite}
               />
-              <Action
-                label={chapters.length ? t('book.analyzeShort') : t('book.outlineShort')}
-                tone={chapters.length ? 'quiet' : 'loud'}
-                onPress={chapters.length ? openAnalyze : openOutline}
-              />
-            </>
-          ) : (
-            <>
-              <Action
-                label={current ? t('book.continue') : t('book.start')}
-                tone="loud"
-                onPress={() => router.push(`/reader/${book.id}`)}
-              />
-              <Action label={t('book.analyzeShort')} onPress={openAnalyze} />
-            </>
-          )
+              <Action label={`🔍  ${t('identify.title')}`} onPress={() => setIdentifyOpen(true)} />
+              {/* A plus inside a circle: "put this into something". The bars
+                  it replaces drew a list, which is where it *goes* rather than
+                  what the button does — and lists are read from the shelf. */}
+              <Action label="⊕" onPress={() => setListsOpen(true)} compact />
+            </View>
+          </View>
         }
-        // Which chapter Continue resumes at is context, not an action.
-        note={record ? t('book.recordNote') : current ? label(current, t) : undefined}
       >
         <InlineText
           value={book.title}
@@ -328,121 +499,127 @@ export default function BookPage() {
             style={{ color: palette.dim, fontSize: 14 }}
           />
         </View>
+        {/* Rarely read and rarely typed, but it is the only field here that
+            names one printing — which is what makes a catalog answerable. */}
+        <InlineText
+          value={book.isbn}
+          placeholder={t('book.isbn')}
+          onCommit={(value) => edit('isbn', value)}
+          style={{ color: palette.faint, fontSize: 13, marginTop: 2 }}
+        />
         <Text style={{ color: palette.faint, fontSize: 12, marginTop: space.xs }}>
           {t(record ? 'book.recordedFrom' : 'book.importedFrom', { name: book.source_name })}
         </Text>
       </Hero>
 
+      {/* What the book is, in its own voice rather than the reader's — italic
+          and grey for that reason, and three lines tall, because a blurb that
+          pushes everything the reader wrote off the screen has the page the
+          wrong way round. */}
       <View style={{ marginTop: space.lg }}>
         <Writable empty={!book.summary?.trim()}>
-          <InlineText
-            value={book.summary}
-            placeholder={t('book.summaryPlaceholder')}
-            onCommit={(value) => edit('summary', value)}
-            style={{ color: palette.dim, fontSize: 15, lineHeight: 22 }}
-            multiline
-          />
+          {/* Read, not edited by touching it. A blurb is the one thing on this
+              page nobody writes by hand, so a stray tap opening a keyboard
+              over it was all cost and no use — it is edited from a button,
+              and only once it is open far enough to see what you are editing. */}
+          {writingSummary ? (
+            <TextInput
+              value={summaryDraft}
+              onChangeText={setSummaryDraft}
+              placeholder={t('book.summaryPlaceholder')}
+              placeholderTextColor={palette.faint}
+              multiline
+              autoFocus
+              style={{
+                color: palette.dim,
+                fontSize: 15,
+                lineHeight: LINE,
+                fontStyle: 'italic',
+                padding: 0,
+              }}
+            />
+          ) : (
+            <Text
+              // Touching it opens it. It still does not edit: that is the one
+              // thing a stray tap must not start.
+              onPress={() => setBlurbOpen((was) => !was)}
+              suppressHighlighting
+              numberOfLines={blurbOpen ? undefined : BLURB_LINES}
+              onTextLayout={(event) => setSummaryLines(event.nativeEvent.lines.length)}
+              style={{
+                color: book.summary?.trim() ? palette.dim : palette.faint,
+                fontSize: 15,
+                lineHeight: LINE,
+                fontStyle: 'italic',
+              }}
+            >
+              {book.summary?.trim() || t('book.summaryPlaceholder')}
+            </Text>
+          )}
+
+          {/* More, then Edit — and the ✨, which is the other way a blurb gets
+              written: from the briefs where there are any, from the title
+              where there are none. See `openSummary`. */}
+          <View style={styles.summaryFoot}>
+            <View style={{ flexDirection: 'row', gap: space.lg }}>
+              {summaryLines >= BLURB_LINES && !writingSummary ? (
+                <Text
+                  onPress={() => setBlurbOpen((was) => !was)}
+                  suppressHighlighting
+                  style={[styles.link, { color: palette.accent }]}
+                >
+                  {t(blurbOpen ? 'book.less' : 'book.more')}
+                </Text>
+              ) : null}
+              {writingSummary ? (
+                <Text
+                  onPress={async () => {
+                    setWritingSummary(false);
+                    await edit('summary', summaryDraft);
+                  }}
+                  suppressHighlighting
+                  style={[styles.link, { color: palette.accent }]}
+                >
+                  {t('settings.save')}
+                </Text>
+              ) : blurbOpen || !book.summary?.trim() ? (
+                <Text
+                  onPress={() => {
+                    setSummaryDraft(book.summary ?? '');
+                    setWritingSummary(true);
+                  }}
+                  suppressHighlighting
+                  style={[styles.link, { color: palette.accent }]}
+                >
+                  {t('book.editSummary')}
+                </Text>
+              ) : null}
+            </View>
+            <Pressable onPress={openSummary} hitSlop={10}>
+              <Text style={{ color: palette.accent, fontSize: 15 }}>✨</Text>
+            </Pressable>
+          </View>
         </Writable>
       </View>
 
-      {/* What the reader made of it. Every book gets this, not only the ones
-          with no words: a shelf is kept for what you thought of what is on it,
-          and a rating that only records books read on paper is half a shelf. */}
-      <Block title={t('book.rating')}>
-        <Section>
-          <View style={[styles.rating, { borderColor: palette.border }]}>
-            <Stars
-              value={book.stars}
-              size={30}
-              onSet={async (stars) => {
-                await rateBook(book.id, { stars });
-                load();
-              }}
-            />
-            <Text style={{ color: palette.faint, fontSize: 12 }}>
-              {book.stars
-                ? t('book.ratedOn', {
-                    date: new Date(book.rated_at ?? book.created_at).toLocaleDateString(),
-                  })
-                : t('book.notRated')}
-            </Text>
-          </View>
-          <Row
-            label={t('book.statusRow')}
-            detail={t('book.statusHint')}
-            value={`${t(`status.${statusOf(book.status) ?? 'none'}`)}  ${statusOpen ? '⌃' : '⌄'}`}
-            onPress={() => setStatusOpen((was) => !was)}
-            last={!statusOpen}
-          />
-          {statusOpen ? (
-            <OptionRows
-              selectedId={statusOf(book.status) ?? 'none'}
-              options={['none', ...STATUSES].map((entry) => ({
-                id: entry,
-                label: t(`status.${entry}`),
-                detail: t(`status.${entry}Hint`),
-              }))}
-              onPick={async (picked) => {
-                setStatusOpen(false);
-                await updateBook(book.id, { status: picked === 'none' ? null : picked });
-                load();
-              }}
-            />
-          ) : null}
-        </Section>
-        <Writable empty={!book.review?.trim()}>
+      {/* The reader's own overview, and the first thing on the page that is
+          theirs. Above the stars because it is what they would actually say
+          about the book — the rating is the shorthand for it. */}
+      <Block title={t('book.impressions')}>
+        <Writable empty={!book.impressions?.trim()}>
           <InlineText
-            value={book.review}
-            placeholder={t('book.reviewPlaceholder')}
-            onCommit={async (value) => {
-              await rateBook(book.id, { review: value });
-              load();
+            value={book.impressions}
+            placeholder={t('book.impressionsPlaceholder')}
+            onCommit={(value) => edit('impressions', value)}
+            style={{
+              color: palette.text,
+              fontSize: 15,
+              lineHeight: LINE,
+              minHeight: LINE * IMPRESSION_LINES,
             }}
-            style={{ color: palette.text, fontSize: 15, lineHeight: 22 }}
             multiline
           />
         </Writable>
-      </Block>
-
-      <Block
-        title={t('book.inside')}
-        action={
-          chapters.length ? { label: t('book.jumpShort'), onPress: () => setJumpOpen(true) } : undefined
-        }
-      >
-        {chapters.length === 0 ? (
-          <Empty text={t('book.noChapters')} />
-        ) : null}
-        <Tiles>
-          {/* The level a reader of this kind actually navigates by. A bible
-              opens at Genesis, not at a list of 1,189 chapters. */}
-          {shows(book.kind, 'parts') && parts.length > 0 && (
-            <Tile
-              value={parts.length}
-              label={t(`book.parts_${kindOf(book.kind).part ?? 'volume'}`)}
-              onPress={() => router.push(`/book/${book.id}/parts`)}
-            />
-          )}
-          {chapters.length > 0 && (
-            <Tile
-              value={chapters.length}
-              label={t('book.chapters')}
-              onPress={() => router.push(`/book/${book.id}/structure`)}
-            />
-          )}
-          {chapters.length > 0 && !record && supports(book.kind, 'scenes') && (
-            <Tile
-              value={scenes.length}
-              label={t('book.scenesRow')}
-              onPress={() => router.push(`/book/${book.id}/scenes`)}
-            />
-          )}
-          <Tile
-            value={noteCount}
-            label={t('book.notesShort')}
-            onPress={() => router.push(`/book/${book.id}/notes`)}
-          />
-        </Tiles>
       </Block>
 
       {supports(book.kind, 'cast') && (
@@ -479,6 +656,172 @@ export default function BookPage() {
         />
       )}
 
+      {/* What the reader made of it. Every book gets this, not only the ones
+          with no words: a shelf is kept for what you thought of what is on it,
+          and a rating that only records books read on paper is half a shelf. */}
+      <View onLayout={(event) => { ratingY.current = event.nativeEvent.layout.y; }}>
+      <Block title={t('book.rating')}>
+        <Section>
+          <View style={[styles.rating, { borderColor: palette.border }]}>
+            <Stars
+              value={book.stars}
+              size={30}
+              onSet={async (stars) => {
+                await rateBook(book.id, { stars });
+                load();
+              }}
+            />
+            <Text style={{ color: palette.faint, fontSize: 12 }}>
+              {book.stars
+                ? t('book.ratedOn', {
+                    date: new Date(book.rated_at ?? book.created_at).toLocaleDateString(),
+                  })
+                : t('book.notRated')}
+            </Text>
+          </View>
+          <Row
+            label={t('book.statusRow')}
+            detail={t('book.statusHint')}
+            value={`${t(`status.${statusOf(book.status) ?? 'none'}`)}  ${statusOpen ? '⌃' : '⌄'}`}
+            onPress={() => setStatusOpen((was) => !was)}
+          />
+          {statusOpen ? (
+            <OptionRows
+              selectedId={statusOf(book.status) ?? 'none'}
+              options={['none', ...STATUSES].map((entry) => ({
+                id: entry,
+                label: t(`status.${entry}`),
+                detail: t(`status.${entry}Hint`),
+              }))}
+              onPick={async (picked) => {
+                setStatusOpen(false);
+                await updateBook(book.id, { status: picked === 'none' ? null : picked });
+                load();
+              }}
+            />
+          ) : null}
+          {/* The verdict that goes with the stars, folded away like every
+              other field here: it is written once, when the book is finished,
+              and read from the shelf rather than from this page. */}
+          <Row
+            label={t('book.reviewRow')}
+            detail={t('book.reviewHint')}
+            value={`${book.review?.trim() ? t('book.reviewWritten') : t('book.reviewNone')}  ${
+              reviewOpen ? '⌃' : '⌄'
+            }`}
+            onPress={() => setReviewOpen((was) => !was)}
+            last={!reviewOpen}
+          />
+          {reviewOpen ? (
+            <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md }}>
+              <InlineText
+                value={book.review}
+                placeholder={t('book.reviewPlaceholder')}
+                onCommit={async (value) => {
+                  await rateBook(book.id, { review: value });
+                  load();
+                }}
+                style={{
+                  color: palette.text,
+                  fontSize: 15,
+                  lineHeight: LINE,
+                  minHeight: LINE * IMPRESSION_LINES,
+                }}
+                multiline
+              />
+            </View>
+          ) : null}
+        </Section>
+      </Block>
+      </View>
+
+      {/* Everything written in this book, folded into the chapters it was
+          written in. The page behind the heading is where a note is edited,
+          searched or deleted; this is for finding one. */}
+      <View onLayout={(event) => { notesY.current = event.nativeEvent.layout.y; }}>
+        <Block
+          title={t('book.notes')}
+          count={noteCount || undefined}
+          onOpen={() => router.push(`/book/${book.id}/notes`)}
+        >
+          {noteGroups.length === 0 ? (
+            <Empty text={t(record ? 'notes.emptyRecord' : 'notes.empty')} />
+          ) : (
+            <Section>
+              {noteGroups.map((group, index) => (
+                <Fragment key={group.key}>
+                  <Row
+                    label={group.title}
+                    value={`${group.notes.length}  ${openNotes === group.key ? '⌃' : '⌄'}`}
+                    onPress={() => setOpenNotes((was) => (was === group.key ? null : group.key))}
+                    last={index === noteGroups.length - 1 && openNotes !== group.key}
+                  />
+                  {openNotes === group.key
+                    ? group.notes.map((note, at) => (
+                        <Item
+                          key={note.id}
+                          title={note.note?.trim() || note.quote}
+                          detail={note.note?.trim() ? note.quote || undefined : undefined}
+                          quiet={!note.note?.trim()}
+                          onPress={() => router.push(`/book/${book.id}/notes`)}
+                          last={at === group.notes.length - 1}
+                        />
+                      ))
+                    : null}
+                </Fragment>
+              ))}
+            </Section>
+          )}
+        </Block>
+      </View>
+
+      {/* What the chapters were cut into, folded the same way the notes are. */}
+      {supports(book.kind, 'scenes') && !record ? (
+        <View onLayout={(event) => { scenesY.current = event.nativeEvent.layout.y; }}>
+          <Block
+            title={t('book.scenes')}
+            count={scenes.length || undefined}
+            onOpen={() => router.push(`/book/${book.id}/scenes`)}
+          >
+            {sceneGroups.length === 0 ? (
+              <Empty text={t('book.noScenes')} />
+            ) : (
+              <Section>
+                {sceneGroups.map((group, index) => (
+                  <Fragment key={group.key}>
+                    <Row
+                      label={group.title}
+                      value={`${group.scenes.length}  ${openScenes === group.key ? '⌃' : '⌄'}`}
+                      onPress={() =>
+                        setOpenScenes((was) => (was === group.key ? null : group.key))
+                      }
+                      last={index === sceneGroups.length - 1 && openScenes !== group.key}
+                    />
+                    {openScenes === group.key
+                      ? group.scenes.map((scene, at) => (
+                          <Item
+                            key={scene.id}
+                            badge={<Badge n={at + 1} />}
+                            title={scene.title?.trim() || t('book.sceneUnnamed', { n: at + 1 })}
+                            detail={scene.summary?.trim() || undefined}
+                            onPress={() => router.push(`/scene/${scene.id}`)}
+                            last={at === group.scenes.length - 1}
+                          />
+                        ))
+                      : null}
+                  </Fragment>
+                ))}
+              </Section>
+            )}
+          </Block>
+        </View>
+      ) : null}
+
+      {/* Tags stay on the page because they are said *about* the book. Which
+          lists it is in is not — that is read from the shelf, so from here it
+          is only the ☰ above. */}
+      <TagsBlock bookId={book.id} />
+
       {/* A fetched edition is only as good as its key, and the day it stops
           working is a day spent on this page, not on the one that adds books. */}
       {book.text_source === ESV_SOURCE ? (
@@ -511,6 +854,21 @@ export default function BookPage() {
             <Row label={t('book.animations')} value={t('book.comingSoon')} />
           </>
         )}
+        {/* The details, from the catalogs first — a cover and an ISBN are
+            facts somebody published, not something to ask a model for. The
+            pass below it is the fallback for what no catalog lists. */}
+        <Row
+          label={t('identify.title')}
+          detail={t('identify.hint')}
+          value="›"
+          onPress={() => setIdentifyOpen(true)}
+        />
+        <Row
+          label={t('book.correct')}
+          detail={t('book.correctHint')}
+          value="›"
+          onPress={openCorrect}
+        />
         {record ? (
           <Row
             label={t('book.outlineRow')}
@@ -557,32 +915,51 @@ export default function BookPage() {
 
       <AiRunSheet
         visible={summaryOpen}
-        title={t('book.analyze')}
-        description={t(
-          supports(book.kind, 'verses') ? 'book.analyzeWhatCited' : 'book.analyzeWhat',
-          { count: chapters.length }
-        )}
+        title={t('book.summarize')}
+        description={t(briefed ? 'book.summarizeWhat' : 'book.lookUpWhat')}
         estimate={summaryEstimate}
         hasKey={keyed}
         onRun={async () => {
-          await queueChapterRun(book.id, 'deep-analyze', chapters);
-          await queueBookSummary(book.id);
-          return t('book.analyzeQueued', { count: chapters.length });
+          if (briefed) await queueBookSummary(book.id);
+          else await queueBookLookup(book.id, book.title);
+          return t('book.summarizeQueued');
         }}
         onClose={() => setSummaryOpen(false)}
       />
 
+      <CoverViewer
+        visible={coverOpen}
+        title={book.title}
+        hue={book.cover_hue}
+        path={book.cover_path}
+        onClose={() => setCoverOpen(false)}
+      />
+
+      <ListPicker
+        visible={listsOpen}
+        bookId={book.id}
+        onClose={() => setListsOpen(false)}
+        onChanged={() => isFavorite(book.id).then(setFavorited).catch(() => undefined)}
+      />
+
+      <IdentifySheet
+        visible={identifyOpen}
+        book={book}
+        onClose={() => setIdentifyOpen(false)}
+        onFilled={load}
+      />
+
       <AiRunSheet
-        visible={lookupOpen}
-        title={t('book.lookUp')}
-        description={t('book.lookUpWhat')}
+        visible={correctOpen}
+        title={t('book.correct')}
+        description={t('book.correctWhat')}
         estimate={askEstimate}
         hasKey={keyed}
         onRun={async () => {
-          await queueBookLookup(book.id, book.title);
-          return t('book.lookUpQueued');
+          await queueBookCorrection(book.id, book.title);
+          return t('book.correctQueued');
         }}
-        onClose={() => setLookupOpen(false)}
+        onClose={() => setCorrectOpen(false)}
       />
 
       <AiRunSheet
@@ -616,18 +993,6 @@ export default function BookPage() {
         onClose={() => setExportOpen(false)}
       />
 
-      <ChapterJump
-        visible={jumpOpen}
-        chapters={chapters}
-        currentId={current?.id}
-        onClose={() => setJumpOpen(false)}
-        onPick={(chapter) => {
-          setJumpOpen(false);
-          // Nothing to read in a record, but its chapter has a page of its own:
-          // the brief, the people in it, and every note made about it.
-          router.push(record ? `/chapter/${chapter.id}` : `/reader/${book.id}?chapter=${chapter.idx}`);
-        }}
-      />
     </ScrollView>
   );
 }
@@ -683,196 +1048,29 @@ const SEARCHABLE_FROM = 8;
  * number rides in its own badge so the eye can run down the column, and each
  * row carries its brief, which is the thing that actually tells them apart.
  */
-function ChapterJump({ visible, chapters, currentId, onClose, onPick }: {
-  visible: boolean;
-  chapters: Chapter[];
-  currentId?: string;
-  onClose: () => void;
-  onPick: (chapter: Chapter) => void;
-}) {
-  const { t } = useTranslation();
-  const palette = usePalette();
-  const { height } = useWindowDimensions();
-  const [query, setQuery] = useState('');
-
-  const needle = query.trim().toLowerCase();
-  const shown = needle
-    ? chapters.filter((chapter) =>
-        `${chapter.idx + 1} ${chapter.title} ${chapter.brief ?? ''}`.toLowerCase().includes(needle)
-      )
-    : chapters;
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[styles.jumpScrim, { backgroundColor: palette.scrim }]} onPress={onClose}>
-        <Pressable
-          style={[
-            styles.jumpSheet,
-            { height: height * 0.6, backgroundColor: palette.bg, borderColor: palette.border },
-          ]}
-          onPress={(event) => event.stopPropagation()}
-        >
-          <View style={[styles.jumpGrabber, { backgroundColor: palette.faint }]} />
-
-          <View style={styles.jumpHead}>
-            <Text style={{ color: palette.text, fontSize: 17, fontWeight: '700' }}>
-              {t('book.jumpTo')}
-            </Text>
-            <Text style={{ color: palette.dim, fontSize: 13 }}>
-              {t('book.jumpCount', { count: chapters.length })}
-            </Text>
-          </View>
-
-          {chapters.length >= SEARCHABLE_FROM && (
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder={t('book.jumpSearch')}
-              placeholderTextColor={palette.faint}
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={[
-                styles.jumpSearch,
-                { color: palette.text, backgroundColor: palette.surface, borderColor: palette.border },
-              ]}
-            />
-          )}
-
-          <ScrollView
-            style={{ marginTop: space.sm }}
-            contentContainerStyle={{ paddingBottom: space.xxl }}
-            keyboardShouldPersistTaps="handled"
-          >
-            {shown.length === 0 ? (
-              <Text style={{ color: palette.dim, fontSize: 14, padding: space.lg }}>
-                {t('book.jumpNone')}
-              </Text>
-            ) : (
-              shown.map((chapter) => {
-                const here = chapter.id === currentId;
-                return (
-                  <Pressable
-                    key={chapter.id}
-                    onPress={() => onPick(chapter)}
-                    style={({ pressed }) => [
-                      styles.jumpRow,
-                      { backgroundColor: pressed ? palette.surface : 'transparent' },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.jumpBadge,
-                        {
-                          backgroundColor: here ? palette.accent : palette.surface,
-                          borderColor: palette.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: here ? palette.onAccent : palette.dim,
-                          fontSize: 13,
-                          fontWeight: '600',
-                        }}
-                      >
-                        {chapter.idx + 1}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          color: here ? palette.accent : palette.text,
-                          fontSize: 15,
-                          fontWeight: here ? '600' : '400',
-                        }}
-                      >
-                        {chapter.title.trim() || '—'}
-                        {chapter.confident ? '' : '  ⚠'}
-                      </Text>
-                      {chapter.brief?.trim() ? (
-                        <Text numberOfLines={1} style={{ color: palette.dim, fontSize: 12, marginTop: 2 }}>
-                          {chapter.brief.trim()}
-                        </Text>
-                      ) : null}
-                    </View>
-                    {here ? <Text style={{ color: palette.accent, fontSize: 15 }}>●</Text> : null}
-                  </Pressable>
-                );
-              })
-            )}
-          </ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
 function label(chapter: Chapter, t: (key: string) => string): string {
   return chapter.title.trim() || `${chapter.idx + 1}`;
 }
 
+/** A button is one line wide, and some chapters are named a whole sentence. */
+const CAP = 32;
+
+function shorten(text: string): string {
+  return text.length > CAP ? `${text.slice(0, CAP - 1).trimEnd()}…` : text;
+}
+
 const styles = StyleSheet.create({
-  jumpScrim: { flex: 1, justifyContent: 'flex-end' },
-  jumpSheet: {
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: space.lg,
-  },
-  jumpGrabber: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: space.sm,
-    marginBottom: space.md,
-  },
-  jumpHead: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginBottom: space.md,
-  },
-  jumpSearch: {
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    fontSize: 15,
-  },
-  jumpRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingVertical: space.md,
-    paddingHorizontal: space.sm,
-    borderRadius: radius.md,
-  },
-  jumpBadge: {
-    minWidth: 30,
-    height: 30,
-    borderRadius: 15,
-    paddingHorizontal: space.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   rating: {
     alignItems: 'center',
     gap: space.xs,
     paddingVertical: space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  coverBadge: {
-    position: 'absolute',
-    right: -6,
-    bottom: -6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+  link: { fontSize: 13, fontWeight: '600' },
+  summaryFoot: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    marginTop: space.xs,
   },
 });

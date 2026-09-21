@@ -354,7 +354,7 @@ export function WorkOverlay() {
 let opener: (() => void) | null = null;
 
 /** Long enough to read a line and reach for it, short enough not to sit there. */
-const LINGER_MS = 8000;
+const LINGER_MS = 2000;
 
 export function openWorkQueue() {
   opener?.();

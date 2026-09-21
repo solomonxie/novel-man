@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Image, Text, View } from 'react-native';
 
+import { imageUri } from '../storage/files';
+
 /**
  * A figure on the page, at the width of the text and its own proportions.
  * Nothing about a picture is known until it loads, and guessing a height makes
@@ -23,18 +25,23 @@ export function ReaderImage({ uri, alt, width, tint, cap, ink, formula }: {
 }) {
   const [ratio, setRatio] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
+  // What is written in the text is a name for anything this app stored, and
+  // an old absolute path for anything it stored before — both are found under
+  // today's images directory, which is the only one that exists. See
+  // `storage/files`.
+  const src = /^(https?:|data:|content:)/i.test(uri) ? uri : imageUri(uri) ?? uri;
 
   useEffect(() => {
     let live = true;
     Image.getSize(
-      uri,
+      src,
       (imageWidth, imageHeight) => live && imageHeight > 0 && setRatio(imageWidth / imageHeight),
       () => live && setFailed(true)
     );
     return () => {
       live = false;
     };
-  }, [uri]);
+  }, [src]);
 
   // The alt text is the fallback, not a decoration: a figure that will not load
   // still says what it was.
@@ -46,7 +53,7 @@ export function ReaderImage({ uri, alt, width, tint, cap, ink, formula }: {
   return (
     <View>
       <Image
-        source={{ uri }}
+        source={{ uri: src }}
         style={[
           { width, height, borderRadius: formula ? 0 : 4 },
           formula && ink ? { tintColor: ink } : null,
