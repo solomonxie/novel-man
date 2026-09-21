@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,34 +25,58 @@ import { CloudSettings } from '../src/settings/Cloud';
 import { setUiLanguage, SUPPORTED, type UiLanguage } from '../src/i18n';
 import { QueueSheet, QueueStrip } from '../src/ui/ImportQueue';
 import { PickerSheet } from '../src/ui/PickerSheet';
+import { AddFlow } from '../src/ui/AddFlow';
 import { openWorkQueue, useWorkFeed } from '../src/ui/WorkQueue';
 import { resumeWorkOnLaunch } from '../src/work/queue';
 import { useWorkRefresh } from '../src/work/refresh';
 import { formatCount } from '../src/text/counts';
-import { matchesBook, searchContent, type ContentHit } from '../src/search/library';
+import { isRecord, statusOf } from '../src/books/record';
+import {
+  NO_RESULTS,
+  rankBook,
+  searchLibrary,
+  type LibraryResults,
+  type MetaHit,
+} from '../src/search/library';
 import { backUpIfAuto, restoreOnLaunch } from '../src/backup/icloud';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { radius, space, usePalette } from '../src/theme';
 import { appearances, setAppearance, useAppearance, type Appearance } from '../src/theme/appearance';
 
-/** Two rows of three. Past that it's a scroll, and a scroll needs asking for. */
-const VISIBLE = 6;
+/** Three across and a sliver of a fourth — the sliver is what says it scrolls. */
+const PER_SCREEN = 3.2;
 const LANGUAGE_LABELS: Record<UiLanguage, string> = { en: 'English', 'zh-Hans': '简体中文' };
 
 export default function Home() {
   const { t, i18n } = useTranslation();
   const palette = usePalette();
   const appearance = useAppearance();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [books, setBooks] = useState<BookListItem[] | null>(null);
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [queueOpen, setQueueOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [expanded, setExpanded] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
-  /** A picked file waiting on the one question only a person can answer. */
-  const [hits, setHits] = useState<ContentHit[]>([]);
+  /** The way in: the whole of adding a book, unfolded on this page. */
+  const [addOpen, setAddOpen] = useState(false);
+  const scroller = useRef<ScrollView>(null);
+  /** Where the button sits in the page, so the menu it opens can be shown whole. */
+  const addY = useRef(0);
+
+  /**
+   * A menu that unfolds below the fold is a menu with an invisible bottom, so
+   * opening it — and every level after — brings the whole of it into view. Not
+   * flush to the top: a card jammed against the status bar reads as a new
+   * screen that has replaced the shelf, and the shelf is still there.
+   */
+  const HEADROOM = Math.round(height * 0.12);
+  const showAdd = useCallback(() => {
+    requestAnimationFrame(() =>
+      scroller.current?.scrollTo({ y: Math.max(0, addY.current - HEADROOM), animated: true })
+    );
+  }, [HEADROOM]);
+  const [results, setResults] = useState<LibraryResults>(NO_RESULTS);
   const work = useWorkFeed();
 
   const refresh = useCallback(() => {
@@ -83,32 +108,75 @@ export default function Home() {
     });
   }), [refresh]);
 
-  const library = useMemo(
-    () => (query.trim() ? (books ?? []).filter((book) => matchesBook(book, query)) : books ?? []),
-    [books, query]
-  );
+  // The shelf is in memory, so it answers the keystroke itself — and in the
+  // order asked for: the book named, then the one by that author.
+  const library = useMemo(() => {
+    const all = books ?? [];
+    if (!query.trim()) return all;
+    const ranked: Array<{ book: BookListItem; rank: number }> = [];
+    for (const book of all) {
+      const rank = rankBook(book, query);
+      if (rank !== null) ranked.push({ book, rank });
+    }
+    return ranked.sort((a, b) => a.rank - b.rank).map((entry) => entry.book);
+  }, [books, query]);
 
-  // Searching inside the manuscripts costs a query per keystroke, so it waits
-  // for a pause. Titles filter instantly; the text catches up.
+  // Everything else is a query per keystroke, so it waits for a pause.
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setHits([]);
+    if (!query.trim()) {
+      setResults(NO_RESULTS);
       return;
     }
     const timer = setTimeout(() => {
-      searchContent(query).then(setHits).catch(() => setHits([]));
+      searchLibrary(query).then(setResults).catch(() => setResults(NO_RESULTS));
     }, 220);
     return () => clearTimeout(timer);
   }, [query]);
 
-  const gridWidth = Math.floor((width - space.lg * 2 - space.md * 2) / 3);
+  const chapters = useMemo(
+    () => results.meta.filter((hit) => hit.kind === 'chapter').map(toRow),
+    [results]
+  );
+  const cast = useMemo(
+    () => results.meta.filter((hit) => hit.kind === 'character' || hit.kind === 'place').map(toRow),
+    [results]
+  );
+  const notes = useMemo(
+    () => results.meta.filter((hit) => hit.kind === 'note').map(toRow),
+    [results]
+  );
+  const passages = useMemo(
+    () => results.text.map((hit) => ({
+      key: `${hit.bookId}-${hit.offset}`,
+      context: hit.title,
+      label: hit.excerpt,
+      onPress: () => router.push(`/reader/${hit.bookId}?at=${hit.offset}`),
+    })),
+    [results]
+  );
+
+  const tileWidth = Math.floor((width - space.lg * 2 - space.md * 2) / PER_SCREEN);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }} edges={['top']}>
       <ScrollView
+        ref={scroller}
         contentContainerStyle={{ paddingBottom: space.xxl * 2 }}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
+        {/* The page says what it is before it asks anything. A search field as
+            the first thing on screen reads as a tool; a shelf should read as a
+            place you keep something. */}
+        <View style={styles.masthead}>
+          <Text style={[styles.appName, { color: palette.text }]}>{t('app.name')}</Text>
+          {books !== null ? (
+            <Text style={{ color: palette.dim, fontSize: 14, marginTop: 2 }}>
+              {t('shelf.count', { count: library.length })}
+            </Text>
+          ) : null}
+        </View>
+
         <View style={[styles.search, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <Text style={{ color: palette.faint, fontSize: 15 }}>🔍</Text>
           <TextInput
@@ -132,49 +200,11 @@ export default function Home() {
           <View style={styles.center}><ActivityIndicator /></View>
         ) : (
           <>
-            {hits.length > 0 && (
-              <View style={{ paddingHorizontal: space.lg, marginTop: space.md }}>
-                <Text style={[styles.shelfTitle, { color: palette.text, marginBottom: space.sm }]}>
-                  {t('shelf.inTheText', { count: hits.length })}
-                </Text>
-                {hits.map((hit, index) => (
-                  <Pressable
-                    key={`${hit.bookId}-${hit.offset}`}
-                    onPress={() => router.push(`/reader/${hit.bookId}?at=${hit.offset}`)}
-                    style={[
-                      styles.hit,
-                      { backgroundColor: palette.surface, borderColor: palette.border },
-                      index > 0 && { marginTop: space.sm },
-                    ]}
-                  >
-                    <Text numberOfLines={1} style={{ color: palette.dim, fontSize: 12 }}>
-                      {hit.title}
-                    </Text>
-                    <Text numberOfLines={2} style={{ color: palette.text, fontSize: 14, marginTop: 2 }}>
-                      {hit.excerpt}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-
             <View style={{ marginTop: space.lg }}>
               <View style={styles.shelfHead}>
-                <Text style={[styles.shelfTitle, { color: palette.text }]}>
+                <Text style={[styles.shelfTitle, { color: palette.dim }]}>
                   {t('shelf.sectionLibrary')}
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg }}>
-                  {library.length > VISIBLE && (
-                    <Pressable onPress={() => setExpanded((was) => !was)} hitSlop={8}>
-                      <Text style={{ color: palette.accent, fontSize: 15 }}>
-                        {expanded ? t('shelf.less') : t('shelf.more', { count: library.length - VISIBLE })}
-                      </Text>
-                    </Pressable>
-                  )}
-                  <Pressable onPress={() => router.push('/add')} hitSlop={12}>
-                    <Text style={{ color: palette.accent, fontSize: 26 }}>＋</Text>
-                  </Pressable>
-                </View>
               </View>
 
               {books.length === 0 ? (
@@ -190,18 +220,77 @@ export default function Home() {
                   {t('shelf.noMatches')}
                 </Text>
               ) : (
-                <View style={styles.grid}>
-                  {(expanded ? library : library.slice(0, VISIBLE)).map((book) => (
-                    <BookTile key={book.id} book={book} width={gridWidth} />
-                  ))}
-                </View>
+                /* One row that runs off the edge. A shelf is read sideways,
+                   and the whole page below it belongs to what is not the
+                   shelf. It virtualises because a library has no ceiling. */
+                <FlatList
+                  horizontal
+                  data={library}
+                  keyExtractor={(book) => book.id}
+                  renderItem={({ item }) => <BookTile book={item} width={tileWidth} />}
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={styles.shelfRow}
+                />
               )}
             </View>
+
+            {/* The way in. A ＋ in the corner of a section header is a 26px
+                glyph for the second thing anybody does with this app — so the
+                button says what it does, and unfolds the one question that has
+                to be answered before the page it opens can be any use.
+                Out of the way while searching: the page is about hits then. */}
+            {!query.trim() ? (
+              <View
+                onLayout={(event) => {
+                  addY.current = event.nativeEvent.layout.y;
+                }}
+                style={{ paddingHorizontal: space.lg, marginTop: space.xl }}
+              >
+                <Pressable
+                  onPress={() => {
+                    setAddOpen((was) => !was);
+                    if (!addOpen) showAdd();
+                  }}
+                  style={({ pressed }) => [
+                    styles.add,
+                    { backgroundColor: palette.accent, opacity: pressed ? 0.85 : 1 },
+                  ]}
+                >
+                  <Text style={{ color: palette.onAccent, fontSize: 17, fontWeight: '600' }}>
+                    {`＋  ${t('shelf.addBook')}`}
+                  </Text>
+                  <Text style={{ color: palette.onAccent, fontSize: 15 }}>
+                    {addOpen ? '⌃' : '⌄'}
+                  </Text>
+                </Pressable>
+                {addOpen ? (
+                  <View
+                    style={[
+                      styles.addPanel,
+                      { backgroundColor: palette.surface, borderColor: palette.border },
+                    ]}
+                  >
+                    {/* The whole flow, here. A book is added without ever
+                        leaving the shelf unless a catalog has to be searched. */}
+                    <AddFlow onStep={showAdd} onDone={() => setAddOpen(false)} />
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* What the query found that isn't a book, in the order someone
+                means it: the chapter, then the person or place, then the
+                sentence it is all made of. */}
+            <Results title={t('shelf.inChapters', { count: chapters.length })} rows={chapters} />
+            <Results title={t('shelf.inCast', { count: cast.length })} rows={cast} />
+            <Results title={t('shelf.inNotes', { count: notes.length })} rows={notes} />
+            <Results title={t('shelf.inTheText', { count: passages.length })} rows={passages} />
 
             {/* Settings are sections of this page, not destinations behind it.
                 A page whose only job is holding four rows gets deleted. */}
             <View style={{ paddingHorizontal: space.lg }}>
-              <Text style={[styles.shelfTitle, { color: palette.text, marginTop: space.xxl }]}>
+              <Text style={[styles.shelfTitle, { color: palette.dim, marginTop: space.xxl }]}>
                 {t('settings.title')}
               </Text>
 
@@ -274,21 +363,92 @@ export default function Home() {
   );
 }
 
+type ResultRow = {
+  key: string;
+  /** Where the thing lives — the book, and the part of it if it has one. */
+  context: string;
+  label: string;
+  excerpt?: string;
+  onPress: () => void;
+};
+
+// A note opens the page it lives on rather than a page of its own: what you
+// wrote is read next to everything else you wrote about that book.
+const routes: Record<MetaHit['kind'], (hit: MetaHit) => string> = {
+  chapter: (hit) => `/chapter/${hit.id}`,
+  character: (hit) => `/entity/${hit.id}`,
+  place: (hit) => `/place/${hit.id}`,
+  note: (hit) => `/book/${hit.bookId}/notes`,
+};
+
+function toRow(hit: MetaHit): ResultRow {
+  return {
+    key: `${hit.kind}-${hit.id}`,
+    context: hit.context,
+    label: hit.label,
+    excerpt: hit.excerpt,
+    onPress: () => router.push(routes[hit.kind](hit)),
+  };
+}
+
+/** `.map` and not a list: the search caps every section before it gets here. */
+function Results({ title, rows }: { title: string; rows: ResultRow[] }) {
+  const palette = usePalette();
+  if (rows.length === 0) return null;
+  return (
+    <View style={{ paddingHorizontal: space.lg, marginTop: space.xl }}>
+      <Text style={[styles.shelfTitle, { color: palette.dim, marginBottom: space.sm }]}>{title}</Text>
+      {rows.map((row, index) => (
+        <Pressable
+          key={row.key}
+          onPress={row.onPress}
+          style={[
+            styles.hit,
+            { backgroundColor: palette.surface, borderColor: palette.border },
+            index > 0 && { marginTop: space.sm },
+          ]}
+        >
+          <Text numberOfLines={1} style={{ color: palette.dim, fontSize: 12 }}>{row.context}</Text>
+          <Text numberOfLines={2} style={{ color: palette.text, fontSize: 14, marginTop: 2 }}>
+            {row.label}
+          </Text>
+          {row.excerpt ? (
+            <Text numberOfLines={2} style={{ color: palette.dim, fontSize: 12, marginTop: 2 }}>
+              {row.excerpt}
+            </Text>
+          ) : null}
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 function BookTile({ book, width }: { book: BookListItem; width: number }) {
   const palette = usePalette();
+  const { t } = useTranslation();
   // A book you've started says how far in you are; one you haven't says how
   // long it is. Both answer "should I open this now?".
   const started = (book.offset ?? 0) > 0;
+  const status = statusOf(book.status);
   return (
     <Pressable onPress={() => router.push(`/book/${book.id}`)} style={{ width }}>
       <Cover title={book.title} hue={book.cover_hue} width={width} path={book.cover_path} />
       <Text numberOfLines={2} style={{ color: palette.text, fontSize: 13, marginTop: space.xs }}>
         {book.title}
       </Text>
+      {/* A book with no words has no length and no progress, so the line says
+          the only two things that are true of it: what you gave it, and where
+          it stands. */}
       <Text numberOfLines={1} style={{ color: palette.dim, fontSize: 11 }}>
-        {started
-          ? `${Math.min(99, Math.round(((book.offset ?? 0) / Math.max(1, book.char_count)) * 100))}%`
-          : formatCount(book.word_count, book.language)}
+        {isRecord(book)
+          ? book.stars
+            ? '★'.repeat(book.stars)
+            : status
+              ? t(`status.${status}`)
+              : t('status.none')
+          : started
+            ? `${Math.min(99, Math.round(((book.offset ?? 0) / Math.max(1, book.char_count)) * 100))}%`
+            : formatCount(book.word_count, book.language)}
       </Text>
     </Pressable>
   );
@@ -313,15 +473,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     marginBottom: space.md,
   },
-  shelfTitle: { fontSize: 22, fontWeight: '700' },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.md,
-    paddingHorizontal: space.lg,
-    marginTop: space.md,
-  },
+  /** Under the masthead, not beside it: sections label a part of the page. */
+  shelfTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+  masthead: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.sm },
+  appName: { fontSize: 30, fontWeight: '700', letterSpacing: -0.5 },
+  shelfRow: { gap: space.md, paddingHorizontal: space.lg, paddingTop: space.md },
   center: { alignItems: 'center', justifyContent: 'center', padding: space.xxl },
+  add: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.sm,
+    borderRadius: radius.md,
+    paddingVertical: space.md + 2,
+  },
+  addPanel: {
+    marginTop: space.sm,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
   hit: {
     padding: space.md,
     borderRadius: radius.md,

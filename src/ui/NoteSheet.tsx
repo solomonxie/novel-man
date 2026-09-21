@@ -13,11 +13,13 @@ import { useTranslation } from 'react-i18next';
 import { radius, space, usePalette } from '../theme';
 
 /** A note is written against the sentence, so the sentence stays on screen. */
-export function NoteSheet({ visible, quote, note, onSave, onClose }: {
+export function NoteSheet({ visible, quote, note, onSave, onDelete, onClose }: {
   visible: boolean;
   quote: string;
   note: string | null;
   onSave: (note: string) => void;
+  /** Only where there is already a mark to take off — see the row below. */
+  onDelete?: () => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -48,9 +50,14 @@ export function NoteSheet({ visible, quote, note, onSave, onClose }: {
                 <Text style={{ color: palette.accent, fontSize: 16 }}>{t('settings.save')}</Text>
               </Pressable>
             </View>
-            <Text numberOfLines={3} style={[styles.quote, { color: palette.dim, borderColor: palette.border }]}>
-              {quote}
-            </Text>
+            {/* Only where there is one. A note about the book quotes nothing,
+                and an empty rule above the field is a passage that failed to
+                load rather than one that was never there. */}
+            {quote ? (
+              <Text numberOfLines={3} style={[styles.quote, { color: palette.dim, borderColor: palette.border }]}>
+                {quote}
+              </Text>
+            ) : null}
             <TextInput
               value={draft}
               onChangeText={setDraft}
@@ -60,6 +67,15 @@ export function NoteSheet({ visible, quote, note, onSave, onClose }: {
               autoFocus
               style={{ color: palette.text, fontSize: 16, minHeight: 120, marginTop: space.md }}
             />
+            {/* Clearing the text leaves the highlight behind, which is the
+                right answer to "I changed my mind about the note" and the
+                wrong one to "I changed my mind about the mark". This is the
+                second question, so it is asked away from Save. */}
+            {onDelete ? (
+              <Pressable onPress={onDelete} style={[styles.remove, { borderColor: palette.border }]}>
+                <Text style={{ color: palette.danger, fontSize: 15 }}>{t('settings.delete')}</Text>
+              </Pressable>
+            ) : null}
           </Pressable>
         </KeyboardAvoidingView>
       </Pressable>
@@ -77,6 +93,12 @@ const styles = StyleSheet.create({
     paddingBottom: space.xxl,
   },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  remove: {
+    marginTop: space.lg,
+    paddingTop: space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+  },
   quote: {
     fontSize: 14,
     lineHeight: 20,

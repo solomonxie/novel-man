@@ -84,6 +84,24 @@ export async function indexState(source: string): Promise<IndexState | null> {
 }
 
 /**
+ * Which lists under one source are kept, and how big each is. A source that
+ * keeps a list per category — Open Library's subjects — needs to say which
+ * categories are on the device, and that is a question about the state table
+ * rather than about any one of them.
+ */
+export async function keptIndexes(
+  prefix: string
+): Promise<{ source: string; fetchedAt: number; count: number }[]> {
+  const database = await db();
+  const rows = await database.getAllAsync<{ source: string; fetched_at: number; count: number }>(
+    `SELECT source, fetched_at, count FROM catalog_state
+      WHERE source LIKE ? ESCAPE '\\' ORDER BY source`,
+    `${escapeLike(prefix)}%`
+  );
+  return rows.map((row) => ({ source: row.source, fetchedAt: row.fetched_at, count: row.count }));
+}
+
+/**
  * Every word has to appear somewhere in the row — "austen pride" finds the one
  * book rather than everything by her and everything proud. Ordered by the
  * shortest title, because a search for `Emma` wants Emma and not `Emma, and

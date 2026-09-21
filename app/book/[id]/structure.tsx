@@ -46,7 +46,7 @@ import { breaksOf } from '../../../src/structure/scenes';
 import { hasAnyKey } from '../../../src/ai/keys';
 import type { Estimate } from '../../../src/ai/cost';
 import { AiRunSheet } from '../../../src/ui/AiRunSheet';
-import { estimateBriefs, queueChapterRun, unbriefed } from '../../../src/analysis/runs';
+import { estimateBriefs, queueBookOutline, queueChapterRun, unbriefed } from '../../../src/analysis/runs';
 import { stoppedWithoutKey } from '../../../src/ai/guard';
 import { Hint, Row, Search, SEARCHABLE_FROM, Section } from '../../../src/ui/primitives';
 import { ActionMenu, type MenuAction } from '../../../src/ui/ActionMenu';
@@ -54,6 +54,7 @@ import { useDocument } from '../../../src/ui/useDocument';
 import { backUpBefore } from '../../../src/backup/local';
 import { space, usePalette } from '../../../src/theme';
 import { useWorkRefresh } from '../../../src/work/refresh';
+import { isRecord } from '../../../src/books/record';
 
 export default function StructurePage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -64,6 +65,9 @@ export default function StructurePage() {
   const [text, setText] = useState('');
   const [book, setBook] = useState<Book | null>(null);
   const language = book?.language ?? 'en';
+  // Nothing here can be detected, split or scened: there is no text to do it
+  // to. What a record's chapter list can be is typed, or asked for.
+  const record = book ? isRecord(book) : false;
   const document = useDocument(id);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [busy, setBusy] = useState(false);
@@ -78,6 +82,8 @@ export default function StructurePage() {
   /** A single chapter's own AI action, opened from its ⋯ menu. */
   const [briefEstimate, setBriefEstimate] = useState<Estimate | null>(null);
   const [keyed, setKeyed] = useState(false);
+  /** A book with no words has its contents asked for rather than detected. */
+  const [outlineOpen, setOutlineOpen] = useState(false);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -113,7 +119,10 @@ export default function StructurePage() {
       return;
     }
     setBriefOpen(true);
-    estimateBriefs(body, unbriefed(chapters ?? []), book ?? { language, kind: 'novel', title: '' })
+    // Nothing to price until the book is here: what a chapter costs to read
+    // depends on whether its words are here to send at all.
+    if (!book) return;
+    estimateBriefs(body, unbriefed(chapters ?? []), book)
       .then(setBriefEstimate)
       .catch(() => undefined);
   }
@@ -134,25 +143,32 @@ export default function StructurePage() {
   /** Everything this chapter supports, in the order it is usually wanted. */
   function chapterActions(index: number): MenuAction[] {
     const sceneCount = scenes.filter((scene) => scene.chapter_id === chapters?.[index]?.id).length;
+    // Splitting, scening and merging are all cuts into a text. A record has
+    // none, so it gets the actions that are about the list itself.
+    const inText: MenuAction[] = record
+      ? []
+      : [
+          { label: t('structure.split'), onPress: () => openPicker('split', index) },
+          { label: t('structure.addScene'), onPress: () => openPicker('scene', index) },
+          {
+            label: t('structure.clearScenes', { count: sceneCount }),
+            enabled: sceneCount > 0,
+            onPress: async () => {
+              await setSceneBreaks(id!, chapters![index], []);
+              setActionsFor(null);
+              load();
+            },
+          },
+          {
+            label: t('structure.mergeNext'),
+            enabled: index < (chapters?.length ?? 0) - 1,
+            onPress: () => apply(mergeWithNext(drafts, index)),
+          },
+        ];
     return [
       { label: t('structure.aiChapter'), onPress: () => runOne(index, 'deep-analyze') },
       { label: t('structure.aiChapterBrief'), onPress: () => runOne(index, 'chapter-brief') },
-      { label: t('structure.split'), onPress: () => openPicker('split', index) },
-      { label: t('structure.addScene'), onPress: () => openPicker('scene', index) },
-      {
-        label: t('structure.clearScenes', { count: sceneCount }),
-        enabled: sceneCount > 0,
-        onPress: async () => {
-          await setSceneBreaks(id!, chapters![index], []);
-          setActionsFor(null);
-          load();
-        },
-      },
-      {
-        label: t('structure.mergeNext'),
-        enabled: index < (chapters?.length ?? 0) - 1,
-        onPress: () => apply(mergeWithNext(drafts, index)),
-      },
+      ...inText,
       { label: t('structure.moveUp'), enabled: index > 0, onPress: () => apply(move(drafts, index, -1)) },
       {
         label: t('structure.moveDown'),
@@ -232,6 +248,12 @@ export default function StructurePage() {
   }
 
   const drafts = toDrafts(chapters);
+
+  /** One more chapter, unnamed and last. Its page is where it gets a name. */
+  async function addChapter() {
+    await apply([...drafts, { title: '', start: 0, end: 0, confident: false, userEdited: true }]);
+  }
+
   // The number, the title and the brief: the three things anyone remembers a
   // chapter by. Editing still acts on the chapter itself, so a filtered list
   // is only a shorter way to reach the same row.
@@ -314,11 +336,13 @@ export default function StructurePage() {
                 {chapter.brief?.trim() || t('structure.briefPlaceholder')}
               </Text>
               <Text style={{ color: palette.faint, fontSize: 12, marginTop: 2 }}>
-                {t('structure.meta', {
-                  chars: chapter.end - chapter.start,
-                  scenes: sceneCounts.get(chapter.id) ?? 0,
-                })}
-                {chapter.confident ? '' : `  ·  ${t('structure.unsure')}`}
+                {record
+                  ? ''
+                  : t('structure.meta', {
+                      chars: chapter.end - chapter.start,
+                      scenes: sceneCounts.get(chapter.id) ?? 0,
+                    })}
+                {chapter.confident || record ? '' : `  ·  ${t('structure.unsure')}`}
                 {chapter.user_edited ? `  ·  ${t('structure.edited')}` : ''}
               </Text>
             </Pressable>
@@ -339,17 +363,34 @@ export default function StructurePage() {
         {unsure > 0 ? <Hint>{t('structure.unsureCount', { count: unsure })}</Hint> : null}
 
         <Section>
-          <Row label={t('structure.redetect')} onPress={redetect} />
-          <Row
-            label={t('structure.aiDetect')}
-            value={t('structure.aiDetectValue')}
-            onPress={() => openSheet('chapters')}
-          />
-          <Row
-            label={t('structure.aiScenes')}
-            value={t('structure.aiDetectValue')}
-            onPress={() => openSheet('scenes')}
-          />
+          {record ? (
+            <>
+              <Row
+                label={t('structure.addChapter')}
+                detail={t('structure.addChapterHint')}
+                onPress={busy ? undefined : addChapter}
+              />
+              <Row
+                label={t('book.outlineRow')}
+                value={t('structure.aiDetectValue')}
+                onPress={() => setOutlineOpen(true)}
+              />
+            </>
+          ) : (
+            <>
+              <Row label={t('structure.redetect')} onPress={redetect} />
+              <Row
+                label={t('structure.aiDetect')}
+                value={t('structure.aiDetectValue')}
+                onPress={() => openSheet('chapters')}
+              />
+              <Row
+                label={t('structure.aiScenes')}
+                value={t('structure.aiDetectValue')}
+                onPress={() => openSheet('scenes')}
+              />
+            </>
+          )}
           <Row
             label={t('structure.aiBriefs', { count: pending.length })}
             value={t('structure.aiDetectValue')}
@@ -357,7 +398,7 @@ export default function StructurePage() {
             last
           />
         </Section>
-        <Hint>{t('structure.redetectHint')}</Hint>
+        <Hint>{t(record ? 'structure.recordHint' : 'structure.redetectHint')}</Hint>
 
           </>
         }
@@ -393,6 +434,22 @@ export default function StructurePage() {
         }}
         onClose={(changed) => {
           setAiOpen(false);
+          if (changed) load();
+        }}
+      />
+
+      <AiRunSheet
+        visible={outlineOpen}
+        title={t('book.outlineRow')}
+        description={t('book.outlineWhat')}
+        estimate={null}
+        hasKey={keyed}
+        onRun={async () => {
+          await queueBookOutline(id!, book?.title ?? '');
+          return t('book.outlineQueued');
+        }}
+        onClose={(changed) => {
+          setOutlineOpen(false);
           if (changed) load();
         }}
       />

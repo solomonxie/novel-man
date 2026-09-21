@@ -21,6 +21,107 @@ arXiv. The bible source's own page is [scripture.md](scripture.md).
                              category
  tutorial    —               a book written in a repo    whatever the file is
                              is already at a url
+ novel       Open Library    40 million records, no key  a record: title,
+ nonfiction                  — 24 categories kept per    author, year, cover.
+ textbook                    subject, or all of it live  No text, ever
+             Goodreads       your own shelves — their    records with your
+                             export file, or a shelf's   ratings, reviews and
+                             RSS feed                    shelves
+```
+
+Two of those hand over no book at all, and that is the point: a shelf entry to
+hang a rating, a review and every note on. Their API was retired in 2020, so
+the Goodreads row says which two doors are left rather than offering a sign-in
+that cannot exist.
+
+## A source's own page keeps its own list
+
+Fetching the list used to live on the Add page, five rows per source behind a
+fold. It is now on the page where the list is read — an empty list whose only
+fix is on the screen before it is a dead end.
+
+```
+┌───────────────────────────────────────────┐
+│ ‹  Standard Ebooks                        │
+│ ┌───────────────────────────────────────┐ │
+│ │ 🔍 A title or an author               │ │
+│ └───────────────────────────────────────┘ │
+│ STANDARD EBOOKS                           │
+│ ┌───────────────────────────────────────┐ │
+│ │ Your Patrons Circle email      Added  │ │ ← the credential first: nothing
+│ │   you@example.com                     │ │   under it works without one
+│ │ Test the address               Works  │ │
+│ │ The list        1,204 titles · 3 Mar  │ │ ← `apt update`, for books
+│ │                              Update   │ │
+│ │ Forget this address                 ! │ │
+│ └───────────────────────────────────────┘ │
+│ Pride and Prejudice                    ›  │ ← the kept list, searched on the
+│   Jane Austen · en                        │   device as it is typed into
+└───────────────────────────────────────────┘
+ locked   The list                Needs your email
+ working  The list                        47%
+ failed   The list   Couldn't reach standardebooks.org   ← takes the place of
+                                                          what the list holds
+```
+
+Open Library keeps one list per category, so its page holds them all:
+
+```
+┌───────────────────────────────────────────┐
+│ ‹  Open Library                           │
+│ ┌───────────────────────────────────────┐ │
+│ │ 🔍 A title or an author               │ │
+│ └───────────────────────────────────────┘ │
+│ ( LISTS YOU KEEP ) ( All of Open Library )│ ← kept: instant, offline, typed
+│ CATEGORIES                   Show all     │   into. Live: their whole
+│ ┌───────────────────────────────────────┐ │   catalogue, on the return key
+│ │ 4,000 titles on this device    4/24   │ │
+│ │   A category is fetched once and       │ │
+│ │   searched on the device after that   │ │
+│ │ Fantasy       1,000 titles · 3 Mar    │ │
+│ │                              Update   │ │
+│ │ Science Fiction          Fiction  Get │ │
+│ │ History                 68%           │ │ ← one at a time, on request
+│ └───────────────────────────────────────┘ │
+│ Dune                                   ›  │
+│   Frank Herbert · 1965                    │
+│ Adding one gives you the record — title,  │
+│ author, year and cover. Not the book.     │
+└───────────────────────────────────────────┘
+```
+
+Goodreads is not a catalogue but one reader's shelves, so its page counts what
+it found before it writes anything:
+
+```
+┌───────────────────────────────────────────┐
+│ ‹  Goodreads                              │
+│ Goodreads switched their API off in 2020,  │
+│ so nothing can sign in on your behalf.     │
+│ FROM THE EXPORT FILE                      │
+│ ┌───────────────────────────────────────┐ │
+│ │ My Books › Import and export › Export │ │
+│ │ Choose the CSV               Change   │ │
+│ │   goodreads_library_export.csv        │ │
+│ └───────────────────────────────────────┘ │
+│ FROM A SHELF FEED                         │
+│ ┌───────────────────────────────────────┐ │
+│ │ Paste a shelf's RSS address       ⌄   │ │ ← the only door that opens twice
+│ └───────────────────────────────────────┘ │
+│ 912 BOOKS FOUND                           │
+│ ┌───────────────────────────────────────┐ │
+│ │ Rated                           460   │ │ ← counted before anything is
+│ │ Reviewed                         88   │ │   written, so it can be said no
+│ │ Read                            501   │ │   to
+│ │ Want to read                    390   │ │
+│ └───────────────────────────────────────┘ │
+│       [[ Bring over 912 books ]]          │
+│ A book already here is filled in rather   │
+│ than added twice, and nothing you have    │
+│ written is overwritten.                   │
+└───────────────────────────────────────────┘
+ working  [[ 240 of 912… ]]
+ done     Added 604 · Filled in 12 · Left alone 296   [[ Go to the shelf ]]
 ```
 
 ## One page per source  `app/source/<id>.tsx`

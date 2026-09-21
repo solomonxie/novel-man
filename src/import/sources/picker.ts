@@ -33,3 +33,9 @@ export function pickManuscript(): Promise<PickedFile | null> {
 export function pickBackupBundle(): Promise<PickedFile | null> {
   return pick([types.allFiles]);
 }
+
+/** A library export, which is a table rather than a book: Goodreads' CSV. */
+export function pickSpreadsheet(): Promise<PickedFile | null> {
+  return pick(['text/csv', 'text/comma-separated-values', 'public.comma-separated-values-text',
+    'text/plain', 'application/octet-stream']);
+}

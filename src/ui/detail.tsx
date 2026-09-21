@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { radius, space, usePalette } from '../theme';
+import { EditableLine } from './EditableLine';
 
 /**
  * The shape every detail page shares. Before this each of them opened with the
@@ -112,6 +113,38 @@ export function Action({ label, onPress, tone = 'quiet' }: {
  * case rather than the uppercase grey label a settings screen uses: this is a
  * page about a story, not a preferences list.
  */
+/**
+ * A line in the head that goes somewhere: the article a person has, the place
+ * a name stands for now. It reads and edits exactly like the lines above it,
+ * and sits empty rather than hidden when nothing has filled it in — an empty
+ * line says "this can be filled in", where no line at all says nothing.
+ */
+export function LinkLine({ value, placeholder, glyph, onCommit, onOpen }: {
+  value: string | null;
+  placeholder: string;
+  glyph: string;
+  onCommit: (next: string) => void;
+  onOpen: (value: string) => void;
+}) {
+  const palette = usePalette();
+  const filled = value?.trim() ?? '';
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.sm }}>
+      <View style={{ flex: 1 }}>
+        <EditableLine
+          value={value}
+          placeholder={placeholder}
+          onCommit={onCommit}
+          style={{ color: palette.dim, fontSize: 14 }}
+        />
+      </View>
+      <Pressable onPress={() => filled && onOpen(filled)} disabled={!filled} hitSlop={10}>
+        <Text style={{ fontSize: 17, opacity: filled ? 1 : 0.3 }}>{glyph}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export function Block({ title, count, action, onOpen, children }: {
   title: string;
   count?: number;

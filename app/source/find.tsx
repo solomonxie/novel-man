@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
@@ -10,6 +10,7 @@ import { bookFromIndex } from '../../src/sources/gutenberg';
 import { bookFromIndex as standardEbookFromIndex } from '../../src/sources/standardEbooks';
 import { choose } from '../../src/sources/chosen';
 import { FindPage } from '../../src/ui/FindPage';
+import { SourceRows } from '../../src/ui/SourceRows';
 
 /**
  * Every list this app has kept, searched at once and on the device. It is a
@@ -31,9 +32,17 @@ export default function FindABook() {
     [kind, only]
   );
 
+  // Opened for one source, this *is* that source's page: keeping its list and
+  // searching it are the same errand, and a list that has to be fetched from
+  // the page before this one is a dead end.
+  const alone = sources.length === 1 && Boolean(only) ? sources[0] : null;
+  const [kept, setKept] = useState(0);
+
   return (
     <FindPage<IndexedBook>
-      title={t('add.findTitle')}
+      title={alone ? t(`source.${alone.id}`) : t('add.findTitle')}
+      header={alone ? <SourceRows source={alone} onUpdated={() => setKept((was) => was + 1)} /> : undefined}
+      runKey={kept}
       placeholder={t('add.findPlaceholder')}
       hint={t('find.localPrompt', {
         sources: sources.map((source) => t(`source.${source.id}`)).join(' · '),

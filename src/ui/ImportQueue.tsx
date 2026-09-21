@@ -1,11 +1,19 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { answerPreview, clearFinished, retryJob, type ImportJob } from '../import/queue';
 import { ImportError } from '../import/pipeline';
 import { StandardEbooksError } from '../sources/standardEbooks';
+import { RepoError } from '../sources/repoBible';
 import { radius, space, usePalette } from '../theme';
 
 /** The one-line summary that lives on the shelf while anything is running. */
@@ -55,12 +63,26 @@ export function QueueSheet({ jobs, visible, onClose }: {
 }) {
   const { t } = useTranslation();
   const palette = usePalette();
+  const { height } = useWindowDimensions();
   const unfinished = jobs.filter((job) => job.status !== 'done');
   const finished = jobs.filter((job) => job.status === 'done');
+  // Exactly what `clearFinished` removes — a failure is finished with too, and
+  // a queue of nothing but failures used to be one nothing could dismiss.
+  const clearable = jobs.filter((job) => job.status === 'done' || job.status === 'failed');
 
+  // Half the screen: a queue is a glance at a few short rows, and a full-height
+  // card makes checking on one read as leaving what you were doing.
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
-      <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={[styles.scrim, { backgroundColor: palette.scrim }]} onPress={onClose}>
+      <Pressable
+        onPress={(event) => event.stopPropagation()}
+        style={[
+          styles.sheet,
+          { height: height * 0.6, backgroundColor: palette.bg, borderColor: palette.border },
+        ]}
+      >
+        <View style={[styles.grabber, { backgroundColor: palette.faint }]} />
         <View style={styles.sheetBar}>
           <Pressable onPress={onClose} hitSlop={12}>
             <Text style={{ color: palette.accent, fontSize: 16 }}>{t('queue.close')}</Text>
@@ -68,14 +90,14 @@ export function QueueSheet({ jobs, visible, onClose }: {
           <Text style={{ color: palette.text, fontSize: 16, fontWeight: '600' }}>
             {t('queue.title', { count: jobs.length })}
           </Text>
-          <Pressable onPress={clearFinished} hitSlop={12} disabled={!finished.length}>
-            <Text style={{ color: finished.length ? palette.accent : palette.faint, fontSize: 16 }}>
+          <Pressable onPress={clearFinished} hitSlop={12} disabled={!clearable.length}>
+            <Text style={{ color: clearable.length ? palette.accent : palette.faint, fontSize: 16 }}>
               {t('queue.clear')}
             </Text>
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: space.lg }}>
+        <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}>
           {jobs.length === 0 && (
             <Text style={{ color: palette.dim, textAlign: 'center', marginTop: space.xxl }}>
               {t('queue.empty')}
@@ -88,7 +110,8 @@ export function QueueSheet({ jobs, visible, onClose }: {
             </View>
           ))}
         </ScrollView>
-      </SafeAreaView>
+      </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -165,6 +188,7 @@ export function JobPreview({ job }: { job: ImportJob }) {
 export function describeImportError(error: unknown, t: TFunction): string {
   // A source's own refusal is not an import failure, and reads nothing like one.
   if (error instanceof StandardEbooksError) return t(`add.se_${error.code}`);
+  if (error instanceof RepoError) return t(`repo.err_${error.code}`, { detail: error.detail ?? '' });
   if (error instanceof ImportError) {
     if (error.code === 'unsupported') return t('import.unsupported', { ext: `.${error.detail}` });
     if (error.code === 'no-text') return t('import.noText');
@@ -174,6 +198,13 @@ export function describeImportError(error: unknown, t: TFunction): string {
 }
 
 const styles = StyleSheet.create({
+  scrim: { flex: 1, justifyContent: 'flex-end' },
+  sheet: {
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  grabber: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: space.sm },
   strip: {
     flexDirection: 'row',
     alignItems: 'center',

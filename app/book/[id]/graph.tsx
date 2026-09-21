@@ -20,6 +20,7 @@ import {
   type Relation,
 } from '../../../src/db/repo';
 import { edgeGeometry, layoutGraph, withinRange } from '../../../src/cast/graph';
+import { TIE_GROUP, tieOf } from '../../../src/cast/ties';
 import { hueFrom } from '../../../src/ui/fields';
 import { space, usePalette } from '../../../src/theme';
 import { useWorkRefresh } from '../../../src/work/refresh';
@@ -120,7 +121,10 @@ export default function Graph() {
                   top: geometry.top,
                   width: geometry.width,
                   height: StyleSheet.hairlineWidth * 2,
-                  backgroundColor: dimmed ? palette.border : palette.accent,
+                  // One colour per kind of tie, decided by the word rather than
+                  // by the order the edges happen to be drawn in: blood, power,
+                  // and everything people choose.
+                  backgroundColor: dimmed ? palette.border : tieColor(edge.label, palette),
                   opacity: dimmed ? 0.4 : 0.8,
                   transform: [{ rotate: geometry.angle }],
                   transformOrigin: 'left center',
@@ -193,7 +197,7 @@ export default function Graph() {
             .filter((edge) => edge.from.id === selected || edge.to.id === selected)
             .map((edge, index) => (
               <Text key={index} style={{ color: palette.dim, fontSize: 13, marginTop: 2 }}>
-                {edge.from.name} ↔ {edge.to.name} · {edge.label}
+                {edge.from.name} → {edge.to.name} · {t(`tie.${tieOf(edge.label)}`)}
               </Text>
             ))}
         </View>
@@ -272,6 +276,13 @@ function RangeBar({ total, range, onChange, tint, track }: {
       <View style={[styles.handle, { backgroundColor: tint, left: Math.max(0, right - 7) }]} />
     </View>
   );
+}
+
+/** Family, power, everything else — three colours the palette already has. */
+function tieColor(label: string, palette: ReturnType<typeof usePalette>): string {
+  const group = TIE_GROUP[tieOf(label)];
+  if (group === 'family') return palette.accent;
+  return group === 'power' ? palette.danger : palette.dim;
 }
 
 const styles = StyleSheet.create({

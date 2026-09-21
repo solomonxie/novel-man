@@ -56,7 +56,13 @@ const light = {
 };
 
 const dark: typeof light = {
-  bg: '#000000',
+  /**
+   * Off pure black by a hair. At #000000 a #1C1C1E card is a 1.2:1 step, so
+   * every surface on the page floated without an edge to sit on — a shelf of
+   * covers over nothing. This is still black on an OLED at a glance, and the
+   * cards now read as laid on it.
+   */
+  bg: '#0B0B0D',
   surface: '#1C1C1E',
   text: '#F2F2F7',
   dim: '#9BA1A6',

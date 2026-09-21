@@ -1,5 +1,39 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Switch, Text, TextInput, View, type ViewStyle } from 'react-native';
 import { radius, space, usePalette } from '../theme';
+
+/**
+ * "That worked", for a moment. An action that copies something and then says
+ * nothing leaves you pressing it again to find out whether the first press
+ * took — so anything whose whole effect happens somewhere else says so here.
+ *
+ * Its own colours, not the palette's: it sits over the page rather than in it,
+ * and has to read against whatever is under it.
+ */
+export function Toast({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <View style={styles.toast} pointerEvents="none">
+      <Text style={{ color: '#FFFFFF', fontSize: 13 }}>{message}</Text>
+    </View>
+  );
+}
+
+/** The message and the timer that takes it away, so a caller only says what happened. */
+export function useFlash(ms = 1200) {
+  const [message, setMessage] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flash = useCallback(
+    (next: string) => {
+      setMessage(next);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setMessage(null), ms);
+    },
+    [ms]
+  );
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  return { message, flash };
+}
 
 export function Section({ title, action, flush, children }: {
   title?: string;
@@ -187,6 +221,15 @@ export function Cover({ title, hue, width, path }: {
 }
 
 const styles = StyleSheet.create({
+  toast: {
+    position: 'absolute',
+    bottom: 80,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    borderRadius: 16,
+  },
   sectionHead: {
     flexDirection: 'row',
     justifyContent: 'space-between',

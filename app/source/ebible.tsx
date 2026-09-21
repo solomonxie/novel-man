@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { readCatalog, type Translation } from '../../src/sources/ebible';
 import { choose } from '../../src/sources/chosen';
 import { Row, Search, SEARCHABLE_FROM } from '../../src/ui/primitives';
+import { SourceRows } from '../../src/ui/SourceRows';
+import { publicSources } from '../../src/sources/registry';
 import { space, usePalette } from '../../src/theme';
 
 /**
@@ -13,11 +15,15 @@ import { space, usePalette } from '../../src/theme';
  * answer and there is nothing to search. The licence is on the row because it
  * is the reason the row exists.
  */
+const EBIBLE = publicSources.find((source) => source.id === 'ebible')!;
+
 export default function Translations() {
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const { t } = useTranslation();
   const palette = usePalette();
-  const catalog = useMemo(() => readCatalog(), []);
+  /** Bumped when the list is fetched here, which is what re-reads it. */
+  const [fetched, setFetched] = useState(0);
+  const catalog = useMemo(() => readCatalog(), [fetched]);
   const all = catalog?.translations ?? [];
   const [query, setQuery] = useState('');
   // Every redistributable edition is here — over a thousand — so the field is
@@ -49,6 +55,12 @@ export default function Translations() {
         data={found}
         keyExtractor={(entry) => entry.id}
         contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
+        // Fetching the list belongs where the list is read, not on the page
+        // before it — an empty page whose only fix is somewhere else is a
+        // dead end.
+        ListHeaderComponent={
+          <SourceRows source={EBIBLE} onUpdated={() => setFetched((was) => was + 1)} />
+        }
         ListEmptyComponent={
           <Text style={{ color: palette.dim, fontSize: 15 }}>
             {catalog ? t('add.noTranslations') : t('add.noCatalog')}

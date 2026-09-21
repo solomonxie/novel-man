@@ -2,6 +2,7 @@ import type { Book, Chapter, Entity, Scene } from '../db/repo';
 import { formatCount } from '../text/counts';
 import { namesOf } from '../cast/mentions';
 import { supports } from '../books/kinds';
+import { isRecord } from '../books/record';
 
 /**
  * What a chapter pass is allowed to know. Everything here is cheap next to the
@@ -44,13 +45,22 @@ export function chapterBody(text: string, chapter: Chapter): string {
 /** The verses a scripture chapter covers, for citing it instead of sending it. */
 export type Passage = { first: number; last: number };
 
+/** Enough of a book to know whether there are words here to send. */
+export type Citable = Pick<Book, 'kind' | 'word_count' | 'text_source'>;
+
 /**
- * A book every model has already read, in every edition. Scripture is the only
- * one — a kind that addresses itself by verse is a canonical text, not a
- * manuscript this app has to teach anyone.
+ * A book named rather than sent. Two of them qualify, for opposite reasons.
+ * Scripture, because a kind that addresses itself by verse is a canonical text
+ * every model has already read in every edition, not a manuscript this app has
+ * to teach anyone. And a record — a book on the shelf with no words behind it —
+ * because naming it is the only thing that *can* be sent.
+ *
+ * The difference is what the pass is allowed to do with it: scripture is
+ * quoted back with the edition named, where a record is a published work the
+ * model either knows or must refuse. See `passageBody`.
  */
-export function citedNotSent(book: Pick<Book, 'kind'>): boolean {
-  return supports(book.kind, 'verses');
+export function citedNotSent(book: Citable): boolean {
+  return supports(book.kind, 'verses') || isRecord(book);
 }
 
 /**
@@ -60,6 +70,7 @@ export function citedNotSent(book: Pick<Book, 'kind'>): boolean {
  * model is told to say so rather than quietly answer about a different one.
  */
 export function passageBody(book: Book, chapter: Chapter, passage?: Passage): string {
+  if (isRecord(book)) return knownWorkBody(book, chapter);
   const reference = chapter.title.trim() || `${chapter.idx + 1}`;
   const verses = passage ? `${reference}:${passage.first}-${passage.last}` : reference;
   return [
@@ -69,6 +80,33 @@ export function passageBody(book: Book, chapter: Chapter, passage?: Passage): st
     'The text of this passage is not included. Read it from your own knowledge of this ' +
       'edition. Where your memory of the wording differs from this edition, say so ' +
       'rather than smoothing it over, and never supply a verse you are unsure of.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/**
+ * A book the app has no copy of, named for a model that may have read it. Every
+ * word of this is about refusal: a model asked what happens in chapter twelve
+ * of a book it has never heard of will write a chapter twelve, and an invented
+ * plot filed under a real title is worse than an empty page — the reader cannot
+ * tell which one they are looking at a month later. So it is told what it is
+ * being asked about, told the app has nothing to check it against, and told to
+ * stop rather than guess.
+ */
+export function knownWorkBody(book: Book, chapter: Chapter): string {
+  const named = chapter.title.trim();
+  return [
+    `Work: ${book.title}${book.author ? ` by ${book.author}` : ''}`,
+    book.year ? `Published: ${book.year}` : '',
+    `Language: ${book.language}`,
+    `Chapter ${chapter.idx + 1}${named ? `: ${named}` : ''}`,
+    'This app does not hold the text of this book and none of it is included. ' +
+      'Answer from your own knowledge of this published work. If you do not know ' +
+      'this book, or know it but cannot place this chapter within it, reply with ' +
+      'exactly {"unknown":true} and nothing else. Never invent a plot, a name, an ' +
+      'event or a chapter, and never answer about a different book with a similar ' +
+      'title.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -116,7 +154,13 @@ export function bookHeader(book: Book, chapters: Chapter[]): string {
     book.author ? `Author: ${book.author}` : '',
     book.year ? `Year: ${book.year}` : '',
     `Language: ${book.language}`,
-    `Length: ${formatCount(book.word_count, book.language)} across ${chapters.length} chapters`,
+    // A record has no manuscript to measure, and "0 words" is a fact about
+    // this app rather than about the book.
+    book.word_count
+      ? `Length: ${formatCount(book.word_count, book.language)} across ${chapters.length} chapters`
+      : chapters.length
+        ? `Chapters: ${chapters.length}`
+        : '',
   ].filter(Boolean);
   if (book.summary?.trim()) {
     facts.push(`What it is about: ${book.summary.trim().slice(0, CAPS.summary)}`);

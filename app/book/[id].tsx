@@ -29,6 +29,7 @@ import {
   listEntities,
   listMentions,
   listRelations,
+  rateBook,
   updateBook,
   type Annotation,
   type Book,
@@ -46,7 +47,15 @@ import { hueFrom } from '../../src/ui/fields';
 import { ExportSheet } from '../../src/ui/ExportSheet';
 import { byFrequency } from '../../src/cast/mentions';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
-import { estimateDeep, queueBookSummary, queueChapterRun } from '../../src/analysis/runs';
+import {
+  estimateDeep,
+  estimateLookup,
+  estimateOutline,
+  queueBookLookup,
+  queueBookOutline,
+  queueBookSummary,
+  queueChapterRun,
+} from '../../src/analysis/runs';
 import { hasAnyKey } from '../../src/ai/keys';
 import { useDocument } from '../../src/ui/useDocument';
 import type { Estimate } from '../../src/ai/cost';
@@ -56,8 +65,13 @@ import { InlineText } from '../../src/ui/inline';
 import { formatCount, formatDuration, readingMinutes } from '../../src/text/counts';
 import { radius, space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
-import { PickerSheet } from '../../src/ui/PickerSheet';
-import { bookKinds, castNoun, kindOf, shows, supports, unitOf } from '../../src/books/kinds';
+import { KindList } from '../../src/ui/KindList';
+import { OptionRows } from '../../src/ui/OptionRows';
+import { kindOf, shows, supports, unitOf } from '../../src/books/kinds';
+import { isRecord, statusOf, STATUSES } from '../../src/books/record';
+import { Stars } from '../../src/ui/Stars';
+import { ESV_SOURCE } from '../../src/sources/esvBook';
+import { EsvKeyRows } from '../../src/settings/EsvKey';
 
 export default function BookPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -67,6 +81,7 @@ export default function BookPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [characters, setCharacters] = useState<Entity[]>([]);
   const [places, setPlaces] = useState<Entity[]>([]);
+  const [terms, setTerms] = useState<Entity[]>([]);
   const [offset, setOffset] = useState(0);
   const [noteCount, setNoteCount] = useState(0);
   const [scenes, setScenes] = useState<Scene[]>([]);
@@ -77,6 +92,11 @@ export default function BookPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryEstimate, setSummaryEstimate] = useState<Estimate | null>(null);
+  /** The two passes a book with no words can have — see `analysis/runs`. */
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [askEstimate, setAskEstimate] = useState<Estimate | null>(null);
+  const [statusOpen, setStatusOpen] = useState(false);
   const [keyed, setKeyed] = useState(false);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [text, setText] = useState('');
@@ -90,6 +110,7 @@ export default function BookPage() {
     listChapters(id).then(setChapters);
     listEntities(id, 'character').then(setCharacters);
     listEntities(id, 'place').then(setPlaces);
+    listEntities(id, 'term').then(setTerms);
     getProgress(id).then(setOffset);
     listAnnotations(id).then((rows) => {
       setAnnotations(rows);
@@ -122,6 +143,10 @@ export default function BookPage() {
 
   const current = chapters.find((chapter) => offset >= chapter.start && offset < chapter.end);
   const minutes = readingMinutes(book.word_count, book.language);
+  // A book with no words behind it: no reader to open, no text to export, and
+  // everything the app knows about it either typed or asked for. See
+  // `books/record`.
+  const record = isRecord(book);
 
   // Priced when the sheet opens, not on every visit: an estimate needs the
   // whole manuscript, and nobody asked for one by walking past.
@@ -135,6 +160,31 @@ export default function BookPage() {
     setSummaryEstimate(null);
     const { text: body } = await document.read();
     estimateDeep(body, chapters, book!).then(setSummaryEstimate).catch(() => undefined);
+  }
+
+  /** What this book is, from a model that may have read it. One small request. */
+  function openLookup() {
+    setLookupOpen(true);
+    setAskEstimate(null);
+    estimateLookup(book!).then(setAskEstimate).catch(() => undefined);
+  }
+
+  /**
+   * Its contents page, likewise. Asked once and replacing what is there, so a
+   * list somebody has already corrected is not overwritten without being told.
+   */
+  function openOutline() {
+    if (!chapters.length) return startOutline();
+    Alert.alert(t('book.outlineRow'), t('book.outlineReplace', { count: chapters.length }), [
+      { text: t('settings.cancel'), style: 'cancel' },
+      { text: t('book.outlineAgain'), onPress: startOutline },
+    ]);
+  }
+
+  function startOutline() {
+    setOutlineOpen(true);
+    setAskEstimate(null);
+    estimateOutline(book!).then(setAskEstimate).catch(() => undefined);
   }
 
   async function edit(field: 'title' | 'author' | 'year' | 'edition' | 'summary', value: string) {
@@ -151,9 +201,16 @@ export default function BookPage() {
 
   // Created unnamed: the ＋ already says what this is, and a profile called
   // "New character" is a row you have to clean up rather than one you wanted.
+  /** Every kind of thing a book names has a page; which one is the kind. */
+  const PAGES: Record<EntityKind, string> = {
+    character: 'entity',
+    place: 'place',
+    term: 'term',
+  };
+
   async function addEntity(kind: EntityKind) {
     const entityId = await createEntity(book!.id, kind, '');
-    router.push(kind === 'place' ? `/place/${entityId}` : `/entity/${entityId}`);
+    router.push(`/${PAGES[kind]}/${entityId}`);
   }
 
   function confirmDelete() {
@@ -187,32 +244,62 @@ export default function BookPage() {
           </Pressable>
         }
         facts={
-          <>
-            {parts.length > 0 ? (
-              <Fact value={parts.length} label={t(`units.unit_${kindOf(book.kind).part ?? 'volume'}s`)} />
-            ) : (
-              <Fact value={formatCount(book.word_count, book.language)} label={t('units.unit_long')} />
-            )}
-            <Fact value={chapters.length} label={t(`units.unit_${unitOf(book.kind)}s`)} />
-            {verses > 0 ? (
-              <Fact value={formatCount(verses, 'en')} label={t('units.unit_verses')} />
-            ) : (
-              <Fact value={formatDuration(minutes)} label={t('units.unit_toRead')} />
-            )}
-          </>
+          record ? (
+            // Nothing here is a length. What a record has instead is what the
+            // reader has done with it.
+            <>
+              <Fact value={chapters.length} label={t(`units.unit_${unitOf(book.kind)}s`)} />
+              <Fact value={noteCount} label={t('book.notesShort')} />
+              <Fact
+                value={book.stars ? '★'.repeat(book.stars) : '—'}
+                label={t('book.ratingShort')}
+              />
+            </>
+          ) : (
+            <>
+              {parts.length > 0 ? (
+                <Fact value={parts.length} label={t(`units.unit_${kindOf(book.kind).part ?? 'volume'}s`)} />
+              ) : (
+                <Fact value={formatCount(book.word_count, book.language)} label={t('units.unit_long')} />
+              )}
+              <Fact value={chapters.length} label={t(`units.unit_${unitOf(book.kind)}s`)} />
+              {verses > 0 ? (
+                <Fact value={formatCount(verses, 'en')} label={t('units.unit_verses')} />
+              ) : (
+                <Fact value={formatDuration(minutes)} label={t('units.unit_toRead')} />
+              )}
+            </>
+          )
         }
         actions={
-          <>
-            <Action
-              label={current ? t('book.continue') : t('book.start')}
-              tone="loud"
-              onPress={() => router.push(`/reader/${book.id}`)}
-            />
-            <Action label={t('book.analyzeShort')} onPress={openAnalyze} />
-          </>
+          record ? (
+            // There is nothing to open, so the first action is the one that
+            // makes the page worth opening: ask what this book is.
+            <>
+              <Action
+                label={book.summary?.trim() ? t('book.lookUpAgain') : t('book.lookUp')}
+                tone={book.summary?.trim() ? 'quiet' : 'loud'}
+                onPress={openLookup}
+              />
+              <Action
+                label={chapters.length ? t('book.analyzeShort') : t('book.outlineShort')}
+                tone={chapters.length ? 'quiet' : 'loud'}
+                onPress={chapters.length ? openAnalyze : openOutline}
+              />
+            </>
+          ) : (
+            <>
+              <Action
+                label={current ? t('book.continue') : t('book.start')}
+                tone="loud"
+                onPress={() => router.push(`/reader/${book.id}`)}
+              />
+              <Action label={t('book.analyzeShort')} onPress={openAnalyze} />
+            </>
+          )
         }
         // Which chapter Continue resumes at is context, not an action.
-        note={current ? label(current, t) : undefined}
+        note={record ? t('book.recordNote') : current ? label(current, t) : undefined}
       >
         <InlineText
           value={book.title}
@@ -242,7 +329,7 @@ export default function BookPage() {
           />
         </View>
         <Text style={{ color: palette.faint, fontSize: 12, marginTop: space.xs }}>
-          {t('book.importedFrom', { name: book.source_name })}
+          {t(record ? 'book.recordedFrom' : 'book.importedFrom', { name: book.source_name })}
         </Text>
       </Hero>
 
@@ -257,6 +344,65 @@ export default function BookPage() {
           />
         </Writable>
       </View>
+
+      {/* What the reader made of it. Every book gets this, not only the ones
+          with no words: a shelf is kept for what you thought of what is on it,
+          and a rating that only records books read on paper is half a shelf. */}
+      <Block title={t('book.rating')}>
+        <Section>
+          <View style={[styles.rating, { borderColor: palette.border }]}>
+            <Stars
+              value={book.stars}
+              size={30}
+              onSet={async (stars) => {
+                await rateBook(book.id, { stars });
+                load();
+              }}
+            />
+            <Text style={{ color: palette.faint, fontSize: 12 }}>
+              {book.stars
+                ? t('book.ratedOn', {
+                    date: new Date(book.rated_at ?? book.created_at).toLocaleDateString(),
+                  })
+                : t('book.notRated')}
+            </Text>
+          </View>
+          <Row
+            label={t('book.statusRow')}
+            detail={t('book.statusHint')}
+            value={`${t(`status.${statusOf(book.status) ?? 'none'}`)}  ${statusOpen ? '⌃' : '⌄'}`}
+            onPress={() => setStatusOpen((was) => !was)}
+            last={!statusOpen}
+          />
+          {statusOpen ? (
+            <OptionRows
+              selectedId={statusOf(book.status) ?? 'none'}
+              options={['none', ...STATUSES].map((entry) => ({
+                id: entry,
+                label: t(`status.${entry}`),
+                detail: t(`status.${entry}Hint`),
+              }))}
+              onPick={async (picked) => {
+                setStatusOpen(false);
+                await updateBook(book.id, { status: picked === 'none' ? null : picked });
+                load();
+              }}
+            />
+          ) : null}
+        </Section>
+        <Writable empty={!book.review?.trim()}>
+          <InlineText
+            value={book.review}
+            placeholder={t('book.reviewPlaceholder')}
+            onCommit={async (value) => {
+              await rateBook(book.id, { review: value });
+              load();
+            }}
+            style={{ color: palette.text, fontSize: 15, lineHeight: 22 }}
+            multiline
+          />
+        </Writable>
+      </Block>
 
       <Block
         title={t('book.inside')}
@@ -284,7 +430,7 @@ export default function BookPage() {
               onPress={() => router.push(`/book/${book.id}/structure`)}
             />
           )}
-          {chapters.length > 0 && supports(book.kind, 'scenes') && (
+          {chapters.length > 0 && !record && supports(book.kind, 'scenes') && (
             <Tile
               value={scenes.length}
               label={t('book.scenesRow')}
@@ -302,11 +448,11 @@ export default function BookPage() {
       {supports(book.kind, 'cast') && (
         <>
           <EntitySection
-            title={t(`book.${castNoun(book.kind)}`)}
+            title={t('book.people')}
             entities={byFrequency(characters, mentions)}
             onAdd={() => addEntity('character')}
             extra={{
-              label: t(`book.${castNoun(book.kind)}All`),
+              label: t('book.peopleAll'),
               value: `${characters.length}  ›`,
               onPress: () => router.push(`/book/${book.id}/cast`),
             }}
@@ -318,6 +464,30 @@ export default function BookPage() {
           />
         </>
       )}
+
+      {/* Neither people nor places: what the book names and keeps using. */}
+      {supports(book.kind, 'terms') && (
+        <EntitySection
+          title={t('book.terms')}
+          entities={byFrequency(terms, mentions)}
+          onAdd={() => addEntity('term')}
+          extra={{
+            label: t('book.termsAll'),
+            value: `${terms.length}  ›`,
+            onPress: () => router.push(`/book/${book.id}/terms`),
+          }}
+        />
+      )}
+
+      {/* A fetched edition is only as good as its key, and the day it stops
+          working is a day spent on this page, not on the one that adds books. */}
+      {book.text_source === ESV_SOURCE ? (
+        <Block title={t('book.esvKey')}>
+          <Section>
+            <EsvKeyRows />
+          </Section>
+        </Block>
+      ) : null}
 
       <Block title={t('book.utilities')}>
         <Section>
@@ -341,44 +511,49 @@ export default function BookPage() {
             <Row label={t('book.animations')} value={t('book.comingSoon')} />
           </>
         )}
+        {record ? (
+          <Row
+            label={t('book.outlineRow')}
+            detail={t('book.outlineHint')}
+            value={chapters.length ? t('book.outlineAgain') : t('book.outlineAsk')}
+            onPress={openOutline}
+          />
+        ) : null}
         <Row
           label={t('book.kindRow')}
           detail={t(`kind.${book.kind}Hint`)}
-          value={`${t(`kind.${book.kind}`)}  ›`}
-          onPress={() => setKindOpen(true)}
-          last
+          value={`${t(`kind.${book.kind}`)}  ${kindOpen ? '⌃' : '⌄'}`}
+          onPress={() => setKindOpen((was) => !was)}
+          last={!kindOpen}
         />
+        {kindOpen ? (
+          <KindList
+            selectedId={book.kind}
+            onPick={async (picked) => {
+              setKindOpen(false);
+              await updateBook(book.id, { kind: picked });
+              load();
+            }}
+          />
+        ) : null}
         </Section>
       </Block>
 
       <Section>
-        <Row
-          label={t('book.export')}
-          value="›"
-          onPress={async () => {
-            setText((await document.read()).text);
-            setExportOpen(true);
-          }}
-        />
+        {/* Nothing to export from a book whose words are not here — its notes
+            leave with a backup, which is where they were always going. */}
+        {record ? null : (
+          <Row
+            label={t('book.export')}
+            value="›"
+            onPress={async () => {
+              setText((await document.read()).text);
+              setExportOpen(true);
+            }}
+          />
+        )}
         <Row label={t('book.delete')} onPress={confirmDelete} danger last />
       </Section>
-
-      <PickerSheet
-        visible={kindOpen}
-        title={t('book.kindRow')}
-        selectedId={book.kind}
-        options={bookKinds.map((entry) => ({
-          id: entry.id,
-          label: t(`kind.${entry.id}`),
-          detail: t(`kind.${entry.id}Hint`),
-        }))}
-        onPick={async (kind) => {
-          setKindOpen(false);
-          await updateBook(book.id, { kind });
-          load();
-        }}
-        onClose={() => setKindOpen(false)}
-      />
 
       <AiRunSheet
         visible={summaryOpen}
@@ -395,6 +570,32 @@ export default function BookPage() {
           return t('book.analyzeQueued', { count: chapters.length });
         }}
         onClose={() => setSummaryOpen(false)}
+      />
+
+      <AiRunSheet
+        visible={lookupOpen}
+        title={t('book.lookUp')}
+        description={t('book.lookUpWhat')}
+        estimate={askEstimate}
+        hasKey={keyed}
+        onRun={async () => {
+          await queueBookLookup(book.id, book.title);
+          return t('book.lookUpQueued');
+        }}
+        onClose={() => setLookupOpen(false)}
+      />
+
+      <AiRunSheet
+        visible={outlineOpen}
+        title={t('book.outlineRow')}
+        description={t('book.outlineWhat')}
+        estimate={askEstimate}
+        hasKey={keyed}
+        onRun={async () => {
+          await queueBookOutline(book.id, book.title);
+          return t('book.outlineQueued');
+        }}
+        onClose={() => setOutlineOpen(false)}
       />
 
       <ExportSheet
@@ -422,7 +623,9 @@ export default function BookPage() {
         onClose={() => setJumpOpen(false)}
         onPick={(chapter) => {
           setJumpOpen(false);
-          router.push(`/reader/${book.id}?chapter=${chapter.idx}`);
+          // Nothing to read in a record, but its chapter has a page of its own:
+          // the brief, the people in it, and every note made about it.
+          router.push(record ? `/chapter/${chapter.id}` : `/reader/${book.id}?chapter=${chapter.idx}`);
         }}
       />
     </ScrollView>
@@ -654,6 +857,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  rating: {
+    alignItems: 'center',
+    gap: space.xs,
+    paddingVertical: space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   coverBadge: {
     position: 'absolute',
