@@ -7,6 +7,8 @@ export type WorkKind =
   | 'book-lookup'
   | 'book-outline'
   | 'chapter-brief'
+  | 'chapter-recap'
+  | 'book-correct'
   | 'deep-analyze'
   | 'cast-chapter'
   | 'cast-wrapup'

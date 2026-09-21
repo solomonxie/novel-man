@@ -1,4 +1,5 @@
 import { db, newId, transaction } from './index';
+import { addTag, listsHolding, setInList, tagsOf, FAVORITES, findListNamed, createBookList } from './shelves';
 import { scenesFromBreaks } from '../structure/scenes';
 import { DEFAULT_KIND } from '../books/kinds';
 import { reconstruct, parseHints, type StructureHint } from '../structure/document';
@@ -29,6 +30,10 @@ export type Book = {
   cover_hue: number;
   /** A few sentences on what the book is. Context for every later pass. */
   summary: string | null;
+  /** The reader's own overview of it — theirs, where the summary is the book's. */
+  impressions: string | null;
+  /** Names one printing, so a catalog can be asked rather than searched. */
+  isbn: string | null;
   /** What the reader made of it: one to five, or null while unrated. */
   stars: number | null;
   /** Their own words about it, as long as they like. Not the summary — the verdict. */
@@ -50,6 +55,11 @@ export type Chapter = {
   user_edited: number;
   /** A line or two on what happens here. Written by you or by a pass. */
   brief: string | null;
+  /**
+   * A retelling of a chapter this app has no copy of, from what a model
+   * remembers of the book. Never the book's words, and never treated as them.
+   */
+  recap: string | null;
   /** The level above, for kinds that have one: a bible's book, a novel's 卷. */
   part_idx: number | null;
   part_title: string | null;
@@ -267,6 +277,8 @@ export type ImportedBook = Omit<
   | 'review'
   | 'rated_at'
   | 'status'
+  | 'impressions'
+  | 'isbn'
 >;
 
 export async function saveImportedBook(input: {
@@ -513,6 +525,8 @@ export async function rateBook(
 const CHAPTER_BATCH = 200;
 
 export type ChapterInsert = {
+  /** Only a record has one: what a model remembers of a chapter with no text. */
+  recap?: string | null;
   title: string;
   start: number;
   end: number;
@@ -536,12 +550,12 @@ async function insertChapters(
     const rows = slice.map((chapter, offset) => {
       values.push(ids[from + offset], bookId, from + offset, chapter.title, chapter.start,
         chapter.end, chapter.confident ? 1 : 0, chapter.userEdited ? 1 : 0, chapter.brief ?? null,
-        chapter.part_idx ?? null, chapter.part_title ?? null);
-      return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        chapter.part_idx ?? null, chapter.part_title ?? null, chapter.recap ?? null);
+      return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
     });
     await database.runAsync(
       `INSERT INTO chapters (id, book_id, idx, title, start, end, confident, user_edited, brief,
-                             part_idx, part_title)
+                             part_idx, part_title, recap)
        VALUES ${rows.join(', ')}`,
       values
     );
@@ -605,6 +619,7 @@ async function insertScenes(
 
 const BOOK_FIELDS = [
   'title', 'author', 'year', 'edition', 'cover_path', 'summary', 'kind', 'review', 'status',
+  'impressions', 'isbn',
 ] as const;
 export type EditableBookField = (typeof BOOK_FIELDS)[number];
 
@@ -884,6 +899,11 @@ export async function setChapterBrief(id: string, brief: string | null) {
   await database.runAsync('UPDATE chapters SET brief = ? WHERE id = ?', brief, id);
 }
 
+export async function setChapterRecap(id: string, recap: string | null) {
+  const database = await db();
+  await database.runAsync('UPDATE chapters SET recap = ? WHERE id = ?', recap, id);
+}
+
 export async function renameChapter(id: string, title: string) {
   const database = await db();
   await database.runAsync(
@@ -992,6 +1012,15 @@ export async function removeAnnotations(ids: string[]) {
     `DELETE FROM annotations WHERE id IN (${ids.map(() => '?').join(',')})`,
     ...ids
   );
+}
+
+export async function lastReadAt(bookId: string): Promise<number | null> {
+  const database = await db();
+  const row = await database.getFirstAsync<{ updated_at: number }>(
+    'SELECT updated_at FROM reading_state WHERE book_id = ?',
+    bookId
+  );
+  return row?.updated_at ?? null;
 }
 
 export async function saveProgress(bookId: string, offset: number) {
@@ -1110,6 +1139,8 @@ export type ChapterDraft = {
   confident: boolean;
   userEdited: boolean;
   brief?: string | null;
+  /** Carried through every edit to the list: reordering must not lose it. */
+  recap?: string | null;
 };
 
 /** Scene breaks are per chapter, and a chapter is the only thing that owns them. */
@@ -1131,8 +1162,7 @@ export async function setSceneBreaks(
   });
 }
 
-export async function replaceChapters(bookId: string, drafts: ChapterDraft[]) {
-  const { text, hints } = await getDocument(bookId);
+export async function replaceChapters(bookId: string, drafts: ChapterInsert[]) {
   const database = await db();
   await transaction(async () => {
     await database.runAsync('DELETE FROM scenes WHERE book_id = ?', bookId);
@@ -1152,6 +1182,7 @@ export function toDrafts(chapters: Chapter[]): ChapterDraft[] {
     confident: !!chapter.confident,
     userEdited: !!chapter.user_edited,
     brief: chapter.brief,
+    recap: chapter.recap,
   }));
 }
 
@@ -1179,6 +1210,15 @@ export type BookRecord = {
   annotations: Annotation[];
   entities: Entity[];
   offset: number;
+  /** What the reader filed it under, and which of their lists it is in. */
+  tags?: string[];
+  /**
+   * A list is named rather than identified: ids do not survive a restore, and
+   * what somebody means by "To read" is the name on it. The one list the app
+   * ships is the exception — it travels as its own id, because its name is
+   * translated and would come back as a second list in another language.
+   */
+  lists?: string[];
 };
 
 /**
@@ -1210,7 +1250,18 @@ export async function readBookRecord(
     start: scene.start,
     end: scene.end,
   }));
-  return { book, text: document.text, hints: document.hints, chapters, annotations, entities, scenes, offset };
+  return {
+    book,
+    text: document.text,
+    hints: document.hints,
+    chapters,
+    annotations,
+    entities,
+    scenes,
+    offset,
+    tags: await tagsOf(bookId),
+    lists: (await listsHolding(bookId)).map((list) => (list.system ? FAVORITES : list.name)),
+  };
 }
 
 /**
@@ -1226,8 +1277,9 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
     await database.runAsync(
       `INSERT INTO books (id, title, author, year, edition, cover_path, language, kind, source_name,
                           source_hash, source_path, source_ext, word_count, char_count, cover_hue,
-                          summary, text_source, stars, review, rated_at, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                          summary, text_source, stars, review, rated_at, status, impressions,
+                          isbn, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id, book.title, book.author, book.year, book.edition, book.cover_path, book.language,
       book.kind ?? DEFAULT_KIND, book.source_name, book.source_hash, book.source_path,
       book.source_ext, book.word_count, book.char_count, book.cover_hue, book.summary,
@@ -1235,7 +1287,7 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
       // and a rating is the reason a shelf was kept at all — a restore that
       // dropped either would hand back a different book.
       book.text_source ?? null, book.stars ?? null, book.review ?? null, book.rated_at ?? null,
-      book.status ?? null, book.created_at || now
+      book.status ?? null, book.impressions ?? null, book.isbn ?? null, book.created_at || now
     );
     await database.runAsync(
       'INSERT INTO documents (book_id, text, hints) VALUES (?, ?, ?)',
@@ -1251,6 +1303,7 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
         confident: !!chapter.confident,
         userEdited: !!chapter.user_edited,
         brief: chapter.brief,
+        recap: chapter.recap,
       }))
     );
     await insertScenes(
@@ -1284,7 +1337,25 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
       id, record.offset, now
     );
   });
+  for (const tag of record.tags ?? []) await addTag(id, tag);
+  await refile(id, record.lists);
   return id;
+}
+
+/**
+ * Back into the lists it was in, by name. A list that is already here takes
+ * the book; one that is not is made — a restore onto a shelf that has since
+ * grown merges with it rather than replacing what is there.
+ */
+async function refile(bookId: string, lists?: string[]) {
+  for (const named of lists ?? []) {
+    if (named === FAVORITES) {
+      await setInList(FAVORITES, bookId, true);
+      continue;
+    }
+    const existing = await findListNamed(named);
+    await setInList(existing ?? (await createBookList(named)), bookId, true);
+  }
 }
 
 /**
@@ -1301,10 +1372,11 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
     await database.runAsync(
       `UPDATE books SET title = ?, author = ?, year = ?, edition = ?, cover_path = ?,
                         kind = ?, cover_hue = ?, summary = ?, stars = ?, review = ?,
-                        rated_at = ?, status = ? WHERE id = ?`,
+                        rated_at = ?, status = ?, impressions = ?, isbn = ? WHERE id = ?`,
       book.title, book.author, book.year, book.edition, book.cover_path,
       book.kind ?? DEFAULT_KIND, book.cover_hue, book.summary, book.stars ?? null,
-      book.review ?? null, book.rated_at ?? null, book.status ?? null, bookId
+      book.review ?? null, book.rated_at ?? null, book.status ?? null,
+      book.impressions ?? null, book.isbn ?? null, bookId
     );
     await database.runAsync('DELETE FROM scenes WHERE book_id = ?', bookId);
     await database.runAsync('DELETE FROM chapters WHERE book_id = ?', bookId);
@@ -1321,6 +1393,7 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
         confident: !!chapter.confident,
         userEdited: !!chapter.user_edited,
         brief: chapter.brief,
+        recap: chapter.recap,
       }))
     );
     await insertScenes(
@@ -1354,6 +1427,8 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
       bookId, record.offset, Date.now()
     );
   });
+  for (const tag of record.tags ?? []) await addTag(bookId, tag);
+  await refile(bookId, record.lists);
 }
 
 export async function listBookIds(): Promise<string[]> {

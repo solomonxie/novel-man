@@ -61,14 +61,44 @@ export function Hero({ eyebrow, avatar, children, facts, actions, note, onNotePr
   );
 }
 
-/** A number and what it counts, small enough to put four of them in a row. */
-export function Fact({ value, label }: { value: string | number; label: string }) {
+/**
+ * A number and what it counts, small enough to put four of them in a row. Some
+ * of them are also the way to the thing they count — the chapters, the parts,
+ * the notes — and a count that leads somewhere says so by being tappable and
+ * by naming its destination in accent.
+ */
+export function Fact({ value, label, onPress }: {
+  value: string | number;
+  label: string;
+  onPress?: () => void;
+}) {
   const palette = usePalette();
   return (
-    <View style={[styles.fact, { backgroundColor: palette.soft }]}>
-      <Text style={{ color: palette.text, fontSize: 15, fontWeight: '700' }}>{value}</Text>
-      <Text style={{ color: palette.dim, fontSize: 11, marginTop: 1 }}>{label}</Text>
-    </View>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [
+        styles.fact,
+        { backgroundColor: palette.soft, opacity: pressed ? 0.7 : 1 },
+      ]}
+    >
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        style={{ color: palette.text, fontSize: 15, fontWeight: '700' }}
+      >
+        {value}
+      </Text>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        style={{ color: onPress ? palette.accent : palette.dim, fontSize: 11, marginTop: 1 }}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -80,10 +110,12 @@ export function Fact({ value, label }: { value: string | number; label: string }
  * that is not the action — which chapter you would resume at, what a pass
  * costs — and that belongs under the buttons, not inside one.
  */
-export function Action({ label, onPress, tone = 'quiet' }: {
+export function Action({ label, onPress, tone = 'quiet', compact }: {
   label: string;
   onPress: () => void;
   tone?: 'loud' | 'quiet';
+  /** A glyph rather than a sentence: it takes its own width, not a share. */
+  compact?: boolean;
 }) {
   const palette = usePalette();
   const loud = tone === 'loud';
@@ -92,6 +124,7 @@ export function Action({ label, onPress, tone = 'quiet' }: {
       onPress={onPress}
       style={({ pressed }) => [
         styles.action,
+        compact && { flex: 0, paddingHorizontal: space.lg },
         {
           backgroundColor: loud ? palette.accent : palette.soft,
           opacity: pressed ? 0.75 : 1,
@@ -365,12 +398,16 @@ const styles = StyleSheet.create({
   },
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   eyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: space.xs },
-  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md },
+  // One row, always. Four counts that wrap onto a second line read as two
+  // groups of facts rather than one, so they share the width instead: each
+  // box takes a quarter and the type inside it is sized to fit that.
+  facts: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
   fact: {
-    paddingHorizontal: space.md,
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: space.sm,
     paddingVertical: space.sm,
     borderRadius: radius.md,
-    minWidth: 76,
   },
   // Wraps rather than truncates: the most important button on the page is the
   // one whose label was getting cut in half.

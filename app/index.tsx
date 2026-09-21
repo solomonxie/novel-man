@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   FlatList,
   Pressable,
   ScrollView,
@@ -18,7 +20,12 @@ import type { TFunction } from 'i18next';
 import { listBooks, type BookListItem } from '../src/db/repo';
 import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
 import { supportedExtensions } from '../src/import/registry';
-import { Cover, Row, Section } from '../src/ui/primitives';
+import { Row, Section } from '../src/ui/primitives';
+import { BookTile } from '../src/ui/BookTile';
+import { hueFrom } from '../src/ui/fields';
+import { Chip, ChipRow } from '../src/ui/detail';
+import { coversByList, listBookLists, listTags, type BookList, type Face } from '../src/db/shelves';
+import { ListAlbum } from '../src/ui/ListAlbum';
 import { AiKeysSettings } from '../src/settings/AiKeys';
 import { BackupSettings } from '../src/settings/Backup';
 import { CloudSettings } from '../src/settings/Cloud';
@@ -29,8 +36,6 @@ import { AddFlow } from '../src/ui/AddFlow';
 import { openWorkQueue, useWorkFeed } from '../src/ui/WorkQueue';
 import { resumeWorkOnLaunch } from '../src/work/queue';
 import { useWorkRefresh } from '../src/work/refresh';
-import { formatCount } from '../src/text/counts';
-import { isRecord, statusOf } from '../src/books/record';
 import {
   NO_RESULTS,
   rankBook,
@@ -61,6 +66,8 @@ export default function Home() {
   /** The way in: the whole of adding a book, unfolded on this page. */
   const [addOpen, setAddOpen] = useState(false);
   const scroller = useRef<ScrollView>(null);
+  /** 0 is a ＋, 1 is an ✕; everything between is the turn from one to the other. */
+  const addTurn = useRef(new Animated.Value(0)).current;
   /** Where the button sits in the page, so the menu it opens can be shown whole. */
   const addY = useRef(0);
 
@@ -77,10 +84,27 @@ export default function Home() {
     );
   }, [HEADROOM]);
   const [results, setResults] = useState<LibraryResults>(NO_RESULTS);
+  /** The two ways the shelf is grouped without moving anything. */
+  const [lists, setLists] = useState<BookList[]>([]);
+  const [tags, setTags] = useState<{ tag: string; books: number }[]>([]);
+  const [faces, setFaces] = useState<Map<string, Face[]>>(new Map());
+  /** A shelf that cannot be read is not an empty shelf, and must not say it is. */
+  const [broken, setBroken] = useState<string | null>(null);
   const work = useWorkFeed();
 
   const refresh = useCallback(() => {
-    listBooks().then(setBooks).catch(() => setBooks([]));
+    listBooks()
+      .then((found) => {
+        setBooks(found);
+        setBroken(null);
+      })
+      .catch((problem) => {
+        setBooks([]);
+        setBroken(String(problem));
+      });
+    listBookLists().then(setLists).catch(() => undefined);
+    coversByList().then(setFaces).catch(() => undefined);
+    listTags().then(setTags).catch(() => undefined);
   }, []);
 
   useFocusEffect(refresh);
@@ -99,6 +123,15 @@ export default function Home() {
 
   // A finished task usually changed something on the shelf.
   useWorkRefresh(refresh);
+
+  useEffect(() => {
+    Animated.timing(addTurn, {
+      toValue: addOpen ? 1 : 0,
+      duration: 160,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [addOpen, addTurn]);
 
   useEffect(() => subscribeToQueue((next) => {
     setJobs((previous) => {
@@ -207,7 +240,17 @@ export default function Home() {
                 </Text>
               </View>
 
-              {books.length === 0 ? (
+              {broken ? (
+                // Books are not lost when the database will not open, and the
+                // difference is the whole distance between a bad morning and a
+                // calm one.
+                <View style={{ paddingHorizontal: space.lg }}>
+                  <Text style={{ color: palette.danger, fontSize: 16 }}>{t('shelf.unreadable')}</Text>
+                  <Text style={{ color: palette.dim, marginTop: space.xs, fontSize: 13 }}>
+                    {broken}
+                  </Text>
+                </View>
+              ) : books.length === 0 ? (
                 <View style={{ paddingHorizontal: space.lg }}>
                   <Text style={{ color: palette.text, fontSize: 16 }}>{t('shelf.empty')}</Text>
                   <Text style={{ color: palette.dim, marginTop: space.xs }}>{t('shelf.emptyHint')}</Text>
@@ -235,6 +278,61 @@ export default function Home() {
               )}
             </View>
 
+            {/* What the reader grouped for themselves, under the shelf that
+                holds everything. Lists are chosen and tags are said, so both
+                are read sideways like the shelf is — and both step aside
+                while searching, when the page is about hits. */}
+            {!query.trim() ? (
+              <View style={{ marginTop: space.xl }}>
+                <View style={styles.shelfHead}>
+                  <Text style={[styles.shelfTitle, { color: palette.dim }]}>
+                    {t('shelf.sectionLists')}
+                  </Text>
+                </View>
+                {/* Read sideways like the shelf above it, and drawn like a
+                    record sleeve: a list is recognised by what is in it. */}
+                <FlatList
+                  horizontal
+                  data={lists}
+                  keyExtractor={(list) => list.id}
+                  renderItem={({ item }) => (
+                    <ListAlbum
+                      name={item.system ? t('lists.favorites') : item.name}
+                      detail={t('lists.count', { count: item.books })}
+                      faces={faces.get(item.id) ?? []}
+                      glyph={item.system ? '♥' : undefined}
+                      width={tileWidth}
+                      onPress={() => router.push(`/list/${item.id}`)}
+                    />
+                  )}
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={styles.shelfRow}
+                />
+              </View>
+            ) : null}
+
+            {!query.trim() && tags.length > 0 ? (
+              <View style={{ marginTop: space.xl }}>
+                <View style={styles.shelfHead}>
+                  <Text style={[styles.shelfTitle, { color: palette.dim }]}>
+                    {t('shelf.sectionTags')}
+                  </Text>
+                </View>
+                <ChipRow>
+                  {tags.map((entry) => (
+                    <Chip
+                      key={entry.tag}
+                      label={entry.tag}
+                      detail={t('lists.count', { count: entry.books })}
+                      hue={hueFrom(entry.tag)}
+                      onPress={() => router.push(`/tag/${encodeURIComponent(entry.tag)}`)}
+                    />
+                  ))}
+                </ChipRow>
+              </View>
+            ) : null}
+
             {/* The way in. A ＋ in the corner of a section header is a 26px
                 glyph for the second thing anybody does with this app — so the
                 button says what it does, and unfolds the one question that has
@@ -257,11 +355,23 @@ export default function Home() {
                     { backgroundColor: palette.accent, opacity: pressed ? 0.85 : 1 },
                   ]}
                 >
+                  {/* The ＋ is the state as well as the invitation: it turns
+                      a corner into an ✕ when the panel is open. A chevron
+                      beside it was a second glyph saying the same thing, and
+                      saying it in the typeface's ugliest character. */}
+                  <Animated.Text
+                    style={{
+                      color: palette.onAccent,
+                      fontSize: 20,
+                      transform: [
+                        { rotate: addTurn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) },
+                      ],
+                    }}
+                  >
+                    ＋
+                  </Animated.Text>
                   <Text style={{ color: palette.onAccent, fontSize: 17, fontWeight: '600' }}>
-                    {`＋  ${t('shelf.addBook')}`}
-                  </Text>
-                  <Text style={{ color: palette.onAccent, fontSize: 15 }}>
-                    {addOpen ? '⌃' : '⌄'}
+                    {t('shelf.addBook')}
                   </Text>
                 </Pressable>
                 {addOpen ? (
@@ -420,37 +530,6 @@ function Results({ title, rows }: { title: string; rows: ResultRow[] }) {
         </Pressable>
       ))}
     </View>
-  );
-}
-
-function BookTile({ book, width }: { book: BookListItem; width: number }) {
-  const palette = usePalette();
-  const { t } = useTranslation();
-  // A book you've started says how far in you are; one you haven't says how
-  // long it is. Both answer "should I open this now?".
-  const started = (book.offset ?? 0) > 0;
-  const status = statusOf(book.status);
-  return (
-    <Pressable onPress={() => router.push(`/book/${book.id}`)} style={{ width }}>
-      <Cover title={book.title} hue={book.cover_hue} width={width} path={book.cover_path} />
-      <Text numberOfLines={2} style={{ color: palette.text, fontSize: 13, marginTop: space.xs }}>
-        {book.title}
-      </Text>
-      {/* A book with no words has no length and no progress, so the line says
-          the only two things that are true of it: what you gave it, and where
-          it stands. */}
-      <Text numberOfLines={1} style={{ color: palette.dim, fontSize: 11 }}>
-        {isRecord(book)
-          ? book.stars
-            ? '★'.repeat(book.stars)
-            : status
-              ? t(`status.${status}`)
-              : t('status.none')
-          : started
-            ? `${Math.min(99, Math.round(((book.offset ?? 0) / Math.max(1, book.char_count)) * 100))}%`
-            : formatCount(book.word_count, book.language)}
-      </Text>
-    </Pressable>
   );
 }
 

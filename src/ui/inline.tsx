@@ -13,12 +13,16 @@ import { usePalette } from '../theme';
  * press on a `Text` is cancelled the moment the touch moves, so a scroll
  * stays a scroll.
  */
-export function InlineText({ value, placeholder, onCommit, style, multiline }: {
+export function InlineText({ value, placeholder, onCommit, style, multiline, lines, onLineCount }: {
   value: string | null;
   placeholder?: string;
   onCommit: (next: string) => void;
   style?: TextStyle | TextStyle[];
   multiline?: boolean;
+  /** Show this many lines and cut the rest — only while it is being read. */
+  lines?: number;
+  /** How many it took to lay out, so the caller can offer to unfold it. */
+  onLineCount?: (count: number) => void;
 }) {
   const palette = usePalette();
   const [draft, setDraft] = useState(value ?? '');
@@ -31,6 +35,10 @@ export function InlineText({ value, placeholder, onCommit, style, multiline }: {
       <Text
         onPress={() => setEditing(true)}
         suppressHighlighting
+        numberOfLines={lines}
+        onTextLayout={
+          onLineCount ? (event) => onLineCount(event.nativeEvent.lines.length) : undefined
+        }
         style={[styles.base, style, shown ? null : { color: palette.faint }]}
       >
         {shown || placeholder || ' '}

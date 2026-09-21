@@ -120,23 +120,25 @@ export function CloudSettings() {
 
   return (
     <>
-      <Section
-        title={t('cloud.title')}
-        action={adding ? undefined : { label: '＋', onPress: () => setAdding(true) }}
-      >
+      <Section title={t('cloud.title')}>
         <IcloudRows />
         {connections.length === 0 ? (
-          <Row label={t('cloud.none')} last />
+          <Row label={t('cloud.none')} />
         ) : (
-          connections.map((connection, index) => (
+          connections.map((connection) => (
             <Row
               key={connection.id}
               label={connection.name}
               value={`${connection.bucket}/${connection.prefix}  ›`}
               onPress={() => router.push(`/settings/cloud-library?id=${connection.id}`)}
-              last={index === connections.length - 1}
             />
           ))
+        )}
+        {/* A row that says what it does, under the block it adds to. The ＋ it
+            replaces was a glyph in a header, which is where a thing goes when
+            nobody is meant to find it. */}
+        {adding ? null : (
+          <Row label={t('cloud.addConnection')} detail={t('cloud.addConnectionHint')} onPress={() => setAdding(true)} last />
         )}
       </Section>
       <Hint>{t('cloud.hint')}</Hint>

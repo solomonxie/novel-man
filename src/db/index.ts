@@ -34,7 +34,15 @@ export function setBeforeMigrations(hook: typeof beforeMigrations) {
 }
 
 export function db(): Promise<Database> {
-  if (!handle) handle = open();
+  if (!handle) {
+    handle = open();
+    // A failure must not be cached as the answer forever. One bad open used
+    // to reject every query for the rest of the session, which reads on the
+    // shelf as a library that has been emptied.
+    handle.catch(() => {
+      handle = null;
+    });
+  }
   return handle;
 }
 
@@ -69,11 +77,39 @@ async function open() {
   // The copy that survives a schema problem, taken before the schema changes.
   if (version < migrations.length) await beforeMigrations?.(database).catch(() => undefined);
   while (version < migrations.length) {
-    await database.execAsync(migrations[version]);
+    await apply(database, migrations[version]);
     version += 1;
     await database.execAsync(`PRAGMA user_version = ${version}`);
   }
   return database;
+}
+
+/**
+ * One migration, and a change that is already there is not a failure.
+ *
+ * The version is an index into the list, so the list is append-only — and a
+ * list that is edited in the middle instead renumbers every migration after
+ * the edit, which hands an installed app a statement it ran weeks ago. That
+ * is a `duplicate column name` at launch, and because nothing else can open
+ * the database afterwards, it looks from the shelf exactly like every book
+ * being gone. Nothing is: the rows were never touched.
+ *
+ * So each statement is allowed to find its own work done. Anything else still
+ * throws — a schema that half-applied is worth stopping for.
+ */
+async function apply(database: Database, sql: string) {
+  for (const statement of sql.split(';')) {
+    if (!statement.trim()) continue;
+    try {
+      await database.execAsync(statement);
+    } catch (error) {
+      if (!alreadyDone(String(error))) throw error;
+    }
+  }
+}
+
+function alreadyDone(message: string): boolean {
+  return /duplicate column name|already exists/i.test(message);
 }
 
 let tail: Promise<unknown> = Promise.resolve();

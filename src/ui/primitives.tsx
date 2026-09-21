@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Switch, Text, TextInput, View, type ViewStyle } from 'react-native';
+import { imageUri } from '../storage/files';
 import { radius, space, usePalette } from '../theme';
 
 /**
@@ -107,13 +108,19 @@ export function Row({ label, value, detail, onPress, danger, alarm, last }: {
  * "do it automatically" are two controls, nobody can predict what any
  * combination of them does.
  */
-export function Toggle({ label, detail, directions, value, onChange, disabled, last }: {
+export function Toggle({ label, detail, directions, value, onChange, onPress, disabled, last }: {
   label: string;
   detail?: string;
   /** Shown accented under the detail, and only where the user can act on it. */
   directions?: string;
   value: boolean;
   onChange: (next: boolean) => void;
+  /**
+   * Where the row leads, when the switch is not the only thing it can do. The
+   * text side goes there; the switch keeps its own job, which is what stops a
+   * thumb aiming for one from doing the other.
+   */
+  onPress?: () => void;
   disabled?: boolean;
   last?: boolean;
 }) {
@@ -125,15 +132,22 @@ export function Toggle({ label, detail, directions, value, onChange, disabled, l
         !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.border },
       ]}
     >
-      <View style={{ flexShrink: 1, flex: 1 }}>
-        <Text style={{ color: disabled ? palette.dim : palette.text, fontSize: 16 }}>{label}</Text>
+      <Pressable
+        onPress={onPress}
+        disabled={!onPress}
+        style={({ pressed }) => [{ flexShrink: 1, flex: 1, opacity: pressed ? 0.6 : 1 }]}
+      >
+        <Text style={{ color: disabled ? palette.dim : palette.text, fontSize: 16 }}>
+          {label}
+          {onPress ? <Text style={{ color: palette.accent }}>{'  ›'}</Text> : null}
+        </Text>
         {detail ? (
           <Text style={{ color: palette.dim, fontSize: 13, marginTop: 2 }}>{detail}</Text>
         ) : null}
         {directions ? (
           <Text style={{ color: palette.accent, fontSize: 13, marginTop: 2 }}>{directions}</Text>
         ) : null}
-      </View>
+      </Pressable>
       <Switch value={value} onValueChange={onChange} disabled={disabled} />
     </View>
   );
@@ -203,6 +217,12 @@ export function PrimaryAction({ label, onPress, style }: {
 }
 
 /** Cover falls through user-set → generated → placeholder; it is never blank. */
+/** The handle every sheet is dragged by, and the sign that it can be. */
+export function Grabber() {
+  const palette = usePalette();
+  return <View style={[styles.grabber, { backgroundColor: palette.faint }]} />;
+}
+
 export function Cover({ title, hue, width, path }: {
   title: string;
   hue: number;
@@ -210,8 +230,11 @@ export function Cover({ title, hue, width, path }: {
   path?: string | null;
 }) {
   const height = Math.round(width * 1.45);
-  if (path) {
-    return <Image source={{ uri: path }} style={[styles.cover, { width, height }]} />;
+  // Resolved rather than used as written: what is stored is a name, and what
+  // a path from an older install points at no longer exists. See `imageUri`.
+  const uri = path ? imageUri(path) : undefined;
+  if (uri) {
+    return <Image source={{ uri }} style={[styles.cover, { width, height }]} />;
   }
   return (
     <View style={[styles.cover, { width, height, backgroundColor: `hsl(${hue}, 32%, 62%)` }]}>
@@ -221,6 +244,14 @@ export function Cover({ title, hue, width, path }: {
 }
 
 const styles = StyleSheet.create({
+  grabber: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: space.sm,
+    opacity: 0.5,
+  },
   toast: {
     position: 'absolute',
     bottom: 80,
