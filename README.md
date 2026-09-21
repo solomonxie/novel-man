@@ -88,6 +88,30 @@ chapter in a repository, a file in a drive — comes in through the link box,
 which rewrites a GitHub page to its raw file the way it already rewrites a
 Google Doc to `.docx`.
 
+**Books with no words in them** — a shelf entry for a book you read on paper,
+borrowed, or only mean to read. No file, no import: a title, and everything
+else the app keeps about a book — chapters, notes, a cast, a rating. Three
+doors to one: type the title, pick it out of **Open Library** (40 million
+records, no key, no quota — a category fetched once is a thousand titles you
+can search on a plane), or bring your whole library over from **Goodreads**.
+Their API was retired in 2020, so that row reads the library export or a
+shelf's RSS feed, and says so rather than pretending to sign in; ratings,
+reviews, shelves and private notes all come across, a book already on the
+shelf is filled in rather than added twice, and nothing you wrote is
+overwritten.
+
+**Asked instead of read** — a book with no text is named to the model rather
+than sent to it, the same bargain scripture already gets. Ask what it is and
+it fills in the author, the year and a few sentences; ask for its contents and
+you get the chapter list, each chapter with a line on what it covers and a
+page of its own to write notes against. A book the model does not know comes
+back saying so — no invented plot under a real title.
+
+**A rating and a review, per book** — five stars, your own verdict as long as
+you like, and where it stands: want to read, reading, read. Notes no longer
+have to quote anything: write one about the book, or about a chapter, and
+search everything you have written from the shelf.
+
 **A bible** asks two questions — which translation, which canon — and downloads
 from eBible.org as USFM: every edition its catalog marks redistributable, which
 is most of them, in whatever language. NIV, NKJV, NASB and 吕振中 are absent

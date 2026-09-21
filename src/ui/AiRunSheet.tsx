@@ -5,8 +5,10 @@ import { router } from '../navigation/router';
 
 import { formatUsd, type Estimate } from '../ai/cost';
 import { Canceled } from '../ai/run';
-import { PrimaryAction } from './primitives';
 import { radius, space, usePalette } from '../theme';
+
+/** Long enough that queueing a run never shows a modal at all. */
+const SLOW_MS = 400;
 
 export type RunHooks = {
   signal: AbortSignal;
@@ -14,9 +16,13 @@ export type RunHooks = {
 };
 
 /**
- * The one shape every paid run wears: what it will do, what it is expected to
- * cost, an explicit Run, and a Cancel that actually stops the requests. No AI
- * feature is allowed to start without passing through here.
+ * The one shape every paid run wears — and it gets out of the way. Tapping an
+ * AI action starts it: there is no Run to confirm and no Done to dismiss,
+ * because two taps to say yes twice is not consent, it is friction. What is
+ * left appears only when it has something to say: a run slow enough to be
+ * worth a progress bar and a Stop, a missing key, or an error. Everything
+ * else is reported by the queue strip at the bottom of whatever screen you
+ * are on.
  */
 export function AiRunSheet({ visible, title, description, estimate, hasKey, onRun, onClose }: {
   visible: boolean;
@@ -33,14 +39,28 @@ export function AiRunSheet({ visible, title, description, estimate, hasKey, onRu
   const [summary, setSummary] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const controller = useRef<AbortController | null>(null);
+  /** A run that finishes in a frame should not flash a modal on the way past. */
+  const [slow, setSlow] = useState(false);
+  const started = useRef(false);
+  const closer = useRef(onClose);
+  closer.current = onClose;
 
   useEffect(() => {
     if (!visible) {
+      started.current = false;
       setProgress(null);
       setSummary(null);
       setError(null);
+      setSlow(false);
+      return;
     }
-  }, [visible]);
+    if (!hasKey || started.current) return;
+    started.current = true;
+    void start();
+    // Started by opening, once. `start` closes over this render's props, which
+    // are the ones the tap meant.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, hasKey]);
 
   async function start() {
     const abort = new AbortController();
@@ -53,6 +73,9 @@ export function AiRunSheet({ visible, title, description, estimate, hasKey, onRu
         onProgress: (done, total) => setProgress({ done, total }),
       });
       setSummary(line);
+      // Queued is finished, as far as this sheet is concerned: the strip at the
+      // bottom of the screen owns everything that happens after.
+      closer.current(true);
     } catch (caught) {
       setError(caught instanceof Canceled ? t('ai.canceled') : String(caught));
     } finally {
@@ -63,8 +86,21 @@ export function AiRunSheet({ visible, title, description, estimate, hasKey, onRu
 
   const running = progress !== null;
 
+  useEffect(() => {
+    if (!running) {
+      setSlow(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlow(true), SLOW_MS);
+    return () => clearTimeout(timer);
+  }, [running]);
+
+  // Nothing to confirm and nothing to celebrate: the sheet is for a wait, a
+  // missing key and a failure, and for nothing else.
+  const showing = visible && (!hasKey || error !== null || slow);
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => onClose(!!summary)}>
+    <Modal visible={showing} transparent animationType="fade" onRequestClose={() => onClose(!!summary)}>
       <Pressable style={[styles.scrim, { backgroundColor: palette.scrim }]} onPress={() => !running && onClose(!!summary)}>
         <Pressable
           style={[styles.sheet, { backgroundColor: palette.surface, borderColor: palette.border }]}
@@ -128,19 +164,10 @@ export function AiRunSheet({ visible, title, description, estimate, hasKey, onRu
                 <Text style={{ color: palette.danger, fontSize: 16 }}>{t('ai.stop')}</Text>
               </Pressable>
             </>
-          ) : summary ? (
-            <PrimaryAction label={t('ai.done')} onPress={() => onClose(true)} style={{ marginTop: space.xl }} />
           ) : (
-            <>
-              <PrimaryAction
-                label={t('ai.run')}
-                onPress={() => hasKey && start()}
-                style={{ marginTop: space.xl, opacity: hasKey ? 1 : 0.4 }}
-              />
-              <Pressable onPress={() => onClose(false)} style={styles.cancel}>
-                <Text style={{ color: palette.dim, fontSize: 16 }}>{t('settings.cancel')}</Text>
-              </Pressable>
-            </>
+            <Pressable onPress={() => onClose(!!summary)} style={styles.cancel}>
+              <Text style={{ color: palette.dim, fontSize: 16 }}>{t('ai.close')}</Text>
+            </Pressable>
           )}
         </Pressable>
       </Pressable>

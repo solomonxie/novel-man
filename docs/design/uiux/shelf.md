@@ -8,17 +8,22 @@ same page. **A page whose only job is holding links gets deleted.**
 │ 🔍 Search content                         │ ← top of the page, not behind a
 ├───────────────────────────────────────────┤   nav-bar icon
 │ Importing · big.docx        47%       ›   │ ← strip, only while a job runs
-│ Library              Show 4 more       ＋ │ ← ＋ on the row that names what
-│ ┌───────┐ ┌───────┐ ┌───────┐             │   it adds to
-│ │ cover │ │ cover │ │ cover │             │   three across, two rows,
+│ Library                                   │ ← no ＋ here: the button under
+│ ┌───────┐ ┌───────┐ ┌───────┐             │   the shelf is the only way in
+│ │ cover │ │ cover │ │ cover │             │   one row that runs off the edge,
 │ └───────┘ └───────┘ └───────┘             │   most recently read first
 │ 《长夜…》  Ash Lane   The Sec…             │
-│ 14%       138.1万字   2%                   │ ← started: how far in.
-│ ┌───────┐ ┌───────┐ ┌───────┐             │   unstarted: how long it is
-│ │ cover │ │ cover │ │ cover │             │
-│ └───────┘ └───────┘ └───────┘             │
+│ 14%       138.1万字   ★★★★☆                │ ← started: how far in.
+│ ┌───────┐ ┌───────┐ ┌───────┐             │   unstarted: how long it is.
+│ │ cover │ │ cover │ │ cover │             │   no words at all: your rating,
+│ └───────┘ └───────┘ └───────┘             │   or where it stands
 │                                           │
-│ Settings                                  │ ← a section, not a destination
+│ ╭───────────────────────────────────────╮ │ ← filled, full width. Adding a
+│ │        ＋  Add a book            ⌄    │ │   book is the second thing
+│ ╰───────────────────────────────────────╯ │   anybody does with this app;
+│                                           │   a 26px glyph in a corner is
+│ Settings                                  │   not a door. Hidden while
+│ GENERAL
 │ GENERAL                                   │
 │ ┌───────────────────────────────────────┐ │
 │ │ Analysis queue       3 running    ›   │ │ ← leads the section: the only
@@ -67,105 +72,101 @@ the title) → placeholder. **Never blank.**
 
 ```
  empty    No books yet.
-          Import a .txt, .md, .docx or .epub to start.        ＋
+          Import a .txt, .md, .docx or .epub to start.
  searching
           In the text (12)                    ← content hits, above the grid
           《长夜纪》 ch.14 …the river had risen past…
           No book by that name.
 ```
 
-## Adding a book  `app/add.tsx`
+## Adding a book  `src/ui/AddFlow.tsx`
 
-＋ pushes a page, not a sheet. **What kind of book comes first**, because it
-decides which sources are worth offering, what else to ask, and what the book
-page will be. Rows appear as they become answerable — no steps, no Next.
+**The menu is the flow.** Adding a book happens on the shelf, one question at a
+time, in the card the button opens — and it never leaves the page unless a
+catalog has to be searched. There is no Add page and no ＋ in a corner: one
+button, under the shelf it adds to.
 
-```
-┌─ Add a book ──────────────────────────────┐
-│ WHAT KIND                                 │
-│ (●Novel) ( Scripture ) ( Nonfiction )     │ ← chips, Novel preselected so
-│ ( How-to ) ( Textbook )                   │   the ordinary path is untouched
-│ Fiction — characters, scenes, a screenplay│ ← one line on what this kind
-│ and illustrations.                        │   buys. The reason to care
-│                                           │
-│ WHERE FROM                                │
-│ ┌───────────────────────────────────────┐ │
-│ │ ash-lane.docx        ready        ─●  │ │ ← a file already in hand (share
-│ │ From Files…     .txt .md .docx .epub  │ │   sheet, "Open in…") sits on top,
-│ │ From a link…    a Google Doc, a URL   │ │   already chosen
-│ │ Project Gutenberg   70k public-domain │ │ ← only sources that carry THIS
-│ └───────────────────────────────────────┘ │   kind. eBible isn't here
-│                                           │
-│ ABOUT THIS BOOK                           │
-│ ┌───────────────────────────────────────┐ │
-│ │ Language          Auto — 中文      ▾  │ │ ← detected, overridable
-│ │ Chapters          第N章 found      ▾  │ │
-│ │ Volumes (卷)              ○─          │ │ ← only for kinds that have one
-│ └───────────────────────────────────────┘ │
-│                                           │
-│            [[ Add it ]]                   │
-│ Nothing is fetched until you tap this.    │
-└───────────────────────────────────────────┘
-```
-
-The kind decides which public sources are on the page. Each is a door to its
-own search — see [sources.md](sources.md):
+Opening it, and every level after, scrolls the card up with a screen-eighth of
+headroom above it — whole, but not jammed against the status bar, because the
+shelf is still there.
 
 ```
-│ WHERE FROM                        novel   │
-│ ┌───────────────────────────────────────┐ │
-│ │ Project Gutenberg          Search  ›  │ │ ← 79,000 books out of copyright
-│ │ From your files      .txt .md .epub…  │ │
-│ │ From a link                           │ │
-│ └───────────────────────────────────────┘ │
-│ WHERE FROM                      tutorial  │
-│ ┌───────────────────────────────────────┐ │
-│ │ From your files                       │ │ ← a kind with no public source
-│ │ From a link                           │ │   still has the two every kind
-│ └───────────────────────────────────────┘ │   has
+ ① what is it                  ② where from              ③ what it still needs
+ ╭─────────────────────────╮   ╭─────────────────────╮   ╭─────────────────────╮
+ │ ＋ Add a book        ⌃  │   │ ＋ Add a book    ⌃  │   │ ＋ Add a book    ⌃  │
+ ╰─────────────────────────╯   ╰─────────────────────╯   ╰─────────────────────╯
+ ╭─────────────────────────╮   ╭─────────────────────╮   ╭─────────────────────╮
+ │ FICTION                 │   │ ‹  Novel            │   │ ‹ Create an empty…  │
+ │ Novel                   │   │ From your files   ⌄ │   │ Novel             ⌄ │
+ │   Fiction — cast, scenes│   │   .txt .md .docx…   │   │   Fiction — cast…   │
+ │ NONFICTION              │──▶│ From a link       ⌄ │   │┌───────────────────┐│
+ │ Nonfiction              │   │ Project Gutenberg   │   ││ Title▌            ││
+ │ Textbook or tutorial    │   │            79,000 ›─┼─┐ ││ Author (optional) ││
+ │ Academic paper          │   │ Standard Ebooks   › │ │ │└───────────────────┘│
+ │ SCRIPTURE               │   │ Open Library 4,000 ›│ │ │ [[ Add to shelf ]]  │
+ │ Bible                   │   ╰─────────────────────╯ │ ╰─────────────────────╯
+ │ ─────────────────────── │                           │
+ │ Goodreads             › │ ← a library, not a book:   │  its own page, then
+ │   Your own shelves…     │   nothing about it answers └▶ straight back to ③
+ │ Create an empty book  ⌄ │   "what is it"                with the book chosen
+ ╰─────────────────────────╯
 ```
 
-Choosing **Scripture** puts eBible in the same place, and it is the one source
-with a list worth keeping: eleven editions, cached with their date.
+- **Two doors are not a type**, so they sit under all of them: a whole shelf
+  brought over from Goodreads, and a book with nothing behind it. The one that
+  fetches nothing is always last.
+- **A record picks its own type inside its own form** — the type decides which
+  sections its page will have, and nothing else, so it is asked where it is
+  used rather than before it.
+- **`‹` is the only way back**, carrying the answers so far
+  (`‹ Novel · Project Gutenberg`). One tap back clears one answer.
+- **`⌄` stays here, `›` leaves.** A title, a link, a key and the canon question
+  are answered in the card; searching a catalog needs a field, a keyboard and a
+  long list, so those are the source's own page — and picking there comes
+  straight back to ③.
+- **Nothing is fetched above the button.** Every level is free and reversible.
+
+A bible's doors, in the order somebody wanting one would try them:
 
 ```
-│ WHERE FROM                                │
-│ eBible.org · 11 translations   Search  ›  │ ← the only source that carries a
-│ Update the list of bibles         ⟳       │   bible
-│ ABOUT THIS BOOK                           │
-│ ┌───────────────────────────────────────┐ │
-│ │ Translation                   WEB  ›  │ │ ← pushes the chosen list; eleven
-│ │                                       │ │   editions, no search box
-│ │ Canon         66 books             ▾  │ │ ← only when the edition has
-│ └───────────────────────────────────────┘ │   deuterocanonical books
-│ 66 books · 1,189 chapters · 31,102 verses │
-│ · 2.9 MB · structure included             │
-│            [[ Download ]]                 │
+ │ ‹  Bible                │
+ │ From your files       ⌄ │
+ │ From a link          ⌄ │
+ │ eBible.org         1,2… │ ← every redistributable edition
+ │ ESV                  ⌄ │ ← licensed: nobody may hand it over, so what it
+ │   Licensed by Crossway… │   needs is a key of your own
+ │ GitHub                › │ ← the editions no catalog is allowed to carry
 ```
 
-- **The kind's chips never disappear.** Changing your mind re-renders the rows
-  under them; nothing is lost that still applies, and a file already chosen
-  stays chosen if the new kind can take it.
-- **Sources belong to kinds.** A novel is offered Gutenberg, a tutorial is
-  offered GitHub, a bible eBible; a kind with no public source shows the file
-  picker and the link box, which every kind has."
-- **Detected values are shown as detected** (`Auto — 中文`, `第N章 found`), so
-  the reader overrides a fact rather than filling a blank.
-- **`Add it` is the first moment anything is fetched.** Everything above it is
-  free and reversible.
-- A `.zip` backup recognized on this page routes to restore, as from any door.
+Level ③, per door:
 
 ```
- From a link…
- ┌──────────────────────────────────────┐
- │ https://…                            │
- └──────────────────────────────────────┘
- A Google Doc link comes in as .docx. The file must be readable
- without signing in.
-                ( Fetch it )
- ⊗ That link asked us to sign in. Share it as "anyone with the link",
-   or download it and import the file.
- ⊗ Couldn't fetch that link.   ⊗ Can't read .pages files yet.
+ From your files      ash-lane.docx  ✓     ← the picker opens on the tap; what
+                      Tap to choose another   came back is named here
+                      [[ Add it ]]
+
+ From a link          https://…            ← a Google Doc arrives as .docx
+                      ( Fetch it ) ▸ ash-lane.docx ✓  [[ Add it ]]
+
+ Project Gutenberg    Pride and Prejudice       Gutenberg   ← taken from its
+                      en · Public domain · 558 KB            own page
+                      [[ Download ]]
+
+ eBible.org           World English Bible         eBible.org
+                      Canon    66 books        ⌄ ← the one question a bible
+                      66 books · 1,189 chapters…   still raises
+                      [[ Download ]]
+
+ ESV                  Your API key            Added
+                      Test the key            Works
+                      Add ESV to the shelf        ›
+```
+
+```
+ states  nothing answered yet     no button at all
+         a title typed            [[ Add to shelf ]]
+         a file chosen            [[ Add it ]]
+         a book chosen            [[ Download ]]   + what the source stated
 ```
 
 The import strip names **the step that is running**, never a bare spinner:

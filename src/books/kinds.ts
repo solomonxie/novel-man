@@ -8,7 +8,7 @@
  * sections its page has. A new kind is a row plus its catalog strings, not an
  * edit to every screen.
  */
-export type BookFeature = 'cast' | 'scenes' | 'script' | 'visuals' | 'verses';
+export type BookFeature = 'cast' | 'terms' | 'scenes' | 'script' | 'visuals' | 'verses';
 
 /**
  * A door on the Add page. Beside the two the reader brings something to —
@@ -20,7 +20,12 @@ export type BookFeature = 'cast' | 'scenes' | 'script' | 'visuals' | 'verses';
 export type BookSource =
   | 'files'
   | 'link'
+  /** No file at all: a title, and a shelf entry to hang notes and a rating on. */
+  | 'record'
+  | 'openlibrary'
+  | 'goodreads'
   | 'ebible'
+  | 'repo'
   | 'gutenberg'
   | 'standardebooks'
   | 'arxiv';
@@ -33,12 +38,21 @@ export type BookSection =
   | 'notes'
   | 'cast'
   | 'places'
+  | 'terms'
   | 'translations'
   | 'script'
   | 'visuals';
 
+/**
+ * The heading a kind sits under when they are all listed. Two levels, because
+ * a flat five reads as five unrelated things — the first question anybody
+ * actually answers is "is it made up or not".
+ */
+export type KindGroup = 'fiction' | 'nonfiction' | 'scripture';
+
 export type BookKind = {
   id: string;
+  group: KindGroup;
   /** How a pass is told to think of what it is reading. */
   subject: string;
   /** Invented people or real ones — the difference a profile must not blur. */
@@ -68,34 +82,38 @@ export type BookKind = {
 export const bookKinds: BookKind[] = [
   {
     id: 'novel',
+    group: 'fiction',
     subject: 'a novel',
     fiction: true,
-    features: ['cast', 'scenes', 'script', 'visuals'],
+    features: ['cast', 'terms', 'scenes', 'script', 'visuals'],
     part: 'volume',
-    sources: ['gutenberg', 'standardebooks', 'files', 'link'],
-    sections: ['chapters', 'scenes', 'notes', 'cast', 'places', 'translations', 'script', 'visuals'],
+    sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads'],
+    sections: ['chapters', 'scenes', 'notes', 'cast', 'places', 'terms', 'translations', 'script', 'visuals'],
   },
   {
     id: 'nonfiction',
+    group: 'nonfiction',
     subject: 'a work of nonfiction',
     fiction: false,
-    features: ['cast'],
-    sources: ['gutenberg', 'standardebooks', 'files', 'link'],
-    sections: ['chapters', 'notes', 'cast', 'places', 'translations'],
+    features: ['cast', 'terms'],
+    sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads'],
+    sections: ['chapters', 'notes', 'cast', 'places', 'terms', 'translations'],
   },
   {
     // A tutorial and a textbook were two rows for one book: something you read
     // to learn from, with sections and notes and no cast. Gutenberg is not
     // offered for it — what it has of the genre is a century old.
     id: 'textbook',
+    group: 'nonfiction',
     subject: 'an instructional book',
     fiction: false,
-    features: [],
-    sources: ['files', 'link'],
-    sections: ['chapters', 'notes', 'translations'],
+    features: ['terms'],
+    sources: ['files', 'link', 'record', 'openlibrary', 'goodreads'],
+    sections: ['chapters', 'notes', 'terms', 'translations'],
   },
   {
     id: 'paper',
+    group: 'nonfiction',
     subject: 'an academic paper',
     fiction: false,
     reads: 'argument',
@@ -103,38 +121,43 @@ export const bookKinds: BookKind[] = [
     // No cast, no scenes: the people in a paper are its authors, and they are
     // on the cover rather than in the text.
     features: [],
-    sources: ['arxiv', 'files', 'link'],
+    sources: ['arxiv', 'files', 'link', 'record'],
     sections: ['chapters', 'notes', 'translations'],
   },
   {
     id: 'scripture',
+    group: 'scripture',
     subject: 'a work of scripture',
     fiction: false,
-    features: ['cast', 'verses'],
+    // Scenes, because scripture has them: the ship, the storm, the lots, the
+    // sea. What it does not have is paragraphs anyone can number — the words
+    // are cited to a pass rather than sent — so a scene here starts at a verse.
+    features: ['cast', 'terms', 'verses', 'scenes'],
     part: 'book',
     // The file picker still works for a bible someone already has; the preset
-    // source leads because nobody has a USFM zip lying around.
-    sources: ['ebible', 'files', 'link'],
+    // source leads because nobody has a USFM zip lying around. A repository is
+    // the door to every edition no catalog is allowed to carry.
+    sources: ['ebible', 'repo', 'files', 'link', 'record'],
     // A bible is read in the edition it was downloaded as; retranslating one
     // is not what this app is for.
-    sections: ['parts', 'chapters', 'notes', 'cast', 'places'],
+    sections: ['parts', 'chapters', 'scenes', 'notes', 'cast', 'places', 'terms'],
   },
 ];
 
 /** A book that arrived through the share sheet was never asked, and novel is the app. */
 export const DEFAULT_KIND = bookKinds[0].id;
 
+/** The order the groups are offered in, and what is under each. */
+export const kindGroups: KindGroup[] = ['fiction', 'nonfiction', 'scripture'];
+
+export function kindsIn(group: KindGroup): BookKind[] {
+  return bookKinds.filter((kind) => kind.group === group);
+}
+
 export function kindOf(kind: string | null | undefined): BookKind {
   return bookKinds.find((entry) => entry.id === kind) ?? bookKinds[0];
 }
 
-/**
- * Invented people are characters; real ones are people. Same section either
- * way — the word is what must not blur, on a bible least of all.
- */
-export function castNoun(kind: string | null | undefined): 'characters' | 'people' {
-  return kindOf(kind).fiction ? 'characters' : 'people';
-}
 
 export function supports(kind: string | null | undefined, feature: BookFeature): boolean {
   return kindOf(kind).features.includes(feature);

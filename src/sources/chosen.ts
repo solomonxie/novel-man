@@ -2,6 +2,8 @@ import type { GutenbergBook } from './gutenberg';
 import type { StandardEbook } from './standardEbooks';
 import type { Paper } from './arxiv';
 import type { Translation } from './ebible';
+import type { RepoEdition } from './repoBible';
+import type { Work } from './openLibrary';
 
 /**
  * What the reader picked on a find page, on its way back to the Add page. It
@@ -10,9 +12,12 @@ import type { Translation } from './ebible';
  */
 export type Choice =
   | { source: 'ebible'; translation: Translation }
+  | { source: 'repo'; edition: RepoEdition }
   | { source: 'gutenberg'; book: GutenbergBook }
   | { source: 'standardebooks'; book: StandardEbook }
-  | { source: 'arxiv'; paper: Paper };
+  | { source: 'arxiv'; paper: Paper }
+  /** A record and nothing more: no file follows this one. */
+  | { source: 'openlibrary'; work: Work };
 
 let held: Choice | null = null;
 

@@ -8,6 +8,7 @@ import {
   type Paper,
 } from '../sources/arxiv';
 import { readGutenbergBook, type GutenbergBook } from '../sources/gutenberg';
+import { downloadRepoBible, type RepoEdition } from '../sources/repoBible';
 import {
   authHeader,
   fileNameFor as standardEbookFileName,
@@ -43,6 +44,7 @@ type Listener = (jobs: ImportJob[]) => void;
 export type QueuedSource =
   | { via: 'file'; uri: string; name: string; kind?: string }
   | { via: 'ebible'; translation: Translation; apocrypha: boolean }
+  | { via: 'repo'; edition: RepoEdition }
   | { via: 'gutenberg'; book: GutenbergBook; kind?: string }
   | { via: 'standardebooks'; book: StandardEbook; kind?: string }
   | { via: 'arxiv'; paper: Paper; kind?: string };
@@ -86,6 +88,11 @@ export function enqueueImport(input: { uri: string; name: string; kind?: string 
 /** A bible from a preset source, queued exactly like a file. */
 export function enqueueTranslation(translation: Translation, apocrypha: boolean): string {
   return enqueue({ via: 'ebible', translation, apocrypha }, translation.title);
+}
+
+/** A bible someone found in a repository, queued exactly like one from a catalog. */
+export function enqueueRepoBible(edition: RepoEdition): string {
+  return enqueue({ via: 'repo', edition }, edition.title);
 }
 
 export function enqueueGutenberg(book: GutenbergBook, kind?: string): string {
@@ -217,6 +224,16 @@ async function runJob(job: ImportJob, source: QueuedSource) {
       summary: source.paper.abstract,
     });
     return result;
+  }
+
+  if (source.via === 'repo') {
+    return downloadRepoBible(source.edition, (stage, fraction) => {
+      // Reading and parsing are one loop here — a file is fetched and read
+      // before the next is asked for — so the fetch owns most of the bar.
+      job.stage = stage === 'fetching' ? 'reading' : 'saving';
+      job.fraction = stage === 'fetching' ? fraction * 0.9 : 0.9 + fraction * 0.1;
+      publish();
+    });
   }
 
   if (source.via === 'ebible') {

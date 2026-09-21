@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import type { CustomField } from '../db/repo';
+import { isLink } from '../cast/lookup';
 import { Row, Section } from './primitives';
 import { space, usePalette } from '../theme';
 
@@ -81,9 +82,19 @@ function FieldRow({ field, last, onChange, onRemove }: {
         placeholderTextColor={palette.faint}
         style={{ color: palette.text, fontSize: 16, flex: 1 }}
       />
-      <Pressable onPress={onRemove} hitSlop={8}>
-        <Text style={{ color: palette.faint, fontSize: 16 }}>✕</Text>
-      </Pressable>
+      {/* A pass can write a link in here — an encyclopedia article for a real
+          person — and then the row has somewhere to go instead of something to
+          throw away: one glyph at the end, not two. Clearing the address makes
+          it an ordinary row again, cross and all. */}
+      {isLink(value) ? (
+        <Pressable onPress={() => Linking.openURL(value.trim())} hitSlop={8}>
+          <Text style={{ fontSize: 17 }}>🔗</Text>
+        </Pressable>
+      ) : (
+        <Pressable onPress={onRemove} hitSlop={8}>
+          <Text style={{ color: palette.faint, fontSize: 16 }}>✕</Text>
+        </Pressable>
+      )}
     </View>
   );
 }

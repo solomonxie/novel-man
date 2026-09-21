@@ -66,6 +66,21 @@ export async function listUnits(bookId: string, target: string, chapterIdx?: num
 
 const UNIT_BATCH = 200;
 
+/** What is left to translate, chapter by chapter — the list the chooser shows. */
+export async function pendingByChapter(
+  bookId: string,
+  target: string
+): Promise<{ chapter_idx: number; pending: number }[]> {
+  const database = await db();
+  return database.getAllAsync<{ chapter_idx: number; pending: number }>(
+    `SELECT chapter_idx, COUNT(*) AS pending FROM translation_units
+      WHERE book_id = ? AND target = ? AND (machine IS NULL OR stale = 1)
+      GROUP BY chapter_idx ORDER BY chapter_idx`,
+    bookId,
+    target
+  );
+}
+
 /** Sentences are created once per chapter; a re-run fills them in, not re-adds. */
 export async function seedUnits(
   bookId: string,

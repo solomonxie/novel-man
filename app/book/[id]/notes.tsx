@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import Clipboard from '@react-native-clipboard/clipboard';
 
 import {
+  addStandaloneNote,
   getBook,
   listAnnotations,
   listChapters,
@@ -15,8 +16,10 @@ import {
   type Book,
   type Chapter,
 } from '../../../src/db/repo';
-import { shareQuoteText } from '../../../src/share/quote';
+import { quoteAsMarkdown, shareQuoteText, type Quote } from '../../../src/share/quote';
 import { NoteSheet } from '../../../src/ui/NoteSheet';
+import { Toast, useFlash } from '../../../src/ui/primitives';
+import { isRecord } from '../../../src/books/record';
 import { radius, space, usePalette } from '../../../src/theme';
 
 type Filter = 'all' | 'highlight' | 'note' | 'bookmark';
@@ -38,6 +41,9 @@ export default function Notes() {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   /** Tapping a mark opens what you wrote on it; the book is a button away. */
   const [editing, setEditing] = useState<Annotation | null>(null);
+  /** And this page can start one: a note about the book, quoting nothing. */
+  const [writing, setWriting] = useState(false);
+  const { message, flash } = useFlash();
 
   const load = useCallback(() => {
     if (!id) return;
@@ -47,6 +53,17 @@ export default function Notes() {
   }, [id]);
 
   useFocusEffect(load);
+
+  /** One mark, with everything about it a quotation needs to be checkable. */
+  function quoteOf(entry: Annotation, chapter: Chapter | null): Quote {
+    return {
+      text: entry.quote,
+      title: book?.title ?? '',
+      author: book?.author,
+      chapter: chapter?.title.trim() || null,
+      note: entry.note,
+    };
+  }
 
   function openInBook(entry: Annotation, chapter: Chapter | null) {
     router.push(
@@ -101,7 +118,9 @@ export default function Notes() {
       const chapter =
         (entry.chapter_id
           ? chapters.find((c) => c.id === entry.chapter_id)
-          : chapters.find((c) => entry.start >= c.start && entry.start < c.end)) ?? null;
+          : entry.standalone
+            ? undefined
+            : chapters.find((c) => entry.start >= c.start && entry.start < c.end)) ?? null;
       const key = chapter?.id ?? 'none';
       if (!byChapter.has(key)) byChapter.set(key, { chapter, items: [] });
       byChapter.get(key)!.items.push(entry);
@@ -145,20 +164,28 @@ export default function Notes() {
       <Stack.Screen
         options={{
           title: selecting ? t('notes.selected', { count: picked.size }) : t('book.notes'),
-          headerRight: () =>
-            total === 0 ? null : (
-              <Pressable onPress={() => (selecting ? endSelecting() : setSelecting(true))} hitSlop={8}>
-                <Text style={{ color: palette.accent, fontSize: 16 }}>
-                  {selecting ? t('notes.selectDone') : t('notes.select')}
-                </Text>
-              </Pressable>
-            ),
+          headerRight: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg }}>
+              {total === 0 ? null : (
+                <Pressable onPress={() => (selecting ? endSelecting() : setSelecting(true))} hitSlop={8}>
+                  <Text style={{ color: palette.accent, fontSize: 16 }}>
+                    {selecting ? t('notes.selectDone') : t('notes.select')}
+                  </Text>
+                </Pressable>
+              )}
+              {selecting ? null : (
+                <Pressable onPress={() => setWriting(true)} hitSlop={8}>
+                  <Text style={{ color: palette.accent, fontSize: 26 }}>＋</Text>
+                </Pressable>
+              )}
+            </View>
+          ),
         }}
       />
 
       {total === 0 ? (
         <Text style={{ color: palette.dim, textAlign: 'center', marginTop: space.xxl }}>
-          {t('notes.empty')}
+          {t(book && isRecord(book) ? 'notes.emptyRecord' : 'notes.empty')}
         </Text>
       ) : (
         <>
@@ -202,7 +229,13 @@ export default function Notes() {
           {groups.map(({ chapter, items }) => (
             <View key={chapter?.id ?? 'none'} style={{ marginTop: space.xl }}>
               <Text style={{ color: palette.text, fontSize: 15, fontWeight: '700' }}>
-                {chapter ? chapter.title.trim() || `${chapter.idx + 1}` : t('notes.unplaced')}
+                {chapter
+                  ? chapter.title.trim() || `${chapter.idx + 1}`
+                  : t(
+                      items.every((entry) => entry.standalone)
+                        ? 'notes.aboutTheBook'
+                        : 'notes.unplaced'
+                    )}
               </Text>
               {items.map((entry) => (
                 <Pressable
@@ -238,14 +271,39 @@ export default function Notes() {
                         ) : null}
                       </View>
                     ) : null}
-                    <View style={{ width: 3, borderRadius: 2, backgroundColor: entry.color ?? palette.accent }} />
-                    <View style={{ flex: 1, gap: space.sm }}>
+                    <View style={{ flex: 1, gap: space.sm, paddingRight: space.lg }}>
+                      {/* On this page the reader's own words are the subject and
+                          the passage is the context, so the weight goes to the
+                          note: full colour, a size up. The mark stays off it —
+                          what they wrote is not a quotation of anything. */}
                       {entry.note ? (
-                        <Text style={{ color: palette.dim, fontSize: 14 }}>{entry.note}</Text>
+                        <Text style={{ color: palette.text, fontSize: 16 }}>{entry.note}</Text>
                       ) : null}
-                      <Text style={{ color: palette.text, fontSize: 15 }}>{entry.quote}</Text>
+                      {entry.quote ? (
+                        <View style={{ flexDirection: 'row', gap: space.sm }}>
+                          <View
+                            style={[
+                              styles.mark,
+                              { backgroundColor: entry.color ?? palette.accent },
+                            ]}
+                          />
+                          <Text style={{ flex: 1, color: palette.dim, fontSize: 15 }}>{entry.quote}</Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
+                  {/* Its own corner, away from everything you would tap on
+                      purpose. It still asks before it does anything. */}
+                  {selecting ? null : (
+                    <Pressable
+                      onPress={() => confirmRemove(entry)}
+                      hitSlop={12}
+                      style={styles.remove}
+                      accessibilityLabel={t('settings.delete')}
+                    >
+                      <Text style={{ color: palette.faint, fontSize: 13, lineHeight: 15 }}>✕</Text>
+                    </Pressable>
+                  )}
                   <View style={styles.cardFoot}>
                     <Text style={{ color: palette.faint, fontSize: 11 }}>
                       {new Date(entry.created_at).toLocaleDateString()}
@@ -253,35 +311,33 @@ export default function Notes() {
                     <View style={{ flexDirection: 'row', gap: space.lg }}>
                       {selecting ? null : (
                         <>
-                      <Pressable onPress={() => Clipboard.setString(entry.quote)} hitSlop={8}>
+                      {/* The card, not a fragment of it: a note copied without
+                          the passage it is about is half a thought. */}
+                      <Pressable
+                        onPress={() => {
+                          Clipboard.setString(quoteAsMarkdown(quoteOf(entry, chapter)));
+                          flash(t('reader.copied'));
+                        }}
+                        hitSlop={8}
+                      >
                         <Text style={{ color: palette.accent, fontSize: 12 }}>{t('reader.copy')}</Text>
                       </Pressable>
-                      <Pressable onPress={() => confirmRemove(entry)} hitSlop={8}>
-                        <Text style={{ color: palette.danger, fontSize: 12 }}>
-                          {t('settings.delete')}
-                        </Text>
-                      </Pressable>
                       <Pressable
-                        onPress={() =>
-                          shareQuoteText({
-                            text: entry.quote,
-                            title: book?.title ?? '',
-                            author: book?.author,
-                            chapter: chapter?.title.trim() || null,
-                            note: entry.note,
-                          })
-                        }
+                        onPress={() => shareQuoteText(quoteOf(entry, chapter))}
                         hitSlop={8}
                       >
                         <Text style={{ color: palette.accent, fontSize: 12 }}>{t('reader.share')}</Text>
                       </Pressable>
                       {/* The jump the card itself used to be: still here, but
-                          it has to be asked for now. */}
-                      <Pressable onPress={() => openInBook(entry, chapter)} hitSlop={8}>
-                        <Text style={{ color: palette.accent, fontSize: 12 }}>
-                          {t('notes.inBook')}  ›
-                        </Text>
-                      </Pressable>
+                          it has to be asked for now — and only where there is
+                          a passage to land on. */}
+                      {entry.standalone ? null : (
+                        <Pressable onPress={() => openInBook(entry, chapter)} hitSlop={8}>
+                          <Text style={{ color: palette.accent, fontSize: 12 }}>
+                            {t('notes.inBook')}  ›
+                          </Text>
+                        </Pressable>
+                      )}
                         </>
                       )}
                     </View>
@@ -312,8 +368,24 @@ export default function Notes() {
         </View>
       ) : null}
 
+      <Toast message={message} />
+
       {/* A bookmark stays a bookmark; for the rest, what you write is what
           decides whether it is a note or just a highlight. */}
+      {/* A note that is about the book: nothing quoted, nowhere to jump to,
+          and the only kind of note a book with no words can have. */}
+      <NoteSheet
+        visible={writing}
+        quote=""
+        note={null}
+        onSave={(note) => {
+          setWriting(false);
+          if (!note.trim() || !id) return;
+          void addStandaloneNote({ bookId: id, note }).then(load);
+        }}
+        onClose={() => setWriting(false)}
+      />
+
       <NoteSheet
         visible={editing !== null}
         quote={editing?.quote ?? ''}
@@ -327,6 +399,7 @@ export default function Notes() {
             kind: mark.kind === 'bookmark' ? 'bookmark' : note ? 'note' : 'highlight',
           }).then(load);
         }}
+        onDelete={editing ? () => confirmRemove(editing) : undefined}
         onClose={() => setEditing(null)}
       />
     </View>
@@ -357,6 +430,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   cardPicked: { borderWidth: 1 },
+  /** The highlight's own colour, down the side of the words it was made on. */
+  mark: { width: 3, borderRadius: 2 },
+  remove: { position: 'absolute', top: 0, right: 0, paddingHorizontal: space.md, paddingVertical: space.sm },
   check: {
     width: 20,
     height: 20,

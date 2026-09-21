@@ -13,19 +13,30 @@ import {
   listEntities,
   listChapterScenes,
   listObservations,
+  listUnlocatedPlaces,
   mergeFields,
+  parseFields,
   recordRelation,
+  replaceChapters,
   replaceMentions,
   replaceScenes,
   setChapterBrief,
+  setPinIfUnset,
+  setWikiIfUnset,
   updateBook,
   updateCast,
   updateEntity,
   type Book,
   type Chapter,
+  type Verse,
 } from '../db/repo';
 import { countMentions, namesOf } from '../cast/mentions';
+import { parsePin } from '../cast/location';
+import { hasWiki, parseWikiLink } from '../cast/lookup';
+import { parseTie, TIES } from '../cast/ties';
+import { translate } from '../translate/run';
 import { kindOf } from '../books/kinds';
+import { isRecord } from '../books/record';
 import type { WorkJob, WorkKind } from '../db/work';
 import {
   assemble,
@@ -34,6 +45,7 @@ import {
   chapterMaterial,
   chapterParagraphs,
   citedNotSent,
+  knownWorkBody,
   recentBriefs,
   type ChapterParagraph,
   type Passage,
@@ -48,14 +60,18 @@ export type Handler = (job: WorkJob, signal: AbortSignal) => Promise<void>;
  */
 export const handlers: Record<WorkKind, Handler> = {
   'book-summary': summarizeBook,
+  'book-lookup': lookUpBook,
+  'book-outline': outlineBook,
   'chapter-brief': briefChapter,
   'deep-analyze': deepAnalyze,
   'cast-chapter': castChapter,
   'cast-wrapup': wrapUpCast,
   'character-polish': polishCharacter,
   'place-polish': polishPlace,
+  'place-locate': locatePlaces,
+  'person-link': linkPeople,
   'scene-suggest': notHere,
-  'translate-span': notHere,
+  'translate-span': translateChapter,
   'script-scene': notHere,
 };
 
@@ -79,6 +95,8 @@ async function loadChapter(job: WorkJob): Promise<{
   chapter: Chapter;
   text: string;
   passage?: Passage;
+  /** Only for a book that has them, and only because a scene starts at one. */
+  verses: Verse[];
 }> {
   const book = await getBook(job.book_id);
   if (!book) throw new Error('book is gone');
@@ -88,12 +106,202 @@ async function loadChapter(job: WorkJob): Promise<{
   const text = await getDocumentText(job.book_id);
   // A chapter that is cited rather than sent needs its verse range, and only
   // that: the query is one row, against a book whose text never goes out.
-  if (!citedNotSent(book)) return { book, chapters, chapter, text };
+  if (!citedNotSent(book)) return { book, chapters, chapter, text, verses: [] };
   const verses = await listVerses(chapter.id);
   const passage = verses.length
     ? { first: verses[0].number, last: verses[verses.length - 1].number }
     : undefined;
-  return { book, chapters, chapter, text, passage };
+  return { book, chapters, chapter, text, passage, verses };
+}
+
+/**
+ * A book with no words behind it, asked about rather than read. The reader
+ * typed a title, or picked one out of a catalog that hands over records and
+ * nothing else — so the only thing this pass has to work with is the name, and
+ * the only honest answers are "here is what that book is" and "I don't know it".
+ *
+ * Nothing already filled in is touched. A lookup fills the gaps the shelf has;
+ * it is not a second opinion on what the reader wrote.
+ */
+type KnownBook = {
+  unknown?: boolean;
+  author?: string;
+  year?: string | number;
+  summary?: string;
+  chapters?: number;
+};
+
+/**
+ * What counts as a book here is wider than "a novel with an author", and the
+ * first version of this got that wrong: a reader typed "NIV bible" and was told
+ * the model did not know it. A translation, an edition, a scripture, a manual,
+ * a series, an anthology or a reference work is a book for this purpose, and
+ * refusing is only for a title nobody could place at all.
+ */
+const KNOWN_BOOK_RULES =
+  'You are a reference desk. You are given the name of a published work and you ' +
+  'answer what is documented about it: who wrote or produced it, the year it was ' +
+  'first published, and three to five sentences on what it is — its subject, its ' +
+  'shape, and what reading it is like. No review, no ranking, no sales copy, and ' +
+  'no spoiler past the opening. A translation, an edition, a scripture, a ' +
+  'textbook, a manual, a reference work, a series and an anthology all count: ' +
+  'answer about the thing itself, and where it has no single author say who ' +
+  'produced it — a committee, a publisher, a tradition — rather than refusing. ' +
+  'Where several unrelated works share this title, answer about the one by the ' +
+  'author given, or failing that the best known, and name which one you mean in ' +
+  'the first sentence. Reply {"unknown":true} only when the title is one you ' +
+  'cannot place at all: an invented answer is worse than none, because nothing ' +
+  'here can tell the two apart later.';
+
+/** `{"unknown":true}` and nothing else — fenced or not, and nothing looser. */
+function refused(answer: string): boolean {
+  const body = answer.replace(/```(?:json)?/gi, '').trim();
+  return /^\{\s*"?unknown"?\s*:\s*true\s*,?\s*\}?$/i.test(body);
+}
+
+/** The one error a reader has to be able to read off the queue row, and act on. */
+const UNKNOWN =
+  'the model could not place this title — try the fuller title, or add the author';
+
+async function lookUpBook(job: WorkJob, signal: AbortSignal) {
+  const book = await getBook(job.book_id);
+  if (!book) throw new Error('book is gone');
+  const answer = await ask(
+    'book-lookup',
+    [
+      {
+        role: 'system',
+        content:
+          `${KNOWN_BOOK_RULES} Reply with JSON only: ` +
+          '{"author","year","summary","chapters":0}. Give "chapters" only if you know ' +
+          'how many the book has; leave any field out rather than guessing at it.',
+      },
+      {
+        role: 'user',
+        content: [
+          `Title: ${book.title}`,
+          book.author ? `Author: ${book.author}` : '',
+          book.year ? `First published: ${book.year}` : '',
+          // Filed by the reader, who may well have left the default on. It is
+          // a hint, not a fact, and saying so is what stops the pass refusing
+          // a bible for not being the novel it was filed as.
+          `The reader filed it as ${kindOf(book.kind).subject}; if that is ` +
+            'plainly wrong, answer about what it really is.',
+          `Answer in ${book.language}.`,
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      },
+    ],
+    700,
+    signal
+  );
+  if (refused(answer)) throw new Error(UNKNOWN);
+
+  const found = parseJson<KnownBook>(answer);
+  if (found.unknown) throw new Error(UNKNOWN);
+  const changes: Record<string, string> = {};
+  if (!book.author?.trim() && found.author?.trim()) changes.author = found.author.trim();
+  const year = String(found.year ?? '').match(/\d{3,4}/)?.[0];
+  if (!book.year?.trim() && year) changes.year = year;
+  if (!book.summary?.trim() && found.summary?.trim()) changes.summary = found.summary.trim();
+  if (!Object.keys(changes).length) throw new Error('nothing was missing that it could fill in');
+  await updateBook(job.book_id, changes);
+}
+
+/**
+ * What the book is made of, for a book whose pages are not here: its chapters,
+ * in order, each with a line on what it covers. That is what makes the rest of
+ * the app work on a record — a note, a brief and a rating all hang off a
+ * chapter — and it is the one thing a catalog never publishes.
+ *
+ * It replaces the chapter list rather than merging with it. A table of contents
+ * is one answer about one book; half of one merged into half of another is a
+ * contents page for a book that does not exist, and the screen that starts this
+ * asks first.
+ */
+type Outline = {
+  unknown?: boolean;
+  chapters?: { title?: string; brief?: string; part?: string }[];
+};
+
+async function outlineBook(job: WorkJob, signal: AbortSignal) {
+  const book = await getBook(job.book_id);
+  if (!book) throw new Error('book is gone');
+  const kind = kindOf(book.kind);
+  const unit = kind.unit ?? 'chapter';
+  const answer = await ask(
+    'book-outline',
+    [
+      {
+        role: 'system',
+        content:
+          'You are a reference desk, asked for the table of contents of a published ' +
+          'work. A translation, an edition, a scripture, a textbook, a manual and an ' +
+          'anthology all count — the books of a bible, the parts of a manual and the ' +
+          'stories in a collection are its contents just as chapters are a novel\'s. ' +
+          `List every ${unit} in order, as it is printed, with the ${unit}'s own ` +
+          'title where it has one and an empty title where it is only numbered. "brief" is ' +
+          `one sentence on what that ${unit} covers, and no more. ` +
+          (kind.part
+            ? `"part" is the name of the ${kind.part} it sits under, where the book has them, ` +
+              'spelled the same way on every row that belongs to it. '
+            : '') +
+          'Give the contents of this work only — never a plausible set of chapter titles, ' +
+          `never a ${unit} you are unsure it has, and never more than it has. ` +
+          'Reply {"unknown":true} only when the title is one you cannot place at all, or ' +
+          'when you know the work but genuinely do not know how it is divided. ' +
+          'Reply with JSON only: {"chapters":[{"title","brief"' +
+          (kind.part ? ',"part"' : '') +
+          '}]}.',
+      },
+      {
+        role: 'user',
+        content: [
+          `Title: ${book.title}`,
+          book.author ? `Author: ${book.author}` : '',
+          book.year ? `First published: ${book.year}` : '',
+          book.summary?.trim() ? `What it is: ${book.summary.trim().slice(0, 600)}` : '',
+          `The reader filed it as ${kind.subject}; if that is plainly wrong, answer ` +
+            'about what it really is.',
+          `Answer in ${book.language}.`,
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      },
+    ],
+    4000,
+    signal
+  );
+  if (refused(answer)) throw new Error(UNKNOWN);
+
+  const outline = parseJson<Outline>(answer);
+  if (outline.unknown) throw new Error(UNKNOWN);
+  const rows = (outline.chapters ?? []).filter((row) => row && typeof row === 'object');
+  if (!rows.length) throw new Error('it listed no chapters');
+
+  // A record has no manuscript, so every chapter is the same empty span: what
+  // addresses one here is its place in the order and its name.
+  const parts: string[] = [];
+  await replaceChapters(
+    job.book_id,
+    rows.map((row, at) => {
+      const part = row.part?.trim();
+      if (part && parts[parts.length - 1] !== part) parts.push(part);
+      return {
+        title: row.title?.trim() || `${at + 1}`,
+        start: 0,
+        end: 0,
+        // Nothing here was read off a page: it is the model's account of a
+        // contents page, and the structure screen marks it as unconfirmed.
+        confident: false,
+        userEdited: false,
+        brief: row.brief?.trim() || null,
+        part_idx: part ? parts.length - 1 : null,
+        part_title: part ?? null,
+      };
+    })
+  );
 }
 
 /**
@@ -171,6 +379,9 @@ async function briefChapter(job: WorkJob, signal: AbortSignal) {
     260,
     signal
   );
+  // A book the model does not know comes back saying so, and that sentence is
+  // not a brief — see `knownWorkBody`.
+  if (isRecord(book) && refused(answer)) throw new Error(UNKNOWN);
   await setChapterBrief(chapter.id, answer.trim() || null);
 }
 
@@ -190,14 +401,15 @@ type Character = {
 
 type SceneResult = { start?: number; title?: string; summary?: string };
 
-type Tie = { from: string; to: string; label: string };
+type TieResult = { from: string; to: string; label: string };
 
 type DeepResult = {
   brief?: string;
   scenes?: SceneResult[];
   characters?: Character[];
-  places?: { name: string; note?: string; details?: Detail[] }[];
-  relations?: Tie[];
+  places?: { name: string; note?: string; details?: Detail[]; location?: unknown }[];
+  terms?: { name: string; note?: string; details?: Detail[] }[];
+  relations?: TieResult[];
 };
 
 /**
@@ -230,6 +442,24 @@ const SCENE_RULES =
   'a title in the scenes listed from the previous chapter, reuse that exact title. ' +
   '"summary" is one sentence about that scene alone.';
 
+/**
+ * The same scene, said in the only numbers a cited book has. A bible's words
+ * are named rather than sent — the model already has them — so there are no
+ * paragraphs of ours to point at, and a verse is better than one anyway: it
+ * is the same number in every edition, and the reader's page is ruled by it.
+ */
+const VERSE_SCENE_RULES =
+  'A scene is a continuous stretch of the chapter in one place, at one time, ' +
+  'following one set of people. It ends the moment any of those moves: they go ' +
+  'somewhere else, time skips, or the account turns to someone else. "start" is ' +
+  'the verse number the scene begins at, an integer from this chapter, and the ' +
+  'first scene always starts at the chapter\'s first verse. A chapter that is ' +
+  'one continuous account is one scene — give it one rather than splitting it ' +
+  'at every paragraph. "title" names what happens in that scene, as a short ' +
+  'phrase in the language of the book: the storm, the lots, the great fish. ' +
+  'Never the chapter title, never "Scene 2". "summary" is one sentence about ' +
+  'that scene alone.';
+
 const PROFILE_RULES =
   '"age" and "gender" only when the text says or plainly implies them. ' +
   '"details" is for anything else this chapter establishes about who they are — ' +
@@ -254,13 +484,63 @@ const PLACE_RULES =
   'nobody could put a pin in — a world, an era, an afterlife — says so as its ' +
   'sort. Omit what the text does not establish; never invent a location.';
 
+/**
+ * Where the places are real, the pass is asked what they are called now. A
+ * name rather than a coordinate: a map searches names, the model actually
+ * knows them — Hazor is Tel Hazor, Shushan is Susa — and a name it gets wrong
+ * is a name you can read and fix. It is asked once, for the place rather than
+ * for the chapter, and it is allowed to say nothing: half the sites named in
+ * scripture are argued over. A land is the exception to "nowhere": Canaan is
+ * nobody's address, but a map opened over the region helps more than none.
+ */
+const MODERN_RULES =
+  '"modern" is the present-day name a map would find it under, with the country ' +
+  '— "Tel Hazor, Israel", "Susa, Iran". A region rather than a spot — a land, a ' +
+  'province, a wilderness, a sea — gives the region as it is named on a map ' +
+  'today. "certainty" is certain, probable or disputed.';
+
+const PIN_RULES =
+  `"location" says where the place is today. ${MODERN_RULES} It describes the ` +
+  'place itself, not this chapter. Leave "location" out entirely where nobody ' +
+  'has identified the site or scholars put it in more than one country; never ' +
+  'write "unknown" into it.';
+
+const LOCATE_RULES =
+  `${MODERN_RULES} Leave a place out of your answer entirely where nobody has ` +
+  'identified the site or scholars put it in more than one country; never answer ' +
+  '"unknown".';
+
+const PLACE_SHAPE = '{"name","note","details":[{"label","value"}]}';
+const PINNED_PLACE_SHAPE =
+  '{"name","note","details":[{"label","value"}],"location":{"modern","certainty"}}';
+
+/**
+ * The third kind of thing a book names. Not a person and not a place: the ark,
+ * the covenant, the Passover, a rank, a rite, a law, an order — what the book
+ * treats as a thing and keeps returning to. A reader meets it once in chapter
+ * three and needs it again in chapter forty, which is exactly the problem a
+ * page of its own solves.
+ */
+const TERM_RULES =
+  '"terms" are the named things this chapter uses that are neither people nor ' +
+  'places: objects, rites, feasts, laws, covenants, titles, ranks, orders, ' +
+  'institutions, and the words this book uses as its own. Name each as the book ' +
+  'names it. "note" is one sentence on what it is *here*, in this chapter. ' +
+  '"details" is anything else this chapter establishes about it, as short ' +
+  'label/value pairs in the language of the book. Skip a word that is merely ' +
+  'ordinary language, and skip anything already listed as a person or a place.';
+
 const RELATION_RULES =
-  '"relations" are the ties this chapter shows between two of its people — ' +
-  'family, rank, allegiance, rivalry, who works for whom. "from" and "to" are ' +
-  'names from "characters" or from the list already known, spelled exactly as ' +
-  'they appear there; "label" is two or three words in the language of the book. ' +
-  'Only what this chapter states or plainly shows: omit a pair rather than ' +
-  'guessing at one, and never name a tie to someone not in this chapter.';
+  '"relations" are the ties this chapter shows between two of its people. ' +
+  '"from" and "to" are names from "characters" or from the list already known, ' +
+  `spelled exactly as they appear there. "label" is exactly one of ${TIES.filter(
+    (tie) => tie !== 'other'
+  ).join(', ')} — that word alone, in English, lower case, and nothing else. ` +
+  'It reads from "from" to "to": {"from":"Abraham","to":"Isaac","label":"parent"} ' +
+  'says Abraham is the parent of Isaac. "kin" is for a family tie none of the ' +
+  'others name. Only what this chapter states or plainly shows: omit a pair ' +
+  'rather than guessing at one, never name a tie to someone not in this chapter, ' +
+  'and where none of the words fits, omit the pair rather than stretching one.';
 
 /** Every pass that reads a chapter writes its people down the same way. */
 async function recordCharacters(bookId: string, chapterIdx: number, characters: Character[]) {
@@ -293,7 +573,7 @@ async function recordCharacters(bookId: string, chapterIdx: number, characters: 
 async function recordPlaces(
   bookId: string,
   chapterIdx: number,
-  places: { name?: string; note?: string; details?: Detail[] }[]
+  places: { name?: string; note?: string; details?: Detail[]; location?: unknown }[]
 ) {
   for (const place of places) {
     if (!place?.name?.trim()) continue;
@@ -302,6 +582,8 @@ async function recordPlaces(
     // it: a camp does not move between chapters, and the first chapter to say
     // which province it is in has said it for good.
     if (Array.isArray(place.details)) await mergeFields(entityId, place.details);
+    const pin = parsePin(place.location);
+    if (pin) await setPinIfUnset(entityId, pin);
     await addObservation({
       book_id: bookId,
       entity_id: entityId,
@@ -314,13 +596,38 @@ async function recordPlaces(
 }
 
 /**
+ * A term is recorded exactly as a place is, and for the same reason: what the
+ * chapter said about it belongs to the chapter, and what it *is* is those
+ * notes read together.
+ */
+async function recordTerms(
+  bookId: string,
+  chapterIdx: number,
+  terms: { name?: string; note?: string; details?: Detail[] }[]
+) {
+  for (const term of terms) {
+    if (!term?.name?.trim()) continue;
+    const entityId = await findOrCreateEntity(bookId, 'term', term.name.trim(), []);
+    if (Array.isArray(term.details)) await mergeFields(entityId, term.details);
+    await addObservation({
+      book_id: bookId,
+      entity_id: entityId,
+      chapter_idx: chapterIdx,
+      appearance: null,
+      voice: null,
+      note: term.note?.trim() || null,
+    });
+  }
+}
+
+/**
  * Ties are written down as the chapters go by rather than only by the
  * whole-book pass: by the time a reader opens a character, the chapters
  * already analyzed should say who that character is to everyone else.
  * A name the chapter invented for the occasion is dropped — a relation is only
  * recorded between two people this book already has profiles for.
  */
-async function recordRelations(bookId: string, chapterIdx: number, ties: Tie[]) {
+async function recordRelations(bookId: string, chapterIdx: number, ties: TieResult[]) {
   if (!ties.length) return;
   const known = await listEntities(bookId, 'character');
   const byName = new Map<string, string>();
@@ -330,14 +637,10 @@ async function recordRelations(bookId: string, chapterIdx: number, ties: Tie[]) 
   for (const tie of ties) {
     const from = byName.get(tie?.from?.trim().toLowerCase() ?? '');
     const to = byName.get(tie?.to?.trim().toLowerCase() ?? '');
-    if (!from || !to || from === to || !tie.label?.trim()) continue;
-    await recordRelation({
-      book_id: bookId,
-      from_id: from,
-      to_id: to,
-      label: tie.label.trim(),
-      chapter_idx: chapterIdx,
-    });
+    // A word that is not one of the sixteen is not a tie this book can draw.
+    const label = parseTie(tie?.label);
+    if (!from || !to || from === to || !label) continue;
+    await recordRelation({ book_id: bookId, from_id: from, to_id: to, label, chapter_idx: chapterIdx });
   }
 }
 
@@ -351,15 +654,42 @@ async function recordRelations(bookId: string, chapterIdx: number, ties: Tie[]) 
  * was sent, which belongs to the last scene if it belongs to anything.
  */
 function locateScenes(paragraphs: ChapterParagraph[], chapter: Chapter, scenes: SceneResult[]) {
+  return tile(
+    chapter,
+    scenes,
+    (index) =>
+      Number.isInteger(index) && index >= 0 && index < paragraphs.length
+        ? paragraphs[index].offset
+        : null
+  );
+}
+
+/**
+ * A cited chapter is split the way its own edition numbers it. A verse the
+ * chapter does not contain is dropped rather than clamped — the model named a
+ * verse from somewhere else, and a scene starting nowhere is worse than one
+ * scene fewer.
+ */
+function locateVerseScenes(verses: Verse[], chapter: Chapter, scenes: SceneResult[]) {
+  const offsets = new Map(verses.map((verse) => [verse.number, verse.start]));
+  return tile(chapter, scenes, (number) => offsets.get(number) ?? null);
+}
+
+/** Whatever the numbers meant, scenes tile their chapter with no gaps. */
+function tile(
+  chapter: Chapter,
+  scenes: SceneResult[],
+  offsetOf: (at: number) => number | null
+) {
   const seen = new Set<number>();
   const found: { start: number; end: number; title: string | null; summary: string | null }[] = [];
   for (const scene of scenes) {
-    const index = Number(scene.start);
-    if (!Number.isInteger(index) || index < 0 || index >= paragraphs.length) continue;
-    if (seen.has(index)) continue;
-    seen.add(index);
+    const at = Number(scene.start);
+    const offset = offsetOf(at);
+    if (offset === null || seen.has(at)) continue;
+    seen.add(at);
     found.push({
-      start: paragraphs[index].offset,
+      start: offset,
       end: 0,
       title: scene.title?.trim() || null,
       summary: scene.summary?.trim() || null,
@@ -380,24 +710,29 @@ function locateScenes(paragraphs: ChapterParagraph[], chapter: Chapter, scenes: 
  * come back consistent and the brief knows what it is continuing from.
  */
 async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
-  const { book, chapters, chapter, text, passage } = await loadChapter(job);
+  const { book, chapters, chapter, text, passage, verses } = await loadChapter(job);
   const characters = await listEntities(job.book_id, 'character');
   const places = await listEntities(job.book_id, 'place');
   const kind = kindOf(book.kind);
-  const wantsScenes = kind.features.includes('scenes');
   const wantsCast = kind.features.includes('cast');
+  const wantsTerms = kind.features.includes('terms');
+  // A cited book is split by verse, a sent one by paragraph — and a cited
+  // chapter with no verses recorded cannot be split at all, so it is not asked.
+  const byVerse = citedNotSent(book);
+  const wantsScenes = kind.features.includes('scenes') && (!byVerse || verses.length > 0);
 
   const previous = chapters.find((entry) => entry.idx === chapter.idx - 1);
   const previousScenes = previous && wantsScenes ? await listChapterScenes(previous.id) : [];
   // Numbering costs tokens per paragraph, so it only goes out when the answer
   // is going to be paragraph numbers.
-  const paragraphs = wantsScenes ? chapterParagraphs(text, chapter) : [];
+  const paragraphs = wantsScenes && !byVerse ? chapterParagraphs(text, chapter) : [];
 
   const shape = [
     '"brief":"one or two sentences on what happens"',
     wantsScenes && '"scenes":[{"start":0,"title","summary"}]',
     wantsCast && `"characters":[${PROFILE_SHAPE}]`,
-    wantsCast && '"places":[{"name","note","details":[{"label","value"}]}]',
+    wantsCast && `"places":[${kind.fiction ? PLACE_SHAPE : PINNED_PLACE_SHAPE}]`,
+    wantsTerms && '"terms":[{"name","note","details":[{"label","value"}]}]',
     wantsCast && '"relations":[{"from","to","label"}]',
   ]
     .filter(Boolean)
@@ -410,14 +745,16 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
         'the section claims and what it rests on — question, method, data, result, ' +
         'limitation, as far as each appears here. State what the authors assert as ' +
         'their assertion, not as fact, and never supply a number the section does not.',
-    wantsScenes && 'Its paragraphs are numbered in brackets: [0], [1], [2] and so on.',
-    wantsScenes && SCENE_RULES,
+    wantsScenes && !byVerse && 'Its paragraphs are numbered in brackets: [0], [1], [2] and so on.',
+    wantsScenes && (byVerse ? VERSE_SCENE_RULES : SCENE_RULES),
     wantsCast &&
       'Reuse the exact names listed under CHARACTERS ALREADY KNOWN — never a new ' +
         'spelling of someone already there; put any new form in "aliases". ' +
         '"appearance" and "voice" carry only what *this* chapter states. ' +
         `${PROFILE_RULES} Skip people only mentioned in passing.`,
     wantsCast && PLACE_RULES,
+    wantsCast && !kind.fiction && PIN_RULES,
+    wantsTerms && TERM_RULES,
     wantsCast && RELATION_RULES,
     // Without this a profile of Paul reads like a character study of an
     // invented person: motives assigned, arc predicted, traits embellished.
@@ -450,7 +787,7 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
           text,
           passage,
           previousScenes,
-          paragraphs: wantsScenes ? paragraphs : undefined,
+          paragraphs: paragraphs.length ? paragraphs : undefined,
         }),
       },
     ],
@@ -461,6 +798,7 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
     signal
   );
 
+  if (isRecord(book) && refused(answer)) throw new Error(UNKNOWN);
   const result = parseJson<DeepResult>(answer);
   if (result.brief?.trim()) await setChapterBrief(chapter.id, result.brief.trim());
 
@@ -471,8 +809,12 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
     await recordRelations(job.book_id, chapter.idx, result.relations ?? []);
   }
 
+  if (wantsTerms) await recordTerms(job.book_id, chapter.idx, result.terms ?? []);
+
   if (wantsScenes) {
-    const located = locateScenes(paragraphs, chapter, result.scenes ?? []);
+    const located = byVerse
+      ? locateVerseScenes(verses, chapter, result.scenes ?? [])
+      : locateScenes(paragraphs, chapter, result.scenes ?? []);
     if (located.length) await replaceScenes(job.book_id, chapter.id, located, 'ai');
   }
 }
@@ -496,6 +838,10 @@ async function polishPlace(job: WorkJob, signal: AbortSignal) {
     .map((row) => `Chapter ${row.chapter_idx + 1}: ${row.note ?? ''}`.trim())
     .join('\n');
 
+  // A novel's places are nowhere; a bible's and a history's are somewhere you
+  // could go, and where that is is the one thing the text will not tell you.
+  const real = book ? !kindOf(book.kind).fiction : false;
+
   const answer = await ask(
     'place-polish',
     [
@@ -503,13 +849,16 @@ async function polishPlace(job: WorkJob, signal: AbortSignal) {
         role: 'system',
         content:
           'You write a profile of a place in a book from per-chapter notes about it. ' +
-          'Reply with JSON only: {"summary","details":[{"label","value"}]}. ' +
+          `Reply with JSON only: {"summary","details":[{"label","value"}]${
+            real ? ',"location":{"modern","certainty"}' : ''
+          }}. ` +
           '"summary" is two or three sentences: what the place is, what it is like, ' +
           'and what happens there. "details" is the rest as short label/value pairs in ' +
           'the language of the book — what kind of place it is, where it sits, who holds ' +
           'it, what it is known for, how it changes. A place has no age, face or voice; ' +
           'do not invent one. Use only what the notes state; contradictions are kept, ' +
-          'not resolved — say "described as X early and Y later".',
+          'not resolved — say "described as X early and Y later".' +
+          (real ? ` ${PIN_RULES}` : ''),
       },
       {
         role: 'user',
@@ -526,15 +875,19 @@ async function polishPlace(job: WorkJob, signal: AbortSignal) {
     signal
   );
 
-  const polished = parseJson<{ summary?: string; details?: Detail[] }>(answer);
+  const polished = parseJson<{ summary?: string; details?: Detail[]; location?: unknown }>(answer);
   if (polished.summary?.trim()) await updateEntity(entityId, { summary: polished.summary.trim() });
   if (Array.isArray(polished.details)) await mergeFields(entityId, polished.details);
+
+  const pin = real ? parsePin(polished.location) : null;
+  if (pin) await updateEntity(entityId, pin);
 }
 
 /** The cast pass without the brief — cheaper, for when only names are wanted. */
 async function castChapter(job: WorkJob, signal: AbortSignal) {
   const { book, chapters, chapter, text, passage } = await loadChapter(job);
   const characters = await listEntities(job.book_id, 'character');
+  const pinned = !kindOf(book.kind).fiction;
 
   const answer = await ask(
     'cast-chapter',
@@ -544,9 +897,9 @@ async function castChapter(job: WorkJob, signal: AbortSignal) {
         content:
           'You catalog the cast of one chapter of a novel. Reply with JSON only: ' +
           `{"characters":[${PROFILE_SHAPE}],` +
-          '"places":[{"name","note","details":[{"label","value"}]}]}. Reuse the exact ' +
+          `"places":[${pinned ? PINNED_PLACE_SHAPE : PLACE_SHAPE}]}. Reuse the exact ` +
           'names already known; put a new form in "aliases". ' +
-          `${PROFILE_RULES} ${PLACE_RULES}`,
+          `${PROFILE_RULES} ${PLACE_RULES}${pinned ? ` ${PIN_RULES}` : ''}`,
       },
       {
         role: 'user',
@@ -569,6 +922,137 @@ async function castChapter(job: WorkJob, signal: AbortSignal) {
 }
 
 /**
+ * What the places are called now, asked once for the whole book. A place named
+ * in Judges is named in fifty other chapters, and letting each chapter's pass
+ * place it again would buy the same answer fifty times — so every place that
+ * has never been placed goes out together, forty to a request, and the answer
+ * comes back as a list of names.
+ */
+async function locatePlaces(job: WorkJob, signal: AbortSignal) {
+  const { ids } = JSON.parse(job.payload) as { ids: string[] };
+  const book = await getBook(job.book_id);
+  const chapters = await listChapters(job.book_id);
+  const wanted = new Set(ids);
+  // Re-read rather than trust the payload: an earlier batch, or a hand-typed
+  // name, may have placed some of these since the run was queued.
+  const places = (await listUnlocatedPlaces(job.book_id)).filter((place) => wanted.has(place.id));
+  if (!places.length) return;
+
+  const answer = await ask(
+    'place-locate',
+    [
+      {
+        role: 'system',
+        content:
+          'You are given the places named in a book. Say where each one is today. ' +
+          'Reply with JSON only: {"places":[{"name","modern","certainty"}]}, where ' +
+          `"name" is copied exactly from the list. ${LOCATE_RULES}`,
+      },
+      {
+        role: 'user',
+        content: [
+          book ? bookHeader(book, chapters) : '',
+          `PLACES\n${places.map((place) => `- ${place.name}${place.alias ? ` (${place.alias})` : ''}`).join('\n')}`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      },
+    ],
+    Math.min(2400, 200 + places.length * 40),
+    signal
+  );
+
+  const result = parseJson<{ places?: { name?: string }[] }>(answer);
+  const byName = new Map(places.map((place) => [place.name.trim().toLowerCase(), place.id]));
+  for (const entry of result.places ?? []) {
+    const entityId = byName.get(String(entry?.name ?? '').trim().toLowerCase());
+    const pin = parsePin(entry);
+    if (entityId && pin) await setPinIfUnset(entityId, pin);
+  }
+}
+
+/**
+ * The article each real person has outside this book, asked for the whole cast
+ * at once. Only the link: what an encyclopedia says about Deborah is not this
+ * app's to recite, and a link is a claim the reader can check in one tap,
+ * where a recalled paragraph is one they would have to take on trust.
+ */
+async function linkPeople(job: WorkJob, signal: AbortSignal) {
+  const { ids } = JSON.parse(job.payload) as { ids: string[] };
+  const book = await getBook(job.book_id);
+  const chapters = await listChapters(job.book_id);
+  const wanted = new Set(ids);
+  const people = (await listEntities(job.book_id, 'character')).filter(
+    (person) => wanted.has(person.id) && !person.wiki && !hasWiki(parseFields(person.fields))
+  );
+  if (!people.length) return;
+
+  const answer = await ask(
+    'person-link',
+    [
+      {
+        role: 'system',
+        content:
+          'You are given the people named in a book, all of them real. For each, ' +
+          'give their Wikipedia article. Reply with JSON only: ' +
+          '{"people":[{"name","wikipedia"}]}, where "name" is copied exactly from ' +
+          'the list and "wikipedia" is the exact title of an English Wikipedia ' +
+          'article you are sure exists — "Deborah (biblical figure)", "Samson" — ' +
+          'or its full https://…wikipedia.org/wiki/… address. A people is one of ' +
+          'them: a nation, a tribe, a race or a family named as one actor — the ' +
+          'Israelites, the Philistines, the Tribe of Judah — has an article like ' +
+          'anybody else, and gets it. Leave one out of your answer entirely only ' +
+          'when there is no article of its own, when the name belongs to several ' +
+          'and this book does not say which, or when you would be guessing at the ' +
+          'title — a link to nothing is worse than none.',
+      },
+      {
+        role: 'user',
+        content: [
+          book ? bookHeader(book, chapters) : '',
+          `PEOPLE\n${people.map((person) => `- ${person.name}${person.alias ? ` (${person.alias})` : ''}`).join('\n')}`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      },
+    ],
+    Math.min(2400, 200 + people.length * 40),
+    signal
+  );
+
+  const result = parseJson<{ people?: { name?: string; wikipedia?: string }[] }>(answer);
+  const byName = new Map(people.map((person) => [person.name.trim().toLowerCase(), person.id]));
+  for (const entry of result.people ?? []) {
+    const entityId = byName.get(String(entry?.name ?? '').trim().toLowerCase());
+    const link = parseWikiLink(entry?.wikipedia);
+    if (entityId && link) await setWikiIfUnset(entityId, link);
+  }
+}
+
+/**
+ * One chapter of one translation, as a queued job. It used to be the whole
+ * book inside a sheet you had to keep open: a novel is thousands of sentences
+ * and tens of minutes, and leaving the page — or the phone locking — took the
+ * run with it. A chapter is the unit because it is what a reader reaches for,
+ * what a failure can be retried alone, and what the progress bar counts.
+ */
+async function translateChapter(job: WorkJob, signal: AbortSignal) {
+  const { target } = JSON.parse(job.payload) as { target: string };
+  const book = await getBook(job.book_id);
+  if (!book) throw new Error('book is gone');
+  if (job.chapter_idx === null) throw new Error('no chapter to translate');
+  const text = await getDocumentText(job.book_id);
+  const run = await translate(job.book_id, target, text, book.language, {
+    signal,
+    chapterIdx: job.chapter_idx,
+  });
+  // A failure here is a span the model would not line up, and it is worth
+  // saying so: the chapter looks translated apart from the sentences missing
+  // out of the middle of it.
+  if (run.failed) throw new Error(`${run.failed} sentences did not line up`);
+}
+
+/**
  * The free half of a cast run, and the reason it is its own unit: counting
  * where a name occurs is `indexOf` over text already on the device, so it runs
  * once at the end rather than being re-done after every chapter.
@@ -578,7 +1062,11 @@ async function wrapUpCast(job: WorkJob) {
   const text = await getDocumentText(job.book_id);
   const characters = await listEntities(job.book_id, 'character');
   const places = await listEntities(job.book_id, 'place');
-  await replaceMentions(job.book_id, countMentions(text, chapters, [...characters, ...places]));
+  const terms = await listEntities(job.book_id, 'term');
+  await replaceMentions(
+    job.book_id,
+    countMentions(text, chapters, [...characters, ...places, ...terms])
+  );
 
   // A profile is its observations joined — not a second thing to keep in sync.
   // Rebuilt from all of them every time, so analyzing more chapters extends the

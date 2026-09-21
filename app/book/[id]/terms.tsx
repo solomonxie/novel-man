@@ -1,196 +1,111 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Stack, useFocusEffect, useLocalSearchParams } from '../../../src/navigation/router';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
-import { getBook, getDocumentText, listEntities, type Book, type Entity } from '../../../src/db/repo';
-import {
-  deleteTerm,
-  listTerms,
-  markStaleContaining,
-  setTermLocked,
-  upsertTerm,
-  type Term,
-} from '../../../src/db/translation';
-import { candidateTerms, type Candidate } from '../../../src/translate/terms';
-import { seedFromCast } from '../../../src/translate/seed';
-import { labelFor } from '../../../src/translate/languages';
-import { InlineText } from '../../../src/ui/inline';
-import { Hint, Row, Section } from '../../../src/ui/primitives';
-import { radius, space, usePalette } from '../../../src/theme';
+import { createEntity, listEntities, type Entity } from '../../../src/db/repo';
+import { useWorkRefresh } from '../../../src/work/refresh';
+import { hueFrom } from '../../../src/ui/fields';
+import { Search } from '../../../src/ui/primitives';
+import { space, usePalette } from '../../../src/theme';
 
 /**
- * The glossary is the one place a translation can be corrected once instead of
- * three hundred times, so it is a workspace rather than a settings row.
+ * Everything the book names that is neither a person nor a place, in one list.
+ * A `FlatList` because a bible accumulates hundreds of them and a technical
+ * book more — and the search box because by then scrolling is not finding.
  */
-export default function Terms() {
-  const { id, target } = useLocalSearchParams<{ id: string; target: string }>();
+export default function TermsPage() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
   const palette = usePalette();
-
-  const [book, setBook] = useState<Book | null>(null);
-  const [terms, setTerms] = useState<Term[] | null>(null);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [draft, setDraft] = useState({ source: '', translation: '' });
+  const [terms, setTerms] = useState<Entity[]>([]);
+  const [query, setQuery] = useState('');
 
   const load = useCallback(() => {
-    if (!id || !target) return;
-    getBook(id).then(setBook);
-    (async () => {
-      const rows = await listTerms(id, target);
-      setTerms(rows);
-      const [text, characters, places] = await Promise.all([
-        getDocumentText(id),
-        listEntities(id, 'character'),
-        listEntities(id, 'place'),
-      ]);
-      const language = (await getBook(id))?.language ?? 'en';
-      setCandidates(candidateTerms(text, language, rows, [...characters, ...places] as Entity[]));
-    })();
-  }, [id, target]);
+    if (!id) return;
+    listEntities(id, 'term').then(setTerms);
+  }, [id]);
 
   useFocusEffect(load);
+  useWorkRefresh(load);
 
-  async function save(source: string, translation: string, locked = false) {
-    await upsertTerm({ bookId: id!, target: target!, source, translation, locked });
-    load();
-  }
+  const typed = query.trim().toLowerCase();
+  const shown = typed
+    ? terms.filter(
+        (term) =>
+          term.name.toLowerCase().includes(typed) ||
+          (term.alias ?? '').toLowerCase().includes(typed)
+      )
+    : terms;
 
-  /** Changing a term is what makes existing sentences wrong, so say how many. */
-  async function change(term: Term, translation: string) {
-    await upsertTerm({
-      bookId: id!,
-      target: target!,
-      source: term.source,
-      translation,
-      locked: !!term.locked,
-    });
-    const affected = await markStaleContaining(id!, target!, term.source);
-    load();
-    if (affected > 0) Alert.alert(t('translate.termAdded'), t('translate.termAffects', { count: affected }));
-  }
-
-  if (!terms || !book) {
-    return (
-      <View style={[styles.center, { backgroundColor: palette.bg }]}>
-        <ActivityIndicator />
-      </View>
-    );
+  async function add() {
+    const newId = await createEntity(id!, 'term', '');
+    router.push(`/term/${newId}`);
   }
 
   return (
-    <ScrollView
-      style={{ backgroundColor: palette.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
-      keyboardShouldPersistTaps="handled"
-    >
+    <View style={{ flex: 1, backgroundColor: palette.bg }}>
       <Stack.Screen
-        options={{ title: `${t('translate.glossary')} · ${labelFor(target ?? '')}`, headerBackTitle: ' ' }}
+        options={{
+          title: t('book.terms'),
+          headerBackTitle: ' ',
+        }}
       />
-
-      <View style={styles.addRow}>
-        <TextInput
-          value={draft.source}
-          onChangeText={(value) => setDraft((was) => ({ ...was, source: value }))}
-          placeholder={t('translate.termSource')}
-          placeholderTextColor={palette.faint}
-          style={[styles.input, { color: palette.text, backgroundColor: palette.surface, borderColor: palette.border }]}
-        />
-        <TextInput
-          value={draft.translation}
-          onChangeText={(value) => setDraft((was) => ({ ...was, translation: value }))}
-          placeholder={t('translate.termTarget')}
-          placeholderTextColor={palette.faint}
-          style={[styles.input, { color: palette.text, backgroundColor: palette.surface, borderColor: palette.border }]}
-        />
-        <Pressable
-          onPress={() => {
-            if (!draft.source.trim() || !draft.translation.trim()) return;
-            save(draft.source.trim(), draft.translation.trim());
-            setDraft({ source: '', translation: '' });
-          }}
-          hitSlop={10}
-        >
-          <Text style={{ color: palette.accent, fontSize: 22 }}>＋</Text>
-        </Pressable>
-      </View>
-
-      <Section title={t('translate.terms')} action={{
-        label: t('translate.seed'),
-        onPress: async () => {
-          const added = await seedFromCast(id!, target!);
-          load();
-          Alert.alert(t('translate.seeded', { count: added }));
-        },
-      }}>
-        {terms.length === 0 ? (
-          <Row label={t('translate.noTerms')} last />
-        ) : (
-          terms.map((term, index) => (
-            <View
-              key={term.id}
-              style={[
-                styles.term,
-                index < terms.length - 1 && {
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderColor: palette.border,
-                },
-              ]}
-            >
-              <Text style={{ color: palette.text, fontSize: 15, width: '36%' }} numberOfLines={2}>
-                {term.source}
-              </Text>
-              <InlineText
-                value={term.translation}
-                placeholder={t('translate.termTarget')}
-                onCommit={(value) => change(term, value)}
-                style={{ color: palette.text, fontSize: 15, flex: 1 }}
-              />
-              <Pressable onPress={() => setTermLocked(term.id, !term.locked).then(load)} hitSlop={8}>
-                <Text style={{ fontSize: 15, opacity: term.locked ? 1 : 0.3 }}>🔒</Text>
-              </Pressable>
-              <Pressable onPress={() => deleteTerm(term.id).then(load)} hitSlop={8}>
-                <Text style={{ color: palette.danger, fontSize: 15 }}>✕</Text>
-              </Pressable>
+      <FlatList
+        data={shown}
+        keyExtractor={(term) => term.id}
+        contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          terms.length > 8 ? (
+            <View style={{ marginBottom: space.md }}>
+              <Search value={query} onChange={setQuery} placeholder={t('book.searchTerms')} />
             </View>
-          ))
+          ) : null
+        }
+        ListEmptyComponent={
+          <Text style={{ color: palette.dim, fontSize: 15 }}>
+            {terms.length ? t('shelf.noMatches') : t('book.termsEmpty')}
+          </Text>
+        }
+        ListFooterComponent={
+          <Pressable onPress={add} style={{ paddingVertical: space.lg }}>
+            <Text style={{ color: palette.accent, fontSize: 16 }}>{t('book.addTerm')}</Text>
+          </Pressable>
+        }
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={() => router.push(`/term/${item.id}`)}
+            style={[styles.row, { backgroundColor: palette.surface, borderColor: palette.border }]}
+          >
+            <View style={[styles.dot, { backgroundColor: `hsl(${hueFrom(item.name)}, 45%, 55%)` }]} />
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={1} style={{ color: palette.text, fontSize: 16 }}>
+                {item.name || t('term.name')}
+              </Text>
+              {item.summary?.trim() ? (
+                <Text numberOfLines={2} style={{ color: palette.dim, fontSize: 13, marginTop: 2 }}>
+                  {item.summary.trim()}
+                </Text>
+              ) : null}
+            </View>
+            <Text style={{ color: palette.faint, fontSize: 16 }}>›</Text>
+          </Pressable>
         )}
-      </Section>
-      <Hint>{t('translate.lockHint')}</Hint>
-
-      {candidates.length > 0 && (
-        <Section title={t('translate.candidates')}>
-          {candidates.slice(0, 40).map((candidate, index) => (
-            <Row
-              key={candidate.source}
-              label={candidate.source}
-              value={t('translate.seenTimes', { count: candidate.count })}
-              onPress={() => setDraft({ source: candidate.source, translation: '' })}
-              last={index === Math.min(candidates.length, 40) - 1}
-            />
-          ))}
-        </Section>
-      )}
-      <Hint>{t('translate.candidatesHint')}</Hint>
-    </ScrollView>
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  addRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  input: {
-    flex: 1,
-    padding: space.sm + 2,
-    fontSize: 15,
-    borderRadius: radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  term: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
+    padding: space.lg,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: space.sm,
   },
+  dot: { width: 10, height: 10, borderRadius: 5 },
 });

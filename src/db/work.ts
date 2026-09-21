@@ -3,12 +3,17 @@ import { db, newId, transaction } from './index';
 /** What a unit of work is. One row per chapter, per pass. */
 export type WorkKind =
   | 'book-summary'
+  /** What a book with no words here is, and what it is made of — both from knowledge. */
+  | 'book-lookup'
+  | 'book-outline'
   | 'chapter-brief'
   | 'deep-analyze'
   | 'cast-chapter'
   | 'cast-wrapup'
   | 'character-polish'
   | 'place-polish'
+  | 'place-locate'
+  | 'person-link'
   | 'scene-suggest'
   | 'translate-span'
   | 'script-scene';

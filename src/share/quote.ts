@@ -13,9 +13,40 @@ export type Quote = {
 
 export function quoteAsText(quote: Quote): string {
   const attribution = [quote.title, quote.author, quote.chapter].filter(Boolean).join(' · ');
+  // A note about the book quotes nothing, so there is nothing to put in
+  // quotation marks — the reader's own words are the whole of it.
+  if (!quote.text.trim()) return `${quote.note ?? ''}\n\n— ${attribution}`.trim();
   return quote.note
     ? `“${quote.text}”\n\n${quote.note}\n\n— ${attribution}`
     : `“${quote.text}”\n\n— ${attribution}`;
+}
+
+/**
+ * The same mark, in the form it is useful in somebody else's notes app: the
+ * book's words as a blockquote, the reader's own words under them as their
+ * own, and the line that says where it came from.
+ *
+ * Every line carries the `>`, blank ones included — markdown ends a blockquote
+ * at the first line that does not have one, so a paragraph break without it
+ * would split one quotation into several.
+ */
+export function quoteAsMarkdown(quote: Quote): string {
+  const attribution = [quote.title, quote.author, quote.chapter].filter(Boolean).join(' · ');
+  return [
+    quote.text.trim() && blockquote(quote.text),
+    quote.note?.trim(),
+    attribution && `— ${attribution}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function blockquote(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => (line.trim() ? `> ${line.trim()}` : '>'))
+    .join('\n');
 }
 
 export async function shareQuoteText(quote: Quote) {
