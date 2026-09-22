@@ -22,7 +22,7 @@ import { Toast, useFlash } from '../../../src/ui/primitives';
 import { isRecord } from '../../../src/books/record';
 import { radius, space, usePalette } from '../../../src/theme';
 
-type Filter = 'all' | 'highlight' | 'note' | 'bookmark';
+type Filter = 'all' | 'highlight' | 'note';
 
 export default function Notes() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -201,7 +201,7 @@ export default function Notes() {
           </View>
 
           <View style={styles.filters}>
-            {(['all', 'highlight', 'note', 'bookmark'] as Filter[]).map((option) => (
+            {(['all', 'highlight', 'note'] as Filter[]).map((option) => (
               <Pressable
                 key={option}
                 onPress={() => setFilter(option)}
@@ -370,8 +370,7 @@ export default function Notes() {
 
       <Toast message={message} />
 
-      {/* A bookmark stays a bookmark; for the rest, what you write is what
-          decides whether it is a note or just a highlight. */}
+      {/* What you write is what decides whether it is a note or a highlight. */}
       {/* A note that is about the book: nothing quoted, nowhere to jump to,
           and the only kind of note a book with no words can have. */}
       <NoteSheet
@@ -396,7 +395,7 @@ export default function Notes() {
           if (!mark) return;
           void updateAnnotation(mark.id, {
             note: note || null,
-            kind: mark.kind === 'bookmark' ? 'bookmark' : note ? 'note' : 'highlight',
+            kind: note ? 'note' : 'highlight',
           }).then(load);
         }}
         onDelete={editing ? () => confirmRemove(editing) : undefined}

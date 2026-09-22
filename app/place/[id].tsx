@@ -45,6 +45,7 @@ import { useWorkRefresh } from '../../src/work/refresh';
 import { hueFrom } from '../../src/ui/fields';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { FieldsSection } from '../../src/ui/FieldsSection';
+import { Renderings } from '../../src/ui/Renderings';
 import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item, LinkLine } from '../../src/ui/detail';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { space, usePalette } from '../../src/theme';
@@ -312,6 +313,12 @@ export default function PlacePage() {
           </View>
         )}
       </AppearanceGraph>
+
+      <Renderings
+        bookId={place.book_id}
+        entityId={place.id}
+        name={place.name}
+      />
 
       <FieldsSection
         title={t('place.fields')}

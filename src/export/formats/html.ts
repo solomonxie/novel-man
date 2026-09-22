@@ -34,7 +34,6 @@ ${sections}
 function markUp(paragraph: string, input: ExportInput): string {
   let out = escapeHtml(paragraph);
   for (const annotation of input.annotations) {
-    if (annotation.kind === 'bookmark') continue;
     const quote = escapeHtml(annotation.quote);
     if (!quote || !out.includes(quote)) continue;
     const note = annotation.note ? ` title="${escapeHtml(annotation.note)}"` : '';

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { router, useFocusEffect } from '../navigation/router';
@@ -18,6 +18,7 @@ export function TagsBlock({ bookId }: { bookId: string }) {
   const palette = usePalette();
   const [tags, setTags] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [draft, setDraft] = useState('');
 
   const load = useCallback(() => {
@@ -33,32 +34,33 @@ export function TagsBlock({ bookId }: { bookId: string }) {
     load();
   }
 
-  // Tapping a tag is how you get to everything else under it; taking it off
-  // is the rarer thing, so it asks first rather than hiding behind a ✕.
-  function askAbout(tag: string) {
-    Alert.alert(tag, t('lists.tagWhat'), [
-      { text: t('settings.cancel'), style: 'cancel' },
-      { text: t('lists.tagOpen'), onPress: () => router.push(`/tag/${encodeURIComponent(tag)}`) },
-      {
-        text: t('lists.tagRemove'),
-        style: 'destructive',
-        onPress: async () => {
-          await removeTag(bookId, tag);
-          load();
-        },
-      },
-    ]);
+  /**
+   * A tag leads to everything else filed under it, and that is all a tap does
+   * — it used to ask which of two things you meant, every single time, for a
+   * gesture nobody uses to delete. Taking one off is a mode instead: entered
+   * on purpose, left on purpose, and while it lasts every chip is a ✕.
+   */
+  async function tapped(tag: string) {
+    if (!deleting) {
+      router.push(`/tag/${encodeURIComponent(tag)}`);
+      return;
+    }
+    await removeTag(bookId, tag);
+    load();
   }
 
   return (
-    <Block
-      title={t('lists.tags')}
-      action={{ label: open ? t('lists.done') : t('lists.add'), onPress: () => setOpen((was) => !was) }}
-    >
+    <Block title={t('lists.tags')}>
       {tags.length ? (
         <ChipRow>
           {tags.map((tag) => (
-            <Chip key={tag} label={tag} hue={hueFrom(tag)} onPress={() => askAbout(tag)} />
+            <Chip
+              key={tag}
+              label={tag}
+              hue={deleting ? undefined : hueFrom(tag)}
+              glyph={deleting ? <Text style={{ color: palette.danger, fontSize: 15 }}>✕</Text> : undefined}
+              onPress={() => tapped(tag)}
+            />
           ))}
         </ChipRow>
       ) : (
@@ -66,6 +68,42 @@ export function TagsBlock({ bookId }: { bookId: string }) {
           {t('lists.noTagsYet')}
         </Text>
       )}
+
+      {/* Under the tags, saying what each one does. A ＋ in the heading is a
+          glyph in the corner of a block, which is where a thing goes when
+          nobody is meant to find it. */}
+      <View style={styles.footer}>
+        <Pressable
+          onPress={() => {
+            setDeleting(false);
+            setOpen((was) => !was);
+          }}
+          hitSlop={8}
+        >
+          <Text style={{ color: palette.accent, fontSize: 14, fontWeight: '600' }}>
+            {open ? t('lists.done') : t('lists.addTag')}
+          </Text>
+        </Pressable>
+        {tags.length ? (
+          <Pressable
+            onPress={() => {
+              setOpen(false);
+              setDeleting((was) => !was);
+            }}
+            hitSlop={8}
+          >
+            <Text
+              style={{
+                color: deleting ? palette.accent : palette.danger,
+                fontSize: 14,
+                fontWeight: '600',
+              }}
+            >
+              {deleting ? t('lists.done') : t('lists.removeTags')}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
 
       {open ? (
         <View style={[styles.panel, { backgroundColor: palette.surface, borderColor: palette.border }]}>
@@ -93,6 +131,12 @@ export function TagsBlock({ bookId }: { bookId: string }) {
 }
 
 const styles = StyleSheet.create({
+  footer: {
+    flexDirection: 'row',
+    gap: space.xl,
+    paddingHorizontal: space.xs,
+    paddingTop: space.md,
+  },
   panel: {
     marginHorizontal: space.xs,
     marginTop: space.md,

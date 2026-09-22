@@ -10,6 +10,8 @@ import {
   View,
   useWindowDimensions,
   type GestureResponderEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from '../../src/navigation/router';
@@ -56,15 +58,21 @@ import {
   type ReadingSettings,
 } from '../../src/reader/settings';
 import { ReadingSettingsSheet } from '../../src/ui/ReadingSettingsSheet';
+import { Scrubber } from '../../src/ui/Scrubber';
+import { labelFor } from '../../src/translate/languages';
 import { ActionMenu, type MenuAction } from '../../src/ui/ActionMenu';
 import { SentenceMenu } from '../../src/ui/SentenceMenu';
 import { NoteSheet } from '../../src/ui/NoteSheet';
 import { Toast, useFlash } from '../../src/ui/primitives';
 import { PickerSheet } from '../../src/ui/PickerSheet';
-import { ChapterSheet } from '../../src/ui/ChapterSheet';
 import { JumpWheel } from '../../src/ui/JumpWheel';
 import { shareQuoteCard, shareQuoteText } from '../../src/share/quote';
-import { listTargets, listUnits } from '../../src/db/translation';
+import {
+  listTargets,
+  listUnits,
+  targetsInChapter,
+  type TranslationUnit,
+} from '../../src/db/translation';
 
 /**
  * Long enough to decide and reach. At under three seconds the bar was gone
@@ -108,7 +116,6 @@ export default function Reader() {
    * kept selecting a line when it was meant to be turning the page.
    */
   const [selection, setSelection] = useState<{ anchor: Span; focus: Span; y: number } | null>(null);
-  const [listOpen, setListOpen] = useState(false);
   /** The title's own menu, unfolded under the bar it belongs to. */
   const [jumpOpen, setJumpOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -116,8 +123,10 @@ export default function Reader() {
   const [shareFor, setShareFor] = useState<Span | null>(null);
   const [offset, setOffset] = useState(0);
   const [targets, setTargets] = useState<string[]>([]);
+  /** Of those, the ones this chapter has actually been translated into. */
+  const [ready, setReady] = useState<string[]>([]);
   const [target, setTarget] = useState<string | null>(null);
-  const [translated, setTranslated] = useState<Map<number, string>>(new Map());
+  const [units, setUnits] = useState<TranslationUnit[]>([]);
   const [verses, setVerses] = useState<Verse[]>([]);
   /** A chapter of a book whose words are not here: fetched, then kept. */
   const [remoteText, setRemoteText] = useState('');
@@ -134,6 +143,10 @@ export default function Reader() {
   const linesOf = useRef(new Map<number, Line[]>());
   const scrollRef = useRef<ScrollView>(null);
   const viewport = useRef({ content: 0, layout: 0 });
+  /** The same two numbers the scrubber is drawn from, where a render sees them. */
+  const [measured, setMeasured] = useState({ content: 0, layout: 0 });
+  /** Driven by the scroll itself, so the thumb keeps up without JavaScript. */
+  const scrollY = useRef(new Animated.Value(0)).current;
   const pendingScroll = useRef<number | null>(null);
   const chrome = useRef(new Animated.Value(1)).current;
   const chromeShown = useRef(true);
@@ -264,13 +277,27 @@ export default function Reader() {
   // copy of the book in memory, for no benefit past the visible page.
   useEffect(() => {
     if (!id || !target || settings.bilingual === 'off' || !chapter) {
-      setTranslated(new Map());
+      setUnits([]);
       return;
     }
-    listUnits(id, target, chapter.idx).then((rows) => {
-      setTranslated(new Map(rows.map((row) => [row.start, row.edited ?? row.machine ?? ''])));
-    });
+    listUnits(id, target, chapter.idx).then(setUnits);
   }, [id, target, chapter, settings.bilingual]);
+
+  /**
+   * Which languages this chapter can be read in, asked again at every chapter.
+   *
+   * A book is "translated" as soon as one chapter is, so reading on past the
+   * last translated chapter used to hand over a page of empty places. The
+   * setting is not touched — walk back into a chapter that has the language
+   * and it is in that language again.
+   */
+  useEffect(() => {
+    if (!id || !chapter) {
+      setReady([]);
+      return;
+    }
+    targetsInChapter(id, chapter.idx).then(setReady);
+  }, [id, chapter]);
 
   // A bible addresses itself by verse, so the numbers are part of the page —
   // and like the translated units, only the chapter on screen is loaded.
@@ -359,6 +386,67 @@ export default function Reader() {
     () => paragraphs.flatMap((paragraph) => paragraph.sentences),
     [paragraphs]
   );
+
+  const translated = useMemo(
+    () => new Map(units.map((unit) => [unit.start, (unit.edited ?? unit.machine ?? '').trim()])),
+    [units]
+  );
+
+  /**
+   * The paragraphs whose translation has to be read as a paragraph, and what
+   * it says.
+   *
+   * A sentence finds its translation by where it starts, which holds only
+   * while the manuscript is still split the way it was split when the
+   * sentences were made. It stops holding the moment it is split differently:
+   * a unit that runs across a paragraph break has swallowed the sentence
+   * after it, and that sentence — with nothing of its own to find — read in
+   * the original in the middle of an otherwise translated page. Every second
+   * or third paragraph, which looks random and reads as the translation being
+   * half done.
+   *
+   * So where the sentences no longer line up one for one, the paragraph's
+   * units are read in order instead: each one belongs to the paragraph its
+   * first word is in, so every translated word is on the page exactly once no
+   * matter where the offsets have drifted to. Only where every sentence is
+   * covered, though — a paragraph nobody has translated yet still shows the
+   * words the book was written in rather than nothing at all.
+   */
+  const targetParagraphs = useMemo(() => {
+    const text = new Map<number, string>();
+    const whole = new Set<number>();
+    const textOf = (unit: TranslationUnit) => (unit.edited ?? unit.machine ?? '').trim();
+
+    let at = 0;
+    for (const paragraph of paragraphs) {
+      const sentences = paragraph.sentences;
+      const start = paragraph.start;
+      const end = sentences.at(-1)?.end ?? start;
+      // Only units that end before this paragraph begins are done with; one
+      // that reaches into it is still this paragraph's business.
+      while (at < units.length && units[at].end <= start) at += 1;
+
+      const here: TranslationUnit[] = [];
+      for (let index = at; index < units.length && units[index].start < end; index += 1) {
+        here.push(units[index]);
+      }
+      const parts = here
+        .filter((unit) => unit.start >= start && unit.start < end)
+        .map(textOf)
+        .filter(Boolean);
+      if (!parts.length) continue;
+      text.set(start, parts.join(' '));
+
+      const aligned = sentences.every((span) =>
+        here.some((unit) => unit.start === span.start && textOf(unit))
+      );
+      const covered = sentences.every((span) =>
+        here.some((unit) => unit.start < span.end && unit.end > span.start && textOf(unit))
+      );
+      if (!aligned && covered) whole.add(start);
+    }
+    return { text, whole };
+  }, [units, paragraphs]);
 
   const palette = readingThemes[settings.theme];
   const script = scriptOf(language);
@@ -465,17 +553,6 @@ export default function Reader() {
     });
   }
 
-  async function onBookmark() {
-    if (!range || !id) return;
-    const existing = annotationAt(marks, range);
-    if (existing?.kind === 'bookmark') await removeAnnotation(existing.id);
-    else if (existing) await updateAnnotation(existing.id, { kind: 'bookmark' });
-    else await save(range, { kind: 'bookmark', color: null });
-    await refreshAnnotations();
-    endSelection();
-    flash(t('reader.bookmarked'));
-  }
-
   /**
    * The swatches are the whole of highlighting now. Tapping one marks the
    * passage; tapping the colour it already carries takes the mark off, which
@@ -525,7 +602,7 @@ export default function Reader() {
     ]);
   }
 
-  function save(span: Span, extra: { kind: 'highlight' | 'note' | 'bookmark'; color: string | null; note?: string }) {
+  function save(span: Span, extra: { kind: 'highlight' | 'note'; color: string | null; note?: string }) {
     return addAnnotation({
       bookId: id!,
       chapterId: remote ? chapter?.id ?? null : null,
@@ -547,15 +624,7 @@ export default function Reader() {
     const partIdx = chapter.part_idx;
     // Leaving the page is a decision, not a reach — so the pages this one sits
     // inside are named in a list rather than crowded onto the bar.
-    const actions: MenuAction[] = [
-      {
-        label: t('reader.openChapter'),
-        onPress: () => {
-          setMoreOpen(false);
-          router.push(`/chapter/${chapter.id}`);
-        },
-      },
-    ];
+    const actions: MenuAction[] = [];
     // A bible's Genesis, a novel's 卷 — named, because "the part" is not what
     // anyone calls the thing they are reading.
     if (partIdx !== null && partIdx !== undefined) {
@@ -589,7 +658,6 @@ export default function Reader() {
 
   function goToChapter(next: number, within = 0) {
     setIndex(next);
-    setListOpen(false);
     endSelection();
     pendingScroll.current = within;
     const target = chapters[next];
@@ -637,13 +705,20 @@ export default function Reader() {
     fontFamily: settings.serif ? (script === 'cjk' ? 'Songti SC' : 'Georgia') : undefined,
   };
 
-  const targetOf = (spans: Span[]) =>
-    spans.map((span) => translated.get(span.start) ?? '').join(' ').trim();
+  /** In this chapter, in this language — or the words the book was written in. */
+  const showing = !!target && ready.includes(target);
+
 
   function renderSentence(span: Span, useTarget: boolean) {
     const marked = annotationAt(marks, span);
     const active = range !== null && span.start >= range.start && span.end <= range.end;
     const flashing = flashAt !== null && flashAt >= span.start && flashAt < span.end;
+    /**
+     * A chapter is translated or it is not — that decision is made once, for
+     * the whole chapter, before anything is drawn. So a sentence here never
+     * has to stand in for a missing one: if a line somehow has no translation
+     * it keeps its own words rather than a row of dots.
+     */
     const body = useTarget ? translated.get(span.start) : undefined;
     const mark = marked?.color ? markOn(marked.color, settings.theme) : null;
     return (
@@ -662,9 +737,7 @@ export default function Reader() {
         }}
         style={{
           backgroundColor: active || flashing ? palette.tint : mark?.bg ?? 'transparent',
-          textDecorationLine: marked?.kind === 'bookmark' ? 'underline' : 'none',
-          // An untranslated sentence still reads, just visibly unfinished.
-          color: useTarget && !body ? palette.dim : mark?.ink ?? palette.text,
+          color: mark?.ink ?? palette.text,
         }}
       >
         {runsIn(body || source.slice(span.start, span.end)).map((run, at) => (
@@ -727,27 +800,47 @@ export default function Reader() {
       ) : null}
       </View>
 
-      <View style={{ flex: 1 }}>
-        <ScrollView
+      <View
+        style={{ flex: 1 }}
+        onLayout={(event) => {
+          const height = event.nativeEvent.layout.height;
+          viewport.current.layout = height;
+          setMeasured((was) => (was.layout === height ? was : { ...was, layout: height }));
+        }}
+      >
+        <Animated.ScrollView
           ref={scrollRef}
+          // Ours is drawn instead: iOS will not let a finger near its own.
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingHorizontal: settings.margin,
             paddingTop: TOUCH + space.lg,
             paddingBottom: space.xxl * 3,
           }}
-          onScroll={(event) => {
-            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-            scrolledY.current = contentOffset.y;
-            viewport.current = { content: contentSize.height, layout: layoutMeasurement.height };
-            if (remote) return;
-            const ratio = contentOffset.y / Math.max(1, contentSize.height - layoutMeasurement.height);
-            const at = chapter.start + Math.round(Math.min(1, Math.max(0, ratio)) * (chapter.end - chapter.start));
-            setOffset(at);
-            if (id) saveProgress(id, at);
-          }}
+          // The thumb follows natively at every frame; the listener still only
+          // runs as often as it did, which is all the saving needs.
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+            useNativeDriver: true,
+            listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+              const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+              scrolledY.current = contentOffset.y;
+              viewport.current = { content: contentSize.height, layout: layoutMeasurement.height };
+              setMeasured((was) =>
+                was.content === contentSize.height && was.layout === layoutMeasurement.height
+                  ? was
+                  : { content: contentSize.height, layout: layoutMeasurement.height }
+              );
+              if (remote) return;
+              const ratio = contentOffset.y / Math.max(1, contentSize.height - layoutMeasurement.height);
+              const at = chapter.start + Math.round(Math.min(1, Math.max(0, ratio)) * (chapter.end - chapter.start));
+              setOffset(at);
+              if (id) saveProgress(id, at);
+            },
+          })}
           scrollEventThrottle={200}
           onContentSizeChange={(_, contentHeight) => {
             viewport.current.content = contentHeight;
+            setMeasured((was) => (was.content === contentHeight ? was : { ...was, content: contentHeight }));
             // The spinner's height is not the chapter's: landing on a verse
             // has to wait for the words, or it lands at the top of nothing.
             if (!text) return;
@@ -766,6 +859,14 @@ export default function Reader() {
               if (!selection) setChrome(!chromeShown.current);
             }}
           >
+            {/* A chapter nobody has translated yet, while the page is set to
+                a language: it is shown in its own words, and says so rather
+                than pretending the original is the translation. */}
+            {settings.bilingual !== 'off' && !!target && !showing ? (
+              <Text style={{ color: palette.dim, fontSize: settings.fontSize - 3, marginBottom: space.md }}>
+                {t('reader.notTranslated', { language: labelFor(target) })}
+              </Text>
+            ) : null}
             {remote && fetching ? (
               <ActivityIndicator style={{ marginTop: space.xxl }} />
             ) : remote && remoteError ? (
@@ -783,6 +884,8 @@ export default function Reader() {
                   paragraph.sentences.at(-1)?.end ?? paragraph.start
                 );
                 const figure = imageIn(body);
+                const inTarget = showing && settings.bilingual === 'target';
+                const asParagraph = targetParagraphs.text.get(paragraph.start) ?? '';
                 const code = figure ? null : codeBlockIn(body);
                 if (code) {
                   return (
@@ -855,13 +958,13 @@ export default function Reader() {
                         {'  '}
                       </Text>
                     ) : null}
-                    {paragraph.sentences.map((span) =>
-                      renderSentence(span, settings.bilingual === 'target')
-                    )}
+                    {inTarget && targetParagraphs.whole.has(paragraph.start)
+                      ? asParagraph
+                      : paragraph.sentences.map((span) => renderSentence(span, inTarget))}
                   </Text>
                   {/* Both languages read as two paragraphs, the way a bilingual
                       edition prints them — not as alternating lines. */}
-                  {settings.bilingual === 'both' && targetOf(paragraph.sentences) ? (
+                  {showing && settings.bilingual === 'both' && asParagraph ? (
                     <Text
                       style={[
                         bodyStyle,
@@ -872,7 +975,7 @@ export default function Reader() {
                         },
                       ]}
                     >
-                      {targetOf(paragraph.sentences)}
+                      {asParagraph}
                     </Text>
                   ) : null}
                 </Pressable>
@@ -913,7 +1016,7 @@ export default function Reader() {
               </View>
             </View>
           ) : null}
-        </ScrollView>
+        </Animated.ScrollView>
 
         {/* The margin is the tap zone: it never sits over a word. */}
         <Pressable
@@ -923,6 +1026,21 @@ export default function Reader() {
         <Pressable
           style={[styles.zone, { right: 0, width: settings.margin }]}
           onPress={() => pageBy(1)}
+        />
+
+        {/* Last, so it is on top: the right margin's page-forward zone covers
+            the same strip of glass, and whichever is drawn later wins the
+            touch. Only the handle itself takes one — the rest of the strip
+            still turns the page. */}
+        <Scrubber
+          scrollY={scrollY}
+          content={measured.content}
+          layout={measured.layout}
+          ink={palette.text}
+          accent={palette.accent}
+          surface={palette.bg}
+          offsetOf={() => scrolledY.current}
+          onScrollTo={(y) => scrollRef.current?.scrollTo({ y, animated: false })}
         />
       </View>
 
@@ -941,59 +1059,42 @@ export default function Reader() {
       >
         <View style={styles.controls}>
           {/* Turning a chapter is not on this bar at all: it happens at the end
-              of the words, or from the title above. What is left is what you
-              reach for while reading. */}
-          <Pressable onPress={() => setSettingsOpen(true)} style={styles.barButton}>
-            <Text style={{ color: palette.text, fontSize: 20 }}>Aa</Text>
+              of the words, or from the title above, which is also where the
+              book's other chapters are. What is left is what you reach for
+              while reading — and each one says what it is, because a row of
+              bare glyphs is a row of guesses. */}
+          <Pressable onPress={() => setSettingsOpen(true)} style={styles.barItem}>
+            <Text style={{ color: palette.text, fontSize: 19, lineHeight: 23 }}>Aa</Text>
+            <Text style={[styles.barLabel, { color: palette.dim }]}>{t('reader.textSettings')}</Text>
           </Pressable>
-          {/* Drawn rather than set in a glyph: a box that fills in is what a
-              mode being on looks like, at whatever size the bar is. Absent on
-              a book whose text is fetched, where a mark has no offset to
-              anchor to. */}
-          {(
+          {/* This chapter's own page: its brief, who is in it, its notes and
+              everything that can be made of it. */}
+          {chapter ? (
             <Pressable
-              onPress={() => {
-                if (selecting || selection) return endSelection();
-                setSelecting(true);
-                setChrome(true);
-                flash(t('reader.selectHint'));
-              }}
-              style={styles.barButton}
+              onPress={() => router.push(`/chapter/${chapter.id}`)}
+              style={styles.barItem}
             >
-              <View
-                style={[
-                  styles.check,
-                  { borderColor: selecting ? palette.accent : palette.text },
-                  selecting && { backgroundColor: palette.accent },
-                ]}
-              >
-                {selecting ? (
-                  <Text style={{ color: palette.bg, fontSize: 13, lineHeight: 15, fontWeight: '700' }}>
-                    ✓
-                  </Text>
-                ) : null}
-              </View>
+              <Text style={{ color: palette.text, fontSize: 19, lineHeight: 23 }}>▤</Text>
+              <Text style={[styles.barLabel, { color: palette.dim }]}>
+                {t('reader.thisChapter')}
+              </Text>
             </Pressable>
-          )}
-          {/* One button for everything that isn't turning a page or resizing
-              the type. The bar had five; the two it kept are the two a thumb
-              reaches for without looking, and the rest are a list that can say
-              what they do in words. Accent while selecting, because that is a
-              mode the page is in and the bar has to admit it. */}
-          {/* The list of chapters, by name rather than by wheel. */}
-          <Pressable onPress={() => setListOpen(true)} style={styles.barButton}>
-            <Text style={{ color: palette.text, fontSize: 22, lineHeight: 26 }}>≡</Text>
-          </Pressable>
+          ) : null}
           {moreActions().length > 0 ? (
-            <Pressable onPress={() => setMoreOpen(true)} style={styles.barButton}>
+            <Pressable onPress={() => setMoreOpen(true)} style={styles.barItem}>
               <Text
                 style={{
                   color: selecting ? palette.accent : palette.text,
-                  fontSize: 26,
-                  lineHeight: 30,
+                  fontSize: 22,
+                  lineHeight: 23,
                 }}
               >
                 ⋯
+              </Text>
+              <Text
+                style={[styles.barLabel, { color: selecting ? palette.accent : palette.dim }]}
+              >
+                {t('reader.more')}
               </Text>
             </Pressable>
           ) : null}
@@ -1005,12 +1106,11 @@ export default function Reader() {
         <SentenceMenu
           dark={settings.theme === 'night'}
           dismissLabel={t('reader.done')}
-          activeColor={
-            selected && selected.kind !== 'bookmark' ? selected.color : settings.highlight
-          }
+          activeColor={selected?.color ?? settings.highlight}
           onColor={onColor}
           onDismiss={endSelection}
           actions={[
+            { key: 'copy', label: t('reader.copy'), onPress: onCopy },
             {
               key: 'note',
               label: t('reader.note'),
@@ -1019,16 +1119,15 @@ export default function Reader() {
               onPress: () => setNoteFor(range!),
             },
             {
-              key: 'bookmark',
-              label: selected?.kind === 'bookmark' ? t('reader.unbookmark') : t('reader.bookmark'),
-              onPress: onBookmark,
-            },
-            {
-              key: 'share',
-              label: t('reader.share'),
-              // The selection outlives the sheet: dismissing it is a change of
-              // mind about sharing, not about the words.
-              onPress: () => setShareFor(range!),
+              key: 'select',
+              // Keeps what is chosen and lets a tap add the next sentence, so
+              // a quote that runs over three of them is three taps rather
+              // than a drag along a handle.
+              label: t('reader.select'),
+              onPress: () => {
+                setSelecting(true);
+                flash(t('reader.selectHint'));
+              },
             },
           ]}
         />
@@ -1038,6 +1137,7 @@ export default function Reader() {
         visible={settingsOpen}
         settings={settings}
         targets={targets}
+        ready={ready}
         target={target}
         onTarget={setTarget}
         onChange={(next) => {
@@ -1091,14 +1191,6 @@ export default function Reader() {
         onClose={() => setMoreOpen(false)}
       />
 
-      <ChapterSheet
-        visible={listOpen}
-        chapters={chapters}
-        current={index}
-        palette={palette}
-        onPick={(idx) => goToChapter(idx)}
-        onClose={() => setListOpen(false)}
-      />
 
       <Toast message={toast} />
     </SafeAreaView>
@@ -1139,14 +1231,13 @@ const styles = StyleSheet.create({
   barButton: { width: TOUCH, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
   /** The back chevron carries a header's worth of weight, so it gets the room. */
   backButton: { width: TOUCH + 8, height: TOUCH + 8, alignItems: 'center', justifyContent: 'center' },
-  check: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  /**
+   * A control on the reading bar is a glyph with its name under it, the way a
+   * tab bar is: three of them share the width evenly, so each is a wide target
+   * rather than a 44pt square with a symbol to be interpreted.
+   */
+  barItem: { flex: 1, minHeight: TOUCH, alignItems: 'center', justifyContent: 'center' },
+  barLabel: { fontSize: 11, marginTop: 1 },
   zone: { position: 'absolute', top: 0, bottom: 0 },
   /** Set well below the last line: a button touching the text is a button hit
    *  by the scroll that was meant to read the end of it. */
@@ -1168,11 +1259,10 @@ const styles = StyleSheet.create({
    * the text that read as a bar that had not quite gone.
    */
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: space.sm },
-  /** Evenly spread, outermost first: the arrows fall under either thumb. */
+  /** Three equal columns: the outer two fall under either thumb. */
   controls: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
-    paddingHorizontal: space.lg,
+    paddingHorizontal: space.sm,
   },
 });

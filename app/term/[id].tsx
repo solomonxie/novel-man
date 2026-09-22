@@ -25,6 +25,7 @@ import { kindOf } from '../../src/books/kinds';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { FieldsSection } from '../../src/ui/FieldsSection';
+import { Renderings } from '../../src/ui/Renderings';
 import { Badge, Block, Empty, Fact, Hero, Item, LinkLine } from '../../src/ui/detail';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { space, usePalette } from '../../src/theme';
@@ -216,6 +217,12 @@ export default function TermPage() {
           </View>
         )}
       </AppearanceGraph>
+
+      <Renderings
+        bookId={term.book_id}
+        entityId={term.id}
+        name={term.name}
+      />
 
       <FieldsSection
         title={t('term.fields')}
