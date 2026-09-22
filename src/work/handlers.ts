@@ -720,13 +720,28 @@ const PINNED_PLACE_SHAPE =
  * page of its own solves.
  */
 const TERM_RULES =
-  '"terms" are the named things this chapter uses that are neither people nor ' +
-  'places: objects, rites, feasts, laws, covenants, titles, ranks, orders, ' +
-  'institutions, and the words this book uses as its own. Name each as the book ' +
-  'names it. "note" is one sentence on what it is *here*, in this chapter. ' +
-  '"details" is anything else this chapter establishes about it, as short ' +
-  'label/value pairs in the language of the book. Skip a word that is merely ' +
-  'ordinary language, and skip anything already listed as a person or a place.';
+  '"terms" are the special nouns this chapter uses that are neither people nor ' +
+  'places — what this book treats as its own and expects a reader to learn: ' +
+  'named objects and artefacts, rites, feasts, laws, covenants, titles, ranks, ' +
+  'orders, institutions, techniques, systems, coined words, and the words this ' +
+  'book uses in a sense of its own. ' +
+  // Without naming them, an extraction pass fills a book's glossary with the
+  // furniture of the world and the page becomes unreadable.
+  'Ordinary vocabulary is never a term, however often it appears: pencil, road, ' +
+  'desk, chair, rain, sun, train, knife, fire and everything like them are the ' +
+  'furniture of the world, not terminology. The one exception is a word this ' +
+  'book has given a particular meaning of its own — a sword the story calls the ' +
+  'Fire, an order named the Train — which is a term because of what the book ' +
+  'made of it, not because of the word. ' +
+  'Name each as the book names it. "note" is one sentence on what it is *here*, ' +
+  'in this chapter. "details" is anything else this chapter establishes about ' +
+  'it, as short label/value pairs in the language of the book. Skip anything ' +
+  'already listed as a person or a place. ' +
+  // Without this the answer stops at a handful, and a term met again in a
+  // later chapter comes back under a new spelling as a second entry.
+  'Within that, list every one the chapter names rather than a selection of the ' +
+  'notable ones, including any that appeared in earlier chapters — reuse the ' +
+  'exact spelling from TERMS ALREADY KNOWN wherever it is the same thing.';
 
 const RELATION_RULES =
   '"relations" are the ties this chapter shows between two of its people. ' +
@@ -982,6 +997,7 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
           // A cast list is only worth its tokens to a pass that answers with names.
           characters: wantsCast ? characters : [],
           places: wantsCast ? places : [],
+          terms: wantsTerms ? await listEntities(job.book_id, 'term') : [],
           text,
           passage,
           previousScenes,
@@ -992,7 +1008,9 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
     // Scenes are the last thing written and the first thing a tight budget
     // loses, and a truncated answer is no answer at all: the JSON fails to
     // parse and the chapter comes back with nothing, not with less.
-    wantsCast ? 2400 : 400,
+    // Terms are the fifth of six answers, so a budget that fits without them
+    // is a budget they fall off the end of.
+    wantsCast ? (wantsTerms ? 3000 : 2400) : 400,
     signal
   );
 

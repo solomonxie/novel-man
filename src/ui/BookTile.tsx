@@ -7,6 +7,7 @@ import { formatCount } from '../text/counts';
 import { isRecord, statusOf } from '../books/record';
 import type { BookListItem } from '../db/repo';
 import { space, usePalette } from '../theme';
+import { trace } from '../dev/trace';
 
 /** One book on a shelf — the whole shelf, a list of them, or a tag's worth. */
 export function BookTile({ book, width }: { book: BookListItem; width: number }) {
@@ -17,7 +18,13 @@ export function BookTile({ book, width }: { book: BookListItem; width: number })
   const started = (book.offset ?? 0) > 0;
   const status = statusOf(book.status);
   return (
-    <Pressable onPress={() => router.push(`/book/${book.id}`)} style={{ width }}>
+    <Pressable
+      onPress={() => {
+        trace(`tap ${book.title}`);
+        router.push(`/book/${book.id}`);
+      }}
+      style={{ width }}
+    >
       <Cover title={book.title} hue={book.cover_hue} width={width} path={book.cover_path} />
       <Text numberOfLines={2} style={{ color: palette.text, fontSize: 13, marginTop: space.xs }}>
         {book.title}

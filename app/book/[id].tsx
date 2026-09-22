@@ -65,7 +65,6 @@ import { InlineText } from '../../src/ui/inline';
 import { radius, space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { KindList } from '../../src/ui/KindList';
-import { OptionRows } from '../../src/ui/OptionRows';
 import { kindOf, shows, supports, unitOf } from '../../src/books/kinds';
 import { isRecord, statusOf, STATUSES } from '../../src/books/record';
 import { Stars } from '../../src/ui/Stars';
@@ -73,9 +72,11 @@ import { IdentifySheet } from '../../src/ui/IdentifySheet';
 import { TagsBlock } from '../../src/ui/Shelving';
 import { ListPicker } from '../../src/ui/ListPicker';
 import { CoverViewer } from '../../src/ui/CoverViewer';
+import { CoverDrawer } from '../../src/ui/CoverDrawer';
 import { isFavorite, setFavorite } from '../../src/db/shelves';
 import { ESV_SOURCE } from '../../src/sources/esvBook';
 import { EsvKeyRows } from '../../src/settings/EsvKey';
+import { timed, trace } from '../../src/dev/trace';
 
 /** One line of anything written on this page, and how many lines each box gets. */
 const LINE = 22;
@@ -103,17 +104,19 @@ export default function BookPage() {
   /** The two passes a book with no words can have — see `analysis/runs`. */
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [correctOpen, setCorrectOpen] = useState(false);
+  const [esvOpen, setEsvOpen] = useState(false);
+  const [drawOpen, setDrawOpen] = useState(false);
   const [identifyOpen, setIdentifyOpen] = useState(false);
   const [listsOpen, setListsOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [askEstimate, setAskEstimate] = useState<Estimate | null>(null);
-  const [statusOpen, setStatusOpen] = useState(false);
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [favorite, setFavorited] = useState(false);
   /** The blurb is three lines until somebody asks for the rest of it. */
   const [blurbOpen, setBlurbOpen] = useState(false);
   const [summaryLines, setSummaryLines] = useState(0);
   const [writingSummary, setWritingSummary] = useState(false);
+  const [reviewDraft, setReviewDraft] = useState('');
+  const reviewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [summaryDraft, setSummaryDraft] = useState('');
   /** The page scrolls itself to the stars when the count of them is tapped. */
   const page = useRef<ScrollView>(null);
@@ -132,22 +135,28 @@ export default function BookPage() {
 
   const load = useCallback(() => {
     if (!id) return;
-    getBook(id).then(setBook);
-    listChapters(id).then(setChapters);
-    listEntities(id, 'character').then(setCharacters);
-    listEntities(id, 'place').then(setPlaces);
-    listEntities(id, 'term').then(setTerms);
-    getProgress(id).then(setOffset);
-    lastReadAt(id).then(setReadAt);
-    listAnnotations(id).then((rows) => {
+    trace('load fired');
+    timed('getBook', getBook(id)).then((found) => {
+      setBook(found);
+      // Only while nothing is being typed: a reload mid-sentence must not
+      // replace the sentence with what was last saved.
+      if (found && !reviewTimer.current) setReviewDraft(found.review ?? '');
+    });
+    timed('listChapters', listChapters(id)).then(setChapters);
+    timed('characters', listEntities(id, 'character')).then(setCharacters);
+    timed('places', listEntities(id, 'place')).then(setPlaces);
+    timed('terms', listEntities(id, 'term')).then(setTerms);
+    timed('getProgress', getProgress(id)).then(setOffset);
+    timed('lastReadAt', lastReadAt(id)).then(setReadAt);
+    timed('listAnnotations', listAnnotations(id)).then((rows) => {
       setAnnotations(rows);
       setNoteCount(rows.length);
     });
-    listMentions(id).then(setMentions);
-    listRelations(id).then(setRelations);
-    isFavorite(id).then(setFavorited).catch(() => undefined);
-    listScenes(id).then(setScenes);
-    listParts(id).then(setParts);
+    timed('listMentions', listMentions(id)).then(setMentions);
+    timed('listRelations', listRelations(id)).then(setRelations);
+    timed('isFavorite', isFavorite(id)).then(setFavorited).catch(() => undefined);
+    timed('listScenes', listScenes(id)).then(setScenes);
+    timed('listParts', listParts(id)).then(setParts);
   }, [id]);
 
   useFocusEffect(load);
@@ -157,6 +166,19 @@ export default function BookPage() {
   useEffect(() => {
     hasAnyKey().then(setKeyed);
   }, []);
+
+  /**
+   * The review, saved without being told to. A write per keystroke would be a
+   * row rewritten thirty times a sentence — and every one of those is a change
+   * the backup layer notices — so it waits for the typing to stop.
+   */
+  function writeReview(next: string) {
+    setReviewDraft(next);
+    if (reviewTimer.current) clearTimeout(reviewTimer.current);
+    reviewTimer.current = setTimeout(() => {
+      if (id) void rateBook(id, { review: next });
+    }, 600);
+  }
 
   /** One tap, and the shelf it lands on is the one that was always there. */
   async function toggleFavorite() {
@@ -214,6 +236,8 @@ export default function BookPage() {
       (a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0)
     );
   }, [chapters, scenes, t]);
+
+  trace(`render book=${book ? 'yes' : 'no'} chapters=${chapters.length}`);
 
   if (!book) {
     return (
@@ -449,7 +473,9 @@ export default function BookPage() {
                       : t('book.start')
                   }
                   tone="loud"
-                  onPress={() => router.push(`/reader/${book.id}`)}
+                  onPress={() =>
+                    router.push(current ? `/chapter/${current.id}` : `/reader/${book.id}`)
+                  }
                 />
               </View>
             )}
@@ -661,7 +687,11 @@ export default function BookPage() {
           and a rating that only records books read on paper is half a shelf. */}
       <View onLayout={(event) => { ratingY.current = event.nativeEvent.layout.y; }}>
       <Block title={t('book.rating')}>
-        <Section>
+        {/* Nothing folded. Three questions, all of them one tap or one line:
+            how many stars, where you are in it, and what you thought. The
+            review saves itself — a Save button on a field nobody leaves open
+            is a button that gets forgotten with the text still in it. */}
+        <Section flush>
           <View style={[styles.rating, { borderColor: palette.border }]}>
             <Stars
               value={book.stars}
@@ -679,58 +709,60 @@ export default function BookPage() {
                 : t('book.notRated')}
             </Text>
           </View>
-          <Row
-            label={t('book.statusRow')}
-            detail={t('book.statusHint')}
-            value={`${t(`status.${statusOf(book.status) ?? 'none'}`)}  ${statusOpen ? '⌃' : '⌄'}`}
-            onPress={() => setStatusOpen((was) => !was)}
-          />
-          {statusOpen ? (
-            <OptionRows
-              selectedId={statusOf(book.status) ?? 'none'}
-              options={['none', ...STATUSES].map((entry) => ({
-                id: entry,
-                label: t(`status.${entry}`),
-                detail: t(`status.${entry}Hint`),
-              }))}
-              onPick={async (picked) => {
-                setStatusOpen(false);
-                await updateBook(book.id, { status: picked === 'none' ? null : picked });
-                load();
+
+          <View style={styles.stands}>
+            <Text style={{ color: palette.dim, fontSize: 13 }}>{t('book.statusRow')}</Text>
+            <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
+              {STATUSES.map((entry) => {
+                const on = statusOf(book.status) === entry;
+                return (
+                  <Pressable
+                    key={entry}
+                    // Tapping the one you are on clears it, the same way a star does.
+                    onPress={async () => {
+                      await updateBook(book.id, { status: on ? null : entry });
+                      load();
+                    }}
+                    style={({ pressed }) => [
+                      styles.stand,
+                      {
+                        backgroundColor: on ? palette.accent : palette.soft,
+                        opacity: pressed ? 0.75 : 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        color: on ? palette.onAccent : palette.accent,
+                        fontSize: 14,
+                        fontWeight: '600',
+                      }}
+                    >
+                      {t(`status.${entry}`)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md }}>
+            <TextInput
+              value={reviewDraft}
+              onChangeText={writeReview}
+              placeholder={t('book.reviewPlaceholder')}
+              placeholderTextColor={palette.faint}
+              multiline
+              style={{
+                color: palette.text,
+                fontSize: 15,
+                lineHeight: LINE,
+                minHeight: LINE * IMPRESSION_LINES,
+                padding: 0,
               }}
             />
-          ) : null}
-          {/* The verdict that goes with the stars, folded away like every
-              other field here: it is written once, when the book is finished,
-              and read from the shelf rather than from this page. */}
-          <Row
-            label={t('book.reviewRow')}
-            detail={t('book.reviewHint')}
-            value={`${book.review?.trim() ? t('book.reviewWritten') : t('book.reviewNone')}  ${
-              reviewOpen ? '⌃' : '⌄'
-            }`}
-            onPress={() => setReviewOpen((was) => !was)}
-            last={!reviewOpen}
-          />
-          {reviewOpen ? (
-            <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md }}>
-              <InlineText
-                value={book.review}
-                placeholder={t('book.reviewPlaceholder')}
-                onCommit={async (value) => {
-                  await rateBook(book.id, { review: value });
-                  load();
-                }}
-                style={{
-                  color: palette.text,
-                  fontSize: 15,
-                  lineHeight: LINE,
-                  minHeight: LINE * IMPRESSION_LINES,
-                }}
-                multiline
-              />
-            </View>
-          ) : null}
+          </View>
         </Section>
       </Block>
       </View>
@@ -747,7 +779,7 @@ export default function BookPage() {
           {noteGroups.length === 0 ? (
             <Empty text={t(record ? 'notes.emptyRecord' : 'notes.empty')} />
           ) : (
-            <Section>
+            <Section flush>
               {noteGroups.map((group, index) => (
                 <Fragment key={group.key}>
                   <Row
@@ -786,7 +818,7 @@ export default function BookPage() {
             {sceneGroups.length === 0 ? (
               <Empty text={t('book.noScenes')} />
             ) : (
-              <Section>
+              <Section flush>
                 {sceneGroups.map((group, index) => (
                   <Fragment key={group.key}>
                     <Row
@@ -822,53 +854,8 @@ export default function BookPage() {
           is only the ☰ above. */}
       <TagsBlock bookId={book.id} />
 
-      {/* A fetched edition is only as good as its key, and the day it stops
-          working is a day spent on this page, not on the one that adds books. */}
-      {book.text_source === ESV_SOURCE ? (
-        <Block title={t('book.esvKey')}>
-          <Section>
-            <EsvKeyRows />
-          </Section>
-        </Block>
-      ) : null}
-
       <Block title={t('book.utilities')}>
-        <Section>
-        {shows(book.kind, 'translations') && (
-          <Row
-            label={t('book.translations')}
-            value="›"
-            onPress={() => router.push(`/book/${book.id}/translation`)}
-          />
-        )}
-        {supports(book.kind, 'script') && (
-          <Row
-            label={t('book.script')}
-            value="›"
-            onPress={() => router.push(`/book/${book.id}/script`)}
-          />
-        )}
-        {supports(book.kind, 'visuals') && (
-          <>
-            <Row label={t('book.illustrations')} value={t('book.comingSoon')} />
-            <Row label={t('book.animations')} value={t('book.comingSoon')} />
-          </>
-        )}
-        {/* The details, from the catalogs first — a cover and an ISBN are
-            facts somebody published, not something to ask a model for. The
-            pass below it is the fallback for what no catalog lists. */}
-        <Row
-          label={t('identify.title')}
-          detail={t('identify.hint')}
-          value="›"
-          onPress={() => setIdentifyOpen(true)}
-        />
-        <Row
-          label={t('book.correct')}
-          detail={t('book.correctHint')}
-          value="›"
-          onPress={openCorrect}
-        />
+        <Section flush>
         {record ? (
           <Row
             label={t('book.outlineRow')}
@@ -1060,6 +1047,13 @@ function shorten(text: string): string {
 }
 
 const styles = StyleSheet.create({
+  stands: { paddingHorizontal: space.lg, paddingVertical: space.md },
+  stand: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: space.sm + 2,
+    borderRadius: radius.md,
+  },
   rating: {
     alignItems: 'center',
     gap: space.xs,

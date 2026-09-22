@@ -31,7 +31,9 @@ export function buildMessages(input: {
   const rules = [
     `Translate into ${englishName(input.target)}.`,
     'The input is numbered lines. Reply with the same numbers, one line each, ' +
-      'in the same order, and nothing else. Never merge or split lines.',
+      'in the same order, and nothing else. Never merge or split lines, never ' +
+      'add a line, and never break one line into two — a numbered line must ' +
+      'contain no line breaks, however long it is.',
     'Keep the register and the paragraphing of the original.',
   ];
   if (glossary.length) {
@@ -61,10 +63,24 @@ export function buildMessages(input: {
       content: [
         ...surroundings,
         'Translate these lines:',
-        input.span.sentences.map((sentence, index) => `${index + 1}. ${sentence.source}`).join('\n'),
+        input.span.sentences
+          .map((sentence, index) => `${index + 1}. ${oneLine(sentence.source)}`)
+          .join('\n'),
       ].join('\n\n'),
     },
   ];
+}
+
+/**
+ * A sentence as one line, whatever it looks like in the book.
+ *
+ * The numbering is the only thing holding a translation to its sentence, and
+ * a source that already contains a line break invites the model to answer in
+ * two lines — after which every sentence in the span is wearing the next
+ * one's translation. A heading and the line under it are one unit here.
+ */
+function oneLine(source: string): string {
+  return source.replace(/\s*\n+\s*/g, ' ').trim();
 }
 
 /** Overlap on distinctive substrings beats nothing and costs no requests. */
@@ -109,6 +125,11 @@ export function parseNumbered(answer: string, expected: number): Aligned[] {
       found.set(current, `${found.get(current) ?? ''} ${raw.trim()}`.trim());
     }
   }
+
+  // Too many is as wrong as too few, and far more dangerous: every index it
+  // does have looks answerable, so a split line would be written silently
+  // against the sentence below it.
+  if (found.size !== expected) throw new AlignmentError(expected, found.size);
 
   const aligned: Aligned[] = [];
   for (let index = 1; index <= expected; index++) {

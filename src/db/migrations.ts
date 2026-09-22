@@ -504,6 +504,11 @@ export const migrations: string[] = [
   // `db/index`. On a device that has all of this, it does nothing at all.
   //
   // The rule it exists to enforce: this list is appended to, never edited.
+  // A bookmark was a mark with no words, which is a highlight with the
+  // underline drawn differently — one concept too many for a reader who
+  // already writes notes. The rows keep their place in the text.
+  `UPDATE annotations SET kind = 'highlight' WHERE kind = 'bookmark';`,
+
   `ALTER TABLE books ADD COLUMN impressions TEXT;
    ALTER TABLE books ADD COLUMN isbn TEXT;
    ALTER TABLE chapters ADD COLUMN recap TEXT;
@@ -528,4 +533,26 @@ export const migrations: string[] = [
    CREATE INDEX IF NOT EXISTS book_tags_tag ON book_tags(tag);
    INSERT OR IGNORE INTO book_lists (id, name, system, created_at)
      VALUES ('favorites', 'Favorites', 1, 0);`,
+
+  /**
+   * Translations filed under a chapter number that has since moved.
+   *
+   * Editing the structure renumbers chapters; the units kept the number they
+   * were seeded with, so every chapter after a split lost its translation as
+   * far as the reader was concerned. `replaceChapters` now re-files them, and
+   * this puts right the ones that drifted before it did. Offsets are the truth
+   * here — they never moved.
+   */
+  `UPDATE translation_units SET chapter_idx = (
+     SELECT c.idx FROM chapters c
+      WHERE c.book_id = translation_units.book_id
+        AND translation_units.start >= c.start
+        AND translation_units.start < c.end
+   )
+   WHERE EXISTS (
+     SELECT 1 FROM chapters c
+      WHERE c.book_id = translation_units.book_id
+        AND translation_units.start >= c.start
+        AND translation_units.start < c.end
+   )`,
 ];

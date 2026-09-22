@@ -48,6 +48,7 @@ import { hasWiki } from '../../src/cast/lookup';
 import { kindOf } from '../../src/books/kinds';
 import { hasAnyKey } from '../../src/ai/keys';
 import { FieldsSection } from '../../src/ui/FieldsSection';
+import { Renderings } from '../../src/ui/Renderings';
 import { PickerSheet } from '../../src/ui/PickerSheet';
 import { TIES, tieOf } from '../../src/cast/ties';
 import { Row, Section } from '../../src/ui/primitives';
@@ -412,6 +413,12 @@ export default function EntityPage() {
           />
         </Block>
       )}
+
+      <Renderings
+        bookId={entity.book_id}
+        entityId={entity.id}
+        name={entity.name}
+      />
 
       <FieldsSection
         title={t('entity.fields')}

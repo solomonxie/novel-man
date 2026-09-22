@@ -10,7 +10,7 @@ import {
   type MemoryEntry,
   type Term,
 } from '../db/translation';
-import { segmentSentences } from '../text/segment';
+import { layoutChapter } from '../reader/model';
 import { AlignmentError, buildMessages, parseNumbered, type Span } from './context';
 
 /** Sentences per request. Small enough that one bad answer is cheap to redo. */
@@ -20,9 +20,27 @@ const MAX_DEPTH = 3;
 
 export type Sentence = { start: number; end: number; source: string };
 
+/**
+ * The chapter's sentences, split exactly the way the reader splits them.
+ *
+ * The reader lays a chapter out paragraph by paragraph and segments inside
+ * each one; this used to segment the whole chapter in one go, and the two
+ * disagreed wherever a paragraph break fell mid-sentence. Two consequences,
+ * both of which looked like other bugs: a unit could span a line break, which
+ * desynchronised the numbered reply — and, worse, the reader looked its
+ * translations up by sentence start and found nothing, so a chapter that was
+ * fully translated read as a page of "…".
+ *
+ * One splitter, one set of offsets. `layoutChapter` is the definition of a
+ * sentence in this app; this follows it.
+ */
 export function sentencesOf(text: string, chapter: Chapter, language: string): Sentence[] {
-  return segmentSentences(text.slice(chapter.start, chapter.end), language, chapter.start).map(
-    (span) => ({ start: span.start, end: span.end, source: text.slice(span.start, span.end) })
+  return layoutChapter(text, chapter, language).flatMap((paragraph) =>
+    paragraph.sentences.map((span) => ({
+      start: span.start,
+      end: span.end,
+      source: text.slice(span.start, span.end),
+    }))
   );
 }
 

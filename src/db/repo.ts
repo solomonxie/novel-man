@@ -1,4 +1,4 @@
-import { db, newId, transaction } from './index';
+import { db, newId, transaction, type Database } from './index';
 import { addTag, listsHolding, setInList, tagsOf, FAVORITES, findListNamed, createBookList } from './shelves';
 import { scenesFromBreaks } from '../structure/scenes';
 import { DEFAULT_KIND } from '../books/kinds';
@@ -99,7 +99,7 @@ export type Entity = {
   created_at: number;
 };
 
-export type AnnotationKind = 'highlight' | 'note' | 'bookmark';
+export type AnnotationKind = 'highlight' | 'note';
 
 export type Annotation = {
   id: string;
@@ -1171,7 +1171,34 @@ export async function replaceChapters(bookId: string, drafts: ChapterInsert[]) {
     // meaningless — and nothing takes their place, because scenes are marked or
     // analyzed, never inferred from the text.
     await insertChapters(database, bookId, drafts);
+    // A translated sentence knows where in the manuscript it is; which chapter
+    // that is was written down beside it, and restructuring renumbers the
+    // chapters underneath it. Left alone, a split three chapters back moves
+    // every translation after it under the wrong number — and a reader asking
+    // chapter 12 for its translation is handed nothing, as though it had never
+    // been translated at all.
+    await reindexByOffset(database, bookId);
   });
+}
+
+/** Sentences find their chapter again by the offsets they never lost. */
+async function reindexByOffset(database: Database, bookId: string) {
+  await database.runAsync(
+    `UPDATE translation_units SET chapter_idx = (
+       SELECT c.idx FROM chapters c
+        WHERE c.book_id = translation_units.book_id
+          AND translation_units.start >= c.start
+          AND translation_units.start < c.end
+     )
+     WHERE book_id = ?
+       AND EXISTS (
+         SELECT 1 FROM chapters c
+          WHERE c.book_id = translation_units.book_id
+            AND translation_units.start >= c.start
+            AND translation_units.start < c.end
+       )`,
+    bookId
+  );
 }
 
 export function toDrafts(chapters: Chapter[]): ChapterDraft[] {
