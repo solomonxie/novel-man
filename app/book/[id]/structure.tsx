@@ -166,17 +166,52 @@ export default function StructurePage() {
         label: t('structure.delete'),
         danger: true,
         enabled: (chapters?.length ?? 0) > 1,
-        onPress: () =>
-          Alert.alert(t('structure.delete'), t('structure.deleteConfirm'), [
-            { text: t('settings.cancel'), style: 'cancel' },
-            {
-              text: t('structure.delete'),
-              style: 'destructive',
-              onPress: () => apply(deleteChapter(drafts, index)),
-            },
-          ]),
+        onPress: () => confirmDelete(index),
       },
     ];
+  }
+
+  /** A neighbour, said the way its row says it. */
+  function nameOf(draft: { title: string }, at: number) {
+    return `${at + 1}. ${draft.title.trim() || t('structure.untitled')}`;
+  }
+
+  /**
+   * The row goes; its words stay, and go somewhere. Where is asked whenever
+   * both neighbours exist and there is anything to place — the choice is the
+   * difference between repairing a split and repairing a run-together, and
+   * only the reader knows which one this is.
+   */
+  function confirmDelete(index: number) {
+    const target = drafts[index];
+    if (!target) return;
+    const above = index > 0;
+    const below = index < drafts.length - 1;
+    const empty = target.end - target.start === 0;
+
+    if (empty || !above || !below) {
+      Alert.alert(t('structure.delete'), t('structure.deleteConfirm'), [
+        { text: t('settings.cancel'), style: 'cancel' },
+        {
+          text: t('structure.delete'),
+          style: 'destructive',
+          onPress: () => apply(deleteChapter(drafts, index, above ? 'above' : 'below')),
+        },
+      ]);
+      return;
+    }
+
+    Alert.alert(t('structure.delete'), t('structure.deleteWhere'), [
+      { text: t('settings.cancel'), style: 'cancel' },
+      {
+        text: t('structure.joinAbove', { name: nameOf(drafts[index - 1], index - 1) }),
+        onPress: () => apply(deleteChapter(drafts, index, 'above')),
+      },
+      {
+        text: t('structure.joinBelow', { name: nameOf(drafts[index + 1], index + 1) }),
+        onPress: () => apply(deleteChapter(drafts, index, 'below')),
+      },
+    ]);
   }
 
   /** The split and scene pickers need the text too, and only then. */
@@ -458,10 +493,12 @@ export default function StructurePage() {
         }}
       />
 
-      {/* A scene break is a place, and the only readable place is a paragraph. */}
+      {/* A scene turns mid-page as often as it turns on a paragraph, so the
+          break is chosen by sentence here too. */}
       <SplitPicker
         index={sceneFor}
         title={t('structure.sceneAt')}
+        language={language}
         chapters={chapters}
         text={text}
         onClose={() => setSceneFor(null)}
@@ -480,6 +517,7 @@ export default function StructurePage() {
       <SplitPicker
         index={splitFor}
         title={t('structure.splitAt')}
+        language={language}
         chapters={chapters}
         text={text}
         onClose={() => setSplitFor(null)}
@@ -562,12 +600,20 @@ function ActionSheet({
   );
 }
 
-/** Splitting needs a place, and the only readable place is a paragraph start. */
-function SplitPicker({ index, title, chapters, text, onClose, onPick }: {
+/**
+ * Where to cut, chosen a sentence at a time.
+ *
+ * The chapter is laid out as it reads, and the row you press becomes the first
+ * sentence of the new chapter. A paragraph's first sentence is marked ¶, since
+ * that is where a cut usually belongs — and a chapter can be thousands of
+ * sentences long, so the list virtualises.
+ */
+function SplitPicker({ index, title, chapters, text, language, onClose, onPick }: {
   index: number | null;
   title: string;
   chapters: Chapter[];
   text: string;
+  language: string;
   onClose: () => void;
   onPick: (index: number, offset: number) => void;
 }) {
@@ -575,7 +621,7 @@ function SplitPicker({ index, title, chapters, text, onClose, onPick }: {
   const palette = usePalette();
   if (index === null) return null;
   const chapter = chapters[index];
-  const points = splitPoints(text, chapter);
+  const points = splitPoints(text, chapter, language);
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -587,23 +633,39 @@ function SplitPicker({ index, title, chapters, text, onClose, onPick }: {
           <Text style={{ color: palette.text, fontSize: 16, fontWeight: '600' }}>{title}</Text>
           <View style={{ width: 50 }} />
         </View>
-        <ScrollView contentContainerStyle={{ padding: space.lg }}>
-          {points.length === 0 ? (
-            <Text style={{ color: palette.dim }}>{t('structure.noSplitPoints')}</Text>
-          ) : (
-            points.map((point) => (
+        {points.length === 0 ? (
+          <Text style={{ color: palette.dim, padding: space.lg }}>{t('structure.noSplitPoints')}</Text>
+        ) : (
+          <FlatList
+            data={points}
+            keyExtractor={(point) => String(point.offset)}
+            contentContainerStyle={{ padding: space.lg }}
+            ListHeaderComponent={
+              <Text style={{ color: palette.dim, fontSize: 13, marginBottom: space.md }}>
+                {t('structure.splitHint')}
+              </Text>
+            }
+            renderItem={({ item }) => (
               <Pressable
-                key={point.offset}
-                onPress={() => onPick(index, point.offset)}
-                style={{ paddingVertical: space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.border }}
+                onPress={() => onPick(index, item.offset)}
+                style={{
+                  flexDirection: 'row',
+                  gap: space.sm,
+                  paddingVertical: space.md,
+                  borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderColor: palette.border,
+                }}
               >
-                <Text numberOfLines={2} style={{ color: palette.text, fontSize: 15 }}>
-                  {point.preview}
+                <Text style={{ color: item.paragraph ? palette.accent : palette.faint, fontSize: 13, width: 14 }}>
+                  {item.paragraph ? '¶' : ''}
+                </Text>
+                <Text numberOfLines={3} style={{ color: palette.text, fontSize: 15, flex: 1 }}>
+                  {item.preview}
                 </Text>
               </Pressable>
-            ))
-          )}
-        </ScrollView>
+            )}
+          />
+        )}
       </SafeAreaView>
     </Modal>
   );

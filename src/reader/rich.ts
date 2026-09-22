@@ -4,7 +4,7 @@
  * with the asterisks still in it is reading the source rather than the book.
  *
  * Only inline styles live here, and only ones that cannot be confused with the
- * app's own marks: underline already means a bookmark in the reader, so an
+ * app's own marks: underline is the app's own, so an
  * underline in the text would be a lie about what the reader put there.
  */
 export type Run = {

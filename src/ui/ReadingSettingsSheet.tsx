@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -12,22 +13,70 @@ import { radius, readingThemes, space, type ReadingTheme } from '../theme';
 
 const THEMES: ReadingTheme[] = ['paper', 'sepia', 'grey', 'night'];
 const SPACINGS: ReadingSettings['spacing'][] = ['compact', 'normal', 'loose'];
-const BILINGUAL: Bilingual[] = ['off', 'target', 'both'];
 
 /** Applies live to the page behind it — you judge type by reading it, not by a number. */
-export function ReadingSettingsSheet({ visible, settings, targets, target, onTarget, onChange, onClose }: {
+export function ReadingSettingsSheet({ visible, settings, targets, ready, target, onTarget, onChange, onClose }: {
   visible: boolean;
   settings: ReadingSettings;
   /** Only offered when this book has a translation to show. */
   targets?: string[];
+  /** Of those, the ones the chapter on screen actually has. */
+  ready?: string[];
   target?: string | null;
   onTarget?: (code: string) => void;
   onChange: (next: ReadingSettings) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  /** One menu unfolds at a time, under the control it belongs to. */
+  const [open, setOpen] = useState<'spacing' | 'font' | 'language' | null>(null);
   const palette = readingThemes[settings.theme];
   const ink = palette.text;
+
+  const hasTargets = !!targets && targets.length > 0;
+  const shownTarget = target ?? targets?.[0] ?? null;
+
+  /** What the reading page is showing, said as the language it is showing. */
+  const languageValue =
+    settings.bilingual === 'off'
+      ? t('reader.bilingual_off')
+      : settings.bilingual === 'both'
+        ? t('reader.bilingual_both')
+        : labelFor(shownTarget ?? '') || t('reader.bilingual_target');
+  const languageMissing = settings.bilingual !== 'off' && !!ready && !!shownTarget && !ready.includes(shownTarget);
+
+  /**
+   * A language this chapter has not been translated into is shown greyed
+   * rather than hidden: it is a fact about the chapter, not about the book,
+   * and hiding it would make the menu change shape as you read.
+   */
+  const has = (code: string | null) => !ready || !code || ready.includes(code);
+
+  const languageOptions = [
+    {
+      id: 'off',
+      label: t('reader.bilingual_off'),
+      active: settings.bilingual === 'off',
+      onPress: () => onChange({ ...settings, bilingual: 'off' as Bilingual }),
+    },
+    ...(targets ?? []).map((code) => ({
+      id: code,
+      label: labelFor(code) || code,
+      active: settings.bilingual === 'target' && code === shownTarget,
+      disabled: !has(code),
+      onPress: () => {
+        onTarget?.(code);
+        onChange({ ...settings, bilingual: 'target' as Bilingual });
+      },
+    })),
+    {
+      id: 'both',
+      label: t('reader.bilingual_both'),
+      active: settings.bilingual === 'both',
+      disabled: !(targets ?? []).some((code) => has(code)),
+      onPress: () => onChange({ ...settings, bilingual: 'both' as Bilingual }),
+    },
+  ];
 
   const step = (key: 'fontSize' | 'margin', direction: -1 | 1) => {
     const range = key === 'fontSize' ? FONT_RANGE : MARGIN_RANGE;
@@ -48,14 +97,20 @@ export function ReadingSettingsSheet({ visible, settings, targets, target, onTar
         >
           <View style={[styles.grabber, { backgroundColor: palette.dim }]} />
 
-          <View style={styles.stepperRow}>
-            <Text style={{ color: ink, fontSize: 15 }}>Aa</Text>
-            <Stepper label={`${settings.fontSize}pt`} ink={ink} onStep={(d) => step('fontSize', d)} />
-          </View>
-
-          <View style={styles.stepperRow}>
-            <Text style={{ color: ink, fontSize: 15 }}>{t('reader.margins')}</Text>
-            <Stepper label={`${settings.margin}`} ink={ink} onStep={(d) => step('margin', d)} />
+          {/* The two numbers side by side: both are the same kind of nudge,
+              and a row each pushed everything worth seeing off the screen. */}
+          <View style={[styles.row, { gap: space.lg }]}>
+            <View style={styles.stepperRow}>
+              <Text style={{ color: ink, fontSize: 14 }}>Aa</Text>
+              <Stepper label={`${settings.fontSize}pt`} ink={ink} onStep={(d) => step('fontSize', d)} />
+            </View>
+            {/* A rule between them: two numbers side by side with nothing
+                between read as one setting with four buttons. */}
+            <View style={[styles.divider, { backgroundColor: ink + '22' }]} />
+            <View style={styles.stepperRow}>
+              <Text style={{ color: ink, fontSize: 14 }}>{t('reader.margins')}</Text>
+              <Stepper label={`${settings.margin}`} ink={ink} onStep={(d) => step('margin', d)} />
+            </View>
           </View>
 
           <Text style={[styles.label, { color: palette.dim }]}>{t('reader.theme')}</Text>
@@ -80,61 +135,80 @@ export function ReadingSettingsSheet({ visible, settings, targets, target, onTar
             ))}
           </View>
 
-          <Text style={[styles.label, { color: palette.dim }]}>{t('reader.spacing')}</Text>
-          <View style={styles.row}>
-            {SPACINGS.map((spacing) => (
-              <Segment
-                key={spacing}
-                label={t(`reader.spacing_${spacing}`)}
-                active={spacing === settings.spacing}
-                ink={ink}
-                accent={palette.accent}
-                onPress={() => onChange({ ...settings, spacing })}
+          {/* Three choices, three words, one row. Each was a paragraph of
+              buttons before, which is a settings page pretending to be a
+              reading one — what you want to see here is the page behind it. */}
+          <View style={[styles.row, { marginTop: space.lg }]}>
+            <Dropdown
+              name={t('reader.spacing')}
+              value={t(`reader.spacing_${settings.spacing}`)}
+              open={open === 'spacing'}
+              palette={palette}
+              onPress={() => setOpen(open === 'spacing' ? null : 'spacing')}
+            />
+            <Dropdown
+              name={t('reader.font')}
+              value={settings.serif ? t('reader.serif') : t('reader.sans')}
+              open={open === 'font'}
+              palette={palette}
+              onPress={() => setOpen(open === 'font' ? null : 'font')}
+            />
+            {/* A language is named, never called "the translation": which one
+                it is is the whole question when a book has two. */}
+            {hasTargets ? (
+              <Dropdown
+                name={t('reader.bilingual')}
+                value={languageValue}
+                muted={languageMissing}
+                open={open === 'language'}
+                palette={palette}
+                onPress={() => setOpen(open === 'language' ? null : 'language')}
               />
-            ))}
+            ) : null}
           </View>
 
-          <Text style={[styles.label, { color: palette.dim }]}>{t('reader.font')}</Text>
-          <View style={styles.row}>
-            <Segment label={t('reader.sans')} active={!settings.serif} ink={ink}
-                accent={palette.accent}
-              onPress={() => onChange({ ...settings, serif: false })} />
-            <Segment label={t('reader.serif')} active={settings.serif} ink={ink}
-                accent={palette.accent}
-              onPress={() => onChange({ ...settings, serif: true })} />
-          </View>
-
-          {targets && targets.length > 0 && (
-            <>
-              <Text style={[styles.label, { color: palette.dim }]}>{t('reader.bilingual')}</Text>
-              <View style={styles.row}>
-                {BILINGUAL.map((mode) => (
-                  <Segment
-                    key={mode}
-                    label={t(`reader.bilingual_${mode}`)}
-                    active={mode === settings.bilingual}
-                    ink={ink}
-                accent={palette.accent}
-                    onPress={() => onChange({ ...settings, bilingual: mode })}
-                  />
-                ))}
-              </View>
-              {settings.bilingual !== 'off' && targets.length > 1 && (
-                <View style={[styles.row, { marginTop: space.sm }]}>
-                  {targets.map((code) => (
-                    <Segment
-                      key={code}
-                      label={labelFor(code)}
-                      active={code === target}
-                      ink={ink}
-                accent={palette.accent}
-                      onPress={() => onTarget?.(code)}
-                    />
-                  ))}
-                </View>
-              )}
-            </>
-          )}
+          {open ? (
+            <View style={styles.row}>
+              <Menu
+                shown={open === 'spacing'}
+                palette={palette}
+                options={SPACINGS.map((spacing) => ({
+                  id: spacing,
+                  label: t(`reader.spacing_${spacing}`),
+                  active: spacing === settings.spacing,
+                  onPress: () => onChange({ ...settings, spacing }),
+                }))}
+                onPicked={() => setOpen(null)}
+              />
+              <Menu
+                shown={open === 'font'}
+                palette={palette}
+                options={[
+                  {
+                    id: 'sans',
+                    label: t('reader.sans'),
+                    active: !settings.serif,
+                    onPress: () => onChange({ ...settings, serif: false }),
+                  },
+                  {
+                    id: 'serif',
+                    label: t('reader.serif'),
+                    active: !!settings.serif,
+                    onPress: () => onChange({ ...settings, serif: true }),
+                  },
+                ]}
+                onPicked={() => setOpen(null)}
+              />
+              {hasTargets ? (
+                <Menu
+                  shown={open === 'language'}
+                  palette={palette}
+                  options={languageOptions}
+                  onPicked={() => setOpen(null)}
+                />
+              ) : null}
+            </View>
+          ) : null}
 
           {/* A grabber is a hint and the scrim is a guess. One button says it. */}
           <Pressable onPress={onClose} style={[styles.done, { borderColor: ink + '33' }]}>
@@ -154,11 +228,11 @@ function Stepper({ label, ink, onStep }: {
   onStep: (direction: -1 | 1) => void;
 }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
       <Pressable onPress={() => onStep(-1)} hitSlop={12}>
         <Text style={{ color: ink, fontSize: 22 }}>⊖</Text>
       </Pressable>
-      <Text style={{ color: ink, fontSize: 14, minWidth: 44, textAlign: 'center' }}>{label}</Text>
+      <Text style={{ color: ink, fontSize: 13, minWidth: 34, textAlign: 'center' }}>{label}</Text>
       <Pressable onPress={() => onStep(1)} hitSlop={12}>
         <Text style={{ color: ink, fontSize: 22 }}>⊕</Text>
       </Pressable>
@@ -166,20 +240,80 @@ function Stepper({ label, ink, onStep }: {
   );
 }
 
-function Segment({ label, active, ink, accent, onPress }: {
-  label: string;
-  active: boolean;
-  ink: string;
-  accent: string;
+/** A control that says what it is, what it is set to, and that it opens. */
+function Dropdown({ name, value, muted, open, palette, onPress }: {
+  name: string;
+  value: string;
+  /** Set, but not what this chapter can show. */
+  muted?: boolean;
+  open: boolean;
+  palette: (typeof readingThemes)[ReadingTheme];
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.segment, { borderColor: active ? accent : ink + '33', borderWidth: active ? 2 : 1 }]}
-    >
-      <Text style={{ color: ink, fontSize: 13 }}>{label}</Text>
-    </Pressable>
+    <View style={{ flex: 1 }}>
+      <Text style={[styles.label, { color: palette.dim, marginTop: 0 }]}>{name}</Text>
+      <Pressable
+        onPress={onPress}
+        style={[
+          styles.segment,
+          { borderColor: open ? palette.accent : palette.text + '33', borderWidth: open ? 2 : 1 },
+        ]}
+      >
+        <Text numberOfLines={1} style={{ color: muted ? palette.dim : palette.text, fontSize: 13 }}>
+          {value}  {open ? '⌃' : '⌄'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** The options of one dropdown, under its own column and nowhere else. */
+function Menu({ shown, options, palette, onPicked }: {
+  shown: boolean;
+  options: { id: string; label: string; active: boolean; disabled?: boolean; onPress: () => void }[];
+  palette: (typeof readingThemes)[ReadingTheme];
+  onPicked: () => void;
+}) {
+  if (!shown) return <View style={{ flex: 1 }} />;
+  return (
+    <View style={[styles.menu, { borderColor: palette.text + '33' }]}>
+      {options.map((option, index) => (
+        <Pressable
+          key={option.id}
+          disabled={option.disabled}
+          onPress={() => {
+            option.onPress();
+            onPicked();
+          }}
+          style={[
+            styles.menuItem,
+            index < options.length - 1 && {
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderColor: palette.text + '22',
+            },
+          ]}
+        >
+          <Text
+            numberOfLines={1}
+            style={{
+              color: option.disabled
+                ? palette.dim
+                : option.active
+                  ? palette.accent
+                  : palette.text,
+              fontSize: 13,
+              flex: 1,
+            }}
+          >
+            {option.label}
+          </Text>
+          {option.active && !option.disabled ? (
+            <Text style={{ color: palette.accent, fontSize: 13 }}>✓</Text>
+          ) : null}
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
@@ -198,7 +332,9 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
   },
+  divider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', marginVertical: space.xs },
   stepperRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -213,9 +349,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   segment: {
-    flex: 1,
     alignItems: 'center',
     paddingVertical: space.sm + 2,
     borderRadius: radius.sm,
   },
+  /** Unfolds in its own column, so it is obvious which control it belongs to. */
+  menu: {
+    flex: 1,
+    marginTop: space.xs,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.sm,
+  },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.sm + 2 },
 });

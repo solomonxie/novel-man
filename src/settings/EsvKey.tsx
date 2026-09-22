@@ -19,8 +19,14 @@ export type EsvKeyState = { keyed: boolean; ok: boolean; busy: boolean; tail: st
  *
  * Rows rather than a card, so a caller can put its own row among them.
  */
-export function EsvKeyRows({ onState, children }: {
+export function EsvKeyRows({ onState, flat, children }: {
   onState?: (state: EsvKeyState) => void;
+  /**
+   * Already behind a row that opens: the field is laid out plainly instead of
+   * hiding behind a second one. Two folds to reach one input is a door behind
+   * a door.
+   */
+  flat?: boolean;
   /** A row of the caller's own, under the key and its test. */
   children?: React.ReactNode;
 }) {
@@ -67,16 +73,20 @@ export function EsvKeyRows({ onState, children }: {
     }
   }
 
+  const showing = flat || open;
+
   return (
     <>
-      <Row
-        label={t('add.esvKeyRow')}
-        value={keyed ? t('add.esvKeySet', { tail }) : t('add.esvKeyNone')}
-        onPress={() => setOpen((was) => !was)}
-      />
+      {flat ? null : (
+        <Row
+          label={t('add.esvKeyRow')}
+          value={keyed ? t('add.esvKeySet', { tail }) : t('add.esvKeyNone')}
+          onPress={() => setOpen((was) => !was)}
+        />
+      )}
       {/* Under the row it belongs to, inside the same card: a field that opens
           a screen away from what was tapped reads as a different question. */}
-      {open ? (
+      {showing ? (
         <View style={[styles.box, { borderColor: palette.border }]}>
           <TextInput
             value={draft}
@@ -85,10 +95,14 @@ export function EsvKeyRows({ onState, children }: {
             placeholderTextColor={palette.faint}
             autoCapitalize="none"
             autoCorrect={false}
-            autoFocus
+            // Only where the field was the thing asked for. Opened as part of
+            // a section, a keyboard nobody called for covers the section.
+            autoFocus={!flat}
             style={[styles.input, { color: palette.text, borderColor: palette.border }]}
           />
-          <Text style={{ color: palette.dim, fontSize: 12 }}>{t('lookup.keyStaysHere')}</Text>
+          <Text style={{ color: palette.dim, fontSize: 12 }}>
+            {keyed ? `${t('add.esvKeySet', { tail })} · ${t('lookup.keyStaysHere')}` : t('lookup.keyStaysHere')}
+          </Text>
           <Pressable
             onPress={() => {
               if (!draft.trim()) return;
@@ -96,7 +110,7 @@ export function EsvKeyRows({ onState, children }: {
                 setKeyed(true);
                 setTail(((await esvKey()) ?? '').slice(-4));
                 setDraft('');
-                setOpen(false);
+                if (!flat) setOpen(false);
                 setOk(false);
                 void test();
               });

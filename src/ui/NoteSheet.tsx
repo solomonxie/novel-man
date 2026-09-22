@@ -110,7 +110,13 @@ export function NoteSheet({ visible, quote, note, onSave, onDelete, onClose }: {
       // Focused from here rather than by `autoFocus`: inside a modal, autofocus
       // can fire while the thing is still being presented, and a focus the
       // system drops is a keyboard that never comes up at all.
-      onShow={() => field.current?.focus()}
+      //
+      // Only a note that does not exist yet. Opening one that does is usually
+      // to read it, and a keyboard that throws itself up over what you came to
+      // read has to be dismissed before the note can even be seen.
+      onShow={() => {
+        if (!note?.trim()) field.current?.focus();
+      }}
     >
       <View style={StyleSheet.absoluteFill}>
         <Animated.View

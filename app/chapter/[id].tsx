@@ -1,14 +1,18 @@
-import { Fragment, useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 import { supports } from '../../src/books/kinds';
 import { listTargets, pendingByChapter } from '../../src/db/translation';
+import { prepare } from '../../src/translate/run';
+import { targetLanguages } from '../../src/translate/languages';
+import { PickerSheet } from '../../src/ui/PickerSheet';
 import { labelFor } from '../../src/translate/languages';
-import { queueTranslation } from '../../src/analysis/runs';
 
 import {
+  addObservation,
   addStandaloneNote,
+  createEntity,
   getChapter,
   listAnnotations,
   listChapterCast,
@@ -30,7 +34,7 @@ import { estimateDeep, queueChapterRecap, queueChapterRun } from '../../src/anal
 import { stoppedWithoutKey } from '../../src/ai/guard';
 import { sceneOpening } from '../../src/structure/scenes';
 import { formatUsd, type Estimate } from '../../src/ai/cost';
-import { getBook, getDocumentText } from '../../src/db/repo';
+import { getBook, getDocumentText, listChapters } from '../../src/db/repo';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item, Writable } from '../../src/ui/detail';
 import { Hint, Row, Section } from '../../src/ui/primitives';
@@ -65,8 +69,9 @@ export default function ChapterPage() {
   const [queued, setQueued] = useState(false);
   /** The languages this book is being translated into, and what is left here. */
   const [targets, setTargets] = useState<{ target: string; pending: number }[]>([]);
-  const [queuedTargets, setQueuedTargets] = useState<Set<string>>(new Set());
   const [queueError, setQueueError] = useState<string | null>(null);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const [preparing, setPreparing] = useState(false);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -111,6 +116,21 @@ export default function ChapterPage() {
   useFocusEffect(load);
   // A pass that lands while this page is open has to show up on it.
   useWorkRefresh(load);
+
+  /** A term the reader met and the passes did not: blank, and observed here. */
+  async function addTerm() {
+    if (!chapter) return;
+    const entityId = await createEntity(chapter.book_id, 'term', '');
+    await addObservation({
+      book_id: chapter.book_id,
+      entity_id: entityId,
+      chapter_idx: chapter.idx,
+      appearance: null,
+      voice: null,
+      note: null,
+    });
+    router.push(`/term/${entityId}`);
+  }
 
   if (!chapter) {
     return (
@@ -337,10 +357,16 @@ export default function ChapterPage() {
       </Block>
 
       {/* What this chapter names that is neither a person nor a place. Each is
-          a page of its own, because a term met here is wanted forty chapters on. */}
-      <Block title={t('chapter.terms')} count={terms.length || undefined}>
+          a page of its own, because a term met here is wanted forty chapters on.
+          Adding one by hand is how a term nobody ran a pass for gets in: the
+          blank page opens, and what is typed there is recorded as met here. */}
+      <Block
+        title={t('chapter.terms')}
+        count={terms.length || undefined}
+        action={{ label: '＋', onPress: addTerm }}
+      >
         {terms.length === 0 ? (
-          <Empty text={t('chapter.noTerms')} />
+          <Empty text={t('chapter.noTerms')} action={{ label: t('chapter.addTerm'), onPress: addTerm }} />
         ) : (
           <ChipRow>
             {terms.map((term) => (
@@ -381,46 +407,28 @@ export default function ChapterPage() {
 
       {/* Translation is per chapter here for the same reason analysis is: this
           is the one you are reading, and it should not wait behind the book. */}
-      <Section title={t('book.translations')}>
-        {targets.length === 0 ? (
-          <Row
-            label={t('chapter.setUpTranslation')}
-            value="›"
-            onPress={() => router.push(`/book/${chapter.book_id}/translation`)}
-            last
-          />
+      {/* A language is added here, because here is where anybody decides they
+          want one. Everything about a language — its glossary, its progress,
+          the sentences themselves — is on the page it opens. */}
+      <Section
+        title={t('book.translations')}
+        action={{ label: t('chapter.addTranslation'), onPress: () => setLanguageOpen(true) }}
+      >
+        {preparing ? (
+          <Row label={t('translate.preparing')} last />
+        ) : targets.length === 0 ? (
+          <Row label={t('chapter.noTranslations')} last />
         ) : (
-          targets.map((entry, index) => (
-            <Fragment key={entry.target}>
+          <>
+            {targets.map((entry, index) => (
               <Row
-                label={t('chapter.translateInto', { language: labelFor(entry.target) })}
-                detail={
-                  entry.pending
-                    ? t('translate.sentencesLeft', { count: entry.pending })
-                    : t('translate.allDone')
-                }
-                value={
-                  queuedTargets.has(entry.target)
-                    ? t('work.queuedShort')
-                    : entry.pending
-                      ? t('cast.costs')
-                      : '✓'
-                }
-                onPress={
-                  entry.pending && !queuedTargets.has(entry.target)
-                    ? async () => {
-                        if (await stoppedWithoutKey(t)) return;
-                        await queueTranslation(chapter.book_id, entry.target, [
-                          { idx: chapter.idx, label: chapter.title.trim() || `${chapter.idx + 1}` },
-                        ]);
-                        setQueuedTargets((was) => new Set(was).add(entry.target));
-                      }
-                    : undefined
-                }
-              />
-              <Row
-                label={t('chapter.openTranslation')}
-                value="›"
+                key={entry.target}
+                label={t('chapter.openTranslationIn', { language: labelFor(entry.target) })}
+                // A chapter is the unit anybody reads, so it is the unit this
+                // page reports: done, or not yet. How many sentences are left
+                // inside it is a fact for the page that acts on them.
+                detail={entry.pending ? t('chapter.notTranslated') : t('translate.allDone')}
+                value={entry.pending ? '›' : '✓  ›'}
                 onPress={() =>
                   router.push(
                     `/book/${chapter.book_id}/translation?target=${entry.target}&chapter=${chapter.idx}`
@@ -428,10 +436,54 @@ export default function ChapterPage() {
                 }
                 last={index === targets.length - 1}
               />
-            </Fragment>
-          ))
+            ))}
+          </>
         )}
       </Section>
+
+      <PickerSheet
+        visible={languageOpen}
+        title={t('translate.addLanguage')}
+        options={targetLanguages
+          .filter((entry) => !targets.some((row) => row.target === entry.code))
+          .map((entry) => ({ id: entry.code, label: entry.label }))}
+        onPick={async (code) => {
+          setLanguageOpen(false);
+          setPreparing(true);
+          try {
+            // Splitting the book into sentences is what a target *is*; it is
+            // the one part of this that is not per chapter.
+            const all = await listChapters(chapter.book_id);
+            await prepare(chapter.book_id, code, await getDocumentText(chapter.book_id), all, book?.language ?? 'en');
+            load();
+          } finally {
+            setPreparing(false);
+          }
+        }}
+        onClose={() => setLanguageOpen(false)}
+      />
+
+      {/* What this chapter could become. All three are made *of* a chapter —
+          its scenes are the shots, its dialogue is the script — so they are
+          asked for here rather than for a whole book at once. */}
+      {supports(book?.kind, 'script') || supports(book?.kind, 'visuals') ? (
+        <Section title={t('book.utilities')}>
+          {supports(book?.kind, 'script') ? (
+            <Row
+              label={t('book.script')}
+              detail={t('chapter.scriptHint')}
+              value="›"
+              onPress={() => router.push(`/book/${chapter.book_id}/script`)}
+            />
+          ) : null}
+          {supports(book?.kind, 'visuals') ? (
+            <>
+              <Row label={t('book.illustrations')} value={t('book.comingSoon')} />
+              <Row label={t('book.animations')} value={t('book.comingSoon')} last />
+            </>
+          ) : null}
+        </Section>
+      ) : null}
 
       <Hint>{t('chapter.hint')}</Hint>
     </ScrollView>

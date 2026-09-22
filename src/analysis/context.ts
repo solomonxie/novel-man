@@ -20,6 +20,7 @@ export const CAPS = {
   briefLength: 220,
   cast: 40,
   places: 25,
+  terms: 40,
   summary: 900,
   recentScenes: 4,
 };
@@ -30,6 +31,8 @@ export type ChapterContext = {
   chapters: Chapter[];
   characters: Entity[];
   places: Entity[];
+  /** What the book has already named, so chapter forty spells it as chapter three did. */
+  terms?: Entity[];
   text: string;
   /** The scenes of the chapter just before, so this one continues rather than restarts. */
   previousScenes?: Scene[];
@@ -217,6 +220,21 @@ export function castList(characters: Entity[]): string {
     .join('\n');
 }
 
+/**
+ * The terminology this book has already established.
+ *
+ * Characters and places were sent and terms were not, which is why a rite
+ * named in one chapter came back re-spelled in the next and became a second
+ * entry for the same thing. Names only: a term's note belongs to the chapter
+ * it was written for, and forty of them would cost more than the chapter.
+ */
+export function termList(terms: Entity[]): string {
+  return terms
+    .slice(0, CAPS.terms)
+    .map((term) => `- ${term.name}`)
+    .join('\n');
+}
+
 export function placeList(places: Entity[]): string {
   return places
     .slice(0, CAPS.places)
@@ -246,6 +264,7 @@ export function assemble(context: ChapterContext): string {
     ['THE BOOK', bookHeader(context.book, context.chapters)],
     ['CHARACTERS ALREADY KNOWN', castList(context.characters)],
     ['PLACES ALREADY KNOWN', placeList(context.places)],
+    ['TERMS ALREADY KNOWN', termList(context.terms ?? [])],
     ['THE CHAPTERS JUST BEFORE THIS ONE', recentBriefs(context.chapters, context.chapter)],
     ['SCENES AT THE END OF THE PREVIOUS CHAPTER', sceneTail(context.previousScenes ?? [])],
     [

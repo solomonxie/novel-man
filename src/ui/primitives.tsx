@@ -196,9 +196,11 @@ export function Search({ value, onChange, placeholder, onSubmit }: {
 /** Past this many rows, finding one by eye is slower than typing its name. */
 export const SEARCHABLE_FROM = 8;
 
-export function PrimaryAction({ label, onPress, style }: {
+export function PrimaryAction({ label, onPress, danger, style }: {
   label: string;
   onPress: () => void;
+  /** The button that takes something away: red, and never the loud one. */
+  danger?: boolean;
   style?: ViewStyle;
 }) {
   const palette = usePalette();
@@ -207,11 +209,13 @@ export function PrimaryAction({ label, onPress, style }: {
       onPress={onPress}
       style={({ pressed }) => [
         styles.primary,
-        { backgroundColor: palette.accent, opacity: pressed ? 0.85 : 1 },
+        { backgroundColor: danger ? palette.soft : palette.accent, opacity: pressed ? 0.85 : 1 },
         style,
       ]}
     >
-      <Text style={[styles.primaryLabel, { color: palette.onAccent }]}>{label}</Text>
+      <Text style={[styles.primaryLabel, { color: danger ? palette.danger : palette.onAccent }]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
