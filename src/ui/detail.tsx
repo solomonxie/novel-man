@@ -82,24 +82,33 @@ export function Fact({ value, label, onPress }: {
         { backgroundColor: palette.soft, opacity: pressed ? 0.7 : 1 },
       ]}
     >
+      {/* The label leads, because it is what tells two boxes apart: "ch. 4"
+          over "First used" and "ch. 4" over "Last used" read as the same box
+          twice until you found the small grey line under each. */}
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.7}
-        style={{ color: palette.text, fontSize: 15, fontWeight: '700' }}
-      >
-        {value}
-      </Text>
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.7}
-        style={{ color: onPress ? palette.accent : palette.dim, fontSize: 11, marginTop: 1 }}
+        style={{ color: onPress ? palette.accent : palette.dim, fontSize: 11, textAlign: 'center' }}
       >
         {label}
       </Text>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        style={{ color: palette.text, fontSize: 15, fontWeight: '700', marginTop: 1, textAlign: 'center' }}
+      >
+        {value}
+      </Text>
     </Pressable>
   );
+}
+
+/** The same row of counts a Hero holds, for a page that would rather it sat
+ *  under one than inside it. */
+export function FactRow({ children }: { children: React.ReactNode }) {
+  return <View style={styles.facts}>{children}</View>;
 }
 
 /**
@@ -408,6 +417,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.sm,
     paddingVertical: space.sm,
     borderRadius: radius.md,
+    // A row of boxes reads as a row when each one has a middle to read down.
+    alignItems: 'center',
   },
   // Wraps rather than truncates: the most important button on the page is the
   // one whose label was getting cut in half.
