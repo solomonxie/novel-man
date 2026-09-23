@@ -228,7 +228,7 @@ export const migrations: string[] = [
   // the screen that started it, so each chapter is its own row with its own
   // status — which is what makes progress visible, failure survivable, and a
   // resume free. `engine` records whether a unit cost money or not.
-  // 
+  //
   // Summaries live beside what they summarize: a book has one, a chapter has a
   // brief, and both are what a later pass is given as context.
   `ALTER TABLE books ADD COLUMN summary TEXT;
@@ -555,4 +555,29 @@ export const migrations: string[] = [
         AND translation_units.start >= c.start
         AND translation_units.start < c.end
    )`,
+
+  // A scene is a thing the book keeps coming back to, so it is a row of its
+  // own rather than a string retyped in every chapter that has it. The spans
+  // stay per chapter — that is what a scene *is* on the page — and each one
+  // points at the scene it belongs to, so renaming is one write and two
+  // chapters cannot drift into two scenes over a trailing space.
+  //
+  // Back-filled from the titles already typed: one scene per distinct name.
+  `CREATE TABLE scene_tags (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     name TEXT NOT NULL,
+     created_at INTEGER NOT NULL
+   );
+   CREATE UNIQUE INDEX scene_tags_name ON scene_tags(book_id, name);
+   ALTER TABLE scenes ADD COLUMN scene_tag_id TEXT REFERENCES scene_tags(id) ON DELETE SET NULL;
+   CREATE INDEX scenes_tag ON scenes(scene_tag_id);
+   INSERT INTO scene_tags (id, book_id, name, created_at)
+     SELECT lower(hex(randomblob(8))), book_id, trim(title), 0
+       FROM scenes WHERE title IS NOT NULL AND trim(title) <> ''
+      GROUP BY book_id, trim(title);
+   UPDATE scenes SET scene_tag_id = (
+     SELECT t.id FROM scene_tags t
+      WHERE t.book_id = scenes.book_id AND t.name = trim(scenes.title)
+   ) WHERE title IS NOT NULL AND trim(title) <> ''`,
 ];
