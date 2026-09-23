@@ -129,10 +129,14 @@ export function knownWorkBody(book: Book, chapter: Chapter): string {
     'This app holds no copy of this book: none of its text is included here and ' +
       'none can be fetched, so do not ask for it and do not decline for want of ' +
       'it. Answer from your own knowledge of this published work, as far as that ' +
-      'knowledge reaches and no further. If you do not know this book, or know it ' +
-      'but cannot place this chapter within it, reply with exactly {"unknown":true} ' +
-      'and nothing else. Never invent a plot, a name, an event or a chapter, and ' +
-      'never answer about a different book with a similar title.',
+      'knowledge reaches and no further. Where that knowledge is thin, name the ' +
+      'parts you are unsure of and answer with what you do recall — a partial ' +
+      'account marked as partial is what is wanted, and is worth more than ' +
+      'nothing. Reply with exactly {"unknown":true} and nothing else only when ' +
+      'you cannot tell what is being asked about: a book you do not know, or a ' +
+      'chapter this could not be identified as. Never invent a plot, a name, an ' +
+      'event or a chapter, and never answer about a different book with a ' +
+      'similar title.',
   ]
     .filter(Boolean)
     .join('\n');
