@@ -237,7 +237,9 @@
     "notTranslated": "（没有{{language}}翻译）",
     "thisChapter": "本章",
     "openBook": "打开《{{name}}》",
-    "analyzeChapter": "分析这一章"
+    "analyzeChapter": "分析这一章",
+    "prevShort": "上一章",
+    "nextShort": "下一章"
   },
   "settings": {
     "title": "设置",
