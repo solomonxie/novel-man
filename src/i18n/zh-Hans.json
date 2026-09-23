@@ -1075,5 +1075,10 @@
     "readingHint": "正在读。",
     "read": "读完",
     "readHint": "读完了——或者放弃了。"
+  },
+  "prose": {
+    "more": "展开",
+    "less": "收起",
+    "edit": "编辑"
   }
 }

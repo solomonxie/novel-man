@@ -37,6 +37,7 @@ import { formatUsd, type Estimate } from '../../src/ai/cost';
 import { getBook, getDocumentText, listChapters } from '../../src/db/repo';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item, Writable } from '../../src/ui/detail';
+import { Prose } from '../../src/ui/Prose';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { openWorkQueue } from '../../src/ui/WorkQueue';
 import { hueFrom } from '../../src/ui/fields';
@@ -274,13 +275,11 @@ export default function ChapterPage() {
       {record && chapter.recap?.trim() ? (
         <Block title={t('chapter.recap')}>
           <Writable empty={false}>
-            <EditableLine
+            <Prose
               value={chapter.recap}
               placeholder={t('chapter.recapShort')}
+              lines={5}
               onCommit={(value) => setChapterRecap(chapter.id, value.trim() || null).then(load)}
-              style={{ color: palette.text, fontSize: 15, lineHeight: 23 }}
-              multiline
-              numberOfLines={40}
             />
           </Writable>
           <Text style={{ color: palette.faint, fontSize: 12, marginTop: space.sm }}>
