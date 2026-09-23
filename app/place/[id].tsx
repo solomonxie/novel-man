@@ -176,9 +176,9 @@ export default function PlacePage() {
           span
             ? (
               <>
+                <Fact value={visits.length} label={t('units.chapterCount')} />
                 <Fact value={t('units.chapterShort', { n: span.first + 1 })} label={t('place.firstSeen')} />
                 <Fact value={t('units.chapterShort', { n: span.last + 1 })} label={t('place.lastSeen')} />
-                <Fact value={visits.length} label={t('units.unit_chapters')} />
               </>
             )
             : undefined
