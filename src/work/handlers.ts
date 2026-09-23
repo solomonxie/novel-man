@@ -689,6 +689,12 @@ const PROFILE_RULES =
  * pin. So the geography is asked for explicitly and from the outside in, and
  * what the text does not say is left out rather than guessed at — an invented
  * country is worse than a missing one.
+ *
+ * And a place has to be one place. Every scene stands somewhere — a street, a
+ * building, a river, the bank of it — and a pass that files each of those as a
+ * place returns the same four nouns from every chapter of the book, which
+ * names nothing and buries the handful of places that do. The test is whether
+ * the book would say it again and mean the same spot.
  */
 const PLACE_RULES =
   '"places" are where this chapter happens. "details" must carry, wherever the ' +
@@ -698,7 +704,12 @@ const PLACE_RULES =
   'from the outside in: country, region or province, city or town, and what it ' +
   'sits inside. Short label/value pairs in the language of the book. A place ' +
   'nobody could put a pin in — a world, an era, an afterlife — says so as its ' +
-  'sort. Omit what the text does not establish; never invent a location.';
+  'sort. Omit what the text does not establish; never invent a location. ' +
+  'Only somewhere a reader could name again: leave out the common nouns a ' +
+  'scene merely stands in — a building, a street, a river, a riverbank, a ' +
+  'room, a road, a mountain — unless this book gives that one a name of its ' +
+  'own, or it is somewhere the story keeps returning to and knows by. The ' +
+  'tower of Babel is a place; a tower is scenery.';
 
 /**
  * Where the places are real, the pass is asked what they are called now. A
