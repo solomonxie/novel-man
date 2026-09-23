@@ -7,6 +7,7 @@ import {
   findOrCreateEntity,
   getBook,
   getDocumentText,
+  addImage,
   getEntity,
   listChapters,
   listVerses,
@@ -36,6 +37,9 @@ import { parsePin } from '../cast/location';
 import { hasWiki, parseWikiLink } from '../cast/lookup';
 import { parseTie, TIES } from '../cast/ties';
 import { translate } from '../translate/run';
+import { drawImage } from '../ai/image';
+import type { ImageKind } from '../db/repo';
+import { writeImage } from '../storage/files';
 import { kindOf } from '../books/kinds';
 import { isRecord } from '../books/record';
 import { canonChapters, isBible } from '../scripture/canon';
@@ -74,6 +78,7 @@ export const handlers: Record<WorkKind, Handler> = {
   'place-polish': polishPlace,
   'place-locate': locatePlaces,
   'person-link': linkPeople,
+  'image-draw': drawSomething,
   'scene-suggest': notHere,
   'translate-span': translateChapter,
   'script-scene': notHere,
@@ -1333,6 +1338,28 @@ type Polished = {
   arc?: string;
   details?: Detail[];
 };
+
+/**
+ * A picture, drawn from the prompt the reader approved.
+ *
+ * The prompt is settled on the page before this runs — what the chapters said,
+ * edited by whoever is reading — so the job has nothing to decide. It draws,
+ * writes the file, and files it under whatever it was drawn for. Nothing is
+ * written over: the drawing you keep is rarely the first one.
+ */
+async function drawSomething(job: WorkJob, signal: AbortSignal) {
+  const wanted = JSON.parse(job.payload) as {
+    prompt: string;
+    kind: ImageKind;
+    entityId?: string | null;
+    chapterIdx?: number | null;
+    start?: number | null;
+    end?: number | null;
+  };
+  const bytes = await drawImage(wanted.prompt, wanted.kind === 'cover' ? 'portrait' : 'square', signal);
+  const path = writeImage(`drawn-${Date.now().toString(36)}.png`, bytes);
+  await addImage({ bookId: job.book_id, path, ...wanted });
+}
 
 /**
  * Turns one character's per-chapter observations into prose. The observations

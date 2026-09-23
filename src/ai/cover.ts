@@ -1,7 +1,5 @@
-import * as SecureStore from '../storage/secrets';
-import { listKeys, runChat } from './keys';
-import { vendorById } from './vendors';
-import { fromBase64 } from '../import/base64';
+import { runChat } from './keys';
+import { NO_TEXT } from './image';
 
 /**
  * A cover drawn to order, for a book that has none.
@@ -15,15 +13,6 @@ import { fromBase64 } from '../import/base64';
  * this is deliberately narrow: if there is no OpenAI key, it says so rather
  * than pretending the feature is missing.
  */
-const MODEL = 'gpt-image-1';
-const SIZE = '1024x1536';
-
-export class NoImageKey extends Error {
-  constructor() {
-    super('no-image-key');
-  }
-}
-
 /** What the book itself can say, capped so a long one costs the same as a short one. */
 const CAPS = { summary: 700, briefs: 10, brief: 160, names: 8 };
 
@@ -97,10 +86,6 @@ export function coverPrompt(material: CoverMaterial): string {
     .join(' ');
 }
 
-/** The one instruction an image model forgets unless it is repeated. */
-const NO_TEXT =
-  'No text, no lettering, no title, no author name, no logo, and no writing of any kind anywhere in the image.';
-
 /**
  * A cover, art-directed before it is drawn.
  *
@@ -133,42 +118,4 @@ export async function artDirect(material: CoverMaterial, signal?: AbortSignal): 
     { maxTokens: 400, signal }
   );
   return answer.trim();
-}
-
-/** The first OpenAI key there is; the others cannot draw. */
-async function drawingKey(): Promise<{ secret: string; baseUrl: string } | null> {
-  for (const entry of await listKeys()) {
-    if (entry.vendorId !== 'openai') continue;
-    const secret = await SecureStore.getItemAsync(`ai.key.${entry.id}`);
-    const vendor = vendorById(entry.vendorId);
-    if (secret && vendor) return { secret, baseUrl: vendor.baseUrl };
-  }
-  return null;
-}
-
-export async function drawCover(prompt: string, signal?: AbortSignal): Promise<Uint8Array> {
-  const key = await drawingKey();
-  if (!key) throw new NoImageKey();
-
-  const response = await fetch(`${key.baseUrl}/images/generations`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${key.secret}` },
-    body: JSON.stringify({ model: MODEL, prompt, size: SIZE, n: 1 }),
-    signal,
-  });
-  const payload = (await response.json()) as {
-    data?: { b64_json?: string; url?: string }[];
-    error?: { message?: string };
-  };
-  if (!response.ok) throw new Error(payload.error?.message ?? `${response.status}`);
-
-  const drawn = payload.data?.[0];
-  if (drawn?.b64_json) return fromBase64(drawn.b64_json);
-  // Some deployments answer with a link instead of the bytes.
-  if (drawn?.url) {
-    const image = await fetch(drawn.url, { signal });
-    if (!image.ok) throw new Error(`${image.status}`);
-    return new Uint8Array(await image.arrayBuffer());
-  }
-  throw new Error('nothing came back');
 }

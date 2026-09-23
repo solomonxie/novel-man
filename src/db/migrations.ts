@@ -591,4 +591,48 @@ export const migrations: string[] = [
   // The re-split is code, not SQL: only `layoutChapter` knows where a sentence
   // is. This is the flag that says a book has not had it yet.
   `ALTER TABLE books ADD COLUMN units_resplit INTEGER NOT NULL DEFAULT 0`,
+
+  // A person drawn rather than photographed. Kept as its own rows, not written
+  // over the portrait: the first attempt at a face is rarely the one you keep,
+  // and a drawing that replaces the last one costs you the comparison. One of
+  // them can be made the portrait; the rest stay to be drawn against.
+  `CREATE TABLE portraits (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+     path TEXT NOT NULL,
+     prompt TEXT NOT NULL,
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX portraits_entity ON portraits(entity_id, created_at)`,
+
+  // One table for every picture this shelf draws.
+  //
+  // A face for a person, a view of a place, a thing a term names, a cover, and
+  // whatever a passage suggested: they are the same object — a prompt, bytes, and
+  // what it was drawn for. Kept apart they would be four tables and four pages
+  // that each knew about one of them.
+  //
+  // Nothing here is a foreign key to a chapter: a chapter number moves when the
+  // structure is edited, and a picture drawn of chapter nine should still say nine
+  // afterwards rather than following the row that renumbered.
+  `CREATE TABLE images (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     entity_id TEXT REFERENCES entities(id) ON DELETE CASCADE,
+     chapter_idx INTEGER,
+     start INTEGER,
+     end INTEGER,
+     kind TEXT NOT NULL DEFAULT 'free',
+     path TEXT NOT NULL,
+     prompt TEXT NOT NULL,
+     caption TEXT,
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX images_book ON images(book_id, created_at);
+   CREATE INDEX images_entity ON images(entity_id, created_at);
+   CREATE INDEX images_chapter ON images(book_id, chapter_idx);
+   INSERT INTO images (id, book_id, entity_id, kind, path, prompt, created_at)
+     SELECT id, book_id, entity_id, 'portrait', path, prompt, created_at FROM portraits;
+   DROP TABLE portraits`,
 ];

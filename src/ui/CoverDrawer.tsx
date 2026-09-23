@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { artDirect, coverPrompt, drawCover, NoImageKey, type CoverMaterial } from '../ai/cover';
+import { artDirect, coverPrompt, type CoverMaterial } from '../ai/cover';
+import { drawImage, NoImageKey } from '../ai/image';
 import { writeImage } from '../storage/files';
 import { updateBook, type Book } from '../db/repo';
 import { radius, space, usePalette } from '../theme';
@@ -75,7 +76,7 @@ export function CoverDrawer({ book, material, onDrawn }: {
     setDrawn(null);
     abort.current = new AbortController();
     try {
-      const bytes = await drawCover(prompt.trim(), abort.current.signal);
+      const bytes = await drawImage(prompt.trim(), 'portrait', abort.current.signal);
       // Kept under its own name, beside the cover rather than over it.
       setDrawn(writeImage(`drawn-${book.id}-${Date.now().toString(36)}.png`, bytes));
     } catch (problem) {
