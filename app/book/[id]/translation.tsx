@@ -29,7 +29,7 @@ import {
   type Pending,
   type TranslationUnit,
 } from '../../../src/db/translation';
-import { prepare } from '../../../src/translate/run';
+import { ensureUnitsCurrent } from '../../../src/translate/repair';
 import { queueTranslation } from '../../../src/analysis/runs';
 import { stoppedWithoutKey } from '../../../src/ai/guard';
 import { useWorkRefresh } from '../../../src/work/refresh';
@@ -71,7 +71,9 @@ export default function TranslationPage() {
 
   const loadUnits = useCallback(() => {
     if (!id || !target) return;
-    listUnits(id, target, chapterIdx).then(setUnits);
+    ensureUnitsCurrent(id)
+      .then(() => listUnits(id, target, chapterIdx))
+      .then(setUnits);
     pendingByChapter(id, target).then(setPending);
   }, [id, target, chapterIdx]);
 
