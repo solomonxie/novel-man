@@ -2,7 +2,8 @@
 
 Product and business reasoning. Interface decisions live in
 [UIUX_DESIGN.md](UIUX_DESIGN.md); build order in
-[IMPLEMENT_PLAN.md](IMPLEMENT_PLAN.md).
+[IMPLEMENT_PLAN.md](IMPLEMENT_PLAN.md); re-import and text
+addressing in [REVISIONS.md](REVISIONS.md).
 
 
 ## Problem
