@@ -4,7 +4,7 @@ export type Span = { start: number; end: number };
 
 const TERMINATORS: Record<Script, RegExp> = {
   latin: /[.!?]["'”’)\]]*(\s|$)/g,
-  cjk: /[。！？…]+["'」』）】]*/g,
+  cjk: /[。！？…]+["'”’」』）】]*/g,
 };
 
 /** Abbreviations that would otherwise end a sentence mid-clause. */

@@ -580,4 +580,15 @@ export const migrations: string[] = [
      SELECT t.id FROM scene_tags t
       WHERE t.book_id = scenes.book_id AND t.name = trim(scenes.title)
    ) WHERE title IS NOT NULL AND trim(title) <> ''`,
+
+  // Units seeded before the splitter agreed with the reader: a chapter was cut
+  // into sentences in one go, so a unit could swallow a paragraph break, and a
+  // table of contents — which has no full stop in it anywhere — became one
+  // 7,000-character "sentence" that ran on into the chapter under it. That
+  // chapter then had no row for its own first paragraph, and read in the
+  // original while its translation page swore everything was done.
+  //
+  // The re-split is code, not SQL: only `layoutChapter` knows where a sentence
+  // is. This is the flag that says a book has not had it yet.
+  `ALTER TABLE books ADD COLUMN units_resplit INTEGER NOT NULL DEFAULT 0`,
 ];

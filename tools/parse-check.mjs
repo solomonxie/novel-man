@@ -24,6 +24,7 @@ const { docxExporter } = await import(join(build, 'export/formats/docx.js'));
 const { epubExporter } = await import(join(build, 'export/formats/epub.js'));
 const { parseNumbered, AlignmentError } = await import(join(build, 'translate/context.js'));
 const { candidateTerms, termsIn } = await import(join(build, 'translate/terms.js'));
+const { placeTranslation, endsTight } = await import(join(build, 'translate/layout.js'));
 const { diffWords } = await import(join(build, 'translate/diff.js'));
 const { countMentions, appearancesIn } = await import(join(build, 'cast/mentions.js'));
 const { layoutGraph, withinRange } = await import(join(build, 'cast/graph.js'));
@@ -247,6 +248,76 @@ console.log('translation alignment');
   let threw = null;
   try { parseNumbered('1. Only one', 2); } catch (error) { threw = error; }
   check('a short answer is rejected, not padded', threw instanceof AlignmentError, true);
+}
+
+console.log('a page read in translation');
+{
+  // A chapter the way a Chinese novel sets one: narration, then dialogue on
+  // lines of its own.
+  const text = [
+    '河水涨过了第二级台阶。她还是下去了。',
+    '“你疯了。”',
+    '他没有回答。',
+    '到了早晨，水又退了下去。',
+  ].join('\n\n');
+  const paragraphs = layoutChapter(text, { start: 0, end: text.length }, 'zh');
+  const kinds = (page) => paragraphs.map((p) => page.paragraphs.get(p.start).kind);
+  const unit = (start, end, machine) => ({
+    start, end, source: text.slice(start, end), machine, edited: null,
+  });
+  const at = (needle) => text.indexOf(needle);
+  const spanning = (from, to, machine) => unit(at(from), at(to) + to.length, machine);
+
+  const aligned = paragraphs.flatMap((paragraph) =>
+    paragraph.sentences.map((span) => unit(span.start, span.end, `T${span.start}`))
+  );
+
+  const lined = placeTranslation(paragraphs, aligned, text);
+  check('sentences that line up stay tappable', kinds(lined), paragraphs.map(() => 'sentences'));
+  check('every sentence finds its own translation',
+    paragraphs.flatMap((p) => p.sentences).every((span) => lined.sentences.get(span.start)), true);
+
+  // Units made before the splitter agreed with the reader, so one of them runs
+  // from the tail of a paragraph across the break and over the two under it.
+  const straddling = [
+    unit(paragraphs[0].sentences[0].start, paragraphs[0].sentences[0].end, 'A'),
+    unit(paragraphs[0].sentences[1].start, paragraphs[0].sentences[1].end, 'B'),
+    unit(paragraphs[1].sentences[0].start, paragraphs[1].sentences[0].end, 'C'),
+    spanning('”', '到了早晨，水又退了下去。', 'D'),
+  ];
+  const drifted = placeTranslation(paragraphs, straddling, text);
+  check('a swallowed paragraph is not redrawn in the original',
+    kinds(drifted), ['sentences', 'sentences', 'absorbed', 'paragraph']);
+  check('the swallowed words are printed once, where most of them are',
+    paragraphs.map((p) => drifted.paragraphs.get(p.start).text), ['A B', 'C', '', 'D']);
+  check('no paragraph is drawn in both languages at once',
+    paragraphs.every((p) => !drifted.paragraphs.get(p.start).text.includes(text.slice(p.start, p.start + 3))),
+    true);
+
+  // A chapter only half translated still shows what nobody has reached, and
+  // still answers a tap: nothing here is printed anywhere else.
+  const partial = placeTranslation(paragraphs, [straddling[0]], text);
+  check('a half-translated paragraph stays tappable',
+    kinds(partial), paragraphs.map(() => 'sentences'));
+  check('an untranslated sentence keeps its own words',
+    partial.paragraphs.get(paragraphs[0].start).text, 'A 她还是下去了。');
+  check('a sentence a unit only reaches into is not drawn twice',
+    kinds(placeTranslation(paragraphs, [spanning('河水涨过了第二级台阶。', '她还是下去了。', 'A')], text))[0],
+    'paragraph');
+
+  check('a chinese full stop is not followed by a space', endsTight('他没有回答。'), true);
+  check('nor is one inside a closing quote', endsTight('\u201c你疯了。\u201d'), true);
+  check('an english one is', endsTight('She waited.'), false);
+
+  // The manuscript moved under the units; they are found by their words.
+  const moved = `序章\n\n${text}`;
+  const shifted = layoutChapter(moved, { start: 0, end: moved.length }, 'zh');
+  const found = placeTranslation(shifted, aligned, moved);
+  check('a unit whose offsets drifted is found by its own words',
+    shifted.slice(1).every((paragraph) =>
+      found.paragraphs.get(paragraph.start).kind === 'sentences' &&
+      paragraph.sentences.every((span) => found.sentences.get(span.start))),
+    true);
 }
 
 console.log('glossary');

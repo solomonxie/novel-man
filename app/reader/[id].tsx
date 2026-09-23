@@ -73,6 +73,8 @@ import {
   targetsInChapter,
   type TranslationUnit,
 } from '../../src/db/translation';
+import { endsTight, placeTranslation } from '../../src/translate/layout';
+import { ensureUnitsCurrent } from '../../src/translate/repair';
 
 /**
  * Long enough to decide and reach. At under three seconds the bar was gone
@@ -280,7 +282,11 @@ export default function Reader() {
       setUnits([]);
       return;
     }
-    listUnits(id, target, chapter.idx).then(setUnits);
+    // Rows seeded by an older splitter are put right once, before anything
+    // asks them where a sentence is.
+    ensureUnitsCurrent(id)
+      .then(() => listUnits(id, target, chapter.idx))
+      .then(setUnits);
   }, [id, target, chapter, settings.bilingual]);
 
   /**
@@ -387,66 +393,15 @@ export default function Reader() {
     [paragraphs]
   );
 
-  const translated = useMemo(
-    () => new Map(units.map((unit) => [unit.start, (unit.edited ?? unit.machine ?? '').trim()])),
-    [units]
-  );
-
   /**
-   * The paragraphs whose translation has to be read as a paragraph, and what
-   * it says.
-   *
-   * A sentence finds its translation by where it starts, which holds only
-   * while the manuscript is still split the way it was split when the
-   * sentences were made. It stops holding the moment it is split differently:
-   * a unit that runs across a paragraph break has swallowed the sentence
-   * after it, and that sentence — with nothing of its own to find — read in
-   * the original in the middle of an otherwise translated page. Every second
-   * or third paragraph, which looks random and reads as the translation being
-   * half done.
-   *
-   * So where the sentences no longer line up one for one, the paragraph's
-   * units are read in order instead: each one belongs to the paragraph its
-   * first word is in, so every translated word is on the page exactly once no
-   * matter where the offsets have drifted to. Only where every sentence is
-   * covered, though — a paragraph nobody has translated yet still shows the
-   * words the book was written in rather than nothing at all.
+   * Where each translated sentence lands on the page — and which paragraphs
+   * must not print themselves, because a neighbour's unit already printed
+   * them. See `placeTranslation`; the work is offsets, not rendering.
    */
-  const targetParagraphs = useMemo(() => {
-    const text = new Map<number, string>();
-    const whole = new Set<number>();
-    const textOf = (unit: TranslationUnit) => (unit.edited ?? unit.machine ?? '').trim();
-
-    let at = 0;
-    for (const paragraph of paragraphs) {
-      const sentences = paragraph.sentences;
-      const start = paragraph.start;
-      const end = sentences.at(-1)?.end ?? start;
-      // Only units that end before this paragraph begins are done with; one
-      // that reaches into it is still this paragraph's business.
-      while (at < units.length && units[at].end <= start) at += 1;
-
-      const here: TranslationUnit[] = [];
-      for (let index = at; index < units.length && units[index].start < end; index += 1) {
-        here.push(units[index]);
-      }
-      const parts = here
-        .filter((unit) => unit.start >= start && unit.start < end)
-        .map(textOf)
-        .filter(Boolean);
-      if (!parts.length) continue;
-      text.set(start, parts.join(' '));
-
-      const aligned = sentences.every((span) =>
-        here.some((unit) => unit.start === span.start && textOf(unit))
-      );
-      const covered = sentences.every((span) =>
-        here.some((unit) => unit.start < span.end && unit.end > span.start && textOf(unit))
-      );
-      if (!aligned && covered) whole.add(start);
-    }
-    return { text, whole };
-  }, [units, paragraphs]);
+  const page = useMemo(
+    () => placeTranslation(paragraphs, units, source),
+    [paragraphs, units, source]
+  );
 
   const palette = readingThemes[settings.theme];
   const script = scriptOf(language);
@@ -719,7 +674,8 @@ export default function Reader() {
      * has to stand in for a missing one: if a line somehow has no translation
      * it keeps its own words rather than a row of dots.
      */
-    const body = useTarget ? translated.get(span.start) : undefined;
+    const body = useTarget ? page.sentences.get(span.start) : undefined;
+    const shown = body || source.slice(span.start, span.end);
     const mark = marked?.color ? markOn(marked.color, settings.theme) : null;
     return (
       <Text
@@ -740,7 +696,7 @@ export default function Reader() {
           color: mark?.ink ?? palette.text,
         }}
       >
-        {runsIn(body || source.slice(span.start, span.end)).map((run, at) => (
+        {runsIn(shown).map((run, at) => (
           <Text
             key={at}
             style={{
@@ -754,7 +710,9 @@ export default function Reader() {
           >
             {run.text}
           </Text>
-        ))}{' '}
+        ))}
+        {/* A full stop in Chinese is already a space wide; one more is a hole. */}
+        {endsTight(shown) ? '' : ' '}
       </Text>
     );
   }
@@ -885,7 +843,11 @@ export default function Reader() {
                 );
                 const figure = imageIn(body);
                 const inTarget = showing && settings.bilingual === 'target';
-                const asParagraph = targetParagraphs.text.get(paragraph.start) ?? '';
+                const place = page.paragraphs.get(paragraph.start);
+                const asParagraph = place?.text ?? '';
+                // Its words are in the paragraph above, in the other language:
+                // printing them here too is the same paragraph twice.
+                if (inTarget && place?.kind === 'absorbed') return null;
                 const code = figure ? null : codeBlockIn(body);
                 if (code) {
                   return (
@@ -958,7 +920,7 @@ export default function Reader() {
                         {'  '}
                       </Text>
                     ) : null}
-                    {inTarget && targetParagraphs.whole.has(paragraph.start)
+                    {inTarget && place?.kind === 'paragraph'
                       ? asParagraph
                       : paragraph.sentences.map((span) => renderSentence(span, inTarget))}
                   </Text>
