@@ -40,39 +40,51 @@ export function Scrubber({ scrollY, content, layout, ink, accent, surface, offse
   const max = Math.max(0, content - layout);
   const travel = Math.max(1, layout - INSET * 2 - SIZE);
 
-  const pan = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        // The page under it is a ScrollView, and a native scroll view takes
-        // back any responder it can. It cannot have this one.
-        onPanResponderTerminationRequest: () => false,
-        onShouldBlockNativeResponder: () => true,
-        onPanResponderGrant: () => {
-          from.current = offsetOf();
-          setPercent(Math.round((from.current / Math.max(1, max)) * 100));
-          setDragging(true);
-        },
-        onPanResponderMove: (_, gesture) => {
-          const next = Math.max(0, Math.min(max, from.current + (gesture.dy / travel) * max));
-          setPercent(Math.round((next / Math.max(1, max)) * 100));
-          onScrollTo(next);
-        },
-        onPanResponderRelease: () => setDragging(false),
-        onPanResponderTerminate: () => setDragging(false),
-      }),
-    [max, travel, offsetOf, onScrollTo]
+  /**
+   * A gesture outlives the renders that happen during it, and so must the
+   * responder holding it. Rebuilt from a changed callback or a fresh chapter
+   * height, it takes over the drag already in progress with a gesture it never
+   * saw begin: its `dy` is measured from zero, so the handle is flung to an
+   * end and dragged back at every frame — a handle that shakes instead of
+   * moving. So it is made once, and reads what changes through a ref.
+   */
+  const latest = useRef({ max, travel, offsetOf, onScrollTo });
+  latest.current = { max, travel, offsetOf, onScrollTo };
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      // The page under it is a ScrollView, and a native scroll view takes
+      // back any responder it can. It cannot have this one.
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+      onPanResponderGrant: () => {
+        const { max: span, offsetOf: at } = latest.current;
+        from.current = at();
+        setPercent(Math.round((from.current / Math.max(1, span)) * 100));
+        setDragging(true);
+      },
+      onPanResponderMove: (_, gesture) => {
+        const { max: span, travel: rail, onScrollTo: scrollTo } = latest.current;
+        const next = Math.max(0, Math.min(span, from.current + (gesture.dy / rail) * span));
+        setPercent(Math.round((next / Math.max(1, span)) * 100));
+        scrollTo(next);
+      },
+      onPanResponderRelease: () => setDragging(false),
+      onPanResponderTerminate: () => setDragging(false),
+    })
+  ).current;
+
+  // Built once per chapter, not once per render: a fresh interpolation is a
+  // fresh native node, and swapping one mid-scroll is a visible hitch.
+  const translateY = useMemo(
+    () => scrollY.interpolate({ inputRange: [0, max], outputRange: [0, travel], extrapolate: 'clamp' }),
+    [scrollY, max, travel]
   );
 
   // Nothing to scroll is nothing to drag.
   if (max <= 0 || travel <= 1) return null;
-
-  const translateY = scrollY.interpolate({
-    inputRange: [0, max],
-    outputRange: [0, travel],
-    extrapolate: 'clamp',
-  });
 
   return (
     // Only the handle takes a touch: the rest of this strip is the page's own
