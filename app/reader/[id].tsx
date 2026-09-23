@@ -434,6 +434,29 @@ export default function Reader() {
     else beginSelect(found, event);
   }
 
+  /**
+   * A long press on that same white space starts a selection, rather than
+   * doing nothing at all.
+   *
+   * The press only ever reached a sentence by landing on its glyphs, and most
+   * of a paragraph is not glyphs — the ragged right edge, the space after a
+   * full stop, the gap under a short last line. A press there fell through to
+   * the paragraph, which outside select mode only toggled the chrome, so
+   * selecting a phrase was a matter of hitting the letters. It reads as
+   * selection being broken; it was a near miss.
+   */
+  function holdParagraph(paragraph: { start: number; sentences: Span[] }, event: GestureResponderEvent) {
+    const found = sentenceAtLine(
+      linesOf.current.get(paragraph.start) ?? [],
+      paragraph.sentences,
+      paragraph.start,
+      event.nativeEvent.locationY
+    );
+    if (!found) return;
+    if (selection) extendSelect(found, event);
+    else beginSelect(found, event);
+  }
+
   function beginSelect(span: Span, event: GestureResponderEvent) {
     setSelection({ anchor: span, focus: span, y: event.nativeEvent.pageY });
     setChrome(true);
@@ -854,6 +877,7 @@ export default function Reader() {
                     <Pressable
                       key={paragraph.start}
                       onPress={(event) => pressParagraph(paragraph, event)}
+                      onLongPress={(event) => holdParagraph(paragraph, event)}
                       style={[styles.code, { borderColor: palette.dim, marginBottom: lineHeight }]}
                     >
                       <Text
@@ -890,6 +914,7 @@ export default function Reader() {
                 <Pressable
                   key={paragraph.start}
                   onPress={(event) => pressParagraph(paragraph, event)}
+                  onLongPress={(event) => holdParagraph(paragraph, event)}
                   style={{ marginBottom: lineHeight * 0.6 }}
                 >
                   <Text
