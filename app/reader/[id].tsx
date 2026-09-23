@@ -60,7 +60,6 @@ import {
 import { ReadingSettingsSheet } from '../../src/ui/ReadingSettingsSheet';
 import { Scrubber } from '../../src/ui/Scrubber';
 import { labelFor } from '../../src/translate/languages';
-import { ActionMenu, type MenuAction } from '../../src/ui/ActionMenu';
 import { SentenceMenu } from '../../src/ui/SentenceMenu';
 import { NoteSheet } from '../../src/ui/NoteSheet';
 import { Toast, useFlash } from '../../src/ui/primitives';
@@ -120,7 +119,6 @@ export default function Reader() {
   const [selection, setSelection] = useState<{ anchor: Span; focus: Span; y: number } | null>(null);
   /** The title's own menu, unfolded under the bar it belongs to. */
   const [jumpOpen, setJumpOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [noteFor, setNoteFor] = useState<Span | null>(null);
   const [shareFor, setShareFor] = useState<Span | null>(null);
   const [offset, setOffset] = useState(0);
@@ -597,33 +595,6 @@ export default function Reader() {
    * wanted: move within the book, then mark it up, then leave for a page that
    * is about what you are looking at.
    */
-  function moreActions(): MenuAction[] {
-    if (!chapter) return [];
-    const partIdx = chapter.part_idx;
-    // Leaving the page is a decision, not a reach — so the pages this one sits
-    // inside are named in a list rather than crowded onto the bar.
-    const actions: MenuAction[] = [];
-    // A bible's Genesis, a novel's 卷 — named, because "the part" is not what
-    // anyone calls the thing they are reading.
-    if (partIdx !== null && partIdx !== undefined) {
-      actions.push({
-        label: t('reader.openPart', { name: chapter.part_title?.trim() || `${partIdx + 1}` }),
-        onPress: () => {
-          setMoreOpen(false);
-          router.push(`/book/${id}/part/${partIdx}`);
-        },
-      });
-    }
-    actions.push({
-      label: t('reader.openBook', { name: book?.title ?? '' }),
-      onPress: () => {
-        setMoreOpen(false);
-        router.push(`/book/${id}`);
-      },
-    });
-    return actions;
-  }
-
   function quoteFor(span: Span) {
     return {
       text: source.slice(span.start, span.end),
@@ -1049,46 +1020,55 @@ export default function Reader() {
         pointerEvents={selection ? 'none' : 'box-none'}
       >
         <View style={styles.controls}>
-          {/* Turning a chapter is not on this bar at all: it happens at the end
-              of the words, or from the title above, which is also where the
-              book's other chapters are. What is left is what you reach for
-              while reading — and each one says what it is, because a row of
-              bare glyphs is a row of guesses. */}
+          {/* Turning a chapter lives on the bar after all. It was at the end of
+              the words and on the title's wheel, which is right when you have
+              finished reading one and wrong when you have not — a book read a
+              chapter at a time is turned far more often than its type is
+              resized. The two of them take the outer columns, where either
+              thumb already rests; the ends of the book keep their place in the
+              row rather than letting the others slide sideways. */}
+          <Pressable
+            onPress={() => index > 0 && goToChapter(index - 1, 0)}
+            disabled={index === 0}
+            style={[styles.barItem, { opacity: index === 0 ? 0.25 : 1 }]}
+          >
+            <Text style={[styles.arrow, { color: palette.text }]}>←</Text>
+            <Text style={[styles.barLabel, { color: palette.dim }]}>{t('reader.prevShort')}</Text>
+          </Pressable>
           <Pressable onPress={() => setSettingsOpen(true)} style={styles.barItem}>
             <Text style={{ color: palette.text, fontSize: 19, lineHeight: 23 }}>Aa</Text>
             <Text style={[styles.barLabel, { color: palette.dim }]}>{t('reader.textSettings')}</Text>
           </Pressable>
           {/* This chapter's own page: its brief, who is in it, its notes and
-              everything that can be made of it. */}
+              everything that can be made of it — and the way to the book, now
+              that no menu holds one. */}
           {chapter ? (
             <Pressable
               onPress={() => router.push(`/chapter/${chapter.id}`)}
               style={styles.barItem}
             >
-              <Text style={{ color: palette.text, fontSize: 19, lineHeight: 23 }}>▤</Text>
+              <Text
+                style={{
+                  color: selecting ? palette.accent : palette.text,
+                  fontSize: 19,
+                  lineHeight: 23,
+                }}
+              >
+                ▤
+              </Text>
               <Text style={[styles.barLabel, { color: palette.dim }]}>
                 {t('reader.thisChapter')}
               </Text>
             </Pressable>
           ) : null}
-          {moreActions().length > 0 ? (
-            <Pressable onPress={() => setMoreOpen(true)} style={styles.barItem}>
-              <Text
-                style={{
-                  color: selecting ? palette.accent : palette.text,
-                  fontSize: 22,
-                  lineHeight: 23,
-                }}
-              >
-                ⋯
-              </Text>
-              <Text
-                style={[styles.barLabel, { color: selecting ? palette.accent : palette.dim }]}
-              >
-                {t('reader.more')}
-              </Text>
-            </Pressable>
-          ) : null}
+          <Pressable
+            onPress={() => index < chapters.length - 1 && goToChapter(index + 1, 0)}
+            disabled={index >= chapters.length - 1}
+            style={[styles.barItem, { opacity: index >= chapters.length - 1 ? 0.25 : 1 }]}
+          >
+            <Text style={[styles.arrow, { color: palette.text }]}>→</Text>
+            <Text style={[styles.barLabel, { color: palette.dim }]}>{t('reader.nextShort')}</Text>
+          </Pressable>
         </View>
       </Animated.View>
       )}
@@ -1175,13 +1155,6 @@ export default function Reader() {
         onClose={() => setShareFor(null)}
       />
 
-      <ActionMenu
-        visible={moreOpen}
-        title={chapter.title.trim() || `${index + 1}`}
-        actions={moreActions()}
-        onClose={() => setMoreOpen(false)}
-      />
-
 
       <Toast message={toast} />
     </SafeAreaView>
@@ -1228,6 +1201,11 @@ const styles = StyleSheet.create({
    * rather than a 44pt square with a symbol to be interpreted.
    */
   barItem: { flex: 1, minHeight: TOUCH, alignItems: 'center', justifyContent: 'center' },
+  /** An arrow, not the header's chevron: leaving the reader and turning a
+   *  chapter inside it are different moves and should not wear one mark. Set
+   *  at the weight `Aa` is drawn at, or a hairline stroke beside two solid
+   *  glyphs reads as the one that is switched off. */
+  arrow: { fontSize: 23, lineHeight: 23, fontWeight: '600' },
   barLabel: { fontSize: 11, marginTop: 1 },
   zone: { position: 'absolute', top: 0, bottom: 0 },
   /** Set well below the last line: a button touching the text is a button hit

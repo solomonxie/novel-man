@@ -237,7 +237,9 @@
     "notTranslated": "(not translated into {{language}})",
     "thisChapter": "Chapter",
     "openBook": "Go to {{name}}",
-    "analyzeChapter": "Analyze this chapter"
+    "analyzeChapter": "Analyze this chapter",
+    "prevShort": "Prev",
+    "nextShort": "Next"
   },
   "settings": {
     "title": "Settings",
