@@ -281,7 +281,15 @@
     "appearance_dark": "Dark",
     "appearanceSystemHint": "Follows your phone",
     "general": "General",
-    "aiRequestsOn": "{{count}} requests · {{model}}"
+    "aiRequestsOn": "{{count}} requests · {{model}}",
+    "drawing": "Drawing",
+    "drawingGrade": "Quality",
+    "grade_fast": "Fast",
+    "grade_normal": "Normal",
+    "grade_best": "Best",
+    "gradeHint_fast": "512px on the older model. Quick and cheap, and the loosest with what the prompt asked for.",
+    "gradeHint_normal": "1024px, cheapest pass of the current model. Follows the prompt closely.",
+    "gradeHint_best": "1024px at the slowest pass. Same obedience, more of everything else."
   },
   "units": {
     "words": "{{count}} words",
@@ -711,7 +719,8 @@
     "task_book-lookup": "Look up {{what}}",
     "task_book-outline": "Get the contents of {{what}}",
     "task_book-correct": "Check the details of {{what}}",
-    "task_chapter-recap": "Recall {{what}}"
+    "task_chapter-recap": "Recall {{what}}",
+    "task_image-draw": "Draw {{what}}"
   },
   "chapter": {
     "addTerm": "Add a term",
@@ -1076,6 +1085,20 @@
     "readingHint": "In progress.",
     "read": "Read",
     "readHint": "Finished with it — or finished trying."
+  },
+  "gallery": {
+    "title": "Gallery",
+    "draw": "Draw",
+    "cancel": "Cancel",
+    "submit": "Draw it",
+    "queued": "It joins the queue — leave the page, it keeps going.",
+    "placeholder": "What should it look like?",
+    "empty": "Nothing drawn yet.",
+    "use": "Use as portrait",
+    "useCover": "Use as cover",
+    "download": "Save",
+    "remove": "Delete",
+    "removeConfirm": "Delete this drawing?"
   },
   "prose": {
     "more": "More",

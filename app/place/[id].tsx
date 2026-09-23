@@ -32,9 +32,16 @@ import {
   type PlaceCompany,
   type PlaceVisit,
   type Scene,
+  deleteImage,
+  imagesFor,
+  type Drawing,
 } from '../../src/db/repo';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
-import { queuePlaceLocate, queuePlacePolish } from '../../src/analysis/runs';
+import { queueDrawing, queuePlaceLocate, queuePlacePolish } from '../../src/analysis/runs';
+import { Gallery } from '../../src/ui/Gallery';
+import { CoverViewer } from '../../src/ui/CoverViewer';
+import { Share } from 'react-native';
+import { imageUri, removeImage } from '../../src/storage/files';
 import { appearancesIn, namesOf, timelineFor, type Appearance } from '../../src/cast/mentions';
 import { mapUrl } from '../../src/cast/location';
 import { kindOf, supports } from '../../src/books/kinds';
@@ -75,6 +82,8 @@ export default function PlacePage() {
   const [text, setText] = useState('');
   const [book, setBook] = useState<Book | null>(null);
   const [timeline, setTimeline] = useState<{ chapter_idx: number; count: number }[]>([]);
+  const [drawn, setDrawn] = useState<Drawing[]>([]);
+  const [zoomed, setZoomed] = useState<Drawing | null>(null);
   /** What the tapped stretch of the graph actually says, once asked for. */
   const [shown, setShown] = useState<Appearance[]>([]);
   const [scrubbing, setScrubbing] = useState(false);
@@ -98,6 +107,7 @@ export default function PlacePage() {
       if (!found) return;
       setChapters(await listChapters(found.book_id));
       setVisits(await listPlaceVisits(found.id));
+      setDrawn(await imagesFor(found.id));
       setCompany(await listPlaceCompany(found.id));
       setScenes(await listScenesAtPlace(found.id));
       setText(await getDocumentText(found.book_id));
@@ -133,6 +143,23 @@ export default function PlacePage() {
   async function save(changes: Parameters<typeof updateEntity>[1]) {
     await updateEntity(place!.id, changes);
     load();
+  }
+
+  /** A drawing is bought, so it is not thrown away by a stray tap. */
+  function confirmRemove(image: Drawing) {
+    Alert.alert(t('gallery.removeConfirm'), undefined, [
+      { text: t('settings.cancel'), style: 'cancel' },
+      {
+        text: t('settings.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          setZoomed(null);
+          await deleteImage(image.id);
+          removeImage(image.path);
+          load();
+        },
+      },
+    ]);
   }
 
   function confirmDelete() {
@@ -276,6 +303,57 @@ export default function PlacePage() {
           ))
         )}
       </Block>
+
+      <Gallery
+        title={t('gallery.title')}
+        images={drawn}
+        subject={{
+          kind: 'place',
+          name: place.name,
+          facts: [],
+          summary: place.summary,
+          observed: visits.map((visit) => visit.note ?? ''),
+        }}
+        onSubmit={(prompt) =>
+          queueDrawing(place.book_id, place.name, { prompt, kind: 'place', entityId: place.id })
+        }
+        onOpen={setZoomed}
+      />
+
+      <CoverViewer
+        visible={zoomed !== null}
+        title={place.name}
+        hue={hueFrom(place.name)}
+        path={zoomed?.path}
+        onClose={() => setZoomed(null)}
+        actions={
+          zoomed
+            ? [
+                {
+                  key: 'use',
+                  label: t('gallery.use'),
+                  onPress: async () => {
+                    await save({ portrait_path: zoomed.path });
+                    setZoomed(null);
+                  },
+                },
+                {
+                  key: 'save',
+                  label: t('gallery.download'),
+                  onPress: () => {
+                    const uri = imageUri(zoomed.path);
+                    if (uri) void Share.share({ url: uri });
+                  },
+                },
+                {
+                  key: 'delete',
+                  label: t('gallery.remove'),
+                  onPress: () => confirmRemove(zoomed),
+                },
+              ]
+            : undefined
+        }
+      />
 
       <AppearanceGraph
         title={t('place.timeline')}

@@ -106,6 +106,12 @@ export function readImage(path: string): Uint8Array | null {
   return direct.exists ? direct.bytesSync() : null;
 }
 
+/** The row is only half of it: the bytes are ours and go with it. */
+export function removeImage(path: string) {
+  const here = new File(imagesDir(), imageName(path));
+  if (here.exists) here.delete();
+}
+
 export function writeImage(name: string, bytes: Uint8Array): string {
   const target = new File(imagesDir(), name);
   if (target.exists) target.delete();

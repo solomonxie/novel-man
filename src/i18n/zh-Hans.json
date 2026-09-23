@@ -281,7 +281,15 @@
     "appearance_dark": "深色",
     "appearanceSystemHint": "跟随手机设置",
     "general": "通用",
-    "aiRequestsOn": "{{count}} 次请求 · {{model}}"
+    "aiRequestsOn": "{{count}} 次请求 · {{model}}",
+    "drawing": "绘图",
+    "drawingGrade": "画质",
+    "grade_fast": "快速",
+    "grade_normal": "普通",
+    "grade_best": "最佳",
+    "gradeHint_fast": "旧模型 512px。快而便宜，但最不照着提示画。",
+    "gradeHint_normal": "当前模型 1024px 最省档。忠实于提示。",
+    "gradeHint_best": "1024px 最慢档。同样忠实，细节更多。"
   },
   "units": {
     "words": "{{count}} 词",
@@ -711,7 +719,8 @@
     "task_book-lookup": "查 {{what}}",
     "task_book-outline": "取 {{what}} 的目录",
     "task_book-correct": "校对 {{what}} 的书目信息",
-    "task_chapter-recap": "回忆{{what}}"
+    "task_chapter-recap": "回忆{{what}}",
+    "task_image-draw": "绘制 {{what}}"
   },
   "chapter": {
     "addTerm": "添加词条",
@@ -1076,6 +1085,20 @@
     "readingHint": "正在读。",
     "read": "读完",
     "readHint": "读完了——或者放弃了。"
+  },
+  "gallery": {
+    "title": "图库",
+    "draw": "绘制",
+    "cancel": "取消",
+    "submit": "开始绘制",
+    "queued": "已加入队列——离开此页也会继续。",
+    "placeholder": "希望画成什么样？",
+    "empty": "还没有图片。",
+    "use": "设为头像",
+    "useCover": "设为封面",
+    "download": "保存",
+    "remove": "删除",
+    "removeConfirm": "删除这张图片？"
   },
   "prose": {
     "more": "展开",

@@ -6,8 +6,11 @@ import {
   PanResponder,
   Pressable,
   StyleSheet,
+  Text,
   useWindowDimensions,
+  View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Cover } from './primitives';
 
@@ -24,14 +27,17 @@ const DISMISS_AT = 110;
  * follows the finger rather than waiting for it to finish, which is what makes
  * a photo feel held rather than displayed.
  */
-export function CoverViewer({ visible, title, hue, path, onClose }: {
+export function CoverViewer({ visible, title, hue, path, onClose, actions }: {
   visible: boolean;
   title: string;
   hue: number;
   path?: string | null;
   onClose: () => void;
+  /** What can be done with the picture while it is open — kept off the image. */
+  actions?: { key: string; label: string; onPress: () => void }[];
 }) {
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const drag = useRef(new Animated.ValueXY()).current;
   const appear = useRef(new Animated.Value(0)).current;
 
@@ -99,6 +105,17 @@ export function CoverViewer({ visible, title, hue, path, onClose }: {
           />
         </Animated.View>
       </Pressable>
+      {/* Outside the Pressable that dismisses, or every button would also be
+          a way out of the picture it acts on. */}
+      {actions?.length ? (
+        <View style={[styles.actions, { bottom: Math.max(insets.bottom, 24) }]}>
+          {actions.map((action) => (
+            <Pressable key={action.key} onPress={action.onPress} hitSlop={10}>
+              <Text style={styles.action}>{action.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </Modal>
   );
 }
@@ -113,4 +130,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.92)',
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  actions: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 28,
+  },
+  action: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
 });
