@@ -297,7 +297,8 @@
     "unit_books": "books",
     "unit_volumes": "volumes",
     "unit_verses": "verses",
-    "unit_notes": "notes"
+    "unit_notes": "notes",
+    "chapterCount": "# of chapters"
   },
   "job": {
     "title": "Getting it",
