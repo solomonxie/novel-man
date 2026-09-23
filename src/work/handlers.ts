@@ -195,6 +195,19 @@ const UNKNOWN_CHAPTER =
   'the model could not place this chapter — a line in its brief saying what it covers is usually enough';
 
 /**
+ * The same refusal, said usefully.
+ *
+ * "Add a line to the brief" is the right advice exactly once: when there is no
+ * brief. Printed over a chapter that already has one, it sends the reader to
+ * do a thing they have done, and the queue row stops being worth reading.
+ */
+function cannotPlace(chapter: Chapter): string {
+  return chapter.brief?.trim()
+    ? `the model does not know "${chapter.title.trim() || chapter.idx + 1}" of this book well enough to recall it`
+    : UNKNOWN_CHAPTER;
+}
+
+/**
  * The answer to a question about a book whose words were never sent. Three
  * shapes all mean the same thing — the token, `unknown` among the fields, and
  * the prose a model writes when it would rather explain than answer — and all
@@ -528,7 +541,7 @@ async function briefChapter(job: WorkJob, signal: AbortSignal) {
   );
   // A book the model does not know comes back saying so, and that sentence is
   // not a brief — see `knownWorkBody`.
-  if (citedNotSent(book) && refused(answer)) throw new Error(UNKNOWN_CHAPTER);
+  if (citedNotSent(book) && refused(answer)) throw new Error(cannotPlace(chapter));
   await setChapterBrief(chapter.id, answer.trim() || null);
 }
 
@@ -582,9 +595,9 @@ async function recapChapter(job: WorkJob, signal: AbortSignal) {
     1200,
     signal
   );
-  if (refused(answer)) throw new Error(UNKNOWN_CHAPTER);
+  if (refused(answer)) throw new Error(cannotPlace(chapter));
   const recap = answer.trim();
-  if (!recap) throw new Error(UNKNOWN_CHAPTER);
+  if (!recap) throw new Error(cannotPlace(chapter));
   await setChapterRecap(chapter.id, recap);
 }
 
