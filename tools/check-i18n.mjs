@@ -79,5 +79,24 @@ walk(join(root, 'app'));
 walk(join(root, 'src'));
 if (!bare) console.log('  ok   every visible string comes from a catalog');
 
+// A queue row builds its key at the call site — `work.task_${job.kind}` — so
+// nothing above can see it. Rename a kind and its label stays behind under
+// the old name, and the queue prints the key itself at the reader.
+console.log('work kinds');
+const kinds = [
+  ...readFileSync(join(root, 'src/db/work.ts'), 'utf8')
+    .split('export type WorkKind =')[1]
+    .split(';')[0]
+    .matchAll(/'([a-z-]+)'/g),
+].map((match) => match[1]);
+const work = JSON.parse(readFileSync(join(root, 'src/i18n/en.json'), 'utf8')).work;
+const missing = kinds.filter((kind) => !(`task_${kind}` in work));
+const orphan = Object.keys(work).filter(
+  (key) => key.startsWith('task_') && !kinds.includes(key.slice(5))
+);
+for (const kind of missing) report(`no work.task_${kind} — the queue would show the key`);
+for (const key of orphan) report(`work.${key} names no kind`);
+if (!missing.length && !orphan.length) console.log('  ok   every job kind has a label, and no label outlives its kind');
+
 console.log(failures ? `\n${failures} failing` : '\nall passing');
 process.exit(failures ? 1 : 0);
