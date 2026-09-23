@@ -1075,5 +1075,10 @@
     "readingHint": "In progress.",
     "read": "Read",
     "readHint": "Finished with it — or finished trying."
+  },
+  "prose": {
+    "more": "More",
+    "less": "Less",
+    "edit": "Edit"
   }
 }
