@@ -58,12 +58,42 @@ export async function recordRequest(input: {
   );
 }
 
-export async function listRequests(keyId: string): Promise<AiRequest[]> {
+/**
+ * The last few requests on a key, not every one kept.
+ *
+ * Three hundred are retained so a bill can be accounted for; a settings page
+ * is not where anybody reads three hundred prompts. What it is for is "did
+ * that go through, and what did it cost" — which the newest handful answers
+ * and the rest only buries.
+ */
+export const SHOWN = 20;
+
+export async function listRequests(keyId: string, limit = SHOWN): Promise<AiRequest[]> {
   const database = await db();
   return database.getAllAsync<AiRequest>(
-    'SELECT * FROM ai_requests WHERE key_id = ? ORDER BY created_at DESC',
+    'SELECT * FROM ai_requests WHERE key_id = ? ORDER BY created_at DESC LIMIT ?',
+    keyId,
+    limit
+  );
+}
+
+/**
+ * What the key has cost over everything kept, not over what is on screen.
+ *
+ * The page used to add up the rows it was listing, which was every row there
+ * was. Listing fewer must not quietly change the question from "what has this
+ * key cost" to "what did the last twenty cost".
+ */
+export async function requestTotals(keyId: string): Promise<{ count: number; usd: number; failed: number }> {
+  const database = await db();
+  const row = await database.getFirstAsync<{ count: number; usd: number; failed: number }>(
+    `SELECT COUNT(*) AS count,
+            COALESCE(SUM(usd), 0) AS usd,
+            SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS failed
+       FROM ai_requests WHERE key_id = ?`,
     keyId
   );
+  return { count: row?.count ?? 0, usd: row?.usd ?? 0, failed: row?.failed ?? 0 };
 }
 
 export async function getRequest(id: string): Promise<AiRequest | null> {
