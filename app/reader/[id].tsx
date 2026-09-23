@@ -662,6 +662,10 @@ export default function Reader() {
   }
 
   const scrolledY = useRef(0);
+  const whereScrolled = useCallback(() => scrolledY.current, []);
+  const scrollPageTo = useCallback((y: number) => {
+    scrollRef.current?.scrollTo({ y, animated: false });
+  }, []);
 
   if (!book || !chapter) {
     return (
@@ -1026,8 +1030,8 @@ export default function Reader() {
           ink={palette.text}
           accent={palette.accent}
           surface={palette.bg}
-          offsetOf={() => scrolledY.current}
-          onScrollTo={(y) => scrollRef.current?.scrollTo({ y, animated: false })}
+          offsetOf={whereScrolled}
+          onScrollTo={scrollPageTo}
         />
       </View>
 
