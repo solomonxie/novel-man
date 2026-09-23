@@ -229,7 +229,7 @@ export default function EntityPage() {
           span
             ? (
               <>
-                <Fact value={timeline.length} label={t('units.unit_chapters')} />
+                <Fact value={timeline.length} label={t('units.chapterCount')} />
                 <Fact value={t('units.chapterShort', { n: span.first + 1 })} label={t('entity.firstSeen')} />
                 <Fact value={t('units.chapterShort', { n: span.last + 1 })} label={t('entity.lastSeen')} />
               </>

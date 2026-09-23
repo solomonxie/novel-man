@@ -297,7 +297,8 @@
     "unit_books": "卷书",
     "unit_volumes": "分卷",
     "unit_verses": "节",
-    "unit_notes": "笔记"
+    "unit_notes": "笔记",
+    "chapterCount": "章数"
   },
   "job": {
     "title": "正在获取",
