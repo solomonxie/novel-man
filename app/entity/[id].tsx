@@ -26,6 +26,8 @@ import {
   listEntities,
   listMentions,
   listObservations,
+  deleteImage,
+  imagesFor,
   listRelationsFor,
   parseFields,
   updateCast,
@@ -36,6 +38,7 @@ import {
   type CustomField,
   type Entity,
   type Observation,
+  type Drawing,
   type RelationEdge,
 } from '../../src/db/repo';
 import { appearances, appearancesIn, namesOf, timelineFor, type Appearance } from '../../src/cast/mentions';
@@ -58,6 +61,11 @@ import { EditableLine } from '../../src/ui/EditableLine';
 import { adoptImage } from '../../src/storage/files';
 import { radius, space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
+import { Gallery } from '../../src/ui/Gallery';
+import { CoverViewer } from '../../src/ui/CoverViewer';
+import { Share } from 'react-native';
+import { imageUri, removeImage } from '../../src/storage/files';
+import { queueDrawing } from '../../src/analysis/runs';
 
 /**
  * A character's attributes vary wildly by genre — cultivation level, house,
@@ -72,6 +80,8 @@ export default function EntityPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [timeline, setTimeline] = useState<{ chapter_idx: number; count: number }[]>([]);
   const [observations, setObservations] = useState<Observation[]>([]);
+  const [drawn, setDrawn] = useState<Drawing[]>([]);
+  const [zoomed, setZoomed] = useState<Drawing | null>(null);
   const [polishOpen, setPolishOpen] = useState(false);
   const [bar, setBar] = useState<number | null>(null);
   /** Live while a finger is on the graph, kept when it lifts. */
@@ -118,6 +128,7 @@ export default function EntityPage() {
       setChapters(await listChapters(found.book_id));
       setTimeline(timelineFor(await listMentions(found.book_id), found.id));
       setObservations(await listObservations(found.id));
+      setDrawn(await imagesFor(found.id));
       setRelations(await listRelationsFor(found.id));
       const people = await listEntities(found.book_id, 'character');
       setCast(people.filter((row) => row.id !== found.id));
@@ -150,6 +161,8 @@ export default function EntityPage() {
   const real = book ? !kindOf(book.kind).fiction : false;
   const fields = parseFields(entity.fields);
   const span = appearances(timeline);
+  /** The chapters that said something about how they look. */
+  const looks = observations.filter((row) => row.appearance?.trim());
 
   /**
    * The bar says how often; this says what. The manuscript is megabytes, so it
@@ -186,6 +199,23 @@ export default function EntityPage() {
   // on the way out instead.
   async function saveFields(next: CustomField[]) {
     await save({ fields: JSON.stringify(next) });
+  }
+
+  /** A drawing is bought, so it is not thrown away by a stray tap. */
+  function confirmRemove(image: Drawing) {
+    Alert.alert(t('gallery.removeConfirm'), undefined, [
+      { text: t('settings.cancel'), style: 'cancel' },
+      {
+        text: t('settings.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          setZoomed(null);
+          await deleteImage(image.id);
+          removeImage(image.path);
+          load();
+        },
+      },
+    ]);
   }
 
   function confirmDelete() {
@@ -362,6 +392,85 @@ export default function EntityPage() {
               </View>
             )}
       </AppearanceGraph>
+
+      {/* What the book said they look like, chapter by chapter. Every line
+          keeps the number it came from rather than the sentence it came from —
+          the sentence is one tap away, in the text. */}
+      {entity.kind === 'character' && looks.length > 0 && (
+        <Block title={t('entity.appearance')} count={looks.length}>
+          {looks.map((observation) => (
+            <Item
+              key={observation.id}
+              badge={<Badge n={observation.chapter_idx + 1} tone="quiet" />}
+              title={chapterLabel(chapters, observation.chapter_idx)}
+              detail={observation.appearance ?? undefined}
+              onPress={() => router.push(`/reader/${entity.book_id}?chapter=${observation.chapter_idx}`)}
+            />
+          ))}
+        </Block>
+      )}
+
+      {/* Drawn from the lines above, and from everything else the page holds.
+          The same block on a place and on a term, because it is the same
+          question in each. */}
+      <Gallery
+        title={t('gallery.title')}
+        images={drawn}
+        subject={{
+          kind: entity.kind === 'character' ? 'portrait' : entity.kind === 'place' ? 'place' : 'term',
+          name: entity.name,
+          facts: [entity.age, entity.gender, entity.role],
+          summary: entity.summary,
+          observed: looks.length
+            ? looks.map((row) => row.appearance ?? '')
+            : observations.map((row) => row.note ?? ''),
+        }}
+        onSubmit={(prompt) =>
+          queueDrawing(entity.book_id, entity.name, {
+            prompt,
+            kind: entity.kind === 'character' ? 'portrait' : entity.kind === 'place' ? 'place' : 'term',
+            entityId: entity.id,
+          })
+        }
+        onOpen={setZoomed}
+      />
+
+      {/* Full size, with the two things anyone wants of a drawing: keep it as
+          the face this page wears, or take it off the device. */}
+      <CoverViewer
+        visible={zoomed !== null}
+        title={entity.name}
+        hue={hueFrom(entity.name)}
+        path={zoomed?.path}
+        onClose={() => setZoomed(null)}
+        actions={
+          zoomed
+            ? [
+                {
+                  key: 'use',
+                  label: t('gallery.use'),
+                  onPress: async () => {
+                    await save({ portrait_path: zoomed.path });
+                    setZoomed(null);
+                  },
+                },
+                {
+                  key: 'save',
+                  label: t('gallery.download'),
+                  onPress: () => {
+                    const uri = imageUri(zoomed.path);
+                    if (uri) void Share.share({ url: uri });
+                  },
+                },
+                {
+                  key: 'delete',
+                  label: t('gallery.remove'),
+                  onPress: () => confirmRemove(zoomed),
+                },
+              ]
+            : undefined
+        }
+      />
 
       {observations.length > 0 && (
         <Block title={t('entity.perChapter')} count={observations.length}>

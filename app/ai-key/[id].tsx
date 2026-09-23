@@ -4,6 +4,7 @@ import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/n
 import { useTranslation } from 'react-i18next';
 
 import { clearRequests, listRequests, requestTotals, SHOWN, type AiRequest } from '../../src/db/requests';
+import { getGrade, setGrade, type Grade } from '../../src/ai/image';
 import { formatUsd } from '../../src/ai/cost';
 import { listKeys, setKeyModel } from '../../src/ai/keys';
 import { modelFor, vendorById } from '../../src/ai/vendors';
@@ -18,11 +19,13 @@ export default function AiKeyPage() {
   const [requests, setRequests] = useState<AiRequest[]>([]);
   const [model, setModel] = useState<string | undefined>();
   const [totals, setTotals] = useState({ count: 0, usd: 0, failed: 0 });
+  const [grade, setGradeState] = useState<Grade>('normal');
 
   const load = useCallback(() => {
     if (!id) return;
     listRequests(id).then(setRequests);
     requestTotals(id).then(setTotals);
+    getGrade().then(setGradeState);
     listKeys().then((keys) => setModel(keys.find((key) => key.id === id)?.model));
   }, [id]);
 
@@ -30,6 +33,15 @@ export default function AiKeyPage() {
 
   const total = totals.usd;
   const failed = totals.failed;
+
+  /** Three steps rather than a sheet: the whole range is one tap wide. */
+  const GRADES: Grade[] = ['fast', 'normal', 'best'];
+
+  async function cycleGrade() {
+    const next = GRADES[(GRADES.indexOf(grade) + 1) % GRADES.length];
+    await setGrade(next);
+    setGradeState(next);
+  }
 
   function confirmClear() {
     Alert.alert(t('keyLog.clearConfirm'), undefined, [
@@ -68,6 +80,21 @@ export default function AiKeyPage() {
         <Row label={t('keyLog.spent')} value={formatUsd(total)} />
         <Row label={t('keyLog.failed')} value={`${failed}`} last />
       </Section>
+
+      {/* Only this vendor can draw, so only this vendor's page asks how. The
+          choice is the app's rather than the key's — there is realistically
+          one drawing key — but this is where anybody would look for it. */}
+      {vendor === 'openai' && (
+        <Section title={t('settings.drawing')}>
+          <Row
+            label={t('settings.drawingGrade')}
+            value={t(`settings.grade_${grade}`)}
+            detail={t(`settings.gradeHint_${grade}`)}
+            onPress={cycleGrade}
+            last
+          />
+        </Section>
+      )}
 
       <Section title={t('keyLog.requests')}>
         {requests.length === 0 ? (

@@ -1,5 +1,5 @@
 import { estimate, type Estimate } from '../ai/cost';
-import type { Book, Chapter } from '../db/repo';
+import type { Book, Chapter, ImageKind } from '../db/repo';
 import { queueWork } from '../work/queue';
 import { bookHeader, chapterBody, citedNotSent, passageBody } from './context';
 
@@ -114,6 +114,26 @@ export function queuePolish(bookId: string, entityId: string, name: string): Pro
     kind: 'character-polish',
     units: [{ label: name, payload: { entityId } }],
   });
+}
+
+/**
+ * Drawing takes half a minute and costs money, so it goes in the queue with
+ * everything else that does: it survives leaving the page, it can be watched,
+ * and it can be stopped.
+ */
+export function queueDrawing(
+  bookId: string,
+  label: string,
+  wanted: {
+    prompt: string;
+    kind: ImageKind;
+    entityId?: string | null;
+    chapterIdx?: number | null;
+    start?: number | null;
+    end?: number | null;
+  }
+): Promise<string> {
+  return queueWork({ bookId, kind: 'image-draw', units: [{ label, payload: wanted }] });
 }
 
 /** A place earns its profile the same way a person does: from what was observed. */

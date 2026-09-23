@@ -16,6 +16,8 @@ export type WorkKind =
   | 'place-polish'
   | 'place-locate'
   | 'person-link'
+  /** A picture drawn from what the book said the thing looks like. */
+  | 'image-draw'
   | 'scene-suggest'
   | 'translate-span'
   | 'script-scene';

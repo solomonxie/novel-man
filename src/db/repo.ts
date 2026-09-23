@@ -823,6 +823,83 @@ export async function listChapterTerms(bookId: string, chapterIdx: number): Prom
 }
 
 /** The chapters a place was recorded in, with whatever was said about it there. */
+/**
+ * A picture this shelf drew, and what it was drawn for.
+ *
+ * One row shape for all of them: a face, a view of a place, a cover, a passage
+ * somebody wanted to see. What it belongs to is whichever of `entity_id`,
+ * `chapter_idx` and the span is filled in — a free drawing fills none of them
+ * and simply belongs to the book.
+ */
+export type ImageKind = 'cover' | 'portrait' | 'place' | 'term' | 'passage' | 'free';
+
+export type Drawing = {
+  id: string;
+  book_id: string;
+  entity_id: string | null;
+  chapter_idx: number | null;
+  start: number | null;
+  end: number | null;
+  kind: ImageKind;
+  path: string;
+  prompt: string;
+  caption: string | null;
+  created_at: number;
+};
+
+/** The book's whole gallery, newest first. */
+export async function listImages(bookId: string): Promise<Drawing[]> {
+  const database = await db();
+  return database.getAllAsync<Drawing>(
+    'SELECT * FROM images WHERE book_id = ? ORDER BY created_at DESC',
+    bookId
+  );
+}
+
+export async function imagesFor(entityId: string): Promise<Drawing[]> {
+  const database = await db();
+  return database.getAllAsync<Drawing>(
+    'SELECT * FROM images WHERE entity_id = ? ORDER BY created_at DESC',
+    entityId
+  );
+}
+
+export async function imagesIn(bookId: string, chapterIdx: number): Promise<Drawing[]> {
+  const database = await db();
+  return database.getAllAsync<Drawing>(
+    'SELECT * FROM images WHERE book_id = ? AND chapter_idx = ? ORDER BY created_at DESC',
+    bookId,
+    chapterIdx
+  );
+}
+
+export async function addImage(input: {
+  bookId: string;
+  entityId?: string | null;
+  chapterIdx?: number | null;
+  start?: number | null;
+  end?: number | null;
+  kind: ImageKind;
+  path: string;
+  prompt: string;
+}): Promise<string> {
+  const database = await db();
+  const id = newId();
+  await database.runAsync(
+    `INSERT INTO images
+       (id, book_id, entity_id, chapter_idx, start, end, kind, path, prompt, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    id, input.bookId, input.entityId ?? null, input.chapterIdx ?? null,
+    input.start ?? null, input.end ?? null, input.kind, input.path, input.prompt, Date.now()
+  );
+  return id;
+}
+
+export async function deleteImage(id: string) {
+  const database = await db();
+  await database.runAsync('DELETE FROM images WHERE id = ?', id);
+}
+
 export type PlaceVisit = { chapter_idx: number; note: string | null };
 
 export async function listPlaceVisits(entityId: string): Promise<PlaceVisit[]> {

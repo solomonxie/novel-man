@@ -18,6 +18,9 @@ import {
   type CustomField,
   type Entity,
   type PlaceVisit,
+  deleteImage,
+  imagesFor,
+  type Drawing,
 } from '../../src/db/repo';
 import { appearancesIn, namesOf, timelineFor, type Appearance } from '../../src/cast/mentions';
 import { AppearanceGraph, chapterLabel } from '../../src/ui/AppearanceGraph';
@@ -26,6 +29,12 @@ import { useWorkRefresh } from '../../src/work/refresh';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { FieldsSection } from '../../src/ui/FieldsSection';
 import { Renderings } from '../../src/ui/Renderings';
+import { Share } from 'react-native';
+import { hueFrom } from '../../src/ui/fields';
+import { Gallery } from '../../src/ui/Gallery';
+import { CoverViewer } from '../../src/ui/CoverViewer';
+import { queueDrawing } from '../../src/analysis/runs';
+import { imageUri, removeImage } from '../../src/storage/files';
 import { Badge, Block, Empty, Fact, Hero, Item, LinkLine } from '../../src/ui/detail';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { space, usePalette } from '../../src/theme';
@@ -46,6 +55,8 @@ export default function TermPage() {
   const [text, setText] = useState('');
   const [book, setBook] = useState<Book | null>(null);
   const [timeline, setTimeline] = useState<{ chapter_idx: number; count: number }[]>([]);
+  const [drawn, setDrawn] = useState<Drawing[]>([]);
+  const [zoomed, setZoomed] = useState<Drawing | null>(null);
   /** What the tapped stretch of the graph actually says, once asked for. */
   const [shown, setShown] = useState<Appearance[]>([]);
   const [scrubbing, setScrubbing] = useState(false);
@@ -90,6 +101,23 @@ export default function TermPage() {
   async function save(changes: Parameters<typeof updateEntity>[1]) {
     await updateEntity(term!.id, changes);
     load();
+  }
+
+  /** A drawing is bought, so it is not thrown away by a stray tap. */
+  function confirmRemove(image: Drawing) {
+    Alert.alert(t('gallery.removeConfirm'), undefined, [
+      { text: t('settings.cancel'), style: 'cancel' },
+      {
+        text: t('settings.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          setZoomed(null);
+          await deleteImage(image.id);
+          removeImage(image.path);
+          load();
+        },
+      },
+    ]);
   }
 
   function confirmDelete() {
@@ -217,6 +245,57 @@ export default function TermPage() {
           </View>
         )}
       </AppearanceGraph>
+
+      <Gallery
+        title={t('gallery.title')}
+        images={drawn}
+        subject={{
+          kind: 'term',
+          name: term.name,
+          facts: [],
+          summary: term.summary,
+          observed: uses.map((use) => use.note ?? ''),
+        }}
+        onSubmit={(prompt) =>
+          queueDrawing(term.book_id, term.name, { prompt, kind: 'term', entityId: term.id })
+        }
+        onOpen={setZoomed}
+      />
+
+      <CoverViewer
+        visible={zoomed !== null}
+        title={term.name}
+        hue={hueFrom(term.name)}
+        path={zoomed?.path}
+        onClose={() => setZoomed(null)}
+        actions={
+          zoomed
+            ? [
+                {
+                  key: 'use',
+                  label: t('gallery.use'),
+                  onPress: async () => {
+                    await save({ portrait_path: zoomed.path });
+                    setZoomed(null);
+                  },
+                },
+                {
+                  key: 'save',
+                  label: t('gallery.download'),
+                  onPress: () => {
+                    const uri = imageUri(zoomed.path);
+                    if (uri) void Share.share({ url: uri });
+                  },
+                },
+                {
+                  key: 'delete',
+                  label: t('gallery.remove'),
+                  onPress: () => confirmRemove(zoomed),
+                },
+              ]
+            : undefined
+        }
+      />
 
       <Renderings
         bookId={term.book_id}
