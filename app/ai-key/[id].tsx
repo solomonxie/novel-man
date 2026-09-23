@@ -3,7 +3,7 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-nati
 import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
-import { clearRequests, listRequests, type AiRequest } from '../../src/db/requests';
+import { clearRequests, listRequests, requestTotals, SHOWN, type AiRequest } from '../../src/db/requests';
 import { formatUsd } from '../../src/ai/cost';
 import { listKeys, setKeyModel } from '../../src/ai/keys';
 import { modelFor, vendorById } from '../../src/ai/vendors';
@@ -17,17 +17,19 @@ export default function AiKeyPage() {
   const palette = usePalette();
   const [requests, setRequests] = useState<AiRequest[]>([]);
   const [model, setModel] = useState<string | undefined>();
+  const [totals, setTotals] = useState({ count: 0, usd: 0, failed: 0 });
 
   const load = useCallback(() => {
     if (!id) return;
     listRequests(id).then(setRequests);
+    requestTotals(id).then(setTotals);
     listKeys().then((keys) => setModel(keys.find((key) => key.id === id)?.model));
   }, [id]);
 
   useFocusEffect(load);
 
-  const total = requests.reduce((sum, request) => sum + request.usd, 0);
-  const failed = requests.filter((request) => request.error).length;
+  const total = totals.usd;
+  const failed = totals.failed;
 
   function confirmClear() {
     Alert.alert(t('keyLog.clearConfirm'), undefined, [
@@ -62,7 +64,7 @@ export default function AiKeyPage() {
       />
 
       <Section title={t('keyLog.summary')}>
-        <Row label={t('keyLog.count')} value={`${requests.length}`} />
+        <Row label={t('keyLog.count')} value={`${totals.count}`} />
         <Row label={t('keyLog.spent')} value={formatUsd(total)} />
         <Row label={t('keyLog.failed')} value={`${failed}`} last />
       </Section>
@@ -90,6 +92,8 @@ export default function AiKeyPage() {
           ))
         )}
       </Section>
+
+      {totals.count > SHOWN ? <Hint>{t('keyLog.shownHint', { shown: SHOWN, total: totals.count })}</Hint> : null}
 
       <Hint>{t('keyLog.hint')}</Hint>
 

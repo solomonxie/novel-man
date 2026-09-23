@@ -780,7 +780,8 @@
     "modelPrice": "${{in}} in · ${{out}} out per million tokens",
     "modelCustom": "Another model id…",
     "modelCustomHint": "Type an id the list is missing and press done. Priced as an estimate.",
-    "modelHint": "This key runs on the model picked here. A cheaper model is fine for a first sweep; a stronger one reads scenes and people out of a chapter far more reliably."
+    "modelHint": "This key runs on the model picked here. A cheaper model is fine for a first sweep; a stronger one reads scenes and people out of a chapter far more reliably.",
+    "shownHint": "Showing the latest {{shown}} of {{total}} kept."
   },
   "scenes": {
     "title": "Scenes",
