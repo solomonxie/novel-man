@@ -1069,6 +1069,8 @@ export type Scene = {
   title: string | null;
   summary: string | null;
   source: 'manual' | 'ai';
+  /** The scene this span is one occurrence of; null while it has no name. */
+  scene_tag_id: string | null;
 };
 
 /** A chapter's scenes are rewritten whole: they only make sense in order. */
@@ -1082,13 +1084,93 @@ export async function replaceScenes(
   await transaction(async () => {
     await database.runAsync('DELETE FROM scenes WHERE chapter_id = ?', chapterId);
     for (const [idx, scene] of scenes.entries()) {
+      // A name the pass came up with is the same name the reader would have
+      // typed: filed under the scene it names, or the chapter list of an
+      // AI-found scene would be empty while its name said otherwise.
+      const tag = await tagFor(database, bookId, scene.title ?? '');
       await database.runAsync(
-        `INSERT INTO scenes (id, book_id, chapter_id, idx, start, end, title, summary, source)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO scenes (id, book_id, chapter_id, idx, start, end, title, summary, source, scene_tag_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         newId(), bookId, chapterId, idx, scene.start, scene.end,
-        scene.title ?? null, scene.summary ?? null, source
+        scene.title?.trim() || null, scene.summary ?? null, source, tag
       );
     }
+  });
+}
+
+/**
+ * A scene the book returns to, and the spans that are it.
+ *
+ * The span is per chapter, because that is what a scene is where you read it.
+ * The *name* is the thing two chapters share, so it is a row: renamed once
+ * rather than retyped, and never split in two by a trailing space.
+ */
+export type SceneTag = {
+  id: string;
+  book_id: string;
+  name: string;
+  created_at: number;
+};
+
+/** Every span of one scene, in reading order — the chapter list a scene page shows. */
+export async function scenesOfTag(tagId: string): Promise<Scene[]> {
+  const database = await db();
+  return database.getAllAsync<Scene>(
+    `SELECT s.* FROM scenes s JOIN chapters c ON c.id = s.chapter_id
+      WHERE s.scene_tag_id = ? ORDER BY c.idx, s.idx`,
+    tagId
+  );
+}
+
+/**
+ * Naming a span is filing it under a scene: the same name twice is the same
+ * scene, not two. Cleared, the span keeps its place in the chapter and simply
+ * belongs to nothing — an unnamed scene is a break in the text, not a thing
+ * the book comes back to.
+ */
+export async function nameScene(sceneId: string, name: string): Promise<string | null> {
+  const database = await db();
+  const scene = await database.getFirstAsync<{ book_id: string }>(
+    'SELECT book_id FROM scenes WHERE id = ?',
+    sceneId
+  );
+  if (!scene) return null;
+  const tag = await tagFor(database, scene.book_id, name);
+  await database.runAsync(
+    'UPDATE scenes SET title = ?, scene_tag_id = ? WHERE id = ?',
+    name.trim() || null, tag, sceneId
+  );
+  return tag;
+}
+
+/** The scene of that name in this book, made the first time anybody uses it. */
+async function tagFor(
+  database: Awaited<ReturnType<typeof db>>,
+  bookId: string,
+  name: string
+): Promise<string | null> {
+  const wanted = name.trim();
+  if (!wanted) return null;
+  await database.runAsync(
+    `INSERT INTO scene_tags (id, book_id, name, created_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(book_id, name) DO NOTHING`,
+    newId(), bookId, wanted, Date.now()
+  );
+  const row = await database.getFirstAsync<{ id: string }>(
+    'SELECT id FROM scene_tags WHERE book_id = ? AND name = ?',
+    bookId, wanted
+  );
+  return row?.id ?? null;
+}
+
+/** One write renames the scene everywhere it happens. */
+export async function renameSceneTag(tagId: string, name: string) {
+  const wanted = name.trim();
+  if (!wanted) return;
+  const database = await db();
+  await transaction(async () => {
+    await database.runAsync('UPDATE scene_tags SET name = ? WHERE id = ?', wanted, tagId);
+    await database.runAsync('UPDATE scenes SET title = ? WHERE scene_tag_id = ?', wanted, tagId);
   });
 }
 

@@ -36,12 +36,13 @@ export default function ScenesPage() {
 
   const chapterOf = (chapterId: string) => chapters.find((entry) => entry.id === chapterId);
 
+  // Counted by the scene each span belongs to: two chapters that typed the
+  // same name with a stray space are one scene, and always were.
   const recurrence = new Map<string, number>();
   for (const scene of scenes) {
-    const title = scene.title?.trim();
-    if (title) recurrence.set(title, (recurrence.get(title) ?? 0) + 1);
+    if (scene.scene_tag_id) recurrence.set(scene.scene_tag_id, (recurrence.get(scene.scene_tag_id) ?? 0) + 1);
   }
-  const names = [...recurrence.keys()].length;
+  const names = recurrence.size;
 
   return (
     <ScrollView
@@ -65,7 +66,7 @@ export default function ScenesPage() {
             {scenes.map((scene, index) => {
               const chapter = chapterOf(scene.chapter_id);
               const title = scene.title?.trim();
-              const repeats = title ? recurrence.get(title) ?? 1 : 1;
+              const repeats = scene.scene_tag_id ? recurrence.get(scene.scene_tag_id) ?? 1 : 1;
               return (
                 <Row
                   key={scene.id}
