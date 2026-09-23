@@ -826,18 +826,16 @@
     "timelineFetched": "Counted from the text on this device. This edition arrives a chapter at a time, so there is nothing here to count yet.",
     "tapToOpen": "Tap one to open it.",
     "title": "Scene",
-    "position": "Scene {{index}} of {{total}}",
     "byAi": "found by AI",
-    "read": "Read from here →",
-    "openChapter": "The chapter",
-    "present": "In this scene",
+    "present": "Persons",
     "nonePresent": "Nobody recognized in this scene.",
     "aPlace": "a place",
-    "excerpt": "How it starts",
     "hint": "Who is in a scene is counted from the scene's own words, so a name only mentioned elsewhere in the chapter does not appear here.",
-    "appearances": "Where this scene appears",
+    "appearances": "Appearances",
     "thisOne": "this one",
-    "unit": "scene"
+    "firstIn": "First in",
+    "lastIn": "Last in",
+    "summaryPlaceholder": "What happens in this scene."
   },
   "source": {
     "ebible": "eBible.org",
