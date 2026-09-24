@@ -14,6 +14,7 @@ import {
 import { openBundle } from '../../src/backup/bundle';
 import { BundleError, dateOf } from '../../src/backup/format';
 import { restoreBundle, type RestoreReport } from '../../src/backup/restore';
+import { RestoreReportView } from '../../src/settings/RestoreReport';
 import { Hint, PrimaryAction, Row, Section } from '../../src/ui/primitives';
 import { space, usePalette } from '../../src/theme';
 
@@ -123,11 +124,7 @@ export default function IcloudBackups() {
 
       {busy ? <ActivityIndicator style={{ marginTop: space.xl }} /> : null}
 
-      {report ? (
-        <Text style={{ color: palette.text, fontSize: 15, marginTop: space.xl }}>
-          {t('backup.restored', { count: report.restored.length })}
-        </Text>
-      ) : null}
+      {report ? <RestoreReportView report={report} /> : null}
     </ScrollView>
   );
 }
