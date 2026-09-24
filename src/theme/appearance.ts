@@ -44,6 +44,11 @@ export async function setAppearance(next: Appearance) {
   }
 }
 
+export function resetAppearance() {
+  current = 'system';
+  notify();
+}
+
 /** Read once at launch. Until it lands, `system` is already the right guess. */
 export async function loadAppearance() {
   try {

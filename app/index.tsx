@@ -434,7 +434,7 @@ export default function Home() {
 
               <AiKeysSettings />
               <CloudSettings />
-              <BackupSettings />
+              <BackupSettings onRemoved={refresh} />
             </View>
           </>
         )}
@@ -578,4 +578,3 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
 });
-
