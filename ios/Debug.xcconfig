@@ -1,0 +1,2 @@
+#include "Pods/Target Support Files/Pods-NovelMan/Pods-NovelMan.debug.xcconfig"
+#include? "Local.xcconfig"
