@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text } from 'react-native';
 import { Directory, File, Paths } from '../storage/fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,7 @@ import { restoreBundle, type RestoreReport } from '../backup/restore';
 import { BundleError, isBundleName } from '../backup/format';
 import { deliver } from '../export/deliver';
 import { pickBackupBundle } from '../import/sources/picker';
+import { RestoreReportView } from './RestoreReport';
 import { Hint, Row, Section } from '../ui/primitives';
 import { space, usePalette } from '../theme';
 import { db, transaction } from '../db';
@@ -104,28 +105,7 @@ export function BackupSettings({ onRemoved }: { onRemoved?: () => void }) {
 
       {busy ? <ActivityIndicator style={{ marginTop: space.xl }} /> : null}
 
-      {report ? (
-        <View style={{ marginTop: space.xl }}>
-          <Text style={{ color: palette.text, fontSize: 15 }}>
-            {t('backup.restored', { count: report.restored.length })}
-          </Text>
-          {report.waiting > 0 && (
-            <Text style={{ color: palette.dim, fontSize: 13, marginTop: space.xs }}>
-              {t('backup.restoredWaiting', { count: report.waiting })}
-            </Text>
-          )}
-          {report.duplicates.length > 0 && (
-            <Text style={{ color: palette.dim, fontSize: 13, marginTop: space.xs }}>
-              {t('backup.duplicates', { list: report.duplicates.join(', ') })}
-            </Text>
-          )}
-          {report.unplaceable.map((item, index) => (
-            <Text key={index} style={{ color: palette.danger, fontSize: 13, marginTop: space.xs }}>
-              {t(`backup.unplaceable_${item.reason}`, { title: item.title })}
-            </Text>
-          ))}
-        </View>
-      ) : null}
+      {report ? <RestoreReportView report={report} /> : null}
 
       <Pressable
         onPress={confirmRemoveAll}
