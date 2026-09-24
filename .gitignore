@@ -11,3 +11,6 @@ android/
 *.log
 .DS_Store
 .parse-check/
+
+# Apple Team ID, kept out of a public repo
+ios/Local.xcconfig

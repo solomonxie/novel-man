@@ -128,7 +128,8 @@ different model name.
 
 ## How it's built
 
-React Native + Expo + TypeScript, one codebase for iOS and Android.
+Bare React Native + TypeScript, one codebase for iOS and Android. No Expo:
+`ios/` is a real Xcode project, checked in and edited by hand.
 
 - **Local-first.** Manuscripts, structure, annotations and generated assets
   live in on-device SQLite. No account, no server, no sign-up.
@@ -159,18 +160,24 @@ your back.
 - [Design](docs/design/DESIGN.md) — problem, scope, options, decisions
 - [UI/UX](docs/design/UIUX_DESIGN.md) — screens, flows, states, copy
 - [Implementation plan](docs/design/IMPLEMENT_PLAN.md) — phased task list
+- [Release](docs/release/README.md) — App Store setup, build, and every listing field
 
 
 ## Running it
 
 ```
 npm install
+cd ios && pod install && cd ..
 npm run ios             # or: npm run android
 ```
 
-One command: it compiles the native project, installs it on the simulator or
-a connected device, and starts the bundler. There is no second, lighter way to
-run it — see [Design](docs/design/DESIGN.md#no-sandbox-runtime) for why.
+One command: it compiles the native project in Release and installs it on a
+connected phone, with the JS bundle baked in. No packager, no dev server —
+the app always reads its own embedded bundle. There is no second, lighter way
+to run it — see [Design](docs/design/DESIGN.md#no-sandbox-runtime) for why.
+
+Signing needs your Apple Developer Team ID in `ios/Local.xcconfig`
+(`cp ios/Local.xcconfig.example ios/Local.xcconfig`), which is gitignored.
 
 Import a `.txt`, `.md`, `.docx`, `.epub` or `.pdf` from Files and it lands on
 the shelf with its chapters detected. Imports run through a visible queue, so
@@ -196,7 +203,7 @@ partial task still owes.
 
 Two of those reach into native code and are unbuilt rather than unavailable:
 the share extension that puts Novel Man in another app's share sheet (the file
-types are declared in `app.json`, the extension is not written), and moving
+types are declared in `Info.plist`, the extension is not written), and moving
 parsing off the JS thread. The iCloud switch is the one native module that is
 built — it lives in `modules/icloud/`.
 
