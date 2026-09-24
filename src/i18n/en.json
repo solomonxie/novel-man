@@ -289,7 +289,10 @@
     "grade_best": "Best",
     "gradeHint_fast": "512px on the older model. Quick and cheap, and the loosest with what the prompt asked for.",
     "gradeHint_normal": "1024px, cheapest pass of the current model. Follows the prompt closely.",
-    "gradeHint_best": "1024px at the slowest pass. Same obedience, more of everything else."
+    "gradeHint_best": "1024px at the slowest pass. Same obedience, more of everything else.",
+    "removeAll": "Remove all app data",
+    "removeAllTitle": "Remove all app data?",
+    "removeAllWarning": "A uniquely named backup will be saved locally and, when configured, to iCloud and each connected S3 bucket. iCloud backups omit manuscript text. Deletion starts after the backups finish; if a cloud backup fails, your data remains."
   },
   "units": {
     "words": "{{count}} words",
