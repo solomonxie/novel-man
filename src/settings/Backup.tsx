@@ -1,22 +1,33 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Text, View } from 'react-native';
-import { File } from '../storage/fs';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
+import { Directory, File, Paths } from '../storage/fs';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { buildBundle, openBundle } from '../backup/bundle';
+import { backupBeforeRemoval } from '../backup/removal';
 import { restoreBundle, type RestoreReport } from '../backup/restore';
 import { BundleError, isBundleName } from '../backup/format';
 import { deliver } from '../export/deliver';
 import { pickBackupBundle } from '../import/sources/picker';
 import { Hint, Row, Section } from '../ui/primitives';
 import { space, usePalette } from '../theme';
+import { db, transaction } from '../db';
+import * as SecureStore from '../storage/secrets';
+import { resetAppearance } from '../theme/appearance';
+import { setUiLanguage } from '../i18n';
+import { cancelAllWork } from '../work/queue';
+import { listConnections } from '../cloud/connections';
+import { listKeys } from '../ai/keys';
+import { noticeChange } from '../backup/changes';
 
-export function BackupSettings() {
+export function BackupSettings({ onRemoved }: { onRemoved?: () => void }) {
   const { t } = useTranslation();
   const palette = usePalette();
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<RestoreReport | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   async function guard(work: () => Promise<void>) {
     setBusy(true);
@@ -59,6 +70,30 @@ export function BackupSettings() {
     });
   }
 
+  function confirmRemoveAll() {
+    Alert.alert(t('settings.removeAllTitle'), t('settings.removeAllWarning'), [
+      { text: t('settings.cancel'), style: 'cancel' },
+      {
+        text: t('settings.removeAll'),
+        style: 'destructive',
+        onPress: () => {
+          void guard(async () => {
+            const backup = await backupBeforeRemoval();
+            setRemoving(true);
+            try {
+              await clearAppData(backup.fileName);
+              setUiLanguage('system');
+              resetAppearance();
+              onRemoved?.();
+            } finally {
+              setRemoving(false);
+            }
+          });
+        },
+      },
+    ]);
+  }
+
   return (
     <>
       <Section title={t('backup.file')}>
@@ -91,8 +126,68 @@ export function BackupSettings() {
           ))}
         </View>
       ) : null}
+
+      <Pressable
+        onPress={confirmRemoveAll}
+        disabled={busy || removing}
+        style={{ alignSelf: 'flex-start', marginTop: space.xxl, paddingVertical: space.sm }}
+        hitSlop={8}
+      >
+        <Text style={{ color: palette.danger, fontSize: 14 }}>
+          {t('settings.removeAll')}
+        </Text>
+      </Pressable>
     </>
   );
+}
+
+async function clearAppData(keepBackup: string) {
+  await cancelAllWork();
+  const keys = await listKeys();
+  const connections = await listConnections();
+  const database = await db();
+  await database.execAsync('PRAGMA foreign_keys = OFF');
+  try {
+    await transaction(async () => {
+      const tables = await database.getAllAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+      );
+      for (const { name } of tables) {
+        if (!/^[a-zA-Z0-9_]+$/.test(name)) continue;
+        await database.execAsync(`DELETE FROM "${name}"`);
+      }
+    });
+    noticeChange();
+  } finally {
+    await database.execAsync('PRAGMA foreign_keys = ON');
+  }
+  await database.execAsync('PRAGMA wal_checkpoint(TRUNCATE); VACUUM');
+
+  await AsyncStorage.clear();
+  await Promise.all([
+    ...keys.map((key) => SecureStore.deleteItemAsync(`ai.key.${key.id}`)),
+    ...connections.map((connection) => SecureStore.deleteItemAsync(`cloud.secret.${connection.id}`)),
+    SecureStore.deleteItemAsync('ai.keys.index'),
+    SecureStore.deleteItemAsync('ai.keys.strategy'),
+    SecureStore.deleteItemAsync('cloud.connections'),
+    SecureStore.deleteItemAsync('esv.apiKey'),
+    SecureStore.deleteItemAsync('standardebooks.email'),
+  ]);
+
+  const documents = new Directory(Paths.document);
+  for (const entry of documents.list()) {
+    if (entry.name === 'SQLite') continue;
+    if (entry.name === 'Backups' && entry instanceof Directory) {
+      for (const backup of entry.list()) {
+        if (backup.name === keepBackup) continue;
+        if (backup instanceof Directory) backup.deleteContents();
+        backup.delete();
+      }
+      continue;
+    }
+    if (entry instanceof Directory) entry.deleteContents();
+    entry.delete();
+  }
 }
 
 function describe(error: unknown, t: TFunction): string {

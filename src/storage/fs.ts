@@ -118,4 +118,11 @@ export class Directory extends Entry {
       entry.isDirectory ? new Directory(entry.path) : new File(entry.path)
     );
   }
+
+  deleteContents(): void {
+    for (const entry of this.list()) {
+      if (entry instanceof Directory) entry.deleteContents();
+      entry.delete();
+    }
+  }
 }

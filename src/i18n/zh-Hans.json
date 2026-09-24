@@ -289,7 +289,10 @@
     "grade_best": "最佳",
     "gradeHint_fast": "旧模型 512px。快而便宜，但最不照着提示画。",
     "gradeHint_normal": "当前模型 1024px 最省档。忠实于提示。",
-    "gradeHint_best": "1024px 最慢档。同样忠实，细节更多。"
+    "gradeHint_best": "1024px 最慢档。同样忠实，细节更多。",
+    "removeAll": "删除所有应用数据",
+    "removeAllTitle": "删除所有应用数据？",
+    "removeAllWarning": "应用会先在本机保存一份唯一命名的备份；如已配置，也会备份到 iCloud 和所有已连接的 S3 存储桶。iCloud 备份不含正文。备份完成后才会删除数据；云端备份失败时会保留现有数据。"
   },
   "units": {
     "words": "{{count}} 词",
