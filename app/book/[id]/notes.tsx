@@ -19,7 +19,7 @@ import {
 import { quoteAsMarkdown, shareQuoteText, type Quote } from '../../../src/share/quote';
 import { NoteSheet } from '../../../src/ui/NoteSheet';
 import { Toast, useFlash } from '../../../src/ui/primitives';
-import { isRecord } from '../../../src/books/record';
+import { isSkeleton } from '../../../src/books/record';
 import { radius, space, usePalette } from '../../../src/theme';
 
 type Filter = 'all' | 'highlight' | 'note';
@@ -185,7 +185,7 @@ export default function Notes() {
 
       {total === 0 ? (
         <Text style={{ color: palette.dim, textAlign: 'center', marginTop: space.xxl }}>
-          {t(book && isRecord(book) ? 'notes.emptyRecord' : 'notes.empty')}
+          {t(book && isSkeleton(book) ? 'notes.emptyRecord' : 'notes.empty')}
         </Text>
       ) : (
         <>

@@ -66,7 +66,7 @@ import { radius, space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { KindList } from '../../src/ui/KindList';
 import { kindOf, shows, supports, unitOf } from '../../src/books/kinds';
-import { isRecord, statusOf, STATUSES } from '../../src/books/record';
+import { isSkeleton, statusOf, STATUSES } from '../../src/books/record';
 import { Stars } from '../../src/ui/Stars';
 import { IdentifySheet } from '../../src/ui/IdentifySheet';
 import { TagsBlock } from '../../src/ui/Shelving';
@@ -266,7 +266,7 @@ export default function BookPage() {
   // A book with no words behind it: no reader to open, no text to export, and
   // everything the app knows about it either typed or asked for. See
   // `books/record`.
-  const record = isRecord(book);
+  const skeleton = isSkeleton(book);
 
   /**
    * The counts in the head, as one list rather than an arrangement per kind of
@@ -292,7 +292,7 @@ export default function BookPage() {
    * positions still say something on every kind of book.
    */
   const spare: HeadFact | null =
-    !record && supports(book.kind, 'scenes')
+    !skeleton && supports(book.kind, 'scenes')
       ? { value: scenes.length, label: t('units.unit_scenes'), onPress: scrollTo(scenesY) }
       : supports(book.kind, 'cast')
         ? {
@@ -461,7 +461,7 @@ export default function BookPage() {
         actions={
           <View style={{ flex: 1, gap: space.sm }}>
             {/* A record has nothing to read, so it has no first row at all. */}
-            {record ? null : (
+            {skeleton ? null : (
               <View style={{ flexDirection: 'row' }}>
                 <Action
                   // Where it resumes, said on the button rather than in a line
@@ -534,7 +534,7 @@ export default function BookPage() {
           style={{ color: palette.faint, fontSize: 13, marginTop: 2 }}
         />
         <Text style={{ color: palette.faint, fontSize: 12, marginTop: space.xs }}>
-          {t(record ? 'book.recordedFrom' : 'book.importedFrom', { name: book.source_name })}
+          {t(skeleton ? 'book.recordedFrom' : 'book.importedFrom', { name: book.source_name })}
         </Text>
       </Hero>
 
@@ -777,7 +777,7 @@ export default function BookPage() {
           onOpen={() => router.push(`/book/${book.id}/notes`)}
         >
           {noteGroups.length === 0 ? (
-            <Empty text={t(record ? 'notes.emptyRecord' : 'notes.empty')} />
+            <Empty text={t(skeleton ? 'notes.emptyRecord' : 'notes.empty')} />
           ) : (
             <Section flush>
               {noteGroups.map((group, index) => (
@@ -808,7 +808,7 @@ export default function BookPage() {
       </View>
 
       {/* What the chapters were cut into, folded the same way the notes are. */}
-      {supports(book.kind, 'scenes') && !record ? (
+      {supports(book.kind, 'scenes') && !skeleton ? (
         <View onLayout={(event) => { scenesY.current = event.nativeEvent.layout.y; }}>
           <Block
             title={t('book.scenes')}
@@ -856,7 +856,7 @@ export default function BookPage() {
 
       <Block title={t('book.utilities')}>
         <Section flush>
-        {record ? (
+        {skeleton ? (
           <Row
             label={t('book.outlineRow')}
             detail={t('book.outlineHint')}
@@ -887,7 +887,7 @@ export default function BookPage() {
       <Section>
         {/* Nothing to export from a book whose words are not here — its notes
             leave with a backup, which is where they were always going. */}
-        {record ? null : (
+        {skeleton ? null : (
           <Row
             label={t('book.export')}
             value="›"

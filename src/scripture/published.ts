@@ -64,15 +64,15 @@ function* fromJson(source: string): Generator<Attempt> {
   } catch {
     return;
   }
-  const title = isRecord(root) ? text(root.translation ?? root.version)?.trim() : undefined;
-  const list = Array.isArray(root) ? root : isRecord(root) && Array.isArray(root.books) ? root.books : null;
+  const title = isPlainObject(root) ? text(root.translation ?? root.version)?.trim() : undefined;
+  const list = Array.isArray(root) ? root : isPlainObject(root) && Array.isArray(root.books) ? root.books : null;
 
   if (list) {
     yield { shape: 'book-list', title, raw: booksFromList(list) };
     yield { shape: 'verse-rows', title, raw: booksFromRows(list) };
     return;
   }
-  if (!isRecord(root)) return;
+  if (!isPlainObject(root)) return;
   if (root.chapters !== undefined) {
     yield { shape: 'one-book', title, raw: [rawBook(root, 0)] };
     return;
@@ -81,7 +81,7 @@ function* fromJson(source: string): Generator<Attempt> {
 }
 
 function booksFromList(rows: unknown[]): RawBook[] {
-  return rows.flatMap((row, at) => (isRecord(row) && row.chapters !== undefined ? [rawBook(row, at)] : []));
+  return rows.flatMap((row, at) => (isPlainObject(row) && row.chapters !== undefined ? [rawBook(row, at)] : []));
 }
 
 function rawBook(value: Record<string, unknown>, at: number): RawBook {
@@ -96,7 +96,7 @@ function booksFromRows(rows: unknown[]): RawBook[] {
   const byKey = new Map<string, RawBook>();
   const byChapter = new Map<string, UsfmChapter>();
   for (const row of rows) {
-    if (!isRecord(row) || row.chapters !== undefined) continue;
+    if (!isPlainObject(row) || row.chapters !== undefined) continue;
     const line = clean(text(row.text ?? row.verse_text ?? row.content) ?? '');
     if (!line) continue;
     const stated = text(row.book_name ?? row.book ?? row.name ?? row.bookName);
@@ -127,7 +127,7 @@ function booksFromRows(rows: unknown[]): RawBook[] {
 
 /** The book is the key: `{ "Genesis": … }`. Only where every key is one. */
 function booksFromKeys(root: Record<string, unknown>): RawBook[] {
-  const entries = Object.entries(root).filter(([, value]) => isRecord(value) || Array.isArray(value));
+  const entries = Object.entries(root).filter(([, value]) => isPlainObject(value) || Array.isArray(value));
   if (entries.length < 2) return [];
   return entries.map(([name, value], at) => ({
     stated: name,
@@ -138,7 +138,7 @@ function booksFromKeys(root: Record<string, unknown>): RawBook[] {
 
 function chaptersIn(value: unknown): UsfmChapter[] {
   if (Array.isArray(value)) return value.flatMap((entry, at) => keep(chapterFrom(entry, at + 1)));
-  if (isRecord(value)) {
+  if (isPlainObject(value)) {
     return Object.entries(value)
       .flatMap(([key, entry]) => keep(chapterFrom(entry, Number.parseInt(key, 10))))
       .sort((a, b) => a.number - b.number);
@@ -152,7 +152,7 @@ function chapterFrom(entry: unknown, fallback: number): UsfmChapter | null {
     const verses = versesIn(entry);
     return verses.length ? { number: fallback, verses } : null;
   }
-  if (!isRecord(entry)) return null;
+  if (!isPlainObject(entry)) return null;
   const number = numberOf(entry.chapter ?? entry.number ?? entry.num) ?? fallback;
   // A chapter that lists its verses under no key of its own *is* the list.
   const verses = versesIn(entry.verses ?? entry.verse ?? entry);
@@ -166,13 +166,13 @@ function versesIn(value: unknown): { number: number; text: string }[] {
         const line = clean(entry);
         return line ? [{ number: at + 1, text: line }] : [];
       }
-      if (!isRecord(entry)) return [];
+      if (!isPlainObject(entry)) return [];
       const line = clean(text(entry.text ?? entry.content ?? entry.value) ?? '');
       if (!line) return [];
       return [{ number: numberOf(entry.verse ?? entry.number ?? entry.num) ?? at + 1, text: line }];
     });
   }
-  if (isRecord(value)) {
+  if (isPlainObject(value)) {
     return Object.entries(value)
       .flatMap(([key, entry]) => {
         const at = Number.parseInt(key, 10);
@@ -397,7 +397,7 @@ function keep<T>(value: T | null): T[] {
   return value ? [value] : [];
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
