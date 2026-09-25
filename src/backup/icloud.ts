@@ -11,6 +11,7 @@ import { buildBundle, fingerprint, openBundle } from './bundle';
 import { bundleName, isBundleName } from './format';
 import { subscribeToChanges } from './changes';
 import { restoreBundle, type RestoreReport } from './restore';
+import { timed, trace } from '../dev/trace';
 
 const AUTO = 'icloud.auto';
 const RESTORED = 'icloud.restoredAt';
@@ -119,27 +120,34 @@ export async function backUp(): Promise<boolean> {
   // schedule the next one forever. It also keeps two from overlapping.
   if (running) return false;
   // An empty shelf overwrites today's copy under the same day-named key.
-  if (!(await hasBooks())) return false;
-  if (!drive || (await refreshDriveStatus()) !== 'available') return false;
+  if (!(await timed('hasBooks', hasBooks()))) return false;
+  if (!drive || (await timed('driveStatus', refreshDriveStatus())) !== 'available') return false;
   running = true;
   try {
     const name = backupName();
-    const bundle = await buildBundle();
+    const bundle = await timed('buildBundle', buildBundle());
     const body = bundle.body as Uint8Array;
+    let at = performance.now();
     const hash = contentHash('icloud', fingerprint(body));
-    if ((await lastUploadHash(LEDGER, name)) === hash) return false;
+    trace(`fingerprint ${Math.round(performance.now() - at)}ms of ${body.length} bytes`);
+    if ((await timed('lastUploadHash', lastUploadHash(LEDGER, name))) === hash) {
+      trace('unchanged — nothing uploaded');
+      return false;
+    }
 
     const staged = new File(Paths.cache, STAGED);
     if (staged.exists) staged.delete();
     staged.create();
+    at = performance.now();
     staged.write(body);
+    trace(`staged.write ${Math.round(performance.now() - at)}ms`);
     try {
-      await drive.copyIn(nativePath(staged), name);
+      await timed('drive.copyIn', drive.copyIn(nativePath(staged), name));
     } finally {
       staged.delete();
     }
-    await recordUpload(LEDGER, name, hash);
-    await prune();
+    await timed('recordUpload', recordUpload(LEDGER, name, hash));
+    await timed('prune', prune());
     return true;
   } finally {
     running = false;

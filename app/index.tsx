@@ -48,6 +48,7 @@ import { backUpIfAuto, restoreOnLaunch } from '../src/backup/icloud';
 import { subscribeToRestores } from '../src/backup/changes';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { radius, space, usePalette } from '../src/theme';
+import { timed, trace } from '../src/dev/trace';
 import { appearances, setAppearance, useAppearance, type Appearance } from '../src/theme/appearance';
 
 /** Three across and a sliver of a fourth — the sliver is what says it scrolls. */
@@ -95,7 +96,8 @@ export default function Home() {
   const work = useWorkFeed();
 
   const refresh = useCallback(() => {
-    listBooks()
+    trace('refresh start');
+    timed('listBooks', listBooks())
       .then((found) => {
         setBooks(found);
         setBroken(null);
@@ -104,23 +106,27 @@ export default function Home() {
         setBooks([]);
         setBroken(String(problem));
       });
-    listBookLists().then(setLists).catch(() => undefined);
-    coversByList().then(setFaces).catch(() => undefined);
-    listTags().then(setTags).catch(() => undefined);
+    timed('listBookLists', listBookLists()).then(setLists).catch(() => undefined);
+    timed('coversByList', coversByList()).then(setFaces).catch(() => undefined);
+    timed('listTags', listTags()).then(setTags).catch(() => undefined);
   }, []);
 
   useFocusEffect(refresh);
 
   useEffect(() => {
+    // A beat every second: a gap in it is the JS thread blocked, and the
+    // lines either side of the gap say by what.
+    const beat = setInterval(() => trace('beat'), 1000);
     void (async () => {
       // Pull back before pushing up. Backing an empty shelf over a good
       // backup is exactly how a reinstall would lose what it came for.
-      const restored = await restoreOnLaunch().catch(() => null);
+      const restored = await timed('restoreOnLaunch', restoreOnLaunch()).catch(() => null);
       if (restored) refresh();
-      await backUpIfAuto().catch(() => undefined);
+      await timed('backUpIfAuto', backUpIfAuto()).catch(() => undefined);
     })();
-    syncOnLaunch().catch(() => undefined);
-    resumeWorkOnLaunch().catch(() => undefined);
+    timed('syncOnLaunch', syncOnLaunch()).catch(() => undefined);
+    timed('resumeWorkOnLaunch', resumeWorkOnLaunch()).catch(() => undefined);
+    return () => clearInterval(beat);
   }, [refresh]);
 
   // A finished task usually changed something on the shelf.
@@ -375,6 +381,7 @@ export default function Home() {
               >
                 <Pressable
                   onPress={() => {
+                    trace('tap add');
                     setAddOpen((was) => !was);
                     if (!addOpen) showAdd();
                   }}
@@ -404,6 +411,7 @@ export default function Home() {
                 </Pressable>
                 {addOpen ? (
                   <View
+                    onLayout={() => trace('add panel laid out')}
                     style={[
                       styles.addPanel,
                       { backgroundColor: palette.surface, borderColor: palette.border },
