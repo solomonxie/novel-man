@@ -10,7 +10,7 @@ export const pdfImporter: Importer = {
   id: 'pdf',
   label: 'PDF',
   extensions: ['pdf'],
-  mimeTypes: ['application/pdf'],
+  utis: ['com.adobe.pdf'],
   needsPreview: true,
   async parse(bytes, _fileName, context) {
     const blocks = await extractPdf(bytes, context);

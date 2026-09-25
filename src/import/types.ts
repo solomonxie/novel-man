@@ -33,7 +33,9 @@ export type Importer = {
   id: string;
   label: string;
   extensions: string[];
-  mimeTypes: string[];
+  /** iOS uniform type identifiers — what the system picker filters on. A MIME
+   *  type there resolves to nothing, and nothing is selectable. */
+  utis: string[];
   /**
    * Formats whose extraction can silently come out wrong — a scanned PDF, a
    * page saved as HTML — show what they got before it becomes a book.

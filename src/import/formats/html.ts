@@ -20,7 +20,7 @@ export const htmlImporter: Importer = {
   id: 'html',
   label: 'HTML',
   extensions: ['html', 'htm', 'xhtml'],
-  mimeTypes: ['text/html', 'application/xhtml+xml'],
+  utis: ['public.html', 'public.xhtml'],
   needsPreview: true,
   async parse(bytes, _fileName, context) {
     return { blocks: await blocksFromHtml(decodeText(bytes), context) };
