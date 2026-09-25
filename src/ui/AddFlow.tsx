@@ -17,11 +17,7 @@ import { pickManuscript } from '../import/sources/picker';
 import { fetchManuscript, FetchError } from '../import/sources/url';
 import { supportedExtensions } from '../import/registry';
 import { readGutenbergBook, type GutenbergEdition } from '../sources/gutenberg';
-import { standardEbooksEmail } from '../sources/standardEbooksEmail';
-import { indexState, keptIndexes } from '../sources/catalog';
-import { SUBJECT_PREFIX } from '../sources/openLibrary';
 import { authorLine } from '../sources/arxiv';
-import { publicSources } from '../sources/registry';
 import { takeChoice, type Choice } from '../sources/chosen';
 import { addEsvBook, ESV_SOURCE, ESV_TITLE } from '../sources/esvBook';
 import { EsvKeyRows, type EsvKeyState } from '../settings/EsvKey';
@@ -30,7 +26,7 @@ import { keepByHand, keepWork } from '../books/save';
 import { queueBookLookup } from '../analysis/runs';
 import { hasAnyKey } from '../ai/keys';
 import { Row } from './primitives';
-import { KindList } from './KindList';
+import { GroupTitle, KindList } from './KindList';
 import { OptionRows } from './OptionRows';
 import { radius, space, usePalette } from '../theme';
 
@@ -78,6 +74,8 @@ const ORDER: Door[] = [
   ESV,
   'repo',
   'arxiv',
+  // Last, under every way of actually getting the words: a book with none.
+  'record',
 ];
 
 export function AddFlow({ kind: initialKind, onStep, onDone }: {
@@ -93,9 +91,6 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
 
   const [kindId, setKindId] = useState<string | null>(initialKind ?? null);
   const [sourceId, setSourceId] = useState<Door | null>(null);
-  /** Chosen rather than assumed — a record starts on the default and says so. */
-  const [kindChosen, setKindChosen] = useState(Boolean(initialKind));
-  const [typeOpen, setTypeOpen] = useState(false);
 
   const [file, setFile] = useState<{ uri: string; name: string } | null>(null);
   const [link, setLink] = useState('');
@@ -109,8 +104,6 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
   const [apocrypha, setApocrypha] = useState(false);
   const [canonOpen, setCanonOpen] = useState(false);
 
-  const [kept, setKept] = useState<Record<string, number>>({});
-  const [seEmail, setSeEmail] = useState<string | null>(null);
   const [esvState, setEsvState] = useState<EsvKeyState>({
     keyed: false, ok: false, busy: false, tail: '',
   });
@@ -127,19 +120,6 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
       )
     : [];
 
-  const readKept = useCallback(async () => {
-    const counts: Record<string, number> = {};
-    for (const source of publicSources) {
-      if (source.id === 'openlibrary') {
-        const lists = await keptIndexes(`${SUBJECT_PREFIX}:`);
-        counts[source.id] = lists.reduce((total, list) => total + list.count, 0);
-      } else if (source.indexed) {
-        counts[source.id] = (await indexState(source.id))?.count ?? 0;
-      }
-    }
-    setKept(counts);
-  }, []);
-
   // A page opened from here hands its answer back by leaving it where this can
   // take it on the way through.
   useFocusEffect(
@@ -151,15 +131,21 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
         // this menu: what was chosen, and the one button that spends anything.
         setSourceId(taken.source);
       }
-      void readKept();
-    }, [readKept])
+    }, [])
   );
 
+  // The menu is a list of names and nothing else: opening it asks the database
+  // and the keychain for nothing, because every level of it reads the same
+  // whatever the answer would have been. What a level does need — is there a
+  // key, is that bible already here — is read when that level is reached.
   useEffect(() => {
-    hasAnyKey().then(setKeyed).catch(() => undefined);
-    standardEbooksEmail().then(setSeEmail).catch(() => undefined);
-    findRemoteBook(ESV_SOURCE).then((found) => setEsvOnShelf(found?.id ?? null));
-  }, []);
+    if (sourceId === 'record') hasAnyKey().then(setKeyed).catch(() => undefined);
+    if (sourceId === ESV) {
+      findRemoteBook(ESV_SOURCE)
+        .then((found) => setEsvOnShelf(found?.id ?? null))
+        .catch(() => undefined);
+    }
+  }, [sourceId]);
 
   // What Gutenberg will actually hand over, read once a book is chosen.
   useEffect(() => {
@@ -184,21 +170,13 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
 
   function back() {
     setLinkError(null);
-    setTypeOpen(false);
     if (sourceId) {
-      // A record was reached from the top of the menu, not through a type, so
-      // this is the way back to the top.
-      if (sourceId === 'record') {
-        setKindId(null);
-        setKindChosen(false);
-      }
       setSourceId(null);
       setChoice(null);
       setFile(null);
       return;
     }
     setKindId(null);
-    setKindChosen(false);
   }
 
   async function chooseFile() {
@@ -297,7 +275,7 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
       >
         <Text style={{ color: palette.accent, fontSize: 17 }}>‹</Text>
         <Text numberOfLines={1} style={{ color: palette.dim, fontSize: 13, flex: 1 }}>
-          {[kindId && sourceId !== 'record' && t(`kind.${kindId}`), sourceId && labelOf(sourceId, t)]
+          {[kindId && t(`kind.${kindId}`), sourceId && labelOf(sourceId, t)]
             .filter(Boolean)
             .join('  ·  ')}
         </Text>
@@ -305,49 +283,30 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
     );
   }
 
-  // Level one. Nothing under it can be offered until this is answered — except
-  // the book with nothing to answer about: no file, no catalog, no type that
-  // decides which doors are worth showing. It sits under all of them, last.
-  if (!kindId || (sourceId === 'record' && !kindChosen)) {
-    if (sourceId !== 'record') {
-      return (
-        <>
-          <KindList
-            topRule={false}
-            onPick={(picked) => {
-              setKindChosen(true);
-              setKindId(picked);
-            }}
-          />
-          {/* Two doors that are not a type. A shelf brought over from
-              somewhere else is a library rather than a book — nothing about it
-              answers "what is it" — and a book with nothing behind it has no
-              type to decide which doors to offer. Both sit under all of them,
-              and the one that fetches nothing is last. */}
-          <Row
-            label={t('source.goodreads')}
-            detail={t('source.goodreadsDetail')}
-            value="›"
-            onPress={() =>
-              router.push({
-                pathname: '/source/goodreads',
-                params: { kind: DEFAULT_KIND, source: 'goodreads' },
-              })
-            }
-          />
-          <Row
-            label={t('add.recordSource')}
-            detail={t('add.recordWhy')}
-            value="⌄"
-            onPress={() => {
-              setKindId(DEFAULT_KIND);
-              setSourceId('record');
-            }}
-            last
-          />
-        </>
-      );
-    }
+  // Level one. Nothing under it can be offered until this is answered.
+  if (!kindId) {
+    return (
+      <>
+        <KindList topRule={false} onPick={setKindId} />
+        {/* The one door that is not a type. A shelf brought over from
+            somewhere else is a library rather than a book — nothing about it
+            answers "what is it" — so it sits under all of them, under a
+            heading of its own rather than at the foot of the last group. */}
+        <GroupTitle>{t('add.elsewhere')}</GroupTitle>
+        <Row
+          label={t('source.goodreads')}
+          detail={t('source.goodreadsDetail')}
+          value="›"
+          onPress={() =>
+            router.push({
+              pathname: '/source/goodreads',
+              params: { kind: DEFAULT_KIND, source: 'goodreads' },
+            })
+          }
+          last
+        />
+      </>
+    );
   }
 
   // Level two: where this kind of book can come from.
@@ -356,25 +315,16 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
       <>
         {crumb()}
         {doors.map((door, index) => {
-          const locked = door === 'standardebooks' && !seEmail;
+          // A source that still wants a credential says so on its own page,
+          // beside the field that takes one — a warning here is an alarm about
+          // a door nobody has opened yet.
           const page = door === ESV ? undefined : OWN_PAGE[door];
           return (
             <Row
               key={door}
               label={labelOf(door, t)}
-              detail={locked ? t('add.seNeedsEmail') : detailOf(door, t)}
-              alarm={locked}
-              value={
-                door === ESV
-                  ? esvOnShelf
-                    ? t('add.esvOnShelf')
-                    : '⌄'
-                  : kept[door]
-                    ? `${kept[door].toLocaleString()}  ${page ? '›' : ''}`
-                    : page
-                      ? '›'
-                      : '⌄'
-              }
+              detail={detailOf(door, t)}
+              value={page ? '›' : '⌄'}
               onPress={() =>
                 page
                   ? router.push({ pathname: page, params: { kind: kindId, source: door } })
@@ -395,50 +345,31 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
 
       {sourceId === 'record' ? (
         <>
-          {/* The type is asked here rather than before, because a record has
-              no doors for it to choose between — all it decides is which
-              sections the book's own page will have. */}
-          <Row
-            label={t(`kind.${kindId}`)}
-            detail={t(`kind.${kindId}Hint`)}
-            value={typeOpen ? '⌃' : '⌄'}
-            onPress={() => setTypeOpen((was) => !was)}
-            last={!typeOpen}
-          />
-          {typeOpen ? (
-            <KindList
-              selectedId={kindId ?? undefined}
-              onPick={(picked) => {
-                setTypeOpen(false);
-                setKindId(picked);
-              }}
+          <View style={styles.form}>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder={t('add.recordTitlePlaceholder')}
+              placeholderTextColor={palette.faint}
+              autoFocus
+              style={[styles.input, { color: palette.text, borderColor: palette.border }]}
             />
-          ) : null}
-        <View style={styles.form}>
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder={t('add.recordTitlePlaceholder')}
-            placeholderTextColor={palette.faint}
-            autoFocus
-            style={[styles.input, { color: palette.text, borderColor: palette.border }]}
+            <TextInput
+              value={author}
+              onChangeText={setAuthor}
+              placeholder={t('add.recordAuthorPlaceholder')}
+              placeholderTextColor={palette.faint}
+              style={[styles.input, { color: palette.text, borderColor: palette.border }]}
+            />
+          </View>
+          <Row
+            label={t('add.recordLookUp')}
+            detail={t('book.lookUpWhat')}
+            value={!keyed ? t('add.needsKey') : named ? '›' : t('add.needsTitle')}
+            alarm={!keyed}
+            onPress={keyed && named ? keepAndLookUp : undefined}
+            last
           />
-          <TextInput
-            value={author}
-            onChangeText={setAuthor}
-            placeholder={t('add.recordAuthorPlaceholder')}
-            placeholderTextColor={palette.faint}
-            style={[styles.input, { color: palette.text, borderColor: palette.border }]}
-          />
-        </View>
-        <Row
-          label={t('add.recordLookUp')}
-          detail={t('book.lookUpWhat')}
-          value={!keyed ? t('add.needsKey') : named ? '›' : t('add.needsTitle')}
-          alarm={!keyed}
-          onPress={keyed && named ? keepAndLookUp : undefined}
-          last
-        />
         </>
       ) : null}
 
