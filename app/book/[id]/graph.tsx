@@ -19,7 +19,7 @@ import {
   type Entity,
   type Relation,
 } from '../../../src/db/repo';
-import { edgeGeometry, layoutGraph, withinRange } from '../../../src/cast/graph';
+import { edgeGeometry, layoutGraph, reachable, withinRange } from '../../../src/cast/graph';
 import { TIE_GROUP, tieOf } from '../../../src/cast/ties';
 import { hueFrom } from '../../../src/ui/fields';
 import { space, usePalette } from '../../../src/theme';
@@ -76,10 +76,18 @@ export default function Graph() {
     () => (range ? relations.filter((relation) => withinRange(relation, range.from, range.to)) : relations),
     [relations, range]
   );
-  const { nodes, edges } = useMemo(
-    () => layoutGraph(entities, visible, size),
-    [entities, visible, size]
-  );
+  // Picking someone narrows the graph to the people connected to them, at any
+  // remove — the rest of the book is a different crowd and drawing it over
+  // this one only makes both harder to read.
+  const { nodes, edges } = useMemo(() => {
+    if (!selected) return layoutGraph(entities, visible, size);
+    const travelled = reachable(selected, visible);
+    return layoutGraph(
+      entities.filter((entity) => travelled.has(entity.id)),
+      visible.filter((relation) => travelled.has(relation.from_id) && travelled.has(relation.to_id)),
+      size
+    );
+  }, [entities, visible, size, selected]);
 
   const related = selected
     ? new Set(
