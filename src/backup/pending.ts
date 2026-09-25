@@ -51,14 +51,6 @@ function held(): { books: BundledBook[]; assets: Record<string, Uint8Array> } | 
   }
 }
 
-/** How many books are still waiting for their file — the honest count to show. */
-export async function waitingCount(): Promise<number> {
-  const bundle = held();
-  if (!bundle) return 0;
-  const applied = new Set(await appliedHashes());
-  return bundle.books.filter((book) => !applied.has(book.book.source_hash)).length;
-}
-
 export function forget() {
   const file = heldFile();
   if (file.exists) file.delete();
