@@ -1,6 +1,6 @@
 # Privacy Policy — Novel Man
 
-_Last updated: 2026-09-22_
+_Last updated: 2026-09-24_
 
 Novel Man does not collect, transmit, or store your personal data on any server we control. We operate no server, and there is no account to create.
 
@@ -12,7 +12,11 @@ Your manuscripts, chapters, scenes, annotations, characters, places, terms, tran
 - **Cloud bucket backup** — a backup bundle is written to an S3-compatible bucket you provision with credentials you supply. We have no access to it.
 - **Export / import** — files you create and place wherever you choose.
 - **AI features** — off until you add a key. If you supply your own API key (OpenAI, Anthropic, Google, Mistral, Groq, DeepSeek, xAI or another supported vendor), the passages needed for the task you asked for — a chapter to translate, the text to analyze, a title to look up — are sent to that provider under your own account with them. Their privacy policy governs that data. Your key is stored on the device and never sent to us. Each run states what it will cost before it spends.
-- **Book sources** — searching or downloading from Project Gutenberg, Standard Ebooks, arXiv, Open Library or eBible.org sends only the search terms and the file request to that service. Standard Ebooks' feeds are a Patrons Circle benefit, so that source sends the email address you enter, to them, to authenticate. Importing from a link fetches the URL you paste.
+- **Book sources** — searching or downloading from Project Gutenberg, Standard Ebooks, arXiv, Open Library, Google Books or eBible.org sends only the search terms and the file request to that service. Standard Ebooks' feeds are a Patrons Circle benefit, so that source sends the email address you enter, to them, to authenticate. Looking a title up by name or ISBN asks Open Library and Google Books the same question, so that search term reaches Google. Importing from a link — including a GitHub repository of scripture — fetches the URL you paste, and nothing else.
+- **Goodreads shelf** — brought over two ways. Their export file is a CSV you download yourself and choose from Files: it is read on the device and no request is made. A shelf's RSS address, pasted instead, is fetched from Goodreads — the address carries your own shelf key, and re-reading the shelf sends it again.
+- **ESV passages** — the ESV cannot be redistributed, so it is looked up rather than downloaded: with a key of your own from Crossway, the reference you ask for is sent to their API and the answer is shown, not stored. Their terms and attribution travel with the text.
+
+One request you do not ask for by name: importing a **PDF** loads pdf.js and MathJax from a public CDN (jsdelivr.net) the first time, because several megabytes of PDF engine are not worth bundling for a format most manuscripts are not in. The CDN sees the request, as any web server does; your file never leaves the device — it is parsed on it. PDF import is the one import that needs a network, and says so when there isn't one.
 
 No part of this passes through us. There is no intermediary service.
 
