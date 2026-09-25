@@ -9,7 +9,7 @@ export const docxImporter = {
   id: 'docx',
   label: 'Word',
   extensions: ['docx'],
-  mimeTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  utis: ['org.openxmlformats.wordprocessingml.document'],
   async parse(bytes: Uint8Array, _fileName: string, context?: ParseContext) {
     const zip = unzipSync(bytes);
     const documentXml = readEntry(zip, 'word/document.xml');

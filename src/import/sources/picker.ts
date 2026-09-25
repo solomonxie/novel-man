@@ -1,5 +1,5 @@
 import { errorCodes, isErrorWithCode, pick as pickDocument, types } from '@react-native-documents/picker';
-import { supportedMimeTypes } from '../registry';
+import { supportedUtis } from '../registry';
 
 export type PickedFile = { uri: string; name: string };
 
@@ -27,7 +27,7 @@ function pick(type: string[]) {
  * provider shows up here, with no OAuth and nowhere to keep a token.
  */
 export function pickManuscript(): Promise<PickedFile | null> {
-  return pick([...supportedMimeTypes, 'text/*', 'application/octet-stream']);
+  return pick([...supportedUtis, 'public.text']);
 }
 
 export function pickBackupBundle(): Promise<PickedFile | null> {
@@ -36,6 +36,5 @@ export function pickBackupBundle(): Promise<PickedFile | null> {
 
 /** A library export, which is a table rather than a book: Goodreads' CSV. */
 export function pickSpreadsheet(): Promise<PickedFile | null> {
-  return pick(['text/csv', 'text/comma-separated-values', 'public.comma-separated-values-text',
-    'text/plain', 'application/octet-stream']);
+  return pick(['public.comma-separated-values-text', 'public.plain-text']);
 }
