@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from '../storage/fs';
 import { buildBundle } from './bundle';
+import { dayStamp } from './format';
 import { isAuto, refreshDriveStatus } from './icloud';
 import { drive } from '../../modules/icloud';
 import { listConnections, bucketFor } from '../cloud/connections';
@@ -9,8 +10,8 @@ export type RemovalBackup = { fileName: string };
 
 /** Writes a unique pre-removal copy to local storage and configured cloud destinations. */
 export async function backupBeforeRemoval(): Promise<RemovalBackup> {
-  const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const fileName = `novel-man-removal-${stamp}.zip`;
+  const unique = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const fileName = `novel-man-pre-deletion-${dayStamp()}-${unique}.zip`;
   const full = await buildBundle();
   const backupFolder = new Directory(Paths.document, 'Backups');
   if (!backupFolder.exists) backupFolder.create({ intermediates: true });
@@ -25,7 +26,7 @@ export async function backupBeforeRemoval(): Promise<RemovalBackup> {
       for (const connection of connections) {
         const bucket = await bucketFor(connection.id);
         if (!bucket) throw new Error(`Missing credentials for ${connection.name}`);
-        await bucket.put(`before-removal/${fileName}`, full.body as Uint8Array, 'application/zip');
+        await bucket.put(`pre-deletion/${fileName}`, full.body as Uint8Array, 'application/zip');
       }
     })());
   }
@@ -40,7 +41,7 @@ export async function backupBeforeRemoval(): Promise<RemovalBackup> {
       staged.write(metadata.body as Uint8Array);
       try {
         const path = decodeURIComponent(staged.uri.replace('file://', ''));
-        await drive.copyIn(path, `before-removal/${fileName}`);
+        await drive.copyIn(path, `pre-deletion/${fileName}`);
       } finally {
         if (staged.exists) staged.delete();
       }
