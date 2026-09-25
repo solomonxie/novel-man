@@ -27,7 +27,7 @@ const { candidateTerms, termsIn } = await import(join(build, 'translate/terms.js
 const { placeTranslation, endsTight } = await import(join(build, 'translate/layout.js'));
 const { diffWords } = await import(join(build, 'translate/diff.js'));
 const { countMentions, appearancesIn } = await import(join(build, 'cast/mentions.js'));
-const { layoutGraph, withinRange } = await import(join(build, 'cast/graph.js'));
+const { layoutGraph, reachable, withinRange } = await import(join(build, 'cast/graph.js'));
 const { sha256Hex, hmacSha256, utf8, hex } = await import(join(build, 'cloud/sha256.js'));
 const { signRequest, parseUrl } = await import(join(build, 'cloud/sign.js'));
 const { parseListing, extractMessage } = await import(join(build, 'cloud/client.js'));
@@ -371,6 +371,19 @@ console.log('cast');
   check('an edge joins two placed nodes', graph.edges.length, 1);
   check('a relation outside the range is filtered', withinRange(relations[0], 5, 9), false);
   check('a relation inside the range is kept', withinRange(relations[0], 1, 9), true);
+
+  // Two crowds and a bridge: d knows c, and nobody else knows either of them.
+  const crowds = [
+    { id: 'r1', from_id: 'a', to_id: 'b', label: 'sisters', first_chapter: 0, last_chapter: 2 },
+    { id: 'r2', from_id: 'c', to_id: 'd', label: 'rivals', first_chapter: 0, last_chapter: 2 },
+    { id: 'r3', from_id: 'd', to_id: 'e', label: 'hired', first_chapter: 0, last_chapter: 2 },
+  ];
+  check('travel reaches the whole crowd, however many steps',
+    [...reachable('c', crowds)].sort(), ['c', 'd', 'e']);
+  check('and never the other one', reachable('c', crowds).has('a'), false);
+  check('someone in no relation at all is their own crowd',
+    [...reachable('z', crowds)], ['z']);
+  check('direction does not matter', [...reachable('e', crowds)].sort(), ['c', 'd', 'e']);
 }
 
 console.log('signing');

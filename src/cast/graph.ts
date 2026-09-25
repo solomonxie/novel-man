@@ -46,6 +46,39 @@ export function layoutGraph(
   return { nodes, edges };
 }
 
+/**
+ * Everyone you can get to from one person by following relations, however
+ * many steps it takes — the component they belong to. A graph of a long novel
+ * is several unconnected crowds drawn on top of each other; picking a person
+ * and seeing only the crowd they are actually part of is the one question a
+ * ring of forty names cannot answer by itself.
+ *
+ * Direction is ignored: "X is Y's father" connects them both ways round.
+ */
+export function reachable(from: string, relations: Relation[]): Set<string> {
+  const neighbours = new Map<string, string[]>();
+  const link = (one: string, other: string) => {
+    const known = neighbours.get(one);
+    if (known) known.push(other);
+    else neighbours.set(one, [other]);
+  };
+  for (const relation of relations) {
+    link(relation.from_id, relation.to_id);
+    link(relation.to_id, relation.from_id);
+  }
+
+  const found = new Set([from]);
+  const queue = [from];
+  while (queue.length) {
+    for (const next of neighbours.get(queue.pop()!) ?? []) {
+      if (found.has(next)) continue;
+      found.add(next);
+      queue.push(next);
+    }
+  }
+  return found;
+}
+
 /** A relation belongs to the chapters both characters were in together. */
 export function withinRange(relation: Relation, from: number, to: number): boolean {
   return relation.last_chapter >= from && relation.first_chapter <= to;
