@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { router } from '../navigation/router';
 import { Cover } from './primitives';
 import { formatCount } from '../text/counts';
-import { isRecord, statusOf } from '../books/record';
+import { isSkeleton, statusOf } from '../books/record';
 import type { BookListItem } from '../db/repo';
 import { space, usePalette } from '../theme';
 import { trace } from '../dev/trace';
@@ -33,7 +33,7 @@ export function BookTile({ book, width }: { book: BookListItem; width: number })
           the only two things that are true of it: what you gave it, and where
           it stands. */}
       <Text numberOfLines={1} style={{ color: palette.dim, fontSize: 11 }}>
-        {isRecord(book)
+        {isSkeleton(book)
           ? book.stars
             ? '★'.repeat(book.stars)
             : status
