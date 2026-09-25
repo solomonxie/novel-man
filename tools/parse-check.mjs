@@ -77,7 +77,7 @@ const {
   parseFeedUrl,
   pageUrl,
 } = await import(join(build, 'sources/goodreads.js'));
-const { isRecord, starsOf, statusOf } = await import(join(build, 'books/record.js'));
+const { isSkeleton, starsOf, statusOf } = await import(join(build, 'books/record.js'));
 const { readBible } = await import(join(build, 'scripture/published.js'));
 const { bookFiles, contentsUrl, parseRepoUrl, rawUrl, searchUrl, titleFrom } =
   await import(join(build, 'sources/repo.js'));
@@ -1518,13 +1518,13 @@ console.log('\ngoodreads');
 }
 
 // What separates a book with no words from one whose words are fetched.
-console.log('\nrecords');
+console.log('\nskeletons');
 {
-  check('no words and no source is a record', isRecord({ word_count: 0, text_source: null }), true);
+  check('no words and no source is a skeleton', isSkeleton({ word_count: 0, text_source: null }), true);
   check('a licensed edition is not one',
-    isRecord({ word_count: 0, text_source: 'esv' }), false);
+    isSkeleton({ word_count: 0, text_source: 'esv' }), false);
   check('and neither is a manuscript',
-    isRecord({ word_count: 91000, text_source: null }), false);
+    isSkeleton({ word_count: 91000, text_source: null }), false);
   check('five stars is five', starsOf(5), 5);
   check('six is five', starsOf(6), 5);
   check('nothing is nothing', starsOf(null), 0);

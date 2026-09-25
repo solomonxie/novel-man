@@ -54,7 +54,7 @@ import { useDocument } from '../../../src/ui/useDocument';
 import { backUpBefore } from '../../../src/backup/local';
 import { space, usePalette } from '../../../src/theme';
 import { useWorkRefresh } from '../../../src/work/refresh';
-import { isRecord } from '../../../src/books/record';
+import { isSkeleton } from '../../../src/books/record';
 
 export default function StructurePage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -67,7 +67,7 @@ export default function StructurePage() {
   const language = book?.language ?? 'en';
   // Nothing here can be detected, split or scened: there is no text to do it
   // to. What a record's chapter list can be is typed, or asked for.
-  const record = book ? isRecord(book) : false;
+  const record = book ? isSkeleton(book) : false;
   const document = useDocument(id);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [busy, setBusy] = useState(false);

@@ -1,16 +1,20 @@
 /**
- * A book on the shelf with no words behind it: one read on paper, one
- * borrowed, one only meant to be read. The app keeps everything else it keeps
- * about a book — chapters, notes, a cast, a summary, a rating — so this is not
- * a second kind of row but the absence of a manuscript, and that is exactly
- * how it is recognized: nothing to read here, and no source to fetch it from.
+ * A skeleton: a book on the shelf with no words behind it. One read on paper,
+ * one borrowed, one only meant to be read — or one restored from a backup
+ * whose file could not be found. The app keeps everything else it keeps about
+ * a book — chapters, notes, a cast, a summary, a rating — so this is not a
+ * second kind of row but the absence of a manuscript, and that is exactly how
+ * it is recognized: nothing to read here, and no source to fetch it from.
+ *
+ * Named for what it is rather than called a record, which in this codebase is
+ * already a `BookRecord` — the whole of a book, which is the opposite of this.
  *
  * A licensed edition has no words here either, but it has somewhere to get
- * them, so it is not a record.
+ * them, so it is not a skeleton.
  */
-export type Recorded = { word_count: number; text_source: string | null };
+export type Skeletal = { word_count: number; text_source: string | null };
 
-export function isRecord(book: Recorded): boolean {
+export function isSkeleton(book: Skeletal): boolean {
   return book.word_count === 0 && !book.text_source;
 }
 

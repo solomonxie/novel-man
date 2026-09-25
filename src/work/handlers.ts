@@ -41,7 +41,7 @@ import { drawImage } from '../ai/image';
 import type { ImageKind } from '../db/repo';
 import { writeImage } from '../storage/files';
 import { kindOf } from '../books/kinds';
-import { isRecord } from '../books/record';
+import { isSkeleton } from '../books/record';
 import { canonChapters, isBible } from '../scripture/canon';
 import type { WorkJob, WorkKind } from '../db/work';
 import {

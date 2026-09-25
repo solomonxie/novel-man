@@ -2,7 +2,7 @@ import type { Book, Chapter, Entity, Scene } from '../db/repo';
 import { formatCount } from '../text/counts';
 import { namesOf } from '../cast/mentions';
 import { supports } from '../books/kinds';
-import { isRecord } from '../books/record';
+import { isSkeleton } from '../books/record';
 import { isBible } from '../scripture/canon';
 
 /**
@@ -64,7 +64,7 @@ export type Citable = Pick<Book, 'kind' | 'word_count' | 'text_source'>;
  * model either knows or must refuse. See `passageBody`.
  */
 export function citedNotSent(book: Citable): boolean {
-  return supports(book.kind, 'verses') || isRecord(book);
+  return supports(book.kind, 'verses') || isSkeleton(book);
 }
 
 /**
