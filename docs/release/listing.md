@@ -166,10 +166,10 @@ App Preview video: skip for 1.0.
 | App Review → Attachment | none |
 | Version Release | **Manually release this version** |
 
-Promotional Text (166/170):
+Promotional Text (155/170):
 
 ```
-An offline book reader that accept any format. Import a book and get advanced analysis — offline, no account needed.
+A book reader that accepts any format. Import a manuscript and get back its chapters, scenes and cast — on the device, with no account and no subscription.
 ```
 
 Description:
@@ -296,7 +296,9 @@ True only while there is no analytics or crash SDK — re-check before each subm
 grep -rniE "analytics|firebase|sentry|amplitude|mixpanel|posthog|bugsnag" package.json ios/Podfile.lock
 ```
 
-Data leaves the device only to destinations the user configures — their iCloud, their bucket, their AI provider, and the public book sources they search. You never receive it, so it is not "collected".
+Data leaves the device only to destinations the user picks — their iCloud, their bucket, their AI provider, and the public book catalogs they search (Gutenberg, Standard Ebooks, arXiv, Open Library, Google Books, eBible.org, a Goodreads feed they paste, Crossway's ESV API under their own key). Each is a live request answered in real time; none is an SDK, and you never receive any of it, so none of it is "collected" in Apple's sense.
+
+The one fetch the user does not name is pdf.js from jsdelivr.net when importing a PDF — a code download, not user data, and the file itself is parsed on the device. Disclosed in the privacy policy all the same.
 
 ### `App Store → Trust & Safety → App Accessibility`
 
