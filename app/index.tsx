@@ -44,6 +44,7 @@ import {
   type MetaHit,
 } from '../src/search/library';
 import { backUpIfAuto, restoreOnLaunch } from '../src/backup/icloud';
+import { subscribeToRestores } from '../src/backup/changes';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { radius, space, usePalette } from '../src/theme';
 import { appearances, setAppearance, useAppearance, type Appearance } from '../src/theme/appearance';
@@ -123,6 +124,10 @@ export default function Home() {
 
   // A finished task usually changed something on the shelf.
   useWorkRefresh(refresh);
+
+  // Settings are sections of this page, so a restore done there never costs
+  // the shelf its focus — it has to be told.
+  useEffect(() => subscribeToRestores(refresh), [refresh]);
 
   useEffect(() => {
     Animated.timing(addTurn, {

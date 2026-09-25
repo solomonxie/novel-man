@@ -1,22 +1,37 @@
 import { Directory, File, Paths } from '../storage/fs';
-import { buildBundle } from './bundle';
-import { dayStamp } from './format';
+import { buildBundle, openBundle } from './bundle';
+import { secondStamp } from './format';
 import { isAuto, refreshDriveStatus } from './icloud';
 import { drive } from '../../modules/icloud';
 import { listConnections, bucketFor } from '../cloud/connections';
+import { listBookIds } from '../db/repo';
 import { Bucket } from '../cloud/client';
 
 export type RemovalBackup = { fileName: string };
 
+/**
+ * Read back from disk rather than trusted: this file is the only way back from
+ * what runs next, and a short write, a full disk or an empty build would all
+ * produce a plausible-looking zip. Throwing here leaves everything in place.
+ */
+function verify(file: File, expected: number): void {
+  const opened = openBundle(file.bytesSync());
+  const restorable = opened.snapshot.books.filter((book) => book.text?.trim()).length;
+  if (restorable !== expected) {
+    throw new Error(`Backup holds ${restorable} of ${expected} books; nothing was deleted.`);
+  }
+}
+
 /** Writes a unique pre-removal copy to local storage and configured cloud destinations. */
 export async function backupBeforeRemoval(): Promise<RemovalBackup> {
-  const unique = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const fileName = `novel-man-pre-deletion-${dayStamp()}-${unique}.zip`;
+  const fileName = `${secondStamp()}-pre-deletion-novel-man.zip`;
+  const expected = (await listBookIds()).length;
   const full = await buildBundle();
   const backupFolder = new Directory(Paths.document, 'Backups');
   if (!backupFolder.exists) backupFolder.create({ intermediates: true });
   const local = new File(backupFolder, fileName);
   local.write(full.body as Uint8Array);
+  verify(local, expected);
 
   const connections = await listConnections();
   const uploads: Promise<void>[] = [];
@@ -36,9 +51,11 @@ export async function backupBeforeRemoval(): Promise<RemovalBackup> {
       if (!drive || (await refreshDriveStatus()) !== 'available') {
         throw new Error('iCloud Drive is enabled but unavailable.');
       }
-      const metadata = await buildBundle(undefined, { includeText: false });
+      // The one upload that carries the manuscripts. Every other iCloud copy
+      // leaves them out because the reader still has the file they came from —
+      // and the wipe about to run is what takes those files away.
       const staged = new File(Paths.cache, fileName);
-      staged.write(metadata.body as Uint8Array);
+      staged.write(full.body as Uint8Array);
       try {
         const path = decodeURIComponent(staged.uri.replace('file://', ''));
         await drive.copyIn(path, `pre-deletion/${fileName}`);

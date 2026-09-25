@@ -5,8 +5,9 @@ import type { Database } from '../db';
 
 import { db, setBeforeMigrations } from '../db';
 import { lastUploadedAnywhere, recordUpload } from '../db/jobs';
+import { hasBooks } from '../db/repo';
 import { buildBundle } from './bundle';
-import { dateOf, dayStamp } from './format';
+import { dateOf, dayStamp, secondStamp } from './format';
 
 /**
  * The copies that never leave the device, and the only ones that are instant,
@@ -21,8 +22,11 @@ import { dateOf, dayStamp } from './format';
  * visible in Files, and that door is the whole of its outward value.
  */
 const FOLDER = 'Backups';
-const ROLLING = 'novel-man-daily.zip';
-const DATABASE = 'novel-man.db';
+/** When it was taken, what it is for, whose it is — in that order, so the
+ *  folder sorts chronologically and reads as a sentence. */
+const rollingName = () => `${dayStamp()}-daily-novel-man.zip`;
+const databaseName = () => `${dayStamp()}-database-novel-man.db`;
+const OURS = /^\d{4}-\d{2}-\d{2}-(daily|database|before-)/;
 /** A week, not a count: once an operation can add a file, a count silently
  *  caps how many imports you get before yesterday is gone. */
 const KEEP_DAYS = 7;
@@ -45,7 +49,7 @@ export async function snapshotDatabase(open?: Database): Promise<boolean> {
     await database.execAsync('PRAGMA wal_checkpoint(FULL)');
     const live = new File(Paths.document, 'SQLite/novelman.db');
     if (!live.exists) return false;
-    const target = new File(folder(), DATABASE);
+    const target = new File(folder(), databaseName());
     if (target.exists) target.delete();
     live.copy(target);
     return true;
@@ -57,7 +61,7 @@ export async function snapshotDatabase(open?: Database): Promise<boolean> {
 /** The same bytes every other tier gets, so one can be dragged out anywhere. */
 async function writeBundle(name: string): Promise<boolean> {
   try {
-    const bundle = await buildBundle(undefined, { includeText: false });
+    const bundle = await buildBundle();
     const file = new File(folder(), name);
     if (file.exists) file.delete();
     file.create();
@@ -75,8 +79,8 @@ async function writeBundle(name: string): Promise<boolean> {
  * is about to be overwritten by the very state being guarded against.
  */
 export async function backUpBefore(what: string): Promise<boolean> {
-  const stamp = `${dayStamp()}-${String(Date.now() % 86400000)}`;
-  return writeBundle(`novel-man-before-${what}-${stamp}.zip`);
+  if (!(await hasBooks())) return false;
+  return writeBundle(`${secondStamp()}-before-${what}-novel-man.zip`);
 }
 
 /**
@@ -88,28 +92,34 @@ export async function backUpBefore(what: string): Promise<boolean> {
 const LEDGER = 'local';
 
 export async function backUpLocally(): Promise<boolean> {
+  // Minutes after a wipe this runs on the way to the background, and without
+  // this line it writes the emptied shelf over the rolling copy and the
+  // database snapshot — the two files someone comes looking for afterwards.
+  if (!(await hasBooks())) return false;
   const last = await lastUploadedAnywhere(LEDGER);
   if (last && sameDay(last, Date.now())) return false;
   await snapshotDatabase();
-  const wrote = await writeBundle(ROLLING);
+  const rolling = rollingName();
+  const wrote = await writeBundle(rolling);
   if (!wrote) return false;
-  await recordUpload(LEDGER, ROLLING, dayStamp());
+  await recordUpload(LEDGER, rolling, dayStamp());
   prune();
   return true;
 }
 
 /**
- * Ours to tidy, and only ours: a file someone else put here is not this app's.
- * The age is the day in the name rather than the file's timestamp — the name
- * is what the promise is made in ("anything from the last week"), and it does
- * not move when a file is copied about.
+ * Ours to tidy, and only ours: a file someone else put here is not this app's,
+ * and a pre-deletion copy is never swept — it is the only thing standing
+ * between a wipe and the work it wiped. The age is the day in the name rather
+ * than the file's timestamp — the name is what the promise is made in
+ * ("anything from the last week"), and it does not move when a file is copied.
  */
 function prune(): void {
   const cutoff = Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000;
   try {
     for (const entry of folder().list()) {
       if (!(entry instanceof File)) continue;
-      if (!entry.name.startsWith('novel-man-before-')) continue;
+      if (!OURS.test(entry.name)) continue;
       const day = dateOf(entry.name);
       if (day && day.getTime() < cutoff) entry.delete();
     }
