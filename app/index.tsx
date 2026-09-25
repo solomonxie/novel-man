@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { listBooks, type BookListItem } from '../src/db/repo';
+import { bookKinds, kindOf } from '../src/books/kinds';
 import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
 import { supportedExtensions } from '../src/import/registry';
 import { Row, Section } from '../src/ui/primitives';
@@ -159,6 +160,21 @@ export default function Home() {
     return ranked.sort((a, b) => a.rank - b.rank).map((entry) => entry.book);
   }, [books, query]);
 
+  // One shelf per kind, in the order the kinds are declared — a shelf appears
+  // the moment a book of that kind does, and never before.
+  const shelves = useMemo(() => {
+    const byKind = new Map<string, BookListItem[]>();
+    for (const book of library) {
+      const id = kindOf(book.kind).id;
+      const found = byKind.get(id);
+      if (found) found.push(book);
+      else byKind.set(id, [book]);
+    }
+    return bookKinds
+      .filter((kind) => byKind.has(kind.id))
+      .map((kind) => ({ kind, books: byKind.get(kind.id) as BookListItem[] }));
+  }, [library]);
+
   // Everything else is a query per keystroke, so it waits for a pause.
   useEffect(() => {
     if (!query.trim()) {
@@ -239,12 +255,6 @@ export default function Home() {
         ) : (
           <>
             <View style={{ marginTop: space.lg }}>
-              <View style={styles.shelfHead}>
-                <Text style={[styles.shelfTitle, { color: palette.dim }]}>
-                  {t('shelf.sectionLibrary')}
-                </Text>
-              </View>
-
               {broken ? (
                 // Books are not lost when the database will not open, and the
                 // difference is the whole distance between a bad morning and a
@@ -268,18 +278,31 @@ export default function Home() {
                   {t('shelf.noMatches')}
                 </Text>
               ) : (
-                /* One row that runs off the edge. A shelf is read sideways,
-                   and the whole page below it belongs to what is not the
-                   shelf. It virtualises because a library has no ceiling. */
-                <FlatList
-                  horizontal
-                  data={library}
-                  keyExtractor={(book) => book.id}
-                  renderItem={({ item }) => <BookTile book={item} width={tileWidth} />}
-                  showsHorizontalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={styles.shelfRow}
-                />
+                /* A shelf per kind of book, and a kind nobody owns has no
+                   shelf. What the reader keeps is a few novels and a bible,
+                   not "the library" — so the page is the answer to "what do I
+                   have", grouped the way the app already thinks of a book.
+                   Each runs off the edge and virtualises, because any one of
+                   them can grow without a ceiling. */
+                shelves.map(({ kind, books: shelf }, index) => (
+                  <View key={kind.id} style={index > 0 ? { marginTop: space.xl } : undefined}>
+                    <View style={styles.shelfHead}>
+                      <Text style={[styles.shelfTitle, { color: palette.dim }]}>
+                        {t(`kind.${kind.id}Plural`)}
+                      </Text>
+                      <Text style={{ color: palette.faint, fontSize: 12 }}>{shelf.length}</Text>
+                    </View>
+                    <FlatList
+                      horizontal
+                      data={shelf}
+                      keyExtractor={(book) => book.id}
+                      renderItem={({ item }) => <BookTile book={item} width={tileWidth} />}
+                      showsHorizontalScrollIndicator={false}
+                      keyboardShouldPersistTaps="handled"
+                      contentContainerStyle={styles.shelfRow}
+                    />
+                  </View>
+                ))
               )}
             </View>
 
