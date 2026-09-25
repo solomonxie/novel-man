@@ -10,7 +10,7 @@ export const epubImporter: Importer = {
   id: 'epub',
   label: 'EPUB',
   extensions: ['epub'],
-  mimeTypes: ['application/epub+zip'],
+  utis: ['org.idpf.epub-container'],
   async parse(bytes, _fileName, context) {
     const zip = unzipSync(bytes);
     const container = read(zip, 'META-INF/container.xml');

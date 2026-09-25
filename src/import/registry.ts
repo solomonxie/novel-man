@@ -17,7 +17,7 @@ export const importers: Importer[] = [
 /** Formats the picker offers — and the ones the empty state promises. */
 export const supportedExtensions = importers.flatMap((importer) => importer.extensions);
 
-export const supportedMimeTypes = importers.flatMap((importer) => importer.mimeTypes);
+export const supportedUtis = importers.flatMap((importer) => importer.utis);
 
 export function importerFor(extension: string): Importer | undefined {
   return importers.find((importer) => importer.extensions.includes(extension.toLowerCase()));

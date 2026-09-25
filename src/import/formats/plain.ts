@@ -13,7 +13,7 @@ export const txtImporter: Importer = {
   id: 'txt',
   label: 'Plain text',
   extensions: ['txt'],
-  mimeTypes: ['text/plain'],
+  utis: ['public.plain-text'],
   async parse(bytes) {
     return { blocks: blocksFromText(decodeText(bytes)) };
   },
@@ -23,7 +23,7 @@ export const markdownImporter: Importer = {
   id: 'markdown',
   label: 'Markdown',
   extensions: ['md', 'markdown'],
-  mimeTypes: ['text/markdown'],
+  utis: ['net.daringfireball.markdown'],
   async parse(bytes) {
     const blocks: Block[] = [];
     let title: string | undefined;
