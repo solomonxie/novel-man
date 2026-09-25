@@ -3,8 +3,7 @@ import { router, useFocusEffect } from '../navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { isAuto, lastBackupAt, setAuto, useDriveStatus } from '../backup/icloud';
-import { waitingCount } from '../backup/pending';
-import { Row, Toggle } from '../ui/primitives';
+import { Toggle } from '../ui/primitives';
 
 /**
  * The destination that outlives the app, so it sits above the buckets — and it
@@ -19,13 +18,11 @@ export function IcloudRows() {
   const status = useDriveStatus();
   const [auto, setAutoState] = useState(false);
   const [at, setAt] = useState<number | null>(null);
-  const [waiting, setWaiting] = useState(0);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
     isAuto().then(setAutoState);
     lastBackupAt().then(setAt);
-    waitingCount().then(setWaiting);
   }, []);
 
   useFocusEffect(load);
@@ -75,10 +72,6 @@ export function IcloudRows() {
         onPress={blocked ? undefined : () => router.push('/settings/icloud-backups')}
         disabled={blocked || busy}
       />
-      {waiting > 0 ? (
-        <Row label={t('backup.waiting', { count: waiting })} detail={t('backup.waitingDetail')} />
-      ) : null}
-
     </>
   );
 }
