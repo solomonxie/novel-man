@@ -13,6 +13,8 @@ import {
   type Snapshot,
 } from './format';
 
+import { trace } from '../dev/trace';
+
 const SNAPSHOT = 'snapshot.json';
 
 /**
@@ -25,15 +27,22 @@ const SNAPSHOT = 'snapshot.json';
  * travel nowhere.
  */
 export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
+  let at = performance.now();
   const ids = bookIds ?? (await listBookIds());
   const assets: Record<string, Uint8Array> = {};
   const books: BundledBook[] = [];
 
   for (const id of ids) {
+    const each = performance.now();
     const record = await readBookRecord(id);
     if (!record) continue;
+    const read = performance.now();
     books.push(withAssets(record, assets));
+    trace(
+      `book ${id} read ${Math.round(read - each)}ms assets ${Math.round(performance.now() - read)}ms`
+    );
   }
+  trace(`records ${Math.round(performance.now() - at)}ms for ${books.length} books`);
 
   const snapshot: Snapshot = {
     format: BUNDLE_FORMAT,
@@ -44,15 +53,28 @@ export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
     settings: await readPrefs(),
   };
 
-  const files: Record<string, Uint8Array> = { [SNAPSHOT]: strToU8(JSON.stringify(snapshot)) };
-  for (const [path, bytes] of Object.entries(assets)) files[path] = bytes;
+  at = performance.now();
+  const json = JSON.stringify(snapshot);
+  trace(`stringify ${Math.round(performance.now() - at)}ms for ${json.length} chars`);
+  at = performance.now();
+  const files: Record<string, Uint8Array> = { [SNAPSHOT]: strToU8(json) };
+  trace(`strToU8 ${Math.round(performance.now() - at)}ms`);
+  let assetBytes = 0;
+  for (const [path, bytes] of Object.entries(assets)) {
+    files[path] = bytes;
+    assetBytes += bytes.length;
+  }
+  trace(`assets ${Object.keys(assets).length} files ${assetBytes} bytes`);
 
   const label =
     books.length === 1 ? `export-${books[0].book.title.slice(0, 40)}` : 'library-novel-man';
+  at = performance.now();
+  const body = zipSync(files);
+  trace(`zipSync ${Math.round(performance.now() - at)}ms to ${body.length} bytes`);
   return {
     fileName: bundleName(label.replace(/[/\\?%*:|"<>]/g, '-') || 'library-novel-man'),
     mimeType: 'application/zip',
-    body: zipSync(files),
+    body,
   };
 }
 

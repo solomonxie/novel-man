@@ -29,6 +29,7 @@ import { Row } from './primitives';
 import { GroupTitle, KindList } from './KindList';
 import { OptionRows } from './OptionRows';
 import { radius, space, usePalette } from '../theme';
+import { trace } from '../dev/trace';
 
 /**
  * Adding a book, as one menu that goes deeper instead of a page of everything.
@@ -88,6 +89,7 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
 }) {
   const { t } = useTranslation();
   const palette = usePalette();
+  trace('AddFlow render');
 
   const [kindId, setKindId] = useState<string | null>(initialKind ?? null);
   const [sourceId, setSourceId] = useState<Door | null>(null);
