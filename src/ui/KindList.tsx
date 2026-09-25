@@ -62,6 +62,16 @@ export function KindList({ selectedId, onPick, topRule = true }: {
   );
 }
 
+/**
+ * The same heading the groups above use, for a row underneath that is not a
+ * kind of book. It lives here because matching those headings exactly is the
+ * whole of its job.
+ */
+export function GroupTitle({ children }: { children: string }) {
+  const palette = usePalette();
+  return <Text style={[styles.group, { color: palette.dim }]}>{children.toUpperCase()}</Text>;
+}
+
 const styles = StyleSheet.create({
   /** Inside the card, under the row that opened it — a rule, not a gap. */
   panel: { paddingBottom: space.sm },
