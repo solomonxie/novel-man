@@ -6,6 +6,7 @@ import { supports } from '../../src/books/kinds';
 import { listTargets, pendingByChapter } from '../../src/db/translation';
 import { prepare } from '../../src/translate/run';
 import { targetLanguages } from '../../src/translate/languages';
+import { ActionMenu } from '../../src/ui/ActionMenu';
 import { PickerSheet } from '../../src/ui/PickerSheet';
 import { labelFor } from '../../src/translate/languages';
 
@@ -42,7 +43,7 @@ import { Hint, Row, Section } from '../../src/ui/primitives';
 import { openWorkQueue } from '../../src/ui/WorkQueue';
 import { hueFrom } from '../../src/ui/fields';
 import { NoteSheet } from '../../src/ui/NoteSheet';
-import { isRecord } from '../../src/books/record';
+import { isSkeleton } from '../../src/books/record';
 import { space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
 
@@ -68,6 +69,7 @@ export default function ChapterPage() {
   const [notes, setNotes] = useState<Annotation[]>([]);
   const [writing, setWriting] = useState(false);
   const [queued, setQueued] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   /** The languages this book is being translated into, and what is left here. */
   const [targets, setTargets] = useState<{ target: string; pending: number }[]>([]);
   const [queueError, setQueueError] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export default function ChapterPage() {
       // A bible has chapters and verses, not scenes, and a book with no words
       // has nothing to split. Offering an empty section for either says the
       // analysis failed, when it was never asked.
-      setScened(supports(book?.kind, 'scenes') && !(book && isRecord(book)));
+      setScened(supports(book?.kind, 'scenes') && !(book && isSkeleton(book)));
       setNotes(
         (await listAnnotations(found.book_id)).filter((note) =>
           note.chapter_id
@@ -143,12 +145,40 @@ export default function ChapterPage() {
 
   // A chapter of a book with no words: nothing to open, but everything to write
   // about — which is the whole point of a record having chapters at all.
-  const record = book ? isRecord(book) : false;
+  const skeleton = book ? isSkeleton(book) : false;
 
   const read = (at?: number) =>
     router.push(
       `/reader/${chapter.book_id}?chapter=${chapter.idx}${at === undefined ? '' : `&at=${at}`}`
     );
+
+  async function queueing(work: () => Promise<unknown>) {
+    setAiOpen(false);
+    setQueueError(null);
+    if (await stoppedWithoutKey(t)) return;
+    try {
+      await work();
+      setQueued(true);
+    } catch (problem) {
+      // A tap that quietly does nothing is the worst answer there is.
+      setQueueError(String(problem));
+    }
+  }
+
+  const aiActions = [
+    // Only where there is nothing to read: a book the app holds needs no
+    // account of a chapter it can open.
+    ...(skeleton
+      ? [{
+          label: chapter.recap?.trim() ? t('chapter.recapAgain') : t('chapter.recapShort'),
+          onPress: () => void queueing(() => queueChapterRecap(chapter.book_id, chapter)),
+        }]
+      : []),
+    {
+      label: t('chapter.analyzeShort'),
+      onPress: () => void queueing(() => queueChapterRun(chapter.book_id, 'deep-analyze', [chapter])),
+    },
+  ];
 
   return (
     <ScrollView
@@ -171,56 +201,34 @@ export default function ChapterPage() {
         }
         actions={
           <>
-            {/* A record has nothing to open. Writing a note is not the second
+            {/* A skeleton has nothing to open. Writing a note is not the second
                 thing offered here either — the notes block below already has
                 a ＋ and an empty state that both say it. */}
-            {record ? null : (
+            {skeleton ? null : (
               <Action label={t('chapter.read')} onPress={() => read()} tone="loud" />
             )}
-            {/* Only where there is nothing to read: a book the app holds
-                needs no account of a chapter it can open. */}
-            {record ? (
-              <Action
-                tone="loud"
-                label={chapter.recap?.trim() ? t('chapter.recapAgain') : t('chapter.recapShort')}
-                onPress={async () => {
-                  setQueueError(null);
-                  if (await stoppedWithoutKey(t)) return;
-                  try {
-                    await queueChapterRecap(chapter.book_id, chapter);
-                    setQueued(true);
-                  } catch (problem) {
-                    setQueueError(String(problem));
-                  }
-                }}
-              />
-            ) : null}
+            {/* One AI button, whatever it can do. Two of them side by side made
+                the reader choose between "recall" and "analyze" before knowing
+                either was a model doing it, and put a price under a pair where
+                it could only belong to one. */}
             <Action
-              tone="quiet"
-              label={t('chapter.analyzeShort')}
-              onPress={async () => {
-                setQueueError(null);
-                if (await stoppedWithoutKey(t)) return;
-                try {
-                  await queueChapterRun(chapter.book_id, 'deep-analyze', [chapter]);
-                  setQueued(true);
-                } catch (problem) {
-                  // A tap that quietly does nothing is the worst answer there is.
-                  setQueueError(String(problem));
-                }
-              }}
+              tone={skeleton ? 'loud' : 'quiet'}
+              // A button with one thing behind it says that thing; only a
+              // choice is worth a word as vague as "AI".
+              label={aiActions.length > 1 ? t('chapter.aiShort') : aiActions[0].label}
+              onPress={() => (aiActions.length > 1 ? setAiOpen(true) : aiActions[0].onPress())}
             />
           </>
         }
-        // A price under two buttons reads as belonging to the loud one. Only
-        // the pass costs anything, so the line says whose price it is.
+        // The estimate is for the analysis pass, which is not always what the
+        // button next to it will run — so the line names the pass it prices.
         note={
           queueError
             ? t('work.queueFailed', { error: queueError })
             : queued
               ? t('work.queuedOpen')
               : cost
-                ? t(record ? 'ai.estimateForCited' : 'ai.estimateFor', {
+                ? t(skeleton ? 'ai.estimateForCited' : 'ai.estimateFor', {
                     action: t('chapter.analyzeShort'),
                     tokens: cost.inputTokens.toLocaleString(),
                     cost: formatUsd(cost.usd),
@@ -272,7 +280,7 @@ export default function ChapterPage() {
       {/* The chapter as a model remembers it, for a book whose pages are not
           here. Set apart and labelled, because the one thing this must never
           become is something a reader later mistakes for the book. */}
-      {record && chapter.recap?.trim() ? (
+      {skeleton && chapter.recap?.trim() ? (
         <Block title={t('chapter.recap')}>
           <Writable empty={false}>
             <Prose
@@ -439,6 +447,13 @@ export default function ChapterPage() {
           </>
         )}
       </Section>
+
+      <ActionMenu
+        visible={aiOpen}
+        title={t('chapter.aiShort')}
+        actions={aiActions}
+        onClose={() => setAiOpen(false)}
+      />
 
       <PickerSheet
         visible={languageOpen}

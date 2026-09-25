@@ -756,7 +756,8 @@
     "terms": "术语",
     "noTerms": "本章没有识别到术语。",
     "note": "写一条笔记",
-    "noNotes": "这一章还没有笔记。"
+    "noNotes": "这一章还没有笔记。",
+    "aiShort": "问 AI"
   },
   "part": {
     "read": "从这里开始读 →",
