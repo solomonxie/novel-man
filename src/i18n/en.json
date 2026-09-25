@@ -292,7 +292,7 @@
     "gradeHint_best": "1024 px on the current model, slowest setting. Follows the prompt just as closely, with more detail.",
     "removeAll": "Remove all app data",
     "removeAllTitle": "Remove all app data?",
-    "removeAllWarning": "A backup is saved on this device first — and to iCloud and any connected buckets, if set up. iCloud backups don’t include book text. Deletion starts only after the backups finish; if a cloud backup fails, nothing is deleted."
+    "removeAllWarning": "A full backup is saved on this device first — and to iCloud and any connected buckets, if set up. It holds everything but your keys: books, notes, translations, settings, even the files they were imported from. Deletion starts only after the backups finish; if a cloud backup fails, nothing is deleted."
   },
   "units": {
     "words": "{{count}} words",
@@ -494,7 +494,7 @@
     "now": "Back up now",
     "nowUnchanged": "Nothing has changed since the last backup.",
     "waitingDetail": "Import the same file again to bring back its notes, profiles and chapters.",
-    "restoredWaiting": "{{count}} books need their file imported again.",
+    "restoredWaiting": "{{count}} books came back as skeletons — everything but the text.",
     "file": "Backup file",
     "exportLibrary": "Export the whole library",
     "restoreFromFile": "Restore from a file…",
@@ -506,7 +506,6 @@
     "restoreConfirm": "Restoring adds books. Nothing already here is overwritten.",
     "restored": "Restored {{count}} books.",
     "duplicates": "Already on your shelf, so restored as copies: {{list}}",
-    "unplaceable_no-text": "{{title}} had no text and was skipped.",
     "unplaceable_missing-asset": "{{title}} restored without its image.",
     "failed": "Couldn’t complete that",
     "notABundle": "That isn’t a Novel Man backup.",
@@ -627,7 +626,7 @@
   },
   "cloud": {
     "title": "Cloud backup",
-    "hint": "iCloud backs up what you made — notes, people, progress, settings — but not the books themselves. Your own bucket backs up everything, including book text, and nothing is uploaded until you ask.",
+    "hint": "Every backup holds everything but your keys — books, notes, translations, people, progress, settings and the files you imported. iCloud keeps the last ten copies; your own bucket keeps every one, and nothing is uploaded there until you ask.",
     "none": "None connected.",
     "addConnection": "＋ Add a cloud connection",
     "addConnectionHint": "Your own S3-compatible bucket, for full backups with history.",

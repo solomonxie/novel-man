@@ -1,7 +1,7 @@
 import type { BookRecord } from '../db/repo';
 
 export const BUNDLE_FORMAT = 'novel-man-bundle';
-export const BUNDLE_VERSION = 2;
+export const BUNDLE_VERSION = 3;
 export const BUNDLE_EXTENSION = 'zip';
 /** What the bundle was called before it was named for what it already was. */
 export const LEGACY_EXTENSION = 'nmbak';
@@ -26,16 +26,16 @@ export type Snapshot = {
   /** App preferences. Never a credential: those live in the keychain. */
   settings?: Record<string, string>;
   /**
-   * The manuscripts were left out. Everything the reader made — notes,
-   * profiles, structure, progress — still travels, and re-importing the same
-   * file puts it back on the book it belongs to.
+   * Written by builds that left the manuscripts out, and still read because
+   * those bundles are still in people's iCloud folders: their books arrive
+   * without text and wait for the file. Nothing writes it any more.
    */
   contentOmitted?: boolean;
 };
 
 export type BundledBook = BookRecord & {
   /** Paths inside the bundle, so a reader never touches a device path. */
-  assets: { cover?: string; portraits: Record<string, string> };
+  assets: { cover?: string; portraits: Record<string, string>; source?: string };
 };
 
 export class BundleError extends Error {
@@ -55,9 +55,11 @@ export function validate(snapshot: unknown): Snapshot {
 
 /**
  * One file per day, named for the day, sorting chronologically because the
- * stamp leads. A dated file is the only way to answer "what did this look like
- * in March" — a name that is overwritten all month cannot, because by the time
- * you ask, March has written over itself thirty times.
+ * stamp leads — first when it was taken, then what it is for, then whose it
+ * is: `2026-03-09-library-novel-man.zip`. A dated file is the only way to
+ * answer "what did this look like in March" — a name that is overwritten all
+ * month cannot, because by the time you ask, March has written over itself
+ * thirty times.
  *
  * What bounds the count is retention, not the name: iCloud keeps the latest
  * few and prunes, a bucket keeps every one. See `backup-restore`.
@@ -71,7 +73,19 @@ export function dayStamp(at = new Date()): string {
 }
 
 export function bundleName(label: string, at = new Date()): string {
-  return `${label}-${dayStamp(at)}.${BUNDLE_EXTENSION}`;
+  return `${dayStamp(at)}-${label}.${BUNDLE_EXTENSION}`;
+}
+
+/**
+ * To the second, for the copies where a day is not enough to tell two apart:
+ * emptying an already-empty library twice must not overwrite the first file.
+ */
+export function secondStamp(at = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return (
+    `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}` +
+    `${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`
+  );
 }
 
 /**
@@ -80,7 +94,12 @@ export function bundleName(label: string, at = new Date()): string {
  * are still understood — the first of that month.
  */
 export function dateOf(name: string): Date | null {
-  const day = /-(\d{4})-(\d{2})-(\d{2})(?:\D|$)/.exec(name);
+  const second = /(?:^|[-/])(\d{4})(\d{2})(\d{2})\d{6}(?:\D|$)/.exec(name);
+  if (second) {
+    const at = new Date(Number(second[1]), Number(second[2]) - 1, Number(second[3]));
+    return Number.isNaN(at.getTime()) || Number(second[2]) > 12 || Number(second[3]) > 31 ? null : at;
+  }
+  const day = /(?:^|[-/])(\d{4})-(\d{2})-(\d{2})(?:\D|$)/.exec(name);
   if (day) {
     const at = new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]));
     return Number.isNaN(at.getTime()) || Number(day[2]) > 12 || Number(day[3]) > 31 ? null : at;

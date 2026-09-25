@@ -6,7 +6,7 @@ import { File, Paths } from '../storage/fs';
 import { drive, type DriveFile, type DriveStatus } from '../../modules/icloud';
 import { contentHash } from '../ai/cache';
 import { lastUploadedAnywhere, lastUploadHash, recordUpload } from '../db/jobs';
-import { listBookIds } from '../db/repo';
+import { hasBooks, listBookIds } from '../db/repo';
 import { buildBundle, fingerprint, openBundle } from './bundle';
 import { bundleName, isBundleName } from './format';
 import { subscribeToChanges } from './changes';
@@ -23,7 +23,7 @@ const STAGED = 'icloud-upload.zip';
  * thousand of them; a file per month asks them to choose between twelve, which
  * is a question someone can actually answer when a month of work went wrong.
  */
-const backupName = () => bundleName('library');
+const backupName = () => bundleName('library-novel-man');
 /**
  * Reuses the upload ledger the bucket sync already keeps; there is no bucket.
  * Keyed by the file name, so a new month is itself a reason to write — the
@@ -54,13 +54,28 @@ export async function setAuto(on: boolean) {
 // The status can only change while the app is in the background — the fix for
 // every blocked state lives in the Settings app — so it is read once and
 // re-read on the way back in.
-let status: DriveStatus | null = null;
+let status: DriveStatus | null = drive ? null : 'unsupported';
 const listeners = new Set<() => void>();
 
-export async function refreshDriveStatus(): Promise<DriveStatus> {
-  status = drive ? await drive.status() : 'unsupported';
-  for (const listener of listeners) listener();
-  return status;
+/**
+ * One ask at a time. Reaching the ubiquity container is slow and the native
+ * module answers on a single queue, so a second caller starting a second ask
+ * does not get an answer sooner — it makes the first one later. Everyone who
+ * asks while one is in flight gets that one.
+ */
+let asking: Promise<DriveStatus> | null = null;
+
+export function refreshDriveStatus(): Promise<DriveStatus> {
+  asking ??= (drive ? drive.status() : Promise.resolve<DriveStatus>('unsupported'))
+    .then((next) => {
+      status = next;
+      for (const listener of listeners) listener();
+      return next;
+    })
+    .finally(() => {
+      asking = null;
+    });
+  return asking;
 }
 
 export function useDriveStatus(): DriveStatus | null {
@@ -92,19 +107,24 @@ function nativePath(file: File): string {
 
 
 /**
- * The manuscripts stay out of it. Notes, profiles, structure, progress and
- * settings are what the reader made and what a reinstall would otherwise
- * lose; the books themselves came from files they still have.
+ * Everything but the keys — text, notes, profiles, translations, progress,
+ * settings and the source files. It used to leave the manuscripts out, on the
+ * reasoning that the reader still had the file; the one event that destroys
+ * the work also destroys the files, so the copy that outlives the app now
+ * carries the books themselves. It costs megabytes and buys a restore that
+ * needs nothing else.
  */
 export async function backUp(): Promise<boolean> {
   // Recording the upload is itself a write, so without this the backup would
   // schedule the next one forever. It also keeps two from overlapping.
   if (running) return false;
+  // An empty shelf overwrites today's copy under the same day-named key.
+  if (!(await hasBooks())) return false;
   if (!drive || (await refreshDriveStatus()) !== 'available') return false;
   running = true;
   try {
     const name = backupName();
-    const bundle = await buildBundle(undefined, { includeText: false });
+    const bundle = await buildBundle();
     const body = bundle.body as Uint8Array;
     const hash = contentHash('icloud', fingerprint(body));
     if ((await lastUploadHash(LEDGER, name)) === hash) return false;
@@ -153,11 +173,20 @@ async function prune(): Promise<void> {
  * Every backup in the container, newest first — the ten the app keeps, and
  * anything a reader dropped in the folder themselves.
  */
-export async function listBackups(): Promise<DriveFile[]> {
-  if (!drive?.list) return [];
-  return (await drive.list())
-    .filter((file) => isBundleName(file.name))
-    .sort((a, b) => b.modifiedAt - a.modifiedAt);
+/** Shared the same way, and for the same reason, as the status above. */
+let listing: Promise<DriveFile[]> | null = null;
+
+export function listBackups(): Promise<DriveFile[]> {
+  if (!drive?.list) return Promise.resolve([]);
+  listing ??= drive
+    .list()
+    .then((files) =>
+      files.filter((file) => isBundleName(file.name)).sort((a, b) => b.modifiedAt - a.modifiedAt)
+    )
+    .finally(() => {
+      listing = null;
+    });
+  return listing;
 }
 
 /**
@@ -222,6 +251,15 @@ export function watchForChanges(): () => void {
     unsubscribe();
     subscription.remove();
   };
+}
+
+/**
+ * A wipe empties the shelf and clears the marker below, which between them are
+ * everything `restoreOnLaunch` checks — so without this the next launch quietly
+ * pulls the library back, settings and all, and turns the switch back on.
+ */
+export async function suppressLaunchRestore(): Promise<void> {
+  await AsyncStorage.setItem(RESTORED, String(Date.now()));
 }
 
 /**

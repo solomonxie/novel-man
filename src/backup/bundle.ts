@@ -1,6 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { listBookIds, readBookRecord, type BookRecord } from '../db/repo';
-import { readImage } from '../storage/files';
+import { openStored, readImage } from '../storage/files';
 import { readPrefs } from './prefs';
 import type { ExportFile } from '../export/types';
 import {
@@ -15,26 +15,22 @@ import {
 
 const SNAPSHOT = 'snapshot.json';
 
-export type BundleOptions = {
-  /**
-   * Off leaves the manuscripts out. What the reader made is small and theirs;
-   * the books are large and came from a file they still have, so a destination
-   * that should stay cheap and quiet backs up the first without the second.
-   */
-  includeText?: boolean;
-};
-
-/** Per book or whole library — the same payload, so one restore path serves both. */
-export async function buildBundle(
-  bookIds?: string[],
-  { includeText = true }: BundleOptions = {}
-): Promise<ExportFile> {
+/**
+ * Everything but the credentials. A backup used to leave the manuscripts out
+ * of the cheap destinations, on the premise that the book came from a file the
+ * reader still has — and the day that premise failed was the day it mattered:
+ * a wipe takes the files with it, and what came back was a shelf of titles
+ * with nothing to read. So every bundle now carries the text, the work around
+ * it, the images and the source file itself. Keys stay in the keychain and
+ * travel nowhere.
+ */
+export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
   const ids = bookIds ?? (await listBookIds());
   const assets: Record<string, Uint8Array> = {};
   const books: BundledBook[] = [];
 
   for (const id of ids) {
-    const record = await readBookRecord(id, { text: includeText });
+    const record = await readBookRecord(id);
     if (!record) continue;
     books.push(withAssets(record, assets));
   }
@@ -46,15 +42,15 @@ export async function buildBundle(
     app: 'novel-man',
     books,
     settings: await readPrefs(),
-    contentOmitted: includeText ? undefined : true,
   };
 
   const files: Record<string, Uint8Array> = { [SNAPSHOT]: strToU8(JSON.stringify(snapshot)) };
   for (const [path, bytes] of Object.entries(assets)) files[path] = bytes;
 
-  const label = books.length === 1 ? books[0].book.title.slice(0, 40) : 'library';
+  const label =
+    books.length === 1 ? `export-${books[0].book.title.slice(0, 40)}` : 'library-novel-man';
   return {
-    fileName: bundleName(label.replace(/[/\\?%*:|"<>]/g, '-') || 'library'),
+    fileName: bundleName(label.replace(/[/\\?%*:|"<>]/g, '-') || 'library-novel-man'),
     mimeType: 'application/zip',
     body: zipSync(files),
   };
@@ -62,6 +58,15 @@ export async function buildBundle(
 
 function withAssets(record: BookRecord, assets: Record<string, Uint8Array>): BundledBook {
   const bundled: BundledBook = { ...record, assets: { portraits: {} } };
+  // The file the book was made from, so a restore can put it back rather than
+  // ask for it. Without this a restored book reads fine and still counts as
+  // "missing its file" to everything that wants the original bytes.
+  const source = sourceBytes(record);
+  if (source) {
+    const path = `sources/${record.book.source_hash}.${record.book.source_ext || 'bin'}`;
+    assets[path] = source;
+    bundled.assets.source = path;
+  }
   if (record.book.cover_path) {
     const path = stash(record.book.cover_path, assets, `cover-${record.book.id}`);
     if (path) bundled.assets.cover = path;
@@ -72,6 +77,15 @@ function withAssets(record: BookRecord, assets: Record<string, Uint8Array>): Bun
     if (path) bundled.assets.portraits[entity.id] = path;
   }
   return bundled;
+}
+
+function sourceBytes(record: BookRecord): Uint8Array | null {
+  try {
+    const file = openStored(record.book.source_path, record.book.source_hash, record.book.source_ext);
+    return file.exists ? file.bytesSync() : null;
+  } catch {
+    return null;
+  }
 }
 
 function stash(uri: string, assets: Record<string, Uint8Array>, name: string) {

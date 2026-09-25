@@ -764,6 +764,22 @@ export async function deleteBook(id: string) {
   await database.runAsync('DELETE FROM books WHERE id = ?', id);
 }
 
+/**
+ * The skeleton a restore put on the shelf, once the file it was waiting for is
+ * imported and its work has been moved onto the real book. Two rows for one
+ * book is worse than either of them alone, and the words are what decides
+ * which is which: a skeleton has none.
+ */
+export async function supersedeSkeleton(sourceHash: string, keepId: string) {
+  const database = await db();
+  await database.runAsync(
+    `DELETE FROM books
+      WHERE source_hash = ? AND id != ? AND word_count = 0 AND text_source IS NULL`,
+    sourceHash,
+    keepId
+  );
+}
+
 export async function getChapter(id: string): Promise<Chapter | null> {
   const database = await db();
   return database.getFirstAsync<Chapter>('SELECT * FROM chapters WHERE id = ?', id);
@@ -1387,6 +1403,90 @@ export function mergeUserEdits(fresh: ChapterDraft[], previous: Chapter[]): Chap
 }
 
 /** Everything about one book that isn't derivable — the unit a backup carries. */
+/**
+ * The book-scoped tables a bundle carries beyond the reader's text, notes and
+ * profiles. Everything here is work that cost something to make — a
+ * translation, a glossary, an analysis someone paid a vendor for — and none of
+ * it used to travel, so a restore handed back a book with its translations
+ * gone. Caches and queues are deliberately absent: they cost nothing to make
+ * again and mean nothing on another device.
+ */
+export const CARRIED_TABLES = [
+  'translation_units',
+  'translation_memory',
+  'terms',
+  'observations',
+  'continuity_flags',
+  'part_details',
+  'part_names',
+  'script_elements',
+  'scene_tags',
+  'relations',
+  'mentions',
+  'verses',
+] as const;
+
+export type CarriedRows = Record<string, Record<string, unknown>[]>;
+
+/** Ids are regenerated on restore, so every reference to one is rewritten. */
+const REMAPPED: Record<string, 'book' | 'chapter' | 'entity'> = {
+  book_id: 'book',
+  chapter_id: 'chapter',
+  entity_id: 'entity',
+  from_id: 'entity',
+  to_id: 'entity',
+};
+
+async function readCarried(
+  database: Awaited<ReturnType<typeof db>>,
+  bookId: string
+): Promise<CarriedRows> {
+  const carried: CarriedRows = {};
+  for (const table of CARRIED_TABLES) {
+    const rows = await database.getAllAsync<Record<string, unknown>>(
+      `SELECT * FROM ${table} WHERE book_id = ?`,
+      bookId
+    );
+    if (rows.length) carried[table] = rows;
+  }
+  return carried;
+}
+
+async function writeCarried(
+  database: Awaited<ReturnType<typeof db>>,
+  carried: CarriedRows | undefined,
+  ids: { book: string; chapter: Map<string, string>; entity: Map<string, string> }
+) {
+  for (const table of CARRIED_TABLES) {
+    for (const row of carried?.[table] ?? []) {
+      const columns: string[] = [];
+      const values: unknown[] = [];
+      for (const [column, value] of Object.entries(row)) {
+        const kind = REMAPPED[column];
+        if (kind === 'book') {
+          columns.push(column);
+          values.push(ids.book);
+        } else if (kind && typeof value === 'string') {
+          const mapped = ids[kind].get(value);
+          // A row pointing at something this bundle didn't carry is dropped
+          // rather than restored dangling.
+          if (!mapped) { columns.length = 0; break; }
+          columns.push(column);
+          values.push(mapped);
+        } else {
+          columns.push(column);
+          values.push(column === 'id' ? newId() : value);
+        }
+      }
+      if (!columns.length) continue;
+      await database.runAsync(
+        `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+        values
+      );
+    }
+  }
+}
+
 export type BookRecord = {
   book: Book;
   text: string;
@@ -1398,6 +1498,8 @@ export type BookRecord = {
   offset: number;
   /** What the reader filed it under, and which of their lists it is in. */
   tags?: string[];
+  /** Translations, glossary, analysis — see `CARRIED_TABLES`. */
+  carried?: CarriedRows;
   /**
    * A list is named rather than identified: ids do not survive a restore, and
    * what somebody means by "To read" is the name on it. The one list the app
@@ -1445,6 +1547,7 @@ export async function readBookRecord(
     entities,
     scenes,
     offset,
+    carried: await readCarried(database, bookId),
     tags: await tagsOf(bookId),
     lists: (await listsHolding(bookId)).map((list) => (list.system ? FAVORITES : list.name)),
   };
@@ -1479,6 +1582,8 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
       'INSERT INTO documents (book_id, text, hints) VALUES (?, ?, ?)',
       id, record.text, JSON.stringify(record.hints)
     );
+    const chapterMap = new Map<string, string>();
+    const entityMap = new Map<string, string>();
     const chapterIds = await insertChapters(
       database,
       id,
@@ -1492,6 +1597,9 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
         recap: chapter.recap,
       }))
     );
+    record.chapters.forEach((chapter, index) => {
+      if (chapter.id) chapterMap.set(chapter.id, chapterIds[index]);
+    });
     await insertScenes(
       database,
       id,
@@ -1509,11 +1617,13 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
       );
     }
     for (const entity of record.entities) {
+      const entityId = newId();
+      entityMap.set(entity.id, entityId);
       await database.runAsync(
         `INSERT INTO entities (id, book_id, kind, name, alias, summary, portrait_path, fields,
                                located, located_certainty, wiki, sort_index, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        newId(), id, entity.kind, entity.name, entity.alias, entity.summary, entity.portrait_path,
+        entityId, id, entity.kind, entity.name, entity.alias, entity.summary, entity.portrait_path,
         entity.fields, entity.located ?? null, entity.located_certainty ?? null,
         entity.wiki ?? null, entity.sort_index, entity.created_at
       );
@@ -1522,6 +1632,7 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
       'INSERT INTO reading_state (book_id, offset, updated_at) VALUES (?, ?, ?)',
       id, record.offset, now
     );
+    await writeCarried(database, record.carried, { book: id, chapter: chapterMap, entity: entityMap });
   });
   for (const tag of record.tags ?? []) await addTag(id, tag);
   await refile(id, record.lists);
@@ -1568,7 +1679,12 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
     await database.runAsync('DELETE FROM chapters WHERE book_id = ?', bookId);
     await database.runAsync('DELETE FROM annotations WHERE book_id = ?', bookId);
     await database.runAsync('DELETE FROM entities WHERE book_id = ?', bookId);
+    for (const table of CARRIED_TABLES) {
+      await database.runAsync(`DELETE FROM ${table} WHERE book_id = ?`, bookId);
+    }
 
+    const chapterMap = new Map<string, string>();
+    const entityMap = new Map<string, string>();
     const chapterIds = await insertChapters(
       database,
       bookId,
@@ -1582,6 +1698,9 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
         recap: chapter.recap,
       }))
     );
+    record.chapters.forEach((chapter, index) => {
+      if (chapter.id) chapterMap.set(chapter.id, chapterIds[index]);
+    });
     await insertScenes(
       database,
       bookId,
@@ -1599,11 +1718,13 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
       );
     }
     for (const entity of record.entities) {
+      const entityId = newId();
+      entityMap.set(entity.id, entityId);
       await database.runAsync(
         `INSERT INTO entities (id, book_id, kind, name, alias, summary, portrait_path, fields,
                                located, located_certainty, wiki, sort_index, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        newId(), bookId, entity.kind, entity.name, entity.alias, entity.summary,
+        entityId, bookId, entity.kind, entity.name, entity.alias, entity.summary,
         entity.portrait_path, entity.fields, entity.located ?? null,
         entity.located_certainty ?? null, entity.wiki ?? null, entity.sort_index, entity.created_at
       );
@@ -1612,9 +1733,24 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
       'INSERT OR REPLACE INTO reading_state (book_id, offset, updated_at) VALUES (?, ?, ?)',
       bookId, record.offset, Date.now()
     );
+    await writeCarried(database, record.carried, {
+      book: bookId,
+      chapter: chapterMap,
+      entity: entityMap,
+    });
   });
   for (const tag of record.tags ?? []) await addTag(bookId, tag);
   await refile(bookId, record.lists);
+}
+
+/**
+ * Asked before every automatic backup: a copy of nothing must never replace a
+ * copy of something. An emptied shelf is what a wipe, a fresh install and a
+ * database that would not open all look like from here.
+ */
+export async function hasBooks(): Promise<boolean> {
+  const database = await db();
+  return (await database.getAllAsync<{ one: number }>('SELECT 1 AS one FROM books LIMIT 1')).length > 0;
 }
 
 export async function listBookIds(): Promise<string[]> {

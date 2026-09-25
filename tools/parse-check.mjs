@@ -34,7 +34,7 @@ const { parseListing, extractMessage } = await import(join(build, 'cloud/client.
 const { parsePasted, regionFromEndpoint } = await import(join(build, 'cloud/providers.js'));
 const { rewrite, nameFor, looksLikeSignIn } = await import(join(build, 'import/sources/links.js'));
 const { fountainExporter, finalDraftExporter } = await import(join(build, 'export/formats/screenplay.js'));
-const { bundleName, dateOf, isBundleName } = await import(join(build, 'backup/format.js'));
+const { bundleName, dateOf, isBundleName, secondStamp } = await import(join(build, 'backup/format.js'));
 const { parseUsfm, layoutBible, cleanLine } = await import(join(build, 'scripture/usfm.js'));
 const { booksFrom, editionFrom, fileNameFor } = await import(join(build, 'sources/gutenberg.js'));
 const {
@@ -508,18 +508,29 @@ console.log('screenplay');
 console.log('backup names');
 {
   const march = new Date(2026, 2, 9, 4, 30);
-  check('a bundle is named for its day', bundleName('library', march), 'library-2026-03-09.zip');
+  check('when it was taken leads the name',
+    bundleName('library-novel-man', march), '2026-03-09-library-novel-man.zip');
   check('every write that day is the same file',
-    bundleName('library', new Date(2026, 2, 9, 23, 59)), bundleName('library', march));
-  check('a new day is a new file', bundleName('library', new Date(2026, 2, 10)), 'library-2026-03-10.zip');
+    bundleName('library-novel-man', new Date(2026, 2, 9, 23, 59)),
+    bundleName('library-novel-man', march));
+  check('a new day is a new file',
+    bundleName('library-novel-man', new Date(2026, 2, 10)), '2026-03-10-library-novel-man.zip');
   check('names sort into date order',
-    ['library-2026-03-10.zip', 'library-2026-03-09.zip'].sort(),
-    ['library-2026-03-09.zip', 'library-2026-03-10.zip']);
-  check('the day reads back off the name', dateOf('library-2026-03-09.zip')?.getDate(), 9);
+    ['2026-03-10-daily-novel-man.zip', '2026-03-09-library-novel-man.zip'].sort(),
+    ['2026-03-09-library-novel-man.zip', '2026-03-10-daily-novel-man.zip']);
+  check('to the second, for two wipes in one day',
+    secondStamp(new Date(2026, 2, 9, 4, 30, 7)), '20260309043007');
+  check('the day reads back off the name',
+    dateOf('2026-03-09-library-novel-man.zip')?.getDate(), 9);
+  check('and off a stamp made to the second',
+    dateOf('20260309043007-pre-deletion-novel-man.zip')?.getDate(), 9);
+  check('a name from the scheme before this one still reads',
+    dateOf('library-2026-03-09.zip')?.getDate(), 9);
   check('a bundle named for its month still reads', dateOf('books/202612-abc.zip')?.getFullYear(), 2026);
-  check('and still opens', isBundleName('library-2026-03-09-04-30.zip'), true);
+  check('and still opens', isBundleName('2026-03-09-library-novel-man.zip'), true);
   check('13 is not a month', dateOf('202613-library.zip'), null);
   check('nor is a 13th month in a day stamp', dateOf('library-2026-13-09.zip'), null);
+  check('nor in one made to the second', dateOf('20261309043007-pre-deletion-novel-man.zip'), null);
 }
 
 console.log('usfm');

@@ -1,17 +1,22 @@
 import { listBooks, writeBookRecord, type BookRecord } from '../db/repo';
-import { writeImage } from '../storage/files';
+import { restoreSourceFile, writeImage } from '../storage/files';
 import type { OpenedBundle } from './bundle';
 import { writePrefs } from './prefs';
 import { hold } from './pending';
 import { backUpBefore } from './local';
+import { noticeRestore } from './changes';
 
 export type RestoreReport = {
   restored: { title: string; id: string }[];
   /** Named honestly rather than hidden: a duplicate is still restored, twice. */
   duplicates: string[];
-  /** From a backup without manuscripts: the notes land when the file does. */
+  /**
+   * On the shelf as skeletons, from a backup written before bundles carried
+   * manuscripts. Everything around the book is there and the words are not;
+   * importing the file again fills them in.
+   */
   waiting: number;
-  unplaceable: { title: string; reason: 'no-text' | 'missing-asset' }[];
+  unplaceable: { title: string; reason: 'missing-asset' }[];
 };
 
 /**
@@ -36,15 +41,32 @@ export async function restoreBundle(
   if (settings && opened.snapshot.settings) await writePrefs(opened.snapshot.settings);
 
   for (const bundled of opened.snapshot.books) {
-    if (!bundled.text?.trim()) {
-      // A book with no manuscript can't go on the shelf, but its notes are
-      // not lost — they wait for the file, held by whoever called this.
-      if (opened.snapshot.contentOmitted) report.waiting += 1;
-      else report.unplaceable.push({ title: bundled.book.title, reason: 'no-text' });
-      continue;
-    }
     const record: BookRecord = { ...bundled };
     let missingAsset = false;
+
+    // No manuscript in the bundle is no reason to hide the book. It goes on
+    // the shelf as a skeleton — title, cover, notes, people, chapters, rating,
+    // everything except the words — which is a thing this app already has and
+    // can already show. Waiting invisibly in a file is how someone concludes
+    // the restore did nothing.
+    const missingText = !bundled.text?.trim();
+    if (missingText) {
+      record.text = '';
+      record.book = { ...record.book, word_count: 0, char_count: 0, text_source: null };
+      // Only a stripped bundle promises the words exist elsewhere. A book that
+      // was always a skeleton is restored, not waiting.
+      if (opened.snapshot.contentOmitted) report.waiting += 1;
+    }
+
+    const sourcePath = bundled.assets?.source
+      ? opened.assets[bundled.assets.source] &&
+        restoreSourceFile(
+          bundled.book.source_hash,
+          bundled.book.source_ext,
+          opened.assets[bundled.assets.source]
+        )
+      : null;
+    if (sourcePath) record.book = { ...record.book, source_path: sourcePath };
 
     if (bundled.assets?.cover) {
       const restoredPath = restoreAsset(opened, bundled.assets.cover);
@@ -71,9 +93,10 @@ export async function restoreBundle(
       report.unplaceable.push({ title: record.book.title, reason: 'missing-asset' });
     }
   }
-  // Held rather than dropped: the manuscripts are missing, but every note,
-  // profile and chapter fix in there belongs to a file the reader still has.
+  // Held as well as restored: the skeletons on the shelf carry the work, and
+  // this is what puts the words back into them when the file turns up.
   if (report.waiting > 0) hold(opened.bytes);
+  noticeRestore();
   return report;
 }
 

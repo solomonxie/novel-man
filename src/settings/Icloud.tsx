@@ -31,21 +31,25 @@ export function IcloudRows() {
   useFocusEffect(load);
 
   // Hidden rather than disabled: on Android, or in a build without the native
-  // module, this row could never work at all.
-  if (!status || status === 'unsupported') return null;
+  // module, this row could never work at all. An unknown status is not that —
+  // it is the first ask still out, and a row that isn't there yet reads as a
+  // feature that isn't there, which is what makes someone tap the empty space.
+  if (status === 'unsupported') return null;
 
   const blocked = status !== 'available';
   const where = t('backup.icloudWhere');
   const detail =
-    status === 'driveOff'
-      ? t('backup.icloudOff')
-      : status === 'notEntitled'
-        ? t('backup.icloudUnsigned')
-        : status === 'notReady'
-          ? t('backup.icloudNotReady')
-          : at
-            ? `${where} · ${new Date(at).toLocaleString()}`
-            : where;
+    status === null
+      ? where
+      : status === 'driveOff'
+        ? t('backup.icloudOff')
+        : status === 'notEntitled'
+          ? t('backup.icloudUnsigned')
+          : status === 'notReady'
+            ? t('backup.icloudNotReady')
+            : at
+              ? `${where} · ${new Date(at).toLocaleString()}`
+              : where;
 
   async function toggle(next: boolean) {
     setAutoState(next);
