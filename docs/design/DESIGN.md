@@ -653,14 +653,19 @@ assets/
   Importing a novel is thousands of writes and typing a note is one per
   keystroke, hence the wait; backgrounding flushes it. Nothing awaits the
   backup, and a failed one is answered by the next change rather than by an
-  alert. Leaving the manuscripts out is what makes this affordable — the
-  bundle never reads a document row.
-- **iCloud carries no manuscripts.** The books came from files the user still
-  has and are ~100× the rest of the payload; what a reinstall would actually
-  destroy is the work *around* them. So the bundle is built with the text
-  left out, marked `contentOmitted`, and restore holds the text-less books
-  until the matching file is imported again — matched on source hash, which is
-  also why the chapter offsets still line up.
+  alert.
+- **Every bundle carries everything but the credentials** — text, chapters,
+  notes, people, translations, glossary, analysis, progress, settings, images
+  and the source file each book was imported from. Keys never leave the
+  keychain. It was not always so: the cheap tiers left the manuscripts out,
+  because the book came from a file the reader still had. A wipe takes those
+  files with it, so the day the premise failed was the day the backup was
+  needed, and what came back was a shelf of titles with nothing to read.
+  Megabytes per copy is the price of a restore that needs nothing else.
+- **Bundles written by those older builds are still read.** They arrive marked
+  `contentOmitted`; their books have no text, so restore holds them until the
+  matching file is imported again — matched on source hash, which is also why
+  the chapter offsets still line up.
 - **Restore from the drive is automatic, once, on a fresh install** — no
   prompt: there is nothing to overwrite and no context yet for the question.
   Launch pulls back *before* it pushes up, or an empty shelf would overwrite

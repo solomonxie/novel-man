@@ -19,6 +19,8 @@ import * as SecureStore from '../storage/secrets';
 import { resetAppearance } from '../theme/appearance';
 import { setUiLanguage } from '../i18n';
 import { cancelAllWork } from '../work/queue';
+import { settled as cloudSettled } from '../cloud/sync';
+import { suppressLaunchRestore } from '../backup/icloud';
 import { listConnections } from '../cloud/connections';
 import { listKeys } from '../ai/keys';
 import { noticeChange } from '../backup/changes';
@@ -122,7 +124,10 @@ export function BackupSettings({ onRemoved }: { onRemoved?: () => void }) {
 }
 
 async function clearAppData(keepBackup: string) {
+  // Both queues first, and awaited: a handler mid-write would otherwise put
+  // its rows back after the tables were emptied.
   await cancelAllWork();
+  await cloudSettled();
   const keys = await listKeys();
   const connections = await listConnections();
   const database = await db();
@@ -144,6 +149,7 @@ async function clearAppData(keepBackup: string) {
   await database.execAsync('PRAGMA wal_checkpoint(TRUNCATE); VACUUM');
 
   await AsyncStorage.clear();
+  await suppressLaunchRestore();
   await Promise.all([
     ...keys.map((key) => SecureStore.deleteItemAsync(`ai.key.${key.id}`)),
     ...connections.map((connection) => SecureStore.deleteItemAsync(`cloud.secret.${connection.id}`)),
@@ -154,9 +160,27 @@ async function clearAppData(keepBackup: string) {
     SecureStore.deleteItemAsync('standardebooks.email'),
   ]);
 
+  // The picker keeps a copy of every file ever imported, and printing keeps
+  // the PDF. Both are the reader's own words, and neither is under Documents.
+  // A cache the system holds open is not worth failing a finished wipe over.
+  try {
+    new Directory(Paths.cache).deleteContents();
+  } catch {
+    // Left for the system to reclaim.
+  }
+
   const documents = new Directory(Paths.document);
   for (const entry of documents.list()) {
-    if (entry.name === 'SQLite') continue;
+    // The live database is emptied above rather than deleted, because it is
+    // open. Anything else in there is data this wipe promised to remove.
+    if (entry.name === 'SQLite' && entry instanceof Directory) {
+      for (const file of entry.list()) {
+        if (file.name.startsWith('novelman.db')) continue;
+        if (file instanceof Directory) file.deleteContents();
+        file.delete();
+      }
+      continue;
+    }
     if (entry.name === 'Backups' && entry instanceof Directory) {
       for (const backup of entry.list()) {
         if (backup.name === keepBackup) continue;

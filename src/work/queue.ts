@@ -22,7 +22,8 @@ export type WorkFeed = { units: WorkUnit[]; counts: WorkCounts };
 type Listener = (feed: WorkFeed) => void;
 
 const listeners = new Set<Listener>();
-let draining = false;
+/** The drain in flight, so anything that must not race it can await it. */
+let draining: Promise<void> | null = null;
 let paused = false;
 let controller: AbortController | null = null;
 /** The task in flight, so canceling any other one doesn't abort it. */
@@ -73,7 +74,15 @@ export async function cancelWorkUnit(id: string) {
 export async function cancelAllWork() {
   await cancelAllJobs();
   controller?.abort();
+  // An aborted handler is still a handler mid-write. Deleting the tables out
+  // from under one puts its rows back after the wipe believed it was done.
+  await settled();
   await publish();
+}
+
+/** Resolves when nothing is being written by the queue. */
+export function settled(): Promise<void> {
+  return draining ?? Promise.resolve();
 }
 
 export async function retryWorkUnit(id: string) {
@@ -92,30 +101,31 @@ export async function clearFinishedWork() {
  * spend before a mistaken run could be stopped, and vendors rate-limit
  * concurrency harder than they reward it.
  */
-export async function drain(): Promise<void> {
-  if (draining) return;
-  draining = true;
-  try {
-    while (!paused) {
-      const job = await claimNext();
-      if (!job) return;
+export function drain(): Promise<void> {
+  draining ??= loop().finally(() => {
+    draining = null;
+  });
+  return draining;
+}
 
-      await publish();
-      controller = new AbortController();
-      runningId = job.id;
-      try {
-        await handlers[job.kind](job, controller.signal);
-        await finishJob(job.id, 'done');
-      } catch (error) {
-        await finishJob(job.id, controller.signal.aborted ? 'canceled' : 'failed', String(error));
-      } finally {
-        controller = null;
-        runningId = null;
-      }
-      await publish();
+async function loop(): Promise<void> {
+  while (!paused) {
+    const job = await claimNext();
+    if (!job) return;
+
+    await publish();
+    controller = new AbortController();
+    runningId = job.id;
+    try {
+      await handlers[job.kind](job, controller.signal);
+      await finishJob(job.id, 'done');
+    } catch (error) {
+      await finishJob(job.id, controller.signal.aborted ? 'canceled' : 'failed', String(error));
+    } finally {
+      controller = null;
+      runningId = null;
     }
-  } finally {
-    draining = false;
+    await publish();
   }
 }
 

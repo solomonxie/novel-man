@@ -292,7 +292,7 @@
     "gradeHint_best": "当前模型，1024 px，最慢的一档。同样紧扣提示词，细节更多。",
     "removeAll": "删除所有应用数据",
     "removeAllTitle": "删除所有应用数据？",
-    "removeAllWarning": "会先在本机保存一份备份；如已设置，也会备份到 iCloud 和已连接的存储桶。iCloud 备份不含正文。备份完成后才开始删除；如果云端备份失败，数据会保留。"
+    "removeAllWarning": "删除前会先在本机保存一份完整备份，若已设置，也会上传到 iCloud 和已连接的存储桶。备份包含除密钥以外的一切：书籍正文、笔记、翻译、设置，以及导入时用的原始文件。备份全部完成后才开始删除；若云端备份失败，则不会删除任何数据。"
   },
   "units": {
     "words": "{{count}} 词",
@@ -494,7 +494,7 @@
     "now": "立即备份",
     "nowUnchanged": "距上次备份没有任何改动。",
     "waitingDetail": "重新导入同一个文件，笔记、人物和章节就会恢复。",
-    "restoredWaiting": "{{count}} 本书需要重新导入文件。",
+    "restoredWaiting": "{{count}} 本书以书骨架的形式恢复——除正文外一应俱全。",
     "file": "备份文件",
     "exportLibrary": "导出整个书库",
     "restoreFromFile": "从文件恢复…",
@@ -506,7 +506,6 @@
     "restoreConfirm": "恢复只会新增书籍，不会覆盖已有内容。",
     "restored": "已恢复 {{count}} 本。",
     "duplicates": "书架上已有，按副本恢复：{{list}}",
-    "unplaceable_no-text": "《{{title}}》没有正文，已跳过。",
     "unplaceable_missing-asset": "《{{title}}》已恢复，但缺少图片。",
     "failed": "无法完成",
     "notABundle": "这不是 Novel Man 的备份文件。",
@@ -627,7 +626,7 @@
   },
   "cloud": {
     "title": "云端备份",
-    "hint": "iCloud 只备份你创建的内容——笔记、人物、进度、设置，不含书的正文。你自己的存储桶会备份全部内容，包括正文；在你主动操作之前不会上传任何东西。",
+    "hint": "每一份备份都包含除密钥以外的一切：书籍正文、笔记、翻译、人物、进度、设置，以及你导入的文件。iCloud 保留最近十份；你自己的存储桶保留每一份，并且只有你主动上传时才会上传。",
     "none": "尚未连接。",
     "addConnection": "＋ 添加云存储",
     "addConnectionHint": "你自己的 S3 兼容存储桶，完整备份并保留历史版本。",

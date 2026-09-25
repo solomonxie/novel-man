@@ -36,6 +36,20 @@ export async function storeSourceBytes(bytes: Uint8Array, name: string) {
   return { hash, path: stored.uri, size: stored.size, bytes };
 }
 
+/**
+ * A source file carried in a bundle, put back under the name the record it
+ * came with already points at — so a restored book owns its file rather than
+ * waiting for someone to find it again.
+ */
+export function restoreSourceFile(hash: string, ext: string, bytes: Uint8Array): string {
+  const stored = new File(sourcesDir(), ext ? `${hash}.${ext}` : hash);
+  if (!stored.exists) {
+    stored.create();
+    stored.write(bytes);
+  }
+  return stored.uri;
+}
+
 export function openStored(path: string, hash: string, ext: string): File {
   const direct = new File(path);
   if (direct.exists) return direct;

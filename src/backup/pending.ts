@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from '../storage/fs';
-import { attachBookRecord, type BookRecord } from '../db/repo';
+import { attachBookRecord, supersedeSkeleton, type BookRecord } from '../db/repo';
 import { writeImage } from '../storage/files';
 import { openBundle } from './bundle';
 import type { BundledBook } from './format';
@@ -78,6 +78,9 @@ export async function applyToImport(bookId: string, sourceHash: string): Promise
   if (!bundled) return false;
 
   await attachBookRecord(bookId, withRestoredAssets(bundled, bundle.assets));
+  // The book the restore put on the shelf without words is this one, and now
+  // it has them. Its work has just been written onto the imported copy.
+  await supersedeSkeleton(sourceHash, bookId);
   const next = [...applied, sourceHash];
   await AsyncStorage.setItem(APPLIED, JSON.stringify(next));
   if (next.length >= bundle.books.length) forget();

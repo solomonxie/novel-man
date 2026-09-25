@@ -13,23 +13,24 @@ import {
   requeueStale,
   type CloudJob,
 } from '../db/jobs';
-import { getBook, listBookIds } from '../db/repo';
+import { getBook, hasBooks, listBookIds } from '../db/repo';
 import { bucketFor, listConnections } from './connections';
 
 /**
- * Per book under `books/`, the whole library at the root, and a file per month
- * in both places — `202609-library.zip`, `books/202609-<id>.zip`. The month is
+ * Per book under `books/`, the whole library at the root, and a file per day
+ * in both places — `2026-09-24-library-novel-man.zip`,
+ * `books/2026-09-24-book-<id>.zip`. The day is
  * what a bucket is for: the newest copy is the one you restore from, and the
  * one from before last month's mistake is still there.
  */
-export const libraryKey = (at = new Date()) => bundleName('library', at);
-export const bookKey = (bookId: string, at = new Date()) => `books/${bundleName(bookId, at)}`;
+export const libraryKey = (at = new Date()) => bundleName('library-novel-man', at);
+export const bookKey = (bookId: string, at = new Date()) => `books/${bundleName(`book-${bookId}`, at)}`;
 /** A key belongs to one book rather than the library. */
 export const isBookKey = (key: string) => key.startsWith('books/');
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
-let draining = false;
+let draining: Promise<void> | null = null;
 
 export function subscribeToSync(listener: Listener): () => void {
   listeners.add(listener);
@@ -60,24 +61,30 @@ export async function queueDownload(connectionId: string, key: string) {
  * One job at a time. Phone radios and S3 rate limits both punish concurrency
  * harder than they reward it, and a single lane makes "paused" mean something.
  */
-export async function drain(): Promise<void> {
-  if (draining) return;
-  draining = true;
-  try {
-    while (true) {
-      const job = await claimNext();
-      if (!job) return;
-      publish();
-      try {
-        await run(job);
-        await finish(job.id, 'done');
-      } catch (error) {
-        await finish(job.id, 'failed', String(error));
-      }
-      publish();
+export function drain(): Promise<void> {
+  draining ??= loop().finally(() => {
+    draining = null;
+  });
+  return draining;
+}
+
+/** Resolves when nothing is being uploaded, downloaded or restored. */
+export function settled(): Promise<void> {
+  return draining ?? Promise.resolve();
+}
+
+async function loop(): Promise<void> {
+  while (true) {
+    const job = await claimNext();
+    if (!job) return;
+    publish();
+    try {
+      await run(job);
+      await finish(job.id, 'done');
+    } catch (error) {
+      await finish(job.id, 'failed', String(error));
     }
-  } finally {
-    draining = false;
+    publish();
   }
 }
 
@@ -101,6 +108,9 @@ async function run(job: CloudJob) {
   const isBook = job.kind === 'upload-book';
   const key = isBook ? bookKey(job.book_id!) : libraryKey();
   if (isBook && !(await getBook(job.book_id!))) return;
+  // The library key is named for the day, so an empty shelf uploaded after a
+  // wipe replaces the good copy taken earlier the same day.
+  if (!isBook && !(await hasBooks())) return;
 
   const bundle = await buildBundle(isBook ? [job.book_id!] : undefined);
   const body = bundle.body as Uint8Array;
