@@ -979,6 +979,7 @@
     "catalogs": "Catalogs",
     "pickOne": "Pick one of the three above, or type a title.",
     "recordSource": "Create a skeleton",
+    "elsewhere": "From another app",
     "recordLookUp": "Add it, then ask AI about it",
     "needsKey": "Needs an AI key",
     "needsTitle": "Type a title first"

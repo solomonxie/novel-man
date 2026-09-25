@@ -979,6 +979,7 @@
     "catalogs": "书目来源",
     "pickOne": "在上面三种里选一个，或者直接输入书名。",
     "recordSource": "新建书骨架",
+    "elsewhere": "从其他应用导入",
     "recordLookUp": "加入书架，再让 AI 查询这本书",
     "needsKey": "需要 AI 密钥",
     "needsTitle": "先输入书名"
