@@ -17,6 +17,25 @@ public class IcloudDrive: NSObject {
   /// file coordination daemon for long enough to drop frames.
   @objc static func requiresMainQueueSetup() -> Bool { false }
 
+  /**
+   Asking the ubiquity daemon where the container is takes seconds on a cold
+   app, and every call here used to ask again — on one serial queue, so a
+   second tap waited for the first to finish before starting its own wait.
+   Resolved once and kept: the path does not move while the app is running,
+   and the one thing that can move it says so.
+   */
+  private static var container: URL?
+
+  override init() {
+    super.init()
+    NotificationCenter.default.addObserver(
+      forName: .NSUbiquityIdentityDidChange, object: nil, queue: nil
+    ) { _ in IcloudDrive.container = nil }
+    // Warmed off the first tap: the module is created when Settings asks for
+    // the status, which is a screen earlier than the one that needs the path.
+    DispatchQueue.global(qos: .utility).async { _ = self.containerURL() }
+  }
+
   @objc(status:reject:)
   func status(_ resolve: @escaping RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
     resolve(driveStatus())
@@ -99,7 +118,12 @@ public class IcloudDrive: NSObject {
   // MARK: - Container
 
   private func containerURL() -> URL? {
-    return FileManager.default.url(forUbiquityContainerIdentifier: nil)
+    if let cached = IcloudDrive.container { return cached }
+    // A nil answer is not cached: it means signed out or not ready, and both
+    // are fixed in the Settings app and come back without relaunching.
+    let resolved = FileManager.default.url(forUbiquityContainerIdentifier: nil)
+    IcloudDrive.container = resolved
+    return resolved
   }
 
   /// `Documents` is the only subfolder the Files app shows, so a backup the
