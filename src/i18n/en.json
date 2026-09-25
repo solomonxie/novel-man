@@ -756,7 +756,8 @@
     "terms": "Terms",
     "noTerms": "No terms recognized in this chapter.",
     "note": "Write a note",
-    "noNotes": "No notes on this chapter yet."
+    "noNotes": "No notes on this chapter yet.",
+    "aiShort": "Ask AI"
   },
   "part": {
     "read": "Read from here →",
