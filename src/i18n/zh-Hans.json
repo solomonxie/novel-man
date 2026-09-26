@@ -321,7 +321,8 @@
     "unit_volumes": "分卷",
     "unit_verses": "节",
     "unit_notes": "笔记",
-    "chapterCount": "章数"
+    "chapterCount": "章数",
+    "unit_terms": "术语"
   },
   "job": {
     "title": "正在下载",
@@ -517,7 +518,9 @@
     "unplaceable_missing-asset": "《{{title}}》已恢复，但缺少图片。",
     "failed": "无法完成",
     "notABundle": "这不是 Novel Man 的备份文件。",
-    "tooNew": "该备份来自更新的版本（v{{version}}），请先升级应用。"
+    "tooNew": "该备份来自更新的版本（v{{version}}），请先升级应用。",
+    "aboutUnknown": "这是旧版本写的备份，没有记录里面有什么。恢复仍然可用。",
+    "aboutEmpty": "里面是空的。"
   },
   "ai": {
     "noKeyTitle": "没有 AI 密钥",

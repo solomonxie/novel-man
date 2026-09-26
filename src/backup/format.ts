@@ -41,6 +41,26 @@ export type Snapshot = {
   contentOmitted?: boolean;
 };
 
+/**
+ * The one page of a backup anybody reads before restoring it: how much is in
+ * there. It rides in its own tiny entry rather than being worked out from the
+ * snapshot, because the snapshot is a book's worth of JSON per book and the
+ * question "which of these ten copies do I want" should not cost a parse of
+ * thirteen megabytes to answer.
+ */
+export type BundleAbout = {
+  createdAt: number;
+  books: number;
+  chapters: number;
+  notes: number;
+  people: number;
+  places: number;
+  terms: number;
+  words: number;
+};
+
+export const ABOUT = 'about.json';
+
 export type BundledBook = BookRecord & {
   /** Paths inside the bundle, so a reader never touches a device path. */
   assets: { cover?: string; portraits: Record<string, string>; source?: string };

@@ -321,7 +321,8 @@
     "unit_volumes": "volumes",
     "unit_verses": "verses",
     "unit_notes": "notes",
-    "chapterCount": "# of chapters"
+    "chapterCount": "# of chapters",
+    "unit_terms": "terms"
   },
   "job": {
     "title": "Downloading",
@@ -517,7 +518,9 @@
     "unplaceable_missing-asset": "{{title}} restored without its image.",
     "failed": "Couldn’t complete that",
     "notABundle": "That isn’t a Novel Man backup.",
-    "tooNew": "This backup was made by a newer version (v{{version}}). Update the app first."
+    "tooNew": "This backup was made by a newer version (v{{version}}). Update the app first.",
+    "aboutUnknown": "Written by an older version, which didn’t record what was in it. Restoring still works.",
+    "aboutEmpty": "Nothing in it."
   },
   "ai": {
     "noKeyTitle": "No AI key",

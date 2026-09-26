@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
 import { Stack, useFocusEffect } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
@@ -11,8 +11,8 @@ import {
   removeBackup,
   type DriveFile,
 } from '../../src/backup/icloud';
-import { openBundle } from '../../src/backup/bundle';
-import { BundleError, dateOf } from '../../src/backup/format';
+import { openBundle, readAbout } from '../../src/backup/bundle';
+import { BundleError, dateOf, type BundleAbout } from '../../src/backup/format';
 import { restoreBundle, type RestoreReport } from '../../src/backup/restore';
 import { RestoreReportView } from '../../src/settings/RestoreReport';
 import { Hint, PrimaryAction, Row, Section } from '../../src/ui/primitives';
@@ -31,6 +31,12 @@ export default function IcloudBackups() {
   const [files, setFiles] = useState<DriveFile[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<RestoreReport | null>(null);
+  /**
+   * The copy that was read to summarise it, kept for the restore that usually
+   * follows — otherwise choosing a backup downloads it and restoring it
+   * downloads it again.
+   */
+  const held = useRef<{ name: string; bytes: Uint8Array } | null>(null);
 
   const load = useCallback(() => {
     listBackups()
@@ -53,27 +59,57 @@ export default function IcloudBackups() {
     }
   }
 
+  async function bytesOf(name: string): Promise<Uint8Array> {
+    if (held.current?.name === name) return held.current.bytes;
+    const bytes = await readBackup(name);
+    held.current = { name, bytes };
+    return bytes;
+  }
+
   /**
    * Restoring always adds; it never overwrites what is here. So the question
    * asked first is the honest one — this will bring the books in that copy
    * back, beside the ones you have.
+   *
+   * And it says what "the books in that copy" amounts to. Ten dates in a list
+   * are ten identical-looking choices; the one thing that tells them apart is
+   * how much is in each, which is exactly what someone is trying to work out
+   * in the hour they end up on this page.
    */
-  function ask(file: DriveFile) {
-    Alert.alert(when(file), t('backup.restoreConfirm'), [
-      { text: t('settings.cancel'), style: 'cancel' },
-      {
-        text: t('backup.restore'),
-        onPress: () =>
-          guard(async () => {
-            setReport(await restoreBundle(openBundle(await readBackup(file.name))));
-          }),
-      },
-      {
-        text: t('settings.delete'),
-        style: 'destructive',
-        onPress: () => guard(() => removeBackup(file.name)),
-      },
-    ]);
+  async function ask(file: DriveFile) {
+    setBusy(true);
+    let about: BundleAbout | null = null;
+    try {
+      about = readAbout(await bytesOf(file.name));
+    } catch (problem) {
+      setBusy(false);
+      Alert.alert(t('backup.failed'), describe(problem, t));
+      return;
+    }
+    setBusy(false);
+    Alert.alert(
+      when(file),
+      [about ? summarize(about, t) : t('backup.aboutUnknown'), t('backup.restoreConfirm')].join('\n\n'),
+      [
+        { text: t('settings.cancel'), style: 'cancel' },
+        {
+          text: t('backup.restore'),
+          onPress: () =>
+            guard(async () => {
+              setReport(await restoreBundle(openBundle(await bytesOf(file.name))));
+            }),
+        },
+        {
+          text: t('settings.delete'),
+          style: 'destructive',
+          onPress: () =>
+            guard(async () => {
+              await removeBackup(file.name);
+              if (held.current?.name === file.name) held.current = null;
+            }),
+        },
+      ]
+    );
   }
 
   /** What it is *of* comes from its name; when it was written is its own fact. */
@@ -102,7 +138,7 @@ export default function IcloudBackups() {
               label={when(file)}
               detail={file.name}
               value="›"
-              onPress={() => ask(file)}
+              onPress={() => void ask(file)}
               last={index === files.length - 1}
             />
           ))
@@ -127,6 +163,23 @@ export default function IcloudBackups() {
       {report ? <RestoreReportView report={report} /> : null}
     </ScrollView>
   );
+}
+
+/** Only what it actually holds: a line of zeroes says nothing about a backup. */
+function summarize(about: BundleAbout, t: TFunction): string {
+  const counted: [number, string][] = [
+    [about.books, t('units.unit_books')],
+    [about.chapters, t('units.unit_chapters')],
+    [about.notes, t('units.unit_notes')],
+    [about.people, t('units.unit_cast')],
+    [about.places, t('units.unit_places')],
+    [about.terms, t('units.unit_terms')],
+  ];
+  const parts = counted
+    .filter(([count]) => count > 0)
+    .map(([count, label]) => `${count.toLocaleString()} ${label}`);
+  if (about.words > 0) parts.push(t('units.words', { count: about.words.toLocaleString() }));
+  return parts.length ? parts.join('  ·  ') : t('backup.aboutEmpty');
 }
 
 function describe(error: unknown, t: TFunction): string {
