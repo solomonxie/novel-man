@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 
 import { bucketFor, listConnections, removeConnection, updateConnection } from '../../src/cloud/connections';
 import {
-  isBookKey,
   queueBackup,
   queueDownload,
   subscribeToSync,
@@ -15,7 +14,7 @@ import type { RemoteObject } from '../../src/cloud/client';
 import type { Connection } from '../../src/cloud/providers';
 import type { RestoreReport } from '../../src/backup/restore';
 import { dateOf } from '../../src/backup/format';
-import { Hint, Row, Section } from '../../src/ui/primitives';
+import { Hint, PrimaryAction, Row, Section } from '../../src/ui/primitives';
 import { PickerSheet } from '../../src/ui/PickerSheet';
 import { space, usePalette } from '../../src/theme';
 
@@ -78,11 +77,16 @@ export default function CloudLibrary() {
     ]);
   }
 
-  // One bundle per month in each section, newest first — which is the one
-  // anybody wants, with the months before it still there if they don't.
-  const newestFirst = (rows: RemoteObject[]) => [...rows].sort((a, b) => b.modified - a.modified);
-  const books = newestFirst((objects ?? []).filter((object) => isBookKey(object.key)));
-  const library = newestFirst((objects ?? []).filter((object) => !isBookKey(object.key)));
+  /**
+   * One list, newest first, the way the iCloud page reads.
+   *
+   * It used to be two sections, the second of them "Per book (14)" — a bundle
+   * written for every book beside the one for all of them. It is gone: it
+   * doubled what the bucket held to serve a restore nobody performs, and the
+   * page had to explain itself before it could be read. What is here now is
+   * what anybody comes looking for, which is a date.
+   */
+  const copies = [...(objects ?? [])].sort((a, b) => b.modified - a.modified);
 
   /** A bundle from before backups were dated keeps whatever name it has. */
   const dayLabel = (key: string) => {
@@ -91,11 +95,6 @@ export default function CloudLibrary() {
       ? at.toLocaleDateString(i18n.language, { year: 'numeric', month: 'long', day: 'numeric' })
       : key.replace(/^books\//, '').replace(/\.(zip|nmbak)$/, '');
   };
-  const bookLabel = (key: string) =>
-    key
-      .replace(/^books\//, '')
-      .replace(/-\d{4}-\d{2}-\d{2}$|^\d{6}-/, '')
-      .replace(/\.(zip|nmbak)$/, '');
 
   return (
     <ScrollView
@@ -111,14 +110,10 @@ export default function CloudLibrary() {
           label={t('cloud.frequency')}
           value={t(`backup.freq_${connection.frequency === 'manual' ? 'off' : connection.frequency}`)}
           onPress={() => setFrequencyOpen(true)}
+          last
         />
-        <Row label={t('cloud.backupNow')} onPress={() => queueBackup(connection.id)} last />
       </Section>
       <Hint>{t('cloud.frequencyHint')}</Hint>
-
-      <Section>
-        <Row label={t('cloud.remove')} onPress={confirmRemove} danger last />
-      </Section>
 
       {error ? (
         <Text style={{ color: palette.danger, fontSize: 14, marginTop: space.lg }}>{error}</Text>
@@ -128,35 +123,20 @@ export default function CloudLibrary() {
         <ActivityIndicator style={{ marginTop: space.xl }} />
       ) : (
         <>
-          <Section title={t('cloud.whole')}>
-            {library.length === 0 ? (
+          <Section title={t('cloud.copies')}>
+            {copies.length === 0 ? (
               <Row label={t('cloud.nothingYet')} last />
             ) : (
-              library.map((object, index) => (
+              copies.map((object, index) => (
                 <Row
                   key={object.key}
                   label={dayLabel(object.key)}
+                  // How big it is, and when it was written — which is the
+                  // whole of what tells two dated copies apart.
                   detail={new Date(object.modified).toLocaleString()}
                   value={`${Math.round(object.size / 1024)} KB  ›`}
                   onPress={() => confirmGet(object.key)}
-                  last={index === library.length - 1}
-                />
-              ))
-            )}
-          </Section>
-
-          <Section title={t('cloud.perBook', { count: books.length })}>
-            {books.length === 0 ? (
-              <Row label={t('cloud.nothingYet')} last />
-            ) : (
-              books.map((object, index) => (
-                <Row
-                  key={object.key}
-                  label={bookLabel(object.key)}
-                  detail={dayLabel(object.key)}
-                  value={`${Math.round(object.size / 1024)} KB  ›`}
-                  onPress={() => confirmGet(object.key)}
-                  last={index === books.length - 1}
+                  last={index === copies.length - 1}
                 />
               ))
             )}
@@ -164,6 +144,10 @@ export default function CloudLibrary() {
           <Hint>{t('cloud.getHint')}</Hint>
         </>
       )}
+
+      <View style={{ marginTop: space.lg }}>
+        <PrimaryAction label={t('cloud.backupNow')} onPress={() => queueBackup(connection.id)} />
+      </View>
 
       {report ? (
         <View style={{ marginTop: space.xl }}>
@@ -177,6 +161,10 @@ export default function CloudLibrary() {
           ))}
         </View>
       ) : null}
+
+      <Section>
+        <Row label={t('cloud.remove')} onPress={confirmRemove} danger last />
+      </Section>
 
       <PickerSheet
         visible={frequencyOpen}

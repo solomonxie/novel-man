@@ -659,13 +659,10 @@
     "frequencyHint": "默认手动。自动同步只在你打开应用时执行，不会在后台运行。",
     "backupNow": "立即备份",
     "openLibrary": "查看桶内内容",
-    "whole": "整个书库",
-    "perBook": "单本（{{count}}）",
     "nothingYet": "存储桶里还没有内容。",
     "get": "下载",
     "getHint": "下载备份后的恢复方式与从文件恢复相同：只新增，不覆盖。",
     "queue": "队列（{{count}}）",
-    "kind_upload-book": "上传单本",
     "kind_upload-library": "上传书库",
     "kind_download-bundle": "下载备份",
     "status_pending": "等待中",
@@ -676,7 +673,8 @@
     "pause": "暂停",
     "resume": "继续",
     "remove": "移除该存储桶",
-    "removeConfirm": "将从本机移除该连接及其密钥，桶内内容不受影响。"
+    "removeConfirm": "将从本机移除该连接及其密钥，桶内内容不受影响。",
+    "copies": "这个存储桶里的副本"
   },
   "script": {
     "conversion": "剧本",
