@@ -74,7 +74,10 @@
     "noMatches": "No matching books.",
     "kindTitle": "What kind of book is this?",
     "inNotes": "Your notes ({{count}})",
-    "addBook": "Add a book"
+    "addBook": "Add a book",
+    "shelf_reading": "Reading",
+    "shelf_wishlist": "Want to read",
+    "shelf_read": "Finished"
   },
   "import": {
     "title": "Import",
@@ -896,19 +899,14 @@
   },
   "kind": {
     "novel": "Novel",
-    "novelPlural": "Novels",
     "novelHint": "Fiction — people, scenes, screenplay and illustrations",
     "scripture": "Bible",
-    "scripturePlural": "Bibles",
     "scriptureHint": "Real people and places, verses and references. Downloaded from eBible.org.",
     "nonfiction": "Nonfiction",
-    "nonfictionPlural": "Nonfiction",
     "nonfictionHint": "Real people and places, treated as fact — no scenes or screenplay",
     "textbook": "Textbook or tutorial",
-    "textbookPlural": "Textbooks & tutorials",
     "textbookHint": "A book to learn from — a course text, manual or tutorial. Sections and notes, no people or places.",
     "paper": "Academic paper",
-    "paperPlural": "Papers",
     "paperHint": "A single paper. Sections instead of chapters, and an analysis that weighs its claims.",
     "group_fiction": "Fiction",
     "group_nonfiction": "Nonfiction",

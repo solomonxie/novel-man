@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { listBooks, type BookListItem } from '../src/db/repo';
-import { bookKinds, kindOf } from '../src/books/kinds';
+import { statusOf, type ReadingStatus } from '../src/books/record';
 import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
 import { supportedExtensions } from '../src/import/registry';
 import { Row, Section } from '../src/ui/primitives';
@@ -50,6 +50,9 @@ import { syncOnLaunch } from '../src/cloud/sync';
 import { radius, space, usePalette } from '../src/theme';
 import { timed, trace } from '../src/dev/trace';
 import { appearances, setAppearance, useAppearance, type Appearance } from '../src/theme/appearance';
+
+/** The order the shelves are read in, which is not the order they are declared in. */
+const SHELVES: ReadingStatus[] = ['reading', 'wishlist', 'read'];
 
 /** Three across and a sliver of a fourth — the sliver is what says it scrolls. */
 const PER_SCREEN = 3.2;
@@ -165,19 +168,30 @@ export default function Home() {
     return ranked.sort((a, b) => a.rank - b.rank).map((entry) => entry.book);
   }, [books, query]);
 
-  // One shelf per kind, in the order the kinds are declared — a shelf appears
-  // the moment a book of that kind does, and never before.
+  /**
+   * One shelf per reading status, in the order somebody reaches for them:
+   * what is open now, what is next, what is done.
+   *
+   * Three shelves and no fourth. A book nobody has said anything about is one
+   * they have not read yet, which is what "want to read" means — a bucket
+   * named for the absence of an answer explained nothing and held most of the
+   * library. A book is "reading" if it says so or if it has been opened and
+   * left part way through: twelve chapters in is the answer to "am I reading
+   * this", whether or not anyone set the status afterwards.
+   */
   const shelves = useMemo(() => {
-    const byKind = new Map<string, BookListItem[]>();
+    const byStatus = new Map<ReadingStatus, BookListItem[]>();
     for (const book of library) {
-      const id = kindOf(book.kind).id;
-      const found = byKind.get(id);
+      const status =
+        statusOf(book.status) ?? ((book.offset ?? 0) > 0 ? 'reading' : 'wishlist');
+      const found = byStatus.get(status);
       if (found) found.push(book);
-      else byKind.set(id, [book]);
+      else byStatus.set(status, [book]);
     }
-    return bookKinds
-      .filter((kind) => byKind.has(kind.id))
-      .map((kind) => ({ kind, books: byKind.get(kind.id) as BookListItem[] }));
+    return SHELVES.filter((status) => byStatus.has(status)).map((status) => ({
+      status,
+      books: byStatus.get(status) as BookListItem[],
+    }));
   }, [library]);
 
   // Everything else is a query per keystroke, so it waits for a pause.
@@ -283,17 +297,17 @@ export default function Home() {
                   {t('shelf.noMatches')}
                 </Text>
               ) : (
-                /* A shelf per kind of book, and a kind nobody owns has no
-                   shelf. What the reader keeps is a few novels and a bible,
-                   not "the library" — so the page is the answer to "what do I
-                   have", grouped the way the app already thinks of a book.
-                   Each runs off the edge and virtualises, because any one of
-                   them can grow without a ceiling. */
-                shelves.map(({ kind, books: shelf }, index) => (
-                  <View key={kind.id} style={index > 0 ? { marginTop: space.xl } : undefined}>
+                /* A shelf per reading status, and a status nobody is in has
+                   no shelf. What someone opens this app to do is carry on with
+                   what they are reading — so the page answers that first, and
+                   the library they are not reading today is below it. Each row
+                   runs off the edge and virtualises, because any one of them
+                   can grow without a ceiling. */
+                shelves.map(({ status, books: shelf }, index) => (
+                  <View key={status} style={index > 0 ? { marginTop: space.xl } : undefined}>
                     <View style={styles.shelfHead}>
                       <Text style={[styles.shelfTitle, { color: palette.dim }]}>
-                        {t(`kind.${kind.id}Plural`)}
+                        {t(`shelf.shelf_${status}`)}
                       </Text>
                       <Text style={{ color: palette.faint, fontSize: 12 }}>{shelf.length}</Text>
                     </View>
@@ -449,20 +463,6 @@ export default function Home() {
               </Text>
 
               <Section title={t('settings.general')}>
-                {/* Work is started from a book's own pages and then watched
-                    from wherever you are — so it needs a door that is always
-                    in the same place, not only a strip that appears mid-run.
-                    It leads the section because it is the only row that is ever
-                    doing something: language and appearance are set once. */}
-                <Row
-                  label={t('work.open')}
-                  value={
-                    work.counts.pending + work.counts.running > 0
-                      ? t('work.busy', { count: work.counts.pending + work.counts.running })
-                      : t('work.idle')
-                  }
-                  onPress={openWorkQueue}
-                />
                 <Row
                   label={t('settings.language')}
                   value={LANGUAGE_LABELS[i18n.language as UiLanguage] ?? 'English'}
@@ -472,6 +472,21 @@ export default function Home() {
                   label={t('settings.appearance')}
                   value={t(`settings.appearance_${appearance}`)}
                   onPress={() => setAppearanceOpen(true)}
+                />
+                {/* Work is started from a book's own pages and then watched
+                    from wherever you are — so it needs a door that is always
+                    in the same place, not only a strip that appears mid-run.
+                    Under the two things that are set once and never thought
+                    about again, because this is the one that is ever doing
+                    anything. */}
+                <Row
+                  label={t('work.open')}
+                  value={
+                    work.counts.pending + work.counts.running > 0
+                      ? t('work.busy', { count: work.counts.pending + work.counts.running })
+                      : t('work.idle')
+                  }
+                  onPress={openWorkQueue}
                   last
                 />
               </Section>
