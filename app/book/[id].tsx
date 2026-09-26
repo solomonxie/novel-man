@@ -49,16 +49,25 @@ import { byFrequency } from '../../src/cast/mentions';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
 import {
   estimateBookSummary,
+  estimateDeep,
   estimateLookup,
   estimateOutline,
   queueBookCorrection,
   queueBookLookup,
   queueBookOutline,
   queueBookSummary,
+  queueChapterRun,
+  queueTranslation,
 } from '../../src/analysis/runs';
 import { hasAnyKey } from '../../src/ai/keys';
 import { useDocument } from '../../src/ui/useDocument';
-import type { Estimate } from '../../src/ai/cost';
+import { formatUsd, type Estimate } from '../../src/ai/cost';
+import { stoppedWithoutKey } from '../../src/ai/guard';
+import { citedNotSent } from '../../src/analysis/context';
+import { estimateTranslation, pendingSpans, prepare } from '../../src/translate/run';
+import { pendingByChapter } from '../../src/db/translation';
+import { labelFor, targetLanguages } from '../../src/translate/languages';
+import { PickerSheet } from '../../src/ui/PickerSheet';
 import { pickImage } from '../../src/ui/fields';
 import { adoptImage } from '../../src/storage/files';
 import { InlineText } from '../../src/ui/inline';
@@ -99,6 +108,9 @@ export default function BookPage() {
   const [parts, setParts] = useState<Part[]>([]);
   const [kindOpen, setKindOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  /** Every chapter at once, which is the one run worth stopping to price. */
+  const [wholeBookOpen, setWholeBookOpen] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryEstimate, setSummaryEstimate] = useState<Estimate | null>(null);
   /** The two passes a book with no words can have — see `analysis/runs`. */
@@ -375,6 +387,78 @@ export default function BookPage() {
     estimateOutline(book!).then(setAskEstimate).catch(() => undefined);
   }
 
+  /**
+   * The whole book in one tap, and the only two runs in the app that are worth
+   * a confirmation. Every other pass is one request about one thing; these are
+   * one per chapter, five hundred of them on a long novel, and the reader pays
+   * their own vendor for each — so the total is worked out and shown before
+   * anything is queued, rather than reported by the strip afterwards.
+   */
+  async function confirmAnalyzeAll() {
+    if (!book || !chapters.length || await stoppedWithoutKey(t)) return;
+    setPreparing(true);
+    try {
+      // A book whose words are not here is priced on what is actually sent:
+      // the citation, not the chapter. See `analysis/context`.
+      const text = citedNotSent(book) ? '' : (await document.read()).text;
+      const priced = await estimateDeep(text, chapters, book).catch(() => null);
+      askToQueue(t('book.analyzeAll'), chapters.length, priced, () =>
+        queueChapterRun(book.id, 'deep-analyze', chapters)
+      );
+    } finally {
+      setPreparing(false);
+    }
+  }
+
+  async function confirmTranslateAll(code: string) {
+    if (!book || await stoppedWithoutKey(t)) return;
+    setPreparing(true);
+    try {
+      // Splitting the book into sentences is what a target *is*, and it only
+      // adds what is missing — an existing language keeps every line of it.
+      await prepare(book.id, code, (await document.read()).text, chapters, book.language);
+      const spans = await pendingSpans(book.id, code);
+      if (!spans.length) {
+        Alert.alert(labelFor(code), t('book.translateAllDone'));
+        return;
+      }
+      const waiting = await pendingByChapter(book.id, code);
+      const priced = await estimateTranslation(spans, book.language).catch(() => null);
+      askToQueue(labelFor(code), waiting.length, priced, () =>
+        queueTranslation(
+          book.id,
+          code,
+          waiting.map((row) => ({
+            idx: row.chapter_idx,
+            label: chapters.find((chapter) => chapter.idx === row.chapter_idx)?.title?.trim()
+              || `${row.chapter_idx + 1}`,
+          }))
+        )
+      );
+    } finally {
+      setPreparing(false);
+    }
+  }
+
+  /** The count, the price, and the chance to say no. */
+  function askToQueue(
+    title: string,
+    count: number,
+    priced: Estimate | null,
+    queue: () => Promise<string>
+  ) {
+    Alert.alert(
+      title,
+      priced
+        ? t('book.queueAllCost', { count, cost: formatUsd(priced.usd), vendor: priced.vendor })
+        : t('book.queueAllUnpriced', { count }),
+      [
+        { text: t('settings.cancel'), style: 'cancel' },
+        { text: t('book.queueAll'), onPress: () => void queue() },
+      ]
+    );
+  }
+
   async function edit(
     field: 'title' | 'author' | 'year' | 'edition' | 'summary' | 'impressions' | 'isbn',
     value: string
@@ -648,6 +732,7 @@ export default function BookPage() {
         </Writable>
       </Block>
 
+
       {supports(book.kind, 'cast') && (
         <>
           <EntitySection
@@ -807,6 +892,7 @@ export default function BookPage() {
         </Block>
       </View>
 
+
       {/* What the chapters were cut into, folded the same way the notes are. */}
       {supports(book.kind, 'scenes') && !skeleton ? (
         <View onLayout={(event) => { scenesY.current = event.nativeEvent.layout.y; }}>
@@ -881,6 +967,56 @@ export default function BookPage() {
             }}
           />
         ) : null}
+        {/* The two runs that are the whole book at once. Everything else on a
+            book page asks one question; these ask five hundred, so they are
+            here with the tools rather than beside the reading. */}
+        {chapters.length > 0 ? (
+          <Row
+            label={t('book.analyzeAll')}
+            detail={t('book.analyzeAllHint')}
+            value={preparing ? t('book.pricing') : `${chapters.length}  ›`}
+            onPress={preparing ? undefined : confirmAnalyzeAll}
+          />
+        ) : null}
+        {chapters.length > 0 && shows(book.kind, 'translations') && !skeleton ? (
+          <Row
+            label={t('book.translateAll')}
+            detail={t('book.translateAllHint')}
+            value={preparing ? t('book.pricing') : '›'}
+            onPress={preparing ? undefined : () => setWholeBookOpen(true)}
+          />
+        ) : null}
+
+        {/* Most of what is on this shelf has no cover in any catalog — a
+            manuscript, a bible built from a zip, a title somebody typed. It
+            unfolds here rather than opening a page because the thing being
+            decided is the cover at the top of this one. */}
+        <Row
+          label={t('draw.row')}
+          detail={t('draw.hint')}
+          value={drawOpen ? '⌃' : '⌄'}
+          onPress={() => setDrawOpen((was) => !was)}
+          last={!drawOpen}
+        />
+        {drawOpen ? (
+          <CoverDrawer
+            book={book}
+            material={{
+              title: book.title,
+              author: book.author,
+              year: book.year,
+              language: book.language,
+              summary: book.summary,
+              briefs: chapters.map((chapter) => chapter.brief?.trim()).filter(Boolean) as string[],
+              people: characters.map((person) => person.name),
+              places: places.map((place) => place.name),
+            }}
+            onDrawn={() => {
+              setDrawOpen(false);
+              load();
+            }}
+          />
+        ) : null}
         </Section>
       </Block>
 
@@ -920,6 +1056,17 @@ export default function BookPage() {
         hue={book.cover_hue}
         path={book.cover_path}
         onClose={() => setCoverOpen(false)}
+      />
+
+      <PickerSheet
+        visible={wholeBookOpen}
+        title={t('book.translateAll')}
+        options={targetLanguages.map((entry) => ({ id: entry.code, label: entry.label }))}
+        onPick={(code) => {
+          setWholeBookOpen(false);
+          void confirmTranslateAll(code);
+        }}
+        onClose={() => setWholeBookOpen(false)}
       />
 
       <ListPicker
