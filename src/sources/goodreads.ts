@@ -41,6 +41,11 @@ const EXPORT_SHELVES: Record<string, ReadingStatus> = {
   read: 'read',
   'currently-reading': 'reading',
   'to-read': 'wishlist',
+  // A CSV built from a Chinese shelf names the same three in its own words,
+  // and a file written by hand is likelier to carry those than ours.
+  '读过': 'read',
+  '在读': 'reading',
+  '想读': 'wishlist',
 };
 
 /**

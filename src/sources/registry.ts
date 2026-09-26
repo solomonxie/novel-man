@@ -9,7 +9,8 @@ import type { BookSource } from '../books/kinds';
 export type PublicSource = {
   id: Extract<
     BookSource,
-    'ebible' | 'repo' | 'gutenberg' | 'standardebooks' | 'arxiv' | 'openlibrary' | 'goodreads'
+    | 'ebible' | 'repo' | 'gutenberg' | 'standardebooks' | 'arxiv' | 'openlibrary'
+    | 'goodreads' | 'douban'
   >;
   /** Where this source is browsed, when browsing it is worth a page. */
   find?: string;
@@ -46,6 +47,10 @@ export const publicSources: PublicSource[] = [
   // them. Their API was retired in 2020, so the door is the export and the
   // shelf feed — both of which they still hand to whoever owns the account.
   { id: 'goodreads', find: '/source/goodreads', host: 'goodreads.com', indexed: false },
+  // The same thing again, one door narrower. Douban serves no export and no
+  // usable feed — its RSS is ten mixed items with no paging — so this one
+  // reads a file only, the one `tools/douban-shelf.py` writes.
+  { id: 'douban', find: '/source/douban', host: 'douban.com', indexed: false },
 ];
 
 export function sourcesFor(sources: BookSource[]): PublicSource[] {
