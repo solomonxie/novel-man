@@ -83,6 +83,15 @@ export async function indexState(source: string): Promise<IndexState | null> {
   return row ? { fetchedAt: row.fetched_at, count: row.count } : null;
 }
 
+/** Every list this device has kept, for a backup to write down. */
+export async function keptCatalogs(): Promise<{ source: string; fetchedAt: number; count: number }[]> {
+  const database = await db();
+  const rows = await database.getAllAsync<{ source: string; fetched_at: number; count: number }>(
+    'SELECT source, fetched_at, count FROM catalog_state ORDER BY source'
+  );
+  return rows.map((row) => ({ source: row.source, fetchedAt: row.fetched_at, count: row.count }));
+}
+
 /**
  * Which lists under one source are kept, and how big each is. A source that
  * keeps a list per category — Open Library's subjects — needs to say which
