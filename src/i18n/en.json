@@ -635,7 +635,6 @@
   "cloud": {
     "title": "Cloud backup",
     "hint": "Every backup holds everything but your keys — books, notes, translations, people, progress, settings and the files you imported. iCloud keeps the last ten copies; your own bucket keeps every one, and nothing is uploaded there until you ask.",
-    "none": "None connected.",
     "addConnection": "＋ Add a cloud connection",
     "addConnectionHint": "Your own S3-compatible bucket, for full backups with history.",
     "newConnection": "New connection",
