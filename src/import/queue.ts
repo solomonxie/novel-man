@@ -7,7 +7,10 @@ import {
   fileNameFor as paperFileName,
   type Paper,
 } from '../sources/arxiv';
-import { readGutenbergBook, type GutenbergBook } from '../sources/gutenberg';
+import { fetchGutenbergIndex, readGutenbergBook, type GutenbergBook } from '../sources/gutenberg';
+import { refreshCatalog } from '../sources/ebible';
+import { fetchStandardEbooksIndex } from '../sources/standardEbooks';
+import { replaceIndex } from '../sources/catalog';
 import { downloadRepoBible, type RepoEdition } from '../sources/repoBible';
 import {
   authHeader,
@@ -47,7 +50,12 @@ export type QueuedSource =
   | { via: 'repo'; edition: RepoEdition }
   | { via: 'gutenberg'; book: GutenbergBook; kind?: string }
   | { via: 'standardebooks'; book: StandardEbook; kind?: string }
-  | { via: 'arxiv'; paper: Paper; kind?: string };
+  | { via: 'arxiv'; paper: Paper; kind?: string }
+  /** Not a book but a list of them: a source's whole catalog, kept for search. */
+  | { via: 'catalog'; source: CatalogSource };
+
+/** The sources that publish a list this app can hold. */
+export type CatalogSource = 'ebible' | 'gutenberg' | 'standardebooks';
 
 const jobs: ImportJob[] = [];
 const sources = new Map<string, QueuedSource>();
@@ -105,6 +113,18 @@ export function enqueueStandardEbook(book: StandardEbook, kind?: string): string
 
 export function enqueuePaper(paper: Paper, kind?: string): string {
   return enqueue({ via: 'arxiv', paper, kind }, paper.title);
+}
+
+/**
+ * Every list at once, in the queue everything else already runs in.
+ *
+ * Keeping a catalog used to be a page per source, a button per page, and a
+ * wait staring at a progress bar before the search it was for could be used.
+ * They are jobs now: queued together, run one at a time like every other job,
+ * watched from the strip, and forgotten about until they are done.
+ */
+export function enqueueCatalogs(sources: CatalogSource[], name: (source: CatalogSource) => string): string[] {
+  return sources.map((source) => enqueue({ via: 'catalog', source }, name(source)));
 }
 
 
@@ -172,7 +192,43 @@ async function drain() {
   }
 }
 
-async function runJob(job: ImportJob, source: QueuedSource) {
+/**
+ * Every source is somebody's server with a rate limit on it, and three lists
+ * queued back to back is three requests in a second from one address. The
+ * queue is sequential anyway; this only makes the gap deliberate.
+ */
+const PACE_MS = 1500;
+let lastCatalogAt = 0;
+
+async function runJob(job: ImportJob, source: QueuedSource): Promise<Produced> {
+  if (source.via === 'catalog') {
+    const since = Date.now() - lastCatalogAt;
+    if (since < PACE_MS) await new Promise((resolve) => setTimeout(resolve, PACE_MS - since));
+    job.stage = 'reading';
+    publish();
+    try {
+      if (source.source === 'ebible') {
+        // It keeps its own copy as well as the shared index — the catalog is
+        // what the bible pages read.
+        await refreshCatalog();
+        return {};
+      }
+      const rows =
+        source.source === 'gutenberg'
+          ? await fetchGutenbergIndex()
+          : await fetchStandardEbooksIndex(await standardEbooksEmail());
+      job.stage = 'saving';
+      publish();
+      await replaceIndex(source.source, rows, (done, total) => {
+        job.fraction = total ? done / total : 0;
+        publish();
+      });
+      return {};
+    } finally {
+      lastCatalogAt = Date.now();
+    }
+  }
+
   if (source.via === 'gutenberg') {
     job.stage = 'reading';
     publish();
@@ -250,6 +306,9 @@ async function runJob(job: ImportJob, source: QueuedSource) {
   }
   return importFrom(source, job);
 }
+
+/** What a job left behind, when it was a book. A catalog leaves a list. */
+type Produced = { bookId?: string; chapters?: number };
 
 /** Every path ends here: a file on disk, the preview gate, the same stages. */
 function importFrom(file: { uri: string; name: string; kind?: string }, job: ImportJob) {

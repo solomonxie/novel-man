@@ -1,10 +1,14 @@
 import { listBooks, writeBookRecord, type BookRecord } from '../db/repo';
 import { restoreSourceFile, writeImage } from '../storage/files';
 import type { OpenedBundle } from './bundle';
+import type { Snapshot } from './format';
 import { writePrefs } from './prefs';
 import { hold } from './pending';
 import { backUpBefore } from './local';
 import { noticeRestore } from './changes';
+import { enqueueCatalogs, type CatalogSource } from '../import/queue';
+import { indexState } from '../sources/catalog';
+import { labelOfCatalog } from '../sources/registry';
 
 export type RestoreReport = {
   restored: { title: string; id: string }[];
@@ -96,8 +100,29 @@ export async function restoreBundle(
   // Held as well as restored: the skeletons on the shelf carry the work, and
   // this is what puts the words back into them when the file turns up.
   if (report.waiting > 0) hold(opened.bytes);
+  await refetchCatalogs(opened.snapshot.catalogs);
   noticeRestore();
   return report;
+}
+
+/**
+ * The lists this device used to hold, queued rather than carried. The rows are
+ * somebody else's public catalog and go stale; what the backup remembered is
+ * that they were wanted, and the queue fetches them in the background while
+ * the reader looks at the books that just came back.
+ */
+async function refetchCatalogs(kept: Snapshot['catalogs']): Promise<void> {
+  const wanted: CatalogSource[] = [];
+  for (const entry of kept ?? []) {
+    if (entry.source !== 'ebible' && entry.source !== 'gutenberg' && entry.source !== 'standardebooks') {
+      continue;
+    }
+    // Already here — a restore onto a phone that has them is not a reason to
+    // download eighty thousand rows again.
+    if (await indexState(entry.source)) continue;
+    wanted.push(entry.source);
+  }
+  if (wanted.length) enqueueCatalogs(wanted, labelOfCatalog);
 }
 
 function restoreAsset(opened: OpenedBundle, path: string): string | null {

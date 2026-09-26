@@ -2,6 +2,7 @@ import { strFromU8, strToU8, unzipSync, Zip, ZipDeflate, ZipPassThrough } from '
 import { listBookIds, readBookRecord, type BookRecord } from '../db/repo';
 import { openStored, readImage } from '../storage/files';
 import { readPrefs } from './prefs';
+import { keptCatalogs } from '../sources/catalog';
 import { yieldToUI } from '../async/yield';
 import type { ExportFile } from '../export/types';
 import {
@@ -52,6 +53,7 @@ export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
     app: 'novel-man',
     books,
     settings: await readPrefs(),
+    catalogs: await keptCatalogs(),
   };
 
   at = performance.now();
