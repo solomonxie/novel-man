@@ -24,8 +24,9 @@ import { standardEbooksEmail } from '../sources/standardEbooksEmail';
 import { takeChoice, type Choice } from '../sources/chosen';
 import { addEsvBook, ESV_SOURCE, ESV_TITLE } from '../sources/esvBook';
 import { EsvKeyRows, type EsvKeyState } from '../settings/EsvKey';
-import { findRemoteBook } from '../db/repo';
+import { findRemoteBook, updateBook } from '../db/repo';
 import { keepByHand, keepWork } from '../books/save';
+import { parseTypedBooks } from '../books/bulk';
 import { queueBookLookup } from '../analysis/runs';
 import { hasAnyKey } from '../ai/keys';
 import { Row } from './primitives';
@@ -110,6 +111,9 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
+  /** A shelf typed out in one field instead of a form per book. */
+  const [listOpen, setListOpen] = useState(false);
+  const [typed, setTyped] = useState('');
 
   const [choice, setChoice] = useState<Choice | null>(null);
   const [edition, setEdition] = useState<GutenbergEdition | null>(null);
@@ -228,6 +232,7 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
   }
 
   const named = title.trim();
+  const listed = listOpen ? parseTypedBooks(typed) : [];
   /**
    * What the button will do, and whether there is anything for it to do.
    *
@@ -243,7 +248,8 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
         : esvState.ok && !esvState.busy
           ? 'esv'
           : null
-      : choice?.source === 'openlibrary' || (sourceId === 'record' && named.length > 0)
+      : choice?.source === 'openlibrary' ||
+          (sourceId === 'record' && (named.length > 0 || listed.length > 0))
         ? 'keep'
         : choice
           ? 'download'
@@ -274,7 +280,15 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
       return;
     }
     if (!kindId) return;
-    onDone?.();
+    if (sourceId === 'record' && listed.length > 0) {
+      // A list ends on the shelf rather than on any one of its books: the
+      // whole point of typing twelve was not to look at one. Written before
+      // the panel closes, so the shelf it closes onto already has them.
+      for (const book of listed) {
+        const id = await keepByHand({ title: book.title, author: book.author, kind: kindId });
+        if (book.isbn) await updateBook(id, { isbn: book.isbn });
+      }
+      onDone?.();
       return;
     }
     onDone?.();
@@ -434,8 +448,37 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
             value={!keyed ? t('add.needsKey') : named ? '›' : t('add.needsTitle')}
             alarm={!keyed}
             onPress={keyed && named ? keepAndLookUp : undefined}
-            last
           />
+          {/* Twelve paperbacks off a shelf is twelve trips through the form
+              above, each one a keyboard opened and dismissed. Typed as a list
+              it is one field and one button. */}
+          <Row
+            label={t('add.recordList')}
+            detail={listed.length ? t('add.recordListFound', { count: listed.length }) : t('add.recordListWhy')}
+            value={listOpen ? '⌃' : '⌄'}
+            onPress={() => setListOpen((was) => !was)}
+            last={!listOpen}
+          />
+          {listOpen ? (
+            <View style={styles.form}>
+              <TextInput
+                value={typed}
+                onChangeText={setTyped}
+                placeholder={t('add.recordListPlaceholder')}
+                placeholderTextColor={palette.faint}
+                multiline
+                textAlignVertical="top"
+                style={[
+                  styles.input,
+                  styles.list,
+                  { color: palette.text, borderColor: palette.border },
+                ]}
+              />
+              <Text style={{ color: palette.dim, fontSize: 12, marginBottom: space.sm }}>
+                {t('add.recordListHint')}
+              </Text>
+            </View>
+          ) : null}
         </>
       ) : null}
 
@@ -564,7 +607,9 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
             <Text style={{ color: palette.onAccent, fontSize: 17, fontWeight: '600' }}>
               {action === 'esv'
                 ? t('add.esvAdd', { title: ESV_TITLE })
-                : t(`add.${action}`)}
+                : listed.length > 0
+                  ? t('add.keepMany', { count: listed.length })
+                  : t(`add.${action}`)}
             </Text>
           </Pressable>
         </View>
@@ -678,6 +723,8 @@ const styles = StyleSheet.create({
     marginBottom: space.sm,
   },
   act: { paddingVertical: space.md, alignItems: 'center' },
+  /** Tall enough to see a few books at once, not so tall it owns the page. */
+  list: { minHeight: 150, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md, padding: space.md },
   foot: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.lg },
   commit: {
     borderRadius: radius.md,

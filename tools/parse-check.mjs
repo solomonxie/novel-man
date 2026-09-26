@@ -78,6 +78,7 @@ const {
   pageUrl,
 } = await import(join(build, 'sources/goodreads.js'));
 const { isSkeleton, starsOf, statusOf } = await import(join(build, 'books/record.js'));
+const { parseTypedBooks } = await import(join(build, 'books/bulk.js'));
 const { readBible } = await import(join(build, 'scripture/published.js'));
 const { bookFiles, contentsUrl, parseRepoUrl, rawUrl, searchUrl, titleFrom } =
   await import(join(build, 'sources/repo.js'));
@@ -1542,6 +1543,39 @@ console.log('\ngoodreads');
 }
 
 // What separates a book with no words from one whose words are fetched.
+console.log('\na shelf typed out');
+{
+  const three = parseTypedBooks(`
+Name: The Leopard
+Author: Giuseppe Tomasi di Lampedusa
+ISBN: 9780099512318
+
+name: stoner
+
+NAME: Ficciones
+BY: Borges
+`);
+  check('one book per block', three.length, 3);
+  check('the fields it was given', three[0],
+    { title: 'The Leopard', author: 'Giuseppe Tomasi di Lampedusa', isbn: '9780099512318' });
+  check('a name on its own is enough', three[1], { title: 'stoner' });
+  check('keys are read whatever their case', three[2], { title: 'Ficciones', author: 'Borges' });
+
+  check('a bare list of titles is a list of books',
+    parseTypedBooks('Dune\nStoner\nFicciones').map((book) => book.title),
+    ['Dune', 'Stoner', 'Ficciones']);
+  check('a colon inside a title is not a field',
+    parseTypedBooks('Name: Dune: Messiah')[0].title, 'Dune: Messiah');
+  check('and neither is one under an unknown word',
+    parseTypedBooks('Publisher: Vintage\nName: Stoner')[0].title, 'Publisher: Vintage');
+  check('a second name starts a second book without a blank line',
+    parseTypedBooks('Name: a\nName: b').length, 2);
+  check('a block with no name at all is not a book',
+    parseTypedBooks('Author: nobody\nISBN: 123').length, 0);
+  check('nothing typed is nothing added', parseTypedBooks('   \n\n  ').length, 0);
+  check('the first answer wins', parseTypedBooks('Name: a\nAuthor: x\nAuthor: y')[0].author, 'x');
+}
+
 console.log('\nskeletons');
 {
   check('no words and no source is a skeleton', isSkeleton({ word_count: 0, text_source: null }), true);

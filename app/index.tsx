@@ -418,7 +418,16 @@ export default function Home() {
                   >
                     {/* The whole flow, here. A book is added without ever
                         leaving the shelf unless a catalog has to be searched. */}
-                    <AddFlow onStep={showAdd} onDone={() => setAddOpen(false)} />
+                    {/* Refreshed as well as closed: a list of skeletons typed
+                        in here puts books on the shelf without navigating
+                        anywhere, so nothing else would tell the page. */}
+                    <AddFlow
+                      onStep={showAdd}
+                      onDone={() => {
+                        setAddOpen(false);
+                        refresh();
+                      }}
+                    />
                   </View>
                 ) : null}
               </View>
