@@ -19,6 +19,7 @@ import * as SecureStore from '../storage/secrets';
 import { resetAppearance } from '../theme/appearance';
 import { setUiLanguage } from '../i18n';
 import { cancelAllWork } from '../work/queue';
+import { seedSystemLists } from '../db/shelves';
 import { settled as cloudSettled } from '../cloud/sync';
 import { suppressLaunchRestore } from '../backup/icloud';
 import { listConnections } from '../cloud/connections';
@@ -147,6 +148,8 @@ async function clearAppData(keepBackup: string) {
     await database.execAsync('PRAGMA foreign_keys = ON');
   }
   await database.execAsync('PRAGMA wal_checkpoint(TRUNCATE); VACUUM');
+  // A wipe leaves what a fresh install has, and a fresh install has this row.
+  await seedSystemLists();
 
   await AsyncStorage.clear();
   await suppressLaunchRestore();
