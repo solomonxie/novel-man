@@ -48,7 +48,8 @@
     "what": "Search Open Library and Google Books. Pick a result to fill in the cover, title, author, year and ISBN.",
     "none": "No results. Try the full title, or add the author’s name.",
     "failed": "Couldn’t reach the catalogs: {{error}}",
-    "noCover": "No cover"
+    "noCover": "No cover",
+    "unreachable": "Couldn’t reach the catalogs just now. That is not the same as the book not being there — try again in a moment."
   },
   "shelf": {
     "title": "Shelf",
@@ -1060,8 +1061,6 @@
     "hintLive": "Searches openlibrary.org live. Requires a connection.",
     "categories": "Categories",
     "categoriesHint": "A category is downloaded once and searched on this device after that — no connection needed.",
-    "showLists": "Show all",
-    "hideLists": "Hide",
     "keptTotal": "{{count}} titles on this device",
     "keptAsOf": "{{count}} titles · {{date}}",
     "get": "Get",

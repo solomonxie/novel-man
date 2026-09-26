@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 
 import { updateBook, type Book } from '../db/repo';
 import { keepCoverFrom } from '../books/save';
-import { findBook, fillFromEdition, type Candidate } from '../sources/identify';
+import { CatalogsUnreachable, findBook, fillFromEdition, type Candidate } from '../sources/identify';
 import { useKeyboardHeight } from './keyboard';
 import { useDragDismiss } from './dismiss';
 import { Grabber } from './primitives';
@@ -69,7 +69,7 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
     try {
       setFound(await findBook(asked, LIMIT));
     } catch (problem) {
-      setFailure(String(problem));
+      setFailure(problem instanceof CatalogsUnreachable ? t('identify.unreachable') : String(problem));
       setFound([]);
     } finally {
       setBusy(false);

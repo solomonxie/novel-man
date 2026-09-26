@@ -38,7 +38,6 @@ export default function FindOnOpenLibrary() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kept, setKept] = useState<Record<string, { fetchedAt: number; count: number }>>({});
-  const [listsOpen, setListsOpen] = useState(false);
   /** Which category is being fetched, and how far in — one at a time, on request. */
   const [fetching, setFetching] = useState<{ slug: string; done: number; total: number } | null>(null);
 
@@ -49,10 +48,6 @@ export default function FindOnOpenLibrary() {
     setKept(state);
     return state;
   }, []);
-
-  useEffect(() => {
-    readKept().then((state) => setListsOpen(Object.keys(state).length === 0));
-  }, [readKept]);
 
   const keptSources = Object.keys(kept);
   const keptTotal = keptSources.reduce((total, source) => total + kept[source].count, 0);
@@ -158,51 +153,42 @@ export default function FindOnOpenLibrary() {
               })}
             </View>
 
-            {/* The lists themselves, folded once there is one — this is a page
-                for finding a book, and the machinery that makes finding it
-                possible offline belongs under it rather than over it. */}
-            <Section
-              title={t('ol.categories')}
-              action={{
-                label: listsOpen ? t('ol.hideLists') : t('ol.showLists'),
-                onPress: () => setListsOpen((was) => !was),
-              }}
-            >
+            {/* Every category, laid out. This is the source's own page and the
+                lists are what make searching it work offline; folding them put
+                the thing the page is for behind a second tap. */}
+            <Section title={t('ol.categories')}>
               <Row
                 label={t('ol.keptTotal', { count: keptTotal })}
                 detail={t('ol.categoriesHint')}
                 value={`${Object.keys(kept).length}/${subjects.length}`}
-                last={!listsOpen}
               />
-              {listsOpen
-                ? subjects.map((subject, index) => {
-                    const state = kept[sourceIdFor(subject.slug)];
-                    const here = fetching?.slug === subject.slug;
-                    return (
-                      <Row
-                        key={subject.slug}
-                        label={subject.name}
-                        detail={
-                          state
-                            ? t('ol.keptAsOf', {
-                                count: state.count,
-                                date: new Date(state.fetchedAt).toLocaleDateString(i18n.language),
-                              })
-                            : subject.group
-                        }
-                        value={
-                          here
-                            ? `${Math.round((fetching.done / Math.max(1, fetching.total)) * 100)}%`
-                            : state
-                              ? t('ol.update')
-                              : t('ol.get')
-                        }
-                        onPress={fetching ? undefined : () => getList(subject.slug)}
-                        last={index === subjects.length - 1}
-                      />
-                    );
-                  })
-                : null}
+              {subjects.map((subject, index) => {
+                const state = kept[sourceIdFor(subject.slug)];
+                const here = fetching?.slug === subject.slug;
+                return (
+                  <Row
+                    key={subject.slug}
+                    label={subject.name}
+                    detail={
+                      state
+                        ? t('ol.keptAsOf', {
+                            count: state.count,
+                            date: new Date(state.fetchedAt).toLocaleDateString(i18n.language),
+                          })
+                        : subject.group
+                    }
+                    value={
+                      here
+                        ? `${Math.round((fetching.done / Math.max(1, fetching.total)) * 100)}%`
+                        : state
+                          ? t('ol.update')
+                          : t('ol.get')
+                    }
+                    onPress={fetching ? undefined : () => getList(subject.slug)}
+                    last={index === subjects.length - 1}
+                  />
+                );
+              })}
             </Section>
 
             {error ? <Hint>{error}</Hint> : null}

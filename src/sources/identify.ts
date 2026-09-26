@@ -246,26 +246,54 @@ const OL_FIELDS = 'key,title,author_name,first_publish_year,cover_i,language,edi
  * limited or simply has nothing returns an empty list, and the other one still
  * answers.
  */
+/**
+ * Open Library refuses any `q` shorter than three characters — it answers 422,
+ * "Query too short". In English that rules out nothing anybody searches for;
+ * in Chinese it rules out most book titles there are. 活着, 围城 and 三体 are
+ * whole novels in two characters each, and every one of them came back as "no
+ * results" when what happened was that the request was never run.
+ *
+ * Asking for the same thing as a title search is longer than three characters
+ * by construction, passes their check, and finds all three.
+ */
+export function openLibraryQuery(asked: string): string {
+  return asked.length < 3 ? `title:${asked}` : asked;
+}
+
+/** Neither catalog could be reached, which is not the same as neither knowing. */
+export class CatalogsUnreachable extends Error {}
+
 export async function findBook(query: string, limit = 10): Promise<Candidate[]> {
   const asked = query.trim();
   if (!asked) return [];
   const isbn = isIsbn(asked) ? cleanIsbn(asked) : null;
 
+  const answered = [false, false];
   const [openLibrary, google] = await Promise.all([
     json(
       isbn
         ? `${OL_SEARCH}?q=isbn:${isbn}&fields=${OL_FIELDS}&limit=${limit}`
-        : `${OL_SEARCH}?q=${encodeURIComponent(asked)}&fields=${OL_FIELDS}&limit=${limit}`
+        : `${OL_SEARCH}?q=${encodeURIComponent(openLibraryQuery(asked))}&fields=${OL_FIELDS}&limit=${limit}`
     )
-      .then(candidatesFromOpenLibrary)
+      .then((body) => {
+        answered[0] = true;
+        return candidatesFromOpenLibrary(body);
+      })
       .catch(() => [] as Candidate[]),
     json(
       `${GOOGLE}?q=${encodeURIComponent(isbn ? `isbn:${isbn}` : asked)}&maxResults=${limit}`
     )
-      .then(candidatesFromGoogle)
+      .then((body) => {
+        answered[1] = true;
+        return candidatesFromGoogle(body);
+      })
       .catch(() => [] as Candidate[]),
   ]);
 
+  // Both refused — a rate limit, no signal, a query one of them would not take.
+  // Reporting that as "nothing found" sends someone looking for a book that is
+  // there.
+  if (!answered[0] && !answered[1]) throw new CatalogsUnreachable();
   return mergeCandidates([openLibrary, google], limit, asked);
 }
 
