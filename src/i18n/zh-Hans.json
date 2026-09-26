@@ -355,7 +355,9 @@
     "pending": "等待中",
     "waiting": "还有 {{count}} 个等待",
     "failedCount": "{{count}} 个失败",
-    "doneChapters": "{{count}} 章"
+    "doneChapters": "{{count}} 章",
+    "doneList_one": "{{count}} 本书可供搜索",
+    "doneList_other": "{{count}} 本书可供搜索"
   },
   "entity": {
     "addRendering": "添加语言",
@@ -1003,7 +1005,8 @@
     "keepMany_one": "加入 {{count}} 本书",
     "keepMany_other": "加入 {{count}} 本书",
     "needsKey": "需要 AI 密钥",
-    "needsTitle": "先输入书名"
+    "needsTitle": "先输入书名",
+    "linkBible": "USFM 或 JSON 格式的圣经，也可以是存放圣经的 GitHub 仓库链接——会自动识别并按其格式读取。"
   },
   "graph": {
     "barDetail": "{{range}} · 提及 {{count}} 次",
@@ -1011,24 +1014,8 @@
     "barScale": "每根柱子代表 {{count}} 章，点一下查看"
   },
   "repo": {
-    "title": "GitHub 上的圣经",
-    "searchTitle": "查找译本",
-    "searchPlaceholder": "niv、nkjv、和合本——译本或语言",
-    "searchGo": "在 GitHub 上搜索",
-    "searchWhat": "在浏览器里打开 GitHub，仓库按星标数排序",
-    "searchHint": "这类译本没有现成的列表，所以直接在 GitHub 上搜索。搜索词是“bible”加上你输入的内容。",
-    "linkTitle": "粘贴链接",
-    "read": "读取这个链接",
-    "reading": "读取中…",
-    "readWhat": "GitHub 页面地址或 raw 文件地址都可以。此时还不会下载任何内容。",
-    "formats": "支持 JSON 和 XML：一卷一个文件，或整本圣经一个文件。章节和经节来自文件本身，无需识别。",
-    "foundTitle": "找到的内容",
     "fileCount_one": "{{count}} 个文件",
     "fileCount_other": "{{count}} 个文件",
-    "size": "下载大小",
-    "perBook": "一卷一个文件，按正典顺序取",
-    "yours": "仓库里的是某个人的副本，不是出版方的版本。能否复制，由你和版权持有者决定。",
-    "use": "使用这个译本",
     "what": "自带结构——章节和经节来自文件本身，无需识别。",
     "err_url": "这不是指向文件、目录或仓库的 GitHub 链接。",
     "err_missing": "该路径下没有内容。请检查分支和文件名。",

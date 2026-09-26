@@ -33,6 +33,8 @@ export type ImportJob = {
   fraction: number;
   bookId?: string;
   chapters?: number;
+  /** What a job that produced no book has to show for itself: rows kept. */
+  kept?: number;
   preview?: ImportPreview;
   error?: unknown;
 };
@@ -180,6 +182,7 @@ async function drain() {
         job.fraction = 1;
         job.bookId = result.bookId;
         job.chapters = result.chapters;
+        job.kept = result.kept;
       } catch (error) {
         job.status = 'failed';
         job.error = error;
@@ -210,8 +213,8 @@ async function runJob(job: ImportJob, source: QueuedSource): Promise<Produced> {
       if (source.source === 'ebible') {
         // It keeps its own copy as well as the shared index — the catalog is
         // what the bible pages read.
-        await refreshCatalog();
-        return {};
+        const catalog = await refreshCatalog();
+        return { kept: catalog.translations.length };
       }
       const rows =
         source.source === 'gutenberg'
@@ -223,7 +226,7 @@ async function runJob(job: ImportJob, source: QueuedSource): Promise<Produced> {
         job.fraction = total ? done / total : 0;
         publish();
       });
-      return {};
+      return { kept: rows.length };
     } finally {
       lastCatalogAt = Date.now();
     }
@@ -308,7 +311,7 @@ async function runJob(job: ImportJob, source: QueuedSource): Promise<Produced> {
 }
 
 /** What a job left behind, when it was a book. A catalog leaves a list. */
-type Produced = { bookId?: string; chapters?: number };
+type Produced = { bookId?: string; chapters?: number; kept?: number };
 
 /** Every path ends here: a file on disk, the preview gate, the same stages. */
 function importFrom(file: { uri: string; name: string; kind?: string }, job: ImportJob) {

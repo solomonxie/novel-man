@@ -42,7 +42,6 @@ export function SourceRows({ source, onUpdated }: {
 
   /** Only for the one source whose door needs a credential of the reader's. */
   const [email, setEmail] = useState<string | null>(null);
-  const [emailOpen, setEmailOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [tested, setTested] = useState<string | null>(null);
   const [works, setWorks] = useState(false);
@@ -114,9 +113,11 @@ export function SourceRows({ source, onUpdated }: {
             label={t('add.seEmailRow')}
             detail={email ?? t('add.seWhy')}
             value={email ? t('add.seSet') : t('add.seNotSet')}
-            onPress={() => setEmailOpen((was) => !was)}
           />
-          {emailOpen ? (
+          {/* Laid out, not folded. This is the source's own full-screen page
+              and the field is most of why anybody opened it; a disclosure here
+              hides one row behind another for no gain. */}
+          {email ? null : (
             <View style={[styles.box, { borderColor: palette.border }]}>
               <TextInput
                 value={draft}
@@ -136,7 +137,6 @@ export function SourceRows({ source, onUpdated }: {
                   saveStandardEbooksEmail(draft).then(async () => {
                     setEmail(await standardEbooksEmail());
                     setDraft('');
-                    setEmailOpen(false);
                     setWorks(false);
                     void test();
                   });
@@ -146,7 +146,7 @@ export function SourceRows({ source, onUpdated }: {
                 <Text style={{ color: palette.accent, fontSize: 16 }}>{t('add.seSave')}</Text>
               </Pressable>
             </View>
-          ) : null}
+          )}
           {email ? (
             <Row
               label={t('add.seTest')}
@@ -204,7 +204,6 @@ export function SourceRows({ source, onUpdated }: {
           onPress={() =>
             forgetStandardEbooksEmail().then(() => {
               setEmail(null);
-              setEmailOpen(false);
               setTested(null);
               setWorks(false);
             })
