@@ -88,6 +88,14 @@ export async function restoreBundle(
       return { ...entity, portrait_path: restoredPath };
     });
 
+    // The drawn pictures go back under the names their rows carry, so an
+    // illustration restores as itself rather than as a row pointing at
+    // nothing.
+    for (const key of bundled.assets?.pictures ?? []) {
+      const bytes = opened.assets[key];
+      if (bytes) writeImage(key.replace('assets/', ''), bytes);
+    }
+
     const id = await writeBookRecord(record);
     report.restored.push({ title: record.book.title, id });
     if (known.has(naturalKey(record.book.source_hash, record.book.title))) {

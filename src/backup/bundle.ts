@@ -1,6 +1,6 @@
 import { strFromU8, strToU8, unzipSync, Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 import { listBookIds, readBookRecord, type BookRecord } from '../db/repo';
-import { openStored, readImage } from '../storage/files';
+import { imageName, openStored, readImage } from '../storage/files';
 import { readPrefs } from './prefs';
 import { keptCatalogs } from '../sources/catalog';
 import { yieldToUI } from '../async/yield';
@@ -209,6 +209,19 @@ function withAssets(record: BookRecord, assets: Record<string, Uint8Array>): Bun
     const path = stash(entity.portrait_path, assets, `portrait-${entity.id}`);
     if (path) bundled.assets.portraits[entity.id] = path;
   }
+  // Everything else that was drawn. Their rows travel with the book and point
+  // at a file by name, so the bytes go under that same name and the rows
+  // resolve on the other side without being rewritten.
+  const pictures: string[] = [];
+  for (const row of (record.carried?.images ?? []) as { path?: unknown }[]) {
+    const name = imageName(typeof row.path === 'string' ? row.path : '');
+    if (!name || assets[`assets/${name}`]) continue;
+    const bytes = readImage(name);
+    if (!bytes) continue;
+    assets[`assets/${name}`] = bytes;
+    pictures.push(`assets/${name}`);
+  }
+  if (pictures.length) bundled.assets.pictures = pictures;
   return bundled;
 }
 
