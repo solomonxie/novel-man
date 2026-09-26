@@ -198,7 +198,9 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
   async function chooseFile() {
     try {
       const picked = await pickManuscript();
-      if (picked) setFile(picked);
+      if (!picked) return;
+      setFile(picked);
+      setSourceId('files');
     } catch (problem) {
       Alert.alert(t('import.failed'), String(problem));
     }
@@ -226,15 +228,28 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
   }
 
   const named = title.trim();
-  /** What the button will do, and whether there is anything for it to do. */
-  const action: 'keep' | 'download' | 'commit' | null =
-    choice?.source === 'openlibrary' || (sourceId === 'record' && named.length > 0)
-      ? 'keep'
-      : choice
-        ? 'download'
-        : file
-          ? 'commit'
-          : null;
+  /**
+   * What the button will do, and whether there is anything for it to do.
+   *
+   * Every door ends on the same button. A source that asked for a key used to
+   * end on a text row instead, and a skeleton on a row below the form, so the
+   * last step of adding a book looked like three different steps depending on
+   * where the book came from.
+   */
+  const action: 'keep' | 'download' | 'commit' | 'esv' | 'open' | null =
+    sourceId === ESV
+      ? esvOnShelf
+        ? 'open'
+        : esvState.ok && !esvState.busy
+          ? 'esv'
+          : null
+      : choice?.source === 'openlibrary' || (sourceId === 'record' && named.length > 0)
+        ? 'keep'
+        : choice
+          ? 'download'
+          : file
+            ? 'commit'
+            : null;
 
   /**
    * A record typed from memory knows a title and not much else, and the one
@@ -252,7 +267,16 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
   }
 
   async function commit() {
+    if (action === 'esv') return putEsvOnShelf();
+    if (action === 'open' && esvOnShelf) {
+      onDone?.();
+      router.push(`/book/${esvOnShelf}`);
+      return;
+    }
     if (!kindId) return;
+    onDone?.();
+      return;
+    }
     onDone?.();
     if (choice?.source === 'openlibrary') {
       router.push(`/book/${await keepWork(choice.work, kindId)}`);
@@ -330,7 +354,7 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
     return (
       <>
         {crumb()}
-        {doors.map((door, index) => {
+        {doors.map((door) => {
           // A source that still wants a credential says so on its own page,
           // beside the field that takes one — a warning here is an alarm about
           // a door nobody has opened yet.
@@ -340,13 +364,17 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
               key={door}
               label={labelOf(door, t)}
               detail={detailOf(door, t)}
-              value={page ? '›' : '⌄'}
+              value={page || door === 'files' ? '›' : '⌄'}
               onPress={() =>
                 page
                   ? router.push({ pathname: page, params: { kind: kindId, source: door } })
-                  : setSourceId(door)
+                  : door === 'files'
+                    ? // The file picker *is* the next level. Descending into a
+                      // row that repeats the label you just tapped, to open the
+                      // picker from there, asks the same question twice.
+                      void chooseFile()
+                    : setSourceId(door)
               }
-              last={index === doors.length - 1}
             />
           );
         })}
@@ -412,12 +440,12 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
       ) : null}
 
       {sourceId === 'files' ? (
+        // Reached only with a file in hand: what was picked, and the way to
+        // pick a different one.
         <Row
-          label={file ? file.name : t('shelf.fromFiles')}
-          detail={
-            file ? t('add.changeFile') : supportedExtensions.map((ext) => `.${ext}`).join(' ')
-          }
-          value={file ? '✓' : '›'}
+          label={file?.name ?? t('shelf.fromFiles')}
+          detail={t('add.changeFile')}
+          value="✓"
           onPress={chooseFile}
           last
         />
@@ -458,27 +486,16 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
       ) : null}
 
       {sourceId === ESV ? (
+        // The key, and then the same button every other door ends on. This
+        // used to be a text row with its state in the value column, which made
+        // the one edition that needs a key look like a different kind of thing
+        // to add than all the ones that don't.
         <EsvKeyRows onState={setEsvState}>
           <Row
-            label={esvOnShelf ? t('add.esvOnShelf') : t('add.esvAdd', { title: ESV_TITLE })}
-            detail={esvOnShelf ? undefined : t('add.esvAddWhat')}
-            value={
-              esvOnShelf || esvState.ok
-                ? '›'
-                : esvState.keyed
-                  ? t('add.esvTestFirst')
-                  : t('add.esvNeedsKey')
-            }
-            onPress={
-              esvState.busy || !(esvState.ok || esvOnShelf)
-                ? undefined
-                : esvOnShelf
-                  ? () => {
-                      onDone?.();
-                      router.push(`/book/${esvOnShelf}`);
-                    }
-                  : putEsvOnShelf
-            }
+            label={t('add.esvAdd', { title: ESV_TITLE })}
+            detail={esvOnShelf ? t('add.esvOnShelf') : t('add.esvAddWhat')}
+            value={esvOnShelf || esvState.ok ? '' : esvState.keyed ? t('add.esvTestFirst') : t('add.esvNeedsKey')}
+            alarm={!(esvOnShelf || esvState.ok)}
             last
           />
         </EsvKeyRows>
@@ -545,7 +562,9 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
             ]}
           >
             <Text style={{ color: palette.onAccent, fontSize: 17, fontWeight: '600' }}>
-              {t(`add.${action}`)}
+              {action === 'esv'
+                ? t('add.esvAdd', { title: ESV_TITLE })
+                : t(`add.${action}`)}
             </Text>
           </Pressable>
         </View>
