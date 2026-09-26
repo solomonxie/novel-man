@@ -130,14 +130,35 @@ export async function listsHolding(bookId: string): Promise<BookList[]> {
   );
 }
 
+/**
+ * The one list the app ships, put back if it is missing.
+ *
+ * A wipe empties every table, and the migration that seeded this row has
+ * already run and will not run again — so after one, `favorites` was gone for
+ * good. `list_books.list_id` references it, which made every ♥ a foreign key
+ * failure, and `INSERT OR IGNORE` swallowed each one without a word: the
+ * button did nothing, said nothing, and looked fine.
+ */
+export async function seedSystemLists(): Promise<void> {
+  const database = await db();
+  await database.runAsync(
+    "INSERT OR IGNORE INTO book_lists (id, name, system, created_at) VALUES (?, 'Favorites', 1, 0)",
+    FAVORITES
+  );
+}
+
 export async function setInList(listId: string, bookId: string, holds: boolean) {
   const database = await db();
   if (!holds) {
     await database.runAsync('DELETE FROM list_books WHERE list_id = ? AND book_id = ?', listId, bookId);
     return;
   }
+  if (listId === FAVORITES) await seedSystemLists();
+  // Named conflict, not `OR IGNORE`: the only thing worth ignoring here is the
+  // book already being in the list. Anything else is a bug and must be heard.
   await database.runAsync(
-    'INSERT OR IGNORE INTO list_books (list_id, book_id, added_at) VALUES (?, ?, ?)',
+    `INSERT INTO list_books (list_id, book_id, added_at) VALUES (?, ?, ?)
+       ON CONFLICT(list_id, book_id) DO NOTHING`,
     listId,
     bookId,
     Date.now()
