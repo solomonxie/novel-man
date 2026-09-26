@@ -50,3 +50,11 @@ export const publicSources: PublicSource[] = [
 export function sourcesFor(sources: BookSource[]): PublicSource[] {
   return publicSources.filter((source) => sources.includes(source.id));
 }
+
+/**
+ * A catalog's name where no component is asking — a queue row written by a
+ * restore, which has no screen and so no `t`.
+ */
+export function labelOfCatalog(source: string): string {
+  return publicSources.find((entry) => entry.id === source)?.host ?? source;
+}

@@ -26,6 +26,14 @@ export type Snapshot = {
   /** App preferences. Never a credential: those live in the keychain. */
   settings?: Record<string, string>;
   /**
+   * Which source catalogs this device had kept, and how big each was — not the
+   * rows themselves. A catalog is 78,000 lines of somebody else's public list:
+   * it would be most of the bundle, it goes stale, and it can be fetched
+   * again. What cannot be fetched again is the knowledge that this reader had
+   * bothered to keep it, so a restore queues them back.
+   */
+  catalogs?: { source: string; fetchedAt: number; count: number }[];
+  /**
    * Written by builds that left the manuscripts out, and still read because
    * those bundles are still in people's iCloud folders: their books arrive
    * without text and wait for the file. Nothing writes it any more.

@@ -6,18 +6,21 @@ import type { TFunction } from 'i18next';
 import { router, useFocusEffect } from '../navigation/router';
 import { DEFAULT_KIND, kindOf, type BookSource } from '../books/kinds';
 import {
+  enqueueCatalogs,
   enqueueGutenberg,
   enqueueImport,
   enqueuePaper,
   enqueueRepoBible,
   enqueueStandardEbook,
   enqueueTranslation,
+  type CatalogSource,
 } from '../import/queue';
 import { pickManuscript } from '../import/sources/picker';
 import { fetchManuscript, FetchError } from '../import/sources/url';
 import { supportedExtensions } from '../import/registry';
 import { readGutenbergBook, type GutenbergEdition } from '../sources/gutenberg';
 import { authorLine } from '../sources/arxiv';
+import { standardEbooksEmail } from '../sources/standardEbooksEmail';
 import { takeChoice, type Choice } from '../sources/chosen';
 import { addEsvBook, ESV_SOURCE, ESV_TITLE } from '../sources/esvBook';
 import { EsvKeyRows, type EsvKeyState } from '../settings/EsvKey';
@@ -44,6 +47,13 @@ import { trace } from '../dev/trace';
  * list, so those open their own page. Everything short — a title, a link, a
  * key — is answered here.
  */
+
+/** The three sources that publish a list, out of the seven that exist. */
+const CATALOGS: CatalogSource[] = ['ebible', 'gutenberg', 'standardebooks'];
+
+function isCatalog(source: BookSource): source is CatalogSource {
+  return (CATALOGS as string[]).includes(source);
+}
 
 /** The one edition that is nobody's to hand over, and so not a source. */
 const ESV = 'esv';
@@ -112,6 +122,8 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
   const [esvOnShelf, setEsvOnShelf] = useState<string | null>(null);
   /** Whether an AI pass can be offered at all — see the record's own row. */
   const [keyed, setKeyed] = useState(false);
+  /** Said once, so the row that queued the lists stops inviting another tap. */
+  const [queuedLists, setQueuedLists] = useState(false);
 
   const kind = kindId ? kindOf(kindId) : null;
   // The ESV is offered wherever eBible is: it is an edition of the same book,
@@ -121,6 +133,8 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
         door === ESV ? kind.sources.includes('ebible') : kind.sources.includes(door)
       )
     : [];
+  /** The lists this kind can be searched in, which are the ones worth keeping. */
+  const lists = kind ? kind.sources.filter(isCatalog) : [];
 
   // A page opened from here hands its answer back by leaving it where this can
   // take it on the way through.
@@ -336,6 +350,28 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
             />
           );
         })}
+
+        {/* The lists those catalogs are searched in. Keeping them used to be a
+            page per source and a button per page, each one watched to the end
+            before the search it was for could be used; they are queued jobs
+            now, and the strip says when they land. */}
+        {lists.length > 0 ? (
+          <Row
+            label={queuedLists ? t('add.listsQueued') : t('add.refreshLists')}
+            detail={t('add.refreshListsWhy')}
+            value={queuedLists ? '✓' : '⟳'}
+            onPress={async () => {
+              // Standard Ebooks answers nobody without a membership, and a
+              // queue row that fails for everyone who hasn't joined is noise
+              // rather than news.
+              const member = Boolean(await standardEbooksEmail());
+              const wanted = lists.filter((source) => source !== 'standardebooks' || member);
+              enqueueCatalogs(wanted, (source) => t(`source.${source}`));
+              setQueuedLists(true);
+            }}
+            last
+          />
+        ) : null}
       </>
     );
   }
