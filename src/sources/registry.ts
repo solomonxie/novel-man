@@ -26,9 +26,10 @@ export type PublicSource = {
 export const publicSources: PublicSource[] = [
   { id: 'ebible', find: '/source/ebible', host: 'ebible.org', indexed: true },
   // Not a publisher and not a list: a place other people's editions happen to
-  // be kept. Nothing to index — the reader searches it and pastes what they
-  // found, which is the only form this source has.
-  { id: 'repo', find: '/source/repo', host: 'github.com', indexed: false },
+  // be kept. It has no door of its own — a reader pastes the link they found
+  // under "From a link" and it is recognised — but it is still a host this app
+  // fetches from, and the page that discloses those reads this list.
+  { id: 'repo', host: 'github.com', indexed: false },
   { id: 'gutenberg', host: 'gutenberg.org', indexed: true },
   // The same corpus, produced by hand — and behind a credential, because its
   // feeds are a membership benefit rather than an open endpoint.

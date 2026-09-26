@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, Switch, Text, TextInput, View, type ViewStyle } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { imageUri } from '../storage/files';
 import { radius, space, usePalette } from '../theme';
 
@@ -63,30 +73,54 @@ export function Section({ title, action, flush, children }: {
   );
 }
 
-export function Row({ label, value, detail, onPress, danger, alarm, last }: {
+export function Row({ label, value, detail, onPress, onLongPress, danger, link, alarm, busy, last }: {
   label: string;
   value?: string;
   /** A second line under the label, for what the row is rather than where it goes. */
   detail?: string;
   onPress?: () => void;
+  /** What a row can do that is not worth a control of its own — remove it. */
+  onLongPress?: () => void;
   /** The row itself is destructive: its label is the warning. */
   danger?: boolean;
+  /**
+   * The label is the action, so it is written in accent like every other thing
+   * in this app you can tap. For a row that *does* something where its
+   * neighbours only lead somewhere — a paste, a fetch — and where a chevron on
+   * the right is not enough to say so.
+   */
+  link?: boolean;
   /**
    * The row is fine, but what it is reporting went wrong — so the state and
    * the reason are red and the label stays what it always was.
    */
   alarm?: boolean;
+  /**
+   * Working on what this row was tapped for. The spinner belongs here rather
+   * than at the foot of the page: a wait reported somewhere other than where
+   * the tap landed reads as nothing having happened.
+   */
+  busy?: boolean;
   last?: boolean;
 }) {
   const palette = usePalette();
   return (
     <Pressable
       onPress={onPress}
-      disabled={!onPress}
+      onLongPress={onLongPress}
+      disabled={!onPress && !onLongPress}
       style={[styles.row, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.border }]}
     >
       <View style={{ flexShrink: 1, flex: 1 }}>
-        <Text style={{ color: danger ? palette.danger : palette.text, fontSize: 16 }}>{label}</Text>
+        <Text
+          style={{
+            color: danger ? palette.danger : link ? palette.accent : palette.text,
+            fontSize: 16,
+            fontWeight: link ? '600' : '400',
+          }}
+        >
+          {label}
+        </Text>
         {detail ? (
           <Text
             numberOfLines={3}
@@ -96,7 +130,8 @@ export function Row({ label, value, detail, onPress, danger, alarm, last }: {
           </Text>
         ) : null}
       </View>
-      {value ? (
+      {busy ? <ActivityIndicator /> : null}
+      {!busy && value ? (
         <Text style={{ color: alarm ? palette.danger : palette.dim, fontSize: 15 }}>{value}</Text>
       ) : null}
     </Pressable>

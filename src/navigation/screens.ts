@@ -2,7 +2,7 @@ import Index from '../../app/index';
 import Job from '../../app/job/[id]';
 import SourceFind from '../../app/source/find';
 import SourceEbible from '../../app/source/ebible';
-import SourceRepo from '../../app/source/repo';
+import SourceEsv from '../../app/source/esv';
 import SourceArxiv from '../../app/source/arxiv';
 import SourceOpenLibrary from '../../app/source/openlibrary';
 import SourceGoodreads from '../../app/source/goodreads';
@@ -50,7 +50,7 @@ export const screens: Screen[] = [
   { path: '/job/[id]', component: Job, header: true },
   { path: '/source/find', component: SourceFind, header: true },
   { path: '/source/ebible', component: SourceEbible, header: true },
-  { path: '/source/repo', component: SourceRepo, header: true },
+  { path: '/source/esv', component: SourceEsv, header: true },
   { path: '/source/arxiv', component: SourceArxiv, header: true },
   { path: '/source/openlibrary', component: SourceOpenLibrary, header: true },
   { path: '/source/goodreads', component: SourceGoodreads, header: true },

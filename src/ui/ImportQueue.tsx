@@ -128,7 +128,9 @@ export function JobRow({ job }: { job: ImportJob }) {
           {failed
             ? describeImportError(job.error, t)
             : job.status === 'done'
-              ? t('queue.doneChapters', { count: job.chapters ?? 0 })
+              ? job.kept !== undefined
+                ? t('queue.doneList', { count: job.kept })
+                : t('queue.doneChapters', { count: job.chapters ?? 0 })
               : job.status === 'running'
                 ? t(`import.${job.stage ?? 'reading'}`, { format: '' }).trim()
                 : t('queue.pending')}

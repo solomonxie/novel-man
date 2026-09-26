@@ -355,7 +355,9 @@
     "pending": "Waiting",
     "waiting": "{{count}} waiting",
     "failedCount": "{{count}} failed",
-    "doneChapters": "{{count}} chapters"
+    "doneChapters": "{{count}} chapters",
+    "doneList_one": "{{count}} book to search",
+    "doneList_other": "{{count}} books to search"
   },
   "entity": {
     "addRendering": "Add a language",
@@ -1003,7 +1005,8 @@
     "keepMany_one": "Add {{count}} book",
     "keepMany_other": "Add {{count}} books",
     "needsKey": "Needs an AI key",
-    "needsTitle": "Type a title first"
+    "needsTitle": "Type a title first",
+    "linkBible": "A USFM or JSON bible, or a link to a GitHub repository holding one — it is recognised and read as what it is."
   },
   "graph": {
     "barDetail": "{{range}} · {{count}} mentions",
@@ -1011,24 +1014,8 @@
     "barScale": "Each bar covers {{count}} chapters. Tap one for details."
   },
   "repo": {
-    "title": "A Bible on GitHub",
-    "searchTitle": "Find an edition",
-    "searchPlaceholder": "niv, nkjv, 和合本 — a version or a language",
-    "searchGo": "Search GitHub",
-    "searchWhat": "Opens GitHub in your browser, with repositories sorted by stars",
-    "searchHint": "There’s no catalog of these, so the search goes to GitHub itself. It looks for “bible” plus whatever you typed.",
-    "linkTitle": "Paste the link",
-    "read": "Read this link",
-    "reading": "Reading…",
-    "readWhat": "A GitHub page or a raw file link — either works. Nothing is downloaded yet.",
-    "formats": "Reads JSON and XML: one file per book, or the whole Bible in one file. Chapters and verses come from the file itself, not from detection.",
-    "foundTitle": "Found",
     "fileCount_one": "{{count}} file",
     "fileCount_other": "{{count}} files",
-    "size": "Download size",
-    "perBook": "One file per book, fetched in canonical order",
-    "yours": "A repository is someone’s copy, not the publisher’s edition. Whether you may copy it is between you and the rights holder.",
-    "use": "Use this edition",
     "what": "Structure included: chapters and verses come from the file, not from detection.",
     "err_url": "That isn’t a GitHub link to a file, folder or repository.",
     "err_missing": "Nothing found at that path. Check the branch and file name.",
