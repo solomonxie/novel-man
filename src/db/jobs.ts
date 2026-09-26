@@ -1,6 +1,6 @@
 import { db, newId, transaction } from './index';
 
-export type JobKind = 'upload-book' | 'upload-library' | 'download-bundle';
+export type JobKind = 'upload-library' | 'download-bundle';
 export type JobStatus = 'pending' | 'running' | 'done' | 'failed' | 'paused';
 
 export type CloudJob = {

@@ -690,4 +690,7 @@ export const migrations: string[] = [
    CREATE UNIQUE INDEX reading_events_once
      ON reading_events(book_id, kind, COALESCE(label, ''), at)`,
 
+  // A bundle per book is not written any more — see `cloud/sync`. Anything an
+  // older build queued would now upload the whole library under a book's name.
+  `DELETE FROM cloud_jobs WHERE kind = 'upload-book'`,
 ];
