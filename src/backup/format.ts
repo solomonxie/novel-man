@@ -63,7 +63,13 @@ export const ABOUT = 'about.json';
 
 export type BundledBook = BookRecord & {
   /** Paths inside the bundle, so a reader never touches a device path. */
-  assets: { cover?: string; portraits: Record<string, string>; source?: string };
+  assets: {
+    cover?: string;
+    portraits: Record<string, string>;
+    source?: string;
+    /** Drawn images, under the names their rows already point at. */
+    pictures?: string[];
+  };
 };
 
 export class BundleError extends Error {

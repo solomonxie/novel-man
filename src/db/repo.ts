@@ -1424,6 +1424,10 @@ export const CARRIED_TABLES = [
   'relations',
   'mentions',
   'verses',
+  // Every picture the app drew and what it was asked for — an illustration of
+  // a scene, a portrait, a cover that was paid for. A backup that carried the
+  // prompt and not the picture would be a receipt.
+  'images',
   // When the book was read. Of everything here this is the one thing that
   // cannot be made again from the book itself — a chapter can be re-analysed,
   // a translation re-run, but nobody can recover the Sunday they finished it.
