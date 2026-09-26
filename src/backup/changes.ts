@@ -63,10 +63,12 @@ export async function markBackedUp(who: string, at: string): Promise<void> {
 const afterRestore = new Set<Listener>();
 
 /**
- * A restore rewrites the shelf from somewhere no screen controls — the launch
- * pull, a bucket sync, a file chosen in a settings section of the page already
- * showing the books. Waiting for a focus that never comes is how a restored
- * library stays invisible until the app is reopened.
+ * Everything rewritten from somewhere no screen controls: the launch pull, a
+ * bucket sync, a file chosen in a settings section of the page already showing
+ * the books — or a wipe, which empties the same tables from the same page.
+ * Waiting for a focus that never comes is how a restored library stays
+ * invisible until the app is reopened, and how a switch someone just turned
+ * off by deleting everything stays looking on.
  */
 export function subscribeToRestores(listener: Listener): () => void {
   afterRestore.add(listener);
