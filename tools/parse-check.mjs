@@ -61,6 +61,7 @@ const {
   candidatesFromOpenLibrary,
   candidatesFromGoogle,
   mergeCandidates,
+  openLibraryQuery,
 } = await import(join(build, 'sources/identify.js'));
 const { passageFrom, retryDelay, cleanToken } = await import(join(build, 'sources/esv.js'));
 const { parseChapterRef, neighbouringChapters, canonChapters, isBible } =
@@ -77,11 +78,13 @@ const {
   parseFeedUrl,
   pageUrl,
 } = await import(join(build, 'sources/goodreads.js'));
+const { stripTags } = await import(join(build, 'import/xml.js'));
 const { isSkeleton, starsOf, statusOf } = await import(join(build, 'books/record.js'));
 const { parseTypedBooks } = await import(join(build, 'books/bulk.js'));
 const { readBible } = await import(join(build, 'scripture/published.js'));
 const { bookFiles, contentsUrl, parseRepoUrl, rawUrl, searchUrl, titleFrom } =
   await import(join(build, 'sources/repo.js'));
+const { normaliseEndpoint, endpointProblem } = await import(join(build, 'cloud/providers.js'));
 const { parsePin, mapUrl, pinLabel } = await import(join(build, 'cast/location.js'));
 const { parseWikiLink, isLink } = await import(join(build, 'cast/lookup.js'));
 const { parseTie, tieOf, reverseTie, TIES, TIE_OPPOSITE } = await import(join(build, 'cast/ties.js'));
@@ -506,6 +509,22 @@ console.log('screenplay');
   check('fdx escapes the apostrophe safely', fdx.body.includes("It's late."), true);
 }
 
+console.log('\ncloud endpoints');
+{
+  check('a host on its own becomes a url', normaliseEndpoint('minio.example.com'),
+    'https://minio.example.com');
+  check('one that is already a url is left alone',
+    normaliseEndpoint('https://s3.eu-west-2.amazonaws.com/'), 'https://s3.eu-west-2.amazonaws.com');
+  check('a missing region leaves a gap, and a gap is not an address',
+    endpointProblem('https://s3..amazonaws.com'), 'gap');
+  check('nor is a host that starts with the gap',
+    endpointProblem('https://.digitaloceanspaces.com'), 'gap');
+  check('a real one is fine', endpointProblem('https://s3.eu-west-2.amazonaws.com'), null);
+  check('plain http is refused by the phone before we ask',
+    endpointProblem('http://minio.example.com'), 'insecure');
+  check('and nothing typed at all is nothing to try', endpointProblem(''), 'empty');
+}
+
 console.log('backup names');
 {
   const march = new Date(2026, 2, 9, 4, 30);
@@ -924,6 +943,11 @@ console.log('one book, looked up in the catalogs');
 {
   check('an isbn is its digits', cleanIsbn('978-0-14-044913-6'), '9780140449136');
   check('and that one checks out', isIsbn('978-0-14-044913-6'), true);
+  check('a two-character title is asked for as a title', openLibraryQuery('活着'), 'title:活着');
+  check('because the catalog refuses anything shorter than three',
+    openLibraryQuery('三体'), 'title:三体');
+  check('a longer one is asked for as it was typed', openLibraryQuery('红楼梦'), '红楼梦');
+  check('and so is anything in English', openLibraryQuery('dune'), 'dune');
   check('a transposed pair does not', isIsbn('9780140449163'), false);
   check('ten digits are an isbn too', isIsbn('0-14-044913-2'), true);
   check('with the wrong check digit, no', isIsbn('0-14-044913-3'), false);
@@ -1534,11 +1558,35 @@ console.log('\ngoodreads');
     parseFeedUrl('https://www.goodreads.com/review/list_rss/12345?key=abc&shelf=read').shelf, 'read');
   check('anywhere else is not', parseFeedUrl('https://example.org/review/list_rss/1'), null);
   check('nor is http', parseFeedUrl('http://www.goodreads.com/review/list_rss/1'), null);
+  check('a profile link is the shelf behind it',
+    parseFeedUrl('https://www.goodreads.com/user/show/64285797-solo-x').url,
+    'https://www.goodreads.com/review/list_rss/64285797');
+  check('so is a shelf listing',
+    parseFeedUrl('https://www.goodreads.com/review/list/64285797?shelf=read').url,
+    'https://www.goodreads.com/review/list_rss/64285797?shelf=read');
+  check('and it keeps which shelf was asked for',
+    parseFeedUrl('https://www.goodreads.com/review/list/64285797?shelf=read').shelf, 'read');
+  check('a feed pasted whole is left alone, key and all',
+    parseFeedUrl('https://www.goodreads.com/review/list_rss/1?key=abc').url,
+    'https://www.goodreads.com/review/list_rss/1?key=abc');
+  check('a profile that names no number is not one',
+    parseFeedUrl('https://www.goodreads.com/user/show/solo-x'), null);
   check('paging keeps the key', pageUrl('https://www.goodreads.com/review/list_rss/1?key=abc', 2),
     'https://www.goodreads.com/review/list_rss/1?key=abc&page=2');
   check('and replaces a page rather than adding a second',
     pageUrl('https://www.goodreads.com/review/list_rss/1?key=abc&page=2', 3),
     'https://www.goodreads.com/review/list_rss/1?key=abc&page=3');
+  check('a status is read out of a list of shelves', statusFromShelf('to-read, math'), 'wishlist');
+  check('whichever place it sits in the list', statusFromShelf('math, currently-reading'), 'reading');
+  check('a shelf of the reader\'s own is not a status', statusFromShelf('math, history'), null);
+  check('a title Goodreads wrapped in CDATA is still a title',
+    booksFromFeed('<item><title><![CDATA[Dune: Messiah]]></title><author_name>Herbert</author_name></item>')[0]
+      ?.title,
+    'Dune: Messiah');
+  check('and the review inside one keeps its words',
+    booksFromFeed('<item><title>A</title><user_review><![CDATA[<p>Good &amp; long</p>]]></user_review></item>')[0]
+      ?.review,
+    'Good & long');
   check('markup around nothing is nothing', plainText('<br/>'), null);
 }
 

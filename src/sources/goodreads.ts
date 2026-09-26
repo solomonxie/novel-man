@@ -30,6 +30,9 @@ export type Shelved = {
   status: ReadingStatus | null;
   /** When they finished it, or failing that when they shelved it. */
   at: number | null;
+  /** The two apart, for a timeline that wants to say which was which. */
+  read: number | null;
+  added: number | null;
   /** Every shelf they filed it under, which is the closest thing to a category. */
   shelves: string[];
 };
@@ -40,8 +43,18 @@ const EXPORT_SHELVES: Record<string, ReadingStatus> = {
   'to-read': 'wishlist',
 };
 
+/**
+ * The export names one exclusive shelf per row; a feed lists every shelf a
+ * book is on, comma separated — `to-read, math`. Reading only the whole string
+ * meant a book filed under anything of the reader's own lost its status
+ * entirely, which is most of a well-kept shelf.
+ */
 export function statusFromShelf(shelf: string | undefined): ReadingStatus | null {
-  return EXPORT_SHELVES[(shelf ?? '').trim().toLowerCase()] ?? null;
+  for (const name of (shelf ?? '').split(',')) {
+    const known = EXPORT_SHELVES[name.trim().toLowerCase()];
+    if (known) return known;
+  }
+  return null;
 }
 
 function starsFrom(value: string | undefined): number | null {
@@ -126,6 +139,8 @@ export function booksFromExport(csv: string): Shelved[] {
       notes: plainText(row['Private Notes']),
       status: statusFromShelf(row['Exclusive Shelf']),
       at: dateFrom(row['Date Read'], row['Date Added']),
+      read: dateFrom(row['Date Read']),
+      added: dateFrom(row['Date Added']),
       shelves,
     });
   });
@@ -161,6 +176,8 @@ export function booksFromFeed(xml: string, shelf?: string | null): Shelved[] {
         statusFromShelf(shelf ?? undefined) ??
         (firstTagText(item, 'user_read_at')?.trim() ? 'read' : null),
       at: dateFrom(firstTagText(item, 'user_read_at'), firstTagText(item, 'user_date_added')),
+      read: dateFrom(firstTagText(item, 'user_read_at')),
+      added: dateFrom(firstTagText(item, 'user_date_added')),
       shelves,
     });
   }
@@ -168,15 +185,31 @@ export function booksFromFeed(xml: string, shelf?: string | null): Shelved[] {
 }
 
 /**
- * What a pasted feed address is for. Anything that is not one of theirs is
- * refused here rather than fetched — a url this app will send a request to is
- * the one thing not worth being relaxed about.
+ * What a pasted Goodreads address is for. Anything that is not one of theirs
+ * is refused here rather than fetched — a url this app will send a request to
+ * is the one thing not worth being relaxed about.
+ *
+ * Three things are the same shelf to us, because they are the same number: the
+ * feed itself, the profile page a reader would copy out of their browser, and
+ * the shelf listing. Nobody has the feed address to hand — it is three clicks
+ * into a settings page most people have never opened — and the profile link is
+ * the one they already know. The feed is public for a public profile, so no
+ * key is needed to read it; a private one keeps its `key=` when pasted whole.
  */
-export function parseFeedUrl(pasted: string): { url: string; shelf: string | null } | null {
+const PROFILE = /^https:\/\/(www\.)?goodreads\.com\/(user\/show|review\/list(_rss)?)\/(\d+)/;
+
+export function parseFeedUrl(pasted: string): { url: string; id: string; shelf: string | null } | null {
   const trimmed = pasted.trim();
-  if (!/^https:\/\/(www\.)?goodreads\.com\/review\/list_rss\/\d+/.test(trimmed)) return null;
+  const matched = PROFILE.exec(trimmed);
+  if (!matched) return null;
   const shelf = trimmed.match(/[?&]shelf=([^&]+)/);
-  return { url: trimmed, shelf: shelf ? decodeURIComponent(shelf[1]) : null };
+  const named = shelf ? decodeURIComponent(shelf[1]) : null;
+  // A feed address is kept exactly as pasted, key and all. Anything else is
+  // only a user number, so the feed is built from it.
+  const url = /\/review\/list_rss\//.test(trimmed)
+    ? trimmed
+    : `https://www.goodreads.com/review/list_rss/${matched[4]}${named ? `?shelf=${encodeURIComponent(named)}` : ''}`;
+  return { url, id: matched[4], shelf: named };
 }
 
 /** A hundred to a page, in their numbering: `&page=2`. */
@@ -189,18 +222,34 @@ export function pageUrl(url: string, page: number): string {
 
 const FEED_PAGES = 20;
 
+/**
+ * Whose shelf it is, in their own words: the feed titles itself "Solo's
+ * bookshelf: all". Worth reading because it is the only human name in the
+ * whole exchange — an address is a number, and a number is not something
+ * anybody recognises their own library by.
+ */
+export function shelfOwner(xml: string): string | null {
+  const channel = firstTagText(xml, 'title');
+  return channel?.trim() || null;
+}
+
+export type Shelf = { books: Shelved[]; owner: string | null };
+
 export async function fetchShelf(
   pasted: string,
   onProgress?: (books: number) => void
-): Promise<Shelved[]> {
+): Promise<Shelf> {
   const feed = parseFeedUrl(pasted);
   if (!feed) throw new Error('not a Goodreads shelf feed');
   const all: Shelved[] = [];
   const seen = new Set<string>();
+  let owner: string | null = null;
   for (let page = 1; page <= FEED_PAGES; page++) {
     const response = await fetch(pageUrl(feed.url, page), { headers: { accept: 'application/xml' } });
     if (!response.ok) throw new Error(`${response.status}`);
-    const batch = booksFromFeed(await response.text(), feed.shelf);
+    const xml = await response.text();
+    owner ??= shelfOwner(xml);
+    const batch = booksFromFeed(xml, feed.shelf);
     let fresh = 0;
     for (const book of batch) {
       const key = book.id || `${book.title}|${book.author}`;
@@ -214,5 +263,5 @@ export async function fetchShelf(
     // ignores `page` — either way there is nothing further to ask for.
     if (!fresh) break;
   }
-  return all;
+  return { books: all, owner };
 }
