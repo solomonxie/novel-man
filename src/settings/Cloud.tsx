@@ -122,18 +122,17 @@ export function CloudSettings() {
     <>
       <Section title={t('cloud.title')}>
         <IcloudRows />
-        {connections.length === 0 ? (
-          <Row label={t('cloud.none')} />
-        ) : (
-          connections.map((connection) => (
-            <Row
-              key={connection.id}
-              label={connection.name}
-              value={`${connection.bucket}/${connection.prefix}  ›`}
-              onPress={() => router.push(`/settings/cloud-library?id=${connection.id}`)}
-            />
-          ))
-        )}
+        {/* No row for having none. The row under this one is an invitation to
+            add one, which says the same thing without spending a line saying
+            nothing is there. */}
+        {connections.map((connection) => (
+          <Row
+            key={connection.id}
+            label={connection.name}
+            value={`${connection.bucket}/${connection.prefix}  ›`}
+            onPress={() => router.push(`/settings/cloud-library?id=${connection.id}`)}
+          />
+        ))}
         {/* A row that says what it does, under the block it adds to. The ＋ it
             replaces was a glyph in a header, which is where a thing goes when
             nobody is meant to find it. */}
