@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { router, useFocusEffect } from '../navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { isAuto, lastBackupAt, setAuto, useDriveStatus } from '../backup/icloud';
+import { subscribeToRestores } from '../backup/changes';
 import { Toggle } from '../ui/primitives';
 
 /**
@@ -26,6 +27,8 @@ export function IcloudRows() {
   }, []);
 
   useFocusEffect(load);
+  // A wipe empties what this is showing, from this very page.
+  useEffect(() => subscribeToRestores(load), [load]);
 
   // Hidden rather than disabled: on Android, or in a build without the native
   // module, this row could never work at all. An unknown status is not that —

@@ -24,7 +24,7 @@ import { settled as cloudSettled } from '../cloud/sync';
 import { suppressLaunchRestore } from '../backup/icloud';
 import { listConnections } from '../cloud/connections';
 import { listKeys } from '../ai/keys';
-import { noticeChange } from '../backup/changes';
+import { noticeChange, noticeRestore } from '../backup/changes';
 
 export function BackupSettings({ onRemoved }: { onRemoved?: () => void }) {
   const { t } = useTranslation();
@@ -88,6 +88,10 @@ export function BackupSettings({ onRemoved }: { onRemoved?: () => void }) {
               await clearAppData(backup.fileName);
               setUiLanguage('system');
               resetAppearance();
+              // Every screen that is holding something this just deleted —
+              // the iCloud switch, the list of buckets — re-reads now rather
+              // than the next time somebody happens to navigate to it.
+              noticeRestore();
               onRemoved?.();
             } finally {
               setRemoving(false);
