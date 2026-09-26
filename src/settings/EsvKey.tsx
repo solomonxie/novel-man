@@ -73,7 +73,9 @@ export function EsvKeyRows({ onState, flat, children }: {
     }
   }
 
-  const showing = flat || open;
+  // A key already given is not a question. The field comes back when the key
+  // goes — an input box under a key that works reads as "this didn't take".
+  const showing = (flat || open) && !keyed;
 
   return (
     <>
@@ -100,9 +102,7 @@ export function EsvKeyRows({ onState, flat, children }: {
             autoFocus={!flat}
             style={[styles.input, { color: palette.text, borderColor: palette.border }]}
           />
-          <Text style={{ color: palette.dim, fontSize: 12 }}>
-            {keyed ? `${t('add.esvKeySet', { tail })} · ${t('lookup.keyStaysHere')}` : t('lookup.keyStaysHere')}
-          </Text>
+          <Text style={{ color: palette.dim, fontSize: 12 }}>{t('lookup.keyStaysHere')}</Text>
           <Pressable
             onPress={() => {
               if (!draft.trim()) return;
@@ -121,6 +121,9 @@ export function EsvKeyRows({ onState, flat, children }: {
           </Pressable>
         </View>
       ) : null}
+
+      {/* What is stored, without ever showing it. */}
+      {keyed && flat ? <Row label={t('add.esvKeyRow')} value={t('add.esvKeySet', { tail })} /> : null}
 
       {keyed ? (
         <Row

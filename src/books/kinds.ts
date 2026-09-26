@@ -135,9 +135,11 @@ export const bookKinds: BookKind[] = [
     features: ['cast', 'terms', 'verses', 'scenes'],
     part: 'book',
     // The file picker still works for a bible someone already has; the preset
-    // source leads because nobody has a USFM zip lying around. A repository is
-    // the door to every edition no catalog is allowed to carry.
-    sources: ['ebible', 'repo', 'files', 'link', 'record'],
+    // source leads because nobody has a USFM zip lying around. A link covers
+    // every edition no catalog is allowed to carry: paste a repository of one
+    // and it is recognised as what it is. Nobody keeps a bible they have not
+    // got, so there is no skeleton here.
+    sources: ['ebible', 'files', 'link'],
     // A bible is read in the edition it was downloaded as; retranslating one
     // is not what this app is for.
     sections: ['parts', 'chapters', 'scenes', 'notes', 'cast', 'places', 'terms'],

@@ -4,27 +4,25 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { router, useFocusEffect } from '../navigation/router';
-import { DEFAULT_KIND, kindOf, type BookSource } from '../books/kinds';
+import { DEFAULT_KIND, kindOf, supports, type BookSource } from '../books/kinds';
 import {
-  enqueueCatalogs,
   enqueueGutenberg,
   enqueueImport,
   enqueuePaper,
   enqueueRepoBible,
   enqueueStandardEbook,
   enqueueTranslation,
-  type CatalogSource,
 } from '../import/queue';
 import { pickManuscript } from '../import/sources/picker';
 import { fetchManuscript, FetchError } from '../import/sources/url';
+import { parseRepoUrl } from '../sources/repo';
+import { RepoError, resolveRepoBible } from '../sources/repoBible';
 import { supportedExtensions } from '../import/registry';
 import { readGutenbergBook, type GutenbergEdition } from '../sources/gutenberg';
 import { authorLine } from '../sources/arxiv';
-import { standardEbooksEmail } from '../sources/standardEbooksEmail';
+import { ESV_TITLE } from '../sources/esvBook';
 import { takeChoice, type Choice } from '../sources/chosen';
-import { addEsvBook, ESV_SOURCE, ESV_TITLE } from '../sources/esvBook';
-import { EsvKeyRows, type EsvKeyState } from '../settings/EsvKey';
-import { findRemoteBook, updateBook } from '../db/repo';
+import { updateBook } from '../db/repo';
 import { keepByHand, keepWork } from '../books/save';
 import { parseTypedBooks } from '../books/bulk';
 import { queueBookLookup } from '../analysis/runs';
@@ -49,24 +47,22 @@ import { trace } from '../dev/trace';
  * key — is answered here.
  */
 
-/** The three sources that publish a list, out of the seven that exist. */
-const CATALOGS: CatalogSource[] = ['ebible', 'gutenberg', 'standardebooks'];
-
-function isCatalog(source: BookSource): source is CatalogSource {
-  return (CATALOGS as string[]).includes(source);
-}
-
 /** The one edition that is nobody's to hand over, and so not a source. */
 const ESV = 'esv';
 
 type Door = BookSource | typeof ESV;
 
-/** What a source row leads to: more of this menu, or a page of its own. */
-const OWN_PAGE: Partial<Record<BookSource, string>> = {
+/**
+ * Where a source row leads. Everything that is somebody else's — a catalog, a
+ * feed, a licensed edition — gets a page, because a page has room for what the
+ * source needs explaining about it and room for more of it later. What stays
+ * in the menu is what the reader brings: a file, a link, a title.
+ */
+const OWN_PAGE: Partial<Record<BookSource | typeof ESV, string>> = {
+  esv: '/source/esv',
   gutenberg: '/source/find',
   standardebooks: '/source/find',
   ebible: '/source/ebible',
-  repo: '/source/repo',
   arxiv: '/source/arxiv',
   openlibrary: '/source/openlibrary',
   goodreads: '/source/goodreads',
@@ -84,7 +80,6 @@ const ORDER: Door[] = [
   // that carries what no catalog is allowed to.
   'ebible',
   ESV,
-  'repo',
   'arxiv',
   // Last, under every way of actually getting the words: a book with none.
   'record',
@@ -120,14 +115,8 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
   const [apocrypha, setApocrypha] = useState(false);
   const [canonOpen, setCanonOpen] = useState(false);
 
-  const [esvState, setEsvState] = useState<EsvKeyState>({
-    keyed: false, ok: false, busy: false, tail: '',
-  });
-  const [esvOnShelf, setEsvOnShelf] = useState<string | null>(null);
   /** Whether an AI pass can be offered at all — see the record's own row. */
   const [keyed, setKeyed] = useState(false);
-  /** Said once, so the row that queued the lists stops inviting another tap. */
-  const [queuedLists, setQueuedLists] = useState(false);
 
   const kind = kindId ? kindOf(kindId) : null;
   // The ESV is offered wherever eBible is: it is an edition of the same book,
@@ -137,8 +126,6 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
         door === ESV ? kind.sources.includes('ebible') : kind.sources.includes(door)
       )
     : [];
-  /** The lists this kind can be searched in, which are the ones worth keeping. */
-  const lists = kind ? kind.sources.filter(isCatalog) : [];
 
   // A page opened from here hands its answer back by leaving it where this can
   // take it on the way through.
@@ -160,11 +147,6 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
   // key, is that bible already here — is read when that level is reached.
   useEffect(() => {
     if (sourceId === 'record') hasAnyKey().then(setKeyed).catch(() => undefined);
-    if (sourceId === ESV) {
-      findRemoteBook(ESV_SOURCE)
-        .then((found) => setEsvOnShelf(found?.id ?? null))
-        .catch(() => undefined);
-    }
   }, [sourceId]);
 
   // What Gutenberg will actually hand over, read once a book is chosen.
@@ -214,6 +196,15 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
     setLinkError(null);
     setBusy(true);
     try {
+      // A bible is rarely a file at a url — it is a repository of one file per
+      // book, which is why this app could read those at all. The reader should
+      // not have to know that: paste the link they found and it is recognised
+      // for what it is, and read by the parsers that already exist for it.
+      if (supports(kindId, 'verses') && parseRepoUrl(link)) {
+        setChoice({ source: 'repo', edition: await resolveRepoBible(link) });
+        setLink('');
+        return;
+      }
       setFile(await fetchManuscript(link));
       setLink('');
     } catch (problem) {
@@ -221,14 +212,6 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
     } finally {
       setBusy(false);
     }
-  }
-
-  /** Every chapter of a bible is known in advance; none of its words are here. */
-  async function putEsvOnShelf() {
-    const existing = await findRemoteBook(ESV_SOURCE);
-    const bookId = existing?.id ?? (await addEsvBook());
-    onDone?.();
-    router.push(`/book/${bookId}`);
   }
 
   const named = title.trim();
@@ -241,21 +224,15 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
    * last step of adding a book looked like three different steps depending on
    * where the book came from.
    */
-  const action: 'keep' | 'download' | 'commit' | 'esv' | 'open' | null =
-    sourceId === ESV
-      ? esvOnShelf
-        ? 'open'
-        : esvState.ok && !esvState.busy
-          ? 'esv'
-          : null
-      : choice?.source === 'openlibrary' ||
-          (sourceId === 'record' && (named.length > 0 || listed.length > 0))
-        ? 'keep'
-        : choice
-          ? 'download'
-          : file
-            ? 'commit'
-            : null;
+  const action: 'keep' | 'download' | 'commit' | null =
+    choice?.source === 'openlibrary' ||
+      (sourceId === 'record' && (named.length > 0 || listed.length > 0))
+      ? 'keep'
+      : choice
+        ? 'download'
+        : file
+          ? 'commit'
+          : null;
 
   /**
    * A record typed from memory knows a title and not much else, and the one
@@ -273,12 +250,6 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
   }
 
   async function commit() {
-    if (action === 'esv') return putEsvOnShelf();
-    if (action === 'open' && esvOnShelf) {
-      onDone?.();
-      router.push(`/book/${esvOnShelf}`);
-      return;
-    }
     if (!kindId) return;
     if (sourceId === 'record' && listed.length > 0) {
       // A list ends on the shelf rather than on any one of its books: the
@@ -372,7 +343,7 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
           // A source that still wants a credential says so on its own page,
           // beside the field that takes one — a warning here is an alarm about
           // a door nobody has opened yet.
-          const page = door === ESV ? undefined : OWN_PAGE[door];
+          const page = OWN_PAGE[door];
           return (
             <Row
               key={door}
@@ -393,27 +364,6 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
           );
         })}
 
-        {/* The lists those catalogs are searched in. Keeping them used to be a
-            page per source and a button per page, each one watched to the end
-            before the search it was for could be used; they are queued jobs
-            now, and the strip says when they land. */}
-        {lists.length > 0 ? (
-          <Row
-            label={queuedLists ? t('add.listsQueued') : t('add.refreshLists')}
-            detail={t('add.refreshListsWhy')}
-            value={queuedLists ? '✓' : '⟳'}
-            onPress={async () => {
-              // Standard Ebooks answers nobody without a membership, and a
-              // queue row that fails for everyone who hasn't joined is noise
-              // rather than news.
-              const member = Boolean(await standardEbooksEmail());
-              const wanted = lists.filter((source) => source !== 'standardebooks' || member);
-              enqueueCatalogs(wanted, (source) => t(`source.${source}`));
-              setQueuedLists(true);
-            }}
-            last
-          />
-        ) : null}
       </>
     );
   }
@@ -506,7 +456,9 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
             autoFocus
             style={[styles.input, { color: palette.text, borderColor: palette.border }]}
           />
-          <Text style={{ color: palette.dim, fontSize: 12 }}>{t('shelf.linkHint')}</Text>
+          <Text style={{ color: palette.dim, fontSize: 12 }}>
+            {supports(kindId, 'verses') ? t('add.linkBible') : t('shelf.linkHint')}
+          </Text>
           {linkError ? (
             <Text style={{ color: palette.danger, fontSize: 13, marginTop: space.sm }}>
               {linkError}
@@ -528,21 +480,6 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
         </View>
       ) : null}
 
-      {sourceId === ESV ? (
-        // The key, and then the same button every other door ends on. This
-        // used to be a text row with its state in the value column, which made
-        // the one edition that needs a key look like a different kind of thing
-        // to add than all the ones that don't.
-        <EsvKeyRows onState={setEsvState}>
-          <Row
-            label={t('add.esvAdd', { title: ESV_TITLE })}
-            detail={esvOnShelf ? t('add.esvOnShelf') : t('add.esvAddWhat')}
-            value={esvOnShelf || esvState.ok ? '' : esvState.keyed ? t('add.esvTestFirst') : t('add.esvNeedsKey')}
-            alarm={!(esvOnShelf || esvState.ok)}
-            last
-          />
-        </EsvKeyRows>
-      ) : null}
 
       {/* What came back from a catalog's own page, and the one question a
           bible can still raise. */}
@@ -605,9 +542,7 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
             ]}
           >
             <Text style={{ color: palette.onAccent, fontSize: 17, fontWeight: '600' }}>
-              {action === 'esv'
-                ? t('add.esvAdd', { title: ESV_TITLE })
-                : listed.length > 0
+              {listed.length > 0
                   ? t('add.keepMany', { count: listed.length })
                   : t(`add.${action}`)}
             </Text>
@@ -698,6 +633,9 @@ function sizeOf(bytes: number): string {
 }
 
 function describeFetch(error: unknown, t: TFunction): string {
+  // A repository that would not resolve says why in its own words: the wrong
+  // kind of url, a private repo, nothing readable in it.
+  if (error instanceof RepoError) return t(`repo.err_${error.code}`, { detail: error.detail ?? '' });
   if (error instanceof FetchError) {
     if (error.code === 'sign-in') return t('shelf.linkSignIn');
     if (error.code === 'unsupported') return t('import.unsupported', { ext: error.detail });
