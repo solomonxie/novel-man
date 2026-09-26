@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,10 +10,17 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router, Stack, useLocalSearchParams } from '../../src/navigation/router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { booksFromExport, fetchShelf, parseFeedUrl, type Shelved } from '../../src/sources/goodreads';
+import {
+  feedUrlFor,
+  forgetShelf,
+  rememberShelf,
+  savedShelves,
+  type SavedShelf,
+} from '../../src/sources/goodreadsProfiles';
 import { keepShelved, type KeptCount } from '../../src/books/save';
 import { pickSpreadsheet } from '../../src/import/sources/picker';
 import { File } from '../../src/storage/fs';
@@ -31,18 +40,33 @@ import { radius, space, usePalette } from '../../src/theme';
  */
 export default function ImportFromGoodreads() {
   const { kind } = useLocalSearchParams<{ kind?: string }>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const palette = usePalette();
   const [books, setBooks] = useState<Shelved[] | null>(null);
   const [from, setFrom] = useState<string>('');
-  const [feedOpen, setFeedOpen] = useState(false);
   const [feed, setFeed] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedShelf[]>([]);
+  const page = useRef<ScrollView>(null);
+  /** Where the count lands, so reading a shelf can put it in front of you. */
+  const foundY = useRef(0);
+
+  /**
+   * A result three screens below a keyboard is a result nobody sees. Reading a
+   * shelf is the end of the typing, so the keyboard goes and the page moves to
+   * what it found.
+   */
+  function reveal() {
+    requestAnimationFrame(() =>
+      page.current?.scrollTo({ y: Math.max(0, foundY.current - space.lg), animated: true })
+    );
+  }
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [kept, setKept] = useState<KeptCount | null>(null);
 
   async function readExport() {
+    Keyboard.dismiss();
     setError(null);
     try {
       const picked = await pickSpreadsheet();
@@ -57,6 +81,7 @@ export default function ImportFromGoodreads() {
       setBooks(found);
       setFrom(picked.name);
       setKept(null);
+      reveal();
     } catch (problem) {
       setError(String(problem));
     } finally {
@@ -64,22 +89,43 @@ export default function ImportFromGoodreads() {
     }
   }
 
-  async function readFeed() {
+  const loadSaved = useCallback(() => {
+    savedShelves().then(setSaved).catch(() => undefined);
+  }, []);
+
+  useFocusEffect(loadSaved);
+
+  async function readFeed(address = feed) {
+    Keyboard.dismiss();
     setError(null);
-    if (!parseFeedUrl(feed)) {
+    const parsed = parseFeedUrl(address);
+    if (!parsed) {
       setError(t('gr.notAFeed'));
       return;
     }
     setBusy(true);
     try {
-      const found = await fetchShelf(feed, (count) => setProgress({ done: count, total: count }));
+      const { books: found, owner } = await fetchShelf(address, (count) =>
+        setProgress({ done: count, total: count })
+      );
       if (!found.length) {
         setError(t('gr.emptyFeed'));
         return;
       }
       setBooks(found);
-      setFrom(t('gr.fromFeed'));
+      setFrom(owner ?? t('gr.fromFeed'));
       setKept(null);
+      // Remembered once it has actually answered, and by number rather than by
+      // the address that was pasted — see `goodreadsProfiles`.
+      await rememberShelf({
+        id: parsed.id,
+        name: owner ?? parsed.id,
+        shelf: parsed.shelf,
+        books: found.length,
+        at: Date.now(),
+      });
+      loadSaved();
+      reveal();
     } catch {
       setError(t('gr.feedFailed'));
     } finally {
@@ -112,6 +158,7 @@ export default function ImportFromGoodreads() {
 
   return (
     <ScrollView
+      ref={page}
       style={{ backgroundColor: palette.bg }}
       contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
       keyboardShouldPersistTaps="handled"
@@ -121,46 +168,84 @@ export default function ImportFromGoodreads() {
 
       <Hint>{t('gr.noApi')}</Hint>
 
-      <Section title={t('gr.exportTitle')}>
-        <Row label={t('gr.how1')} detail={t('gr.how1Detail')} />
+      {/* The link first. It is the one people already have — copied out of the
+          address bar of the profile they are looking at — and it can be read
+          again every time the shelves change. */}
+      <Section title={t('gr.feedTitle')}>
+        <Row label={t('gr.feedRow')} detail={t('gr.feedWhy')} last />
+        <View style={[styles.box, { borderColor: palette.border }]}>
+          <TextInput
+            value={feed}
+            onChangeText={setFeed}
+            placeholder="https://www.goodreads.com/user/show/…"
+            placeholderTextColor={palette.faint}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={[styles.input, { color: palette.text, borderColor: palette.border }]}
+          />
+          <Text style={{ color: palette.dim, fontSize: 12 }}>{t('gr.feedHint')}</Text>
+          <Pressable onPress={busy ? undefined : () => void readFeed()} style={styles.act}>
+            {busy ? (
+              <ActivityIndicator />
+            ) : (
+              <Text style={{ color: palette.accent, fontSize: 16 }}>{t('gr.readFeed')}</Text>
+            )}
+          </Pressable>
+        </View>
+      </Section>
+
+      {/* Read once, offered forever after. The shelves someone actually
+          keeps are a short list, and finding the link again is the only hard
+          part of a job they will do more than once. */}
+      {saved.length > 0 ? (
+        <Section title={t('gr.savedTitle')}>
+          {saved.map((entry, index) => (
+            <Row
+              key={`${entry.id}-${entry.shelf ?? ''}`}
+              label={entry.name}
+              detail={t('gr.savedWhen', {
+                count: entry.books,
+                date: new Date(entry.at).toLocaleDateString(i18n.language),
+              })}
+              value={busy ? undefined : t('gr.savedRead')}
+              busy={busy && from === entry.name}
+              onPress={
+                busy
+                  ? undefined
+                  : () => {
+                      const url = feedUrlFor(entry);
+                      setFeed(url);
+                      void readFeed(url);
+                    }
+              }
+              onLongPress={() => {
+                Alert.alert(entry.name, t('gr.savedForget'), [
+                  { text: t('settings.cancel'), style: 'cancel' },
+                  {
+                    text: t('settings.delete'),
+                    style: 'destructive',
+                    onPress: () => void forgetShelf(entry).then(loadSaved),
+                  },
+                ]);
+              }}
+              last={index === saved.length - 1}
+            />
+          ))}
+        </Section>
+      ) : null}
+
+      {/* The export file second, because it is the fallback: a download, an
+          email and an attachment. It is what answers a private profile, and
+          it carries the couple of things the feed leaves out. */}
+      <Section flush>
         <Row
-          label={t('gr.chooseFile')}
-          detail={books && from ? from : t('gr.chooseFileHint')}
-          value={busy && !progress ? undefined : books ? t('gr.chosen') : t('gr.choose')}
+          label={t('gr.exportTitle')}
+          detail={t('gr.how1')}
+          value={busy && !progress ? undefined : t('gr.choose')}
+          busy={busy && !progress}
           onPress={busy ? undefined : readExport}
           last
         />
-      </Section>
-
-      <Section title={t('gr.feedTitle')}>
-        <Row
-          label={t('gr.feedRow')}
-          detail={t('gr.feedWhy')}
-          value={feedOpen ? '▴' : '▾'}
-          onPress={() => setFeedOpen((was) => !was)}
-          last={!feedOpen}
-        />
-        {feedOpen ? (
-          <View style={[styles.box, { borderColor: palette.border }]}>
-            <TextInput
-              value={feed}
-              onChangeText={setFeed}
-              placeholder="https://www.goodreads.com/review/list_rss/…"
-              placeholderTextColor={palette.faint}
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={[styles.input, { color: palette.text, borderColor: palette.border }]}
-            />
-            <Text style={{ color: palette.dim, fontSize: 12 }}>{t('gr.feedHint')}</Text>
-            <Pressable onPress={busy ? undefined : readFeed} style={styles.act}>
-              {busy ? (
-                <ActivityIndicator />
-              ) : (
-                <Text style={{ color: palette.accent, fontSize: 16 }}>{t('gr.readFeed')}</Text>
-              )}
-            </Pressable>
-          </View>
-        ) : null}
       </Section>
 
       {error ? (
@@ -169,12 +254,15 @@ export default function ImportFromGoodreads() {
 
       {/* What was found, before anything is written. */}
       {books ? (
+        <View onLayout={(event) => { foundY.current = event.nativeEvent.layout.y; }}>
         <Section title={t('gr.found', { count: books.length })}>
+          {from ? <Row label={t('gr.foundFrom', { name: from })} /> : null}
           <Row label={t('gr.rated')} value={`${rated}`} />
           <Row label={t('gr.reviewed')} value={`${reviewed}`} />
           <Row label={t('gr.shelfRead')} value={`${read}`} />
           <Row label={t('gr.shelfWanted')} value={`${wanted}`} last />
         </Section>
+        </View>
       ) : null}
 
       {books && !kept ? (

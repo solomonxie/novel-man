@@ -54,6 +54,9 @@ export function firstTagText(xml: string, tagName: string): string | undefined {
   return decodeEntities(stripTags(xml.slice(tagEnd + 1, close))).trim() || undefined;
 }
 
+const CDATA_OPEN = '<![CDATA[';
+const CDATA_CLOSE = ']]>';
+
 export function stripTags(xml: string): string {
   if (xml.indexOf('<') < 0) return xml;
   let out = '';
@@ -62,6 +65,17 @@ export function stripTags(xml: string): string {
     const open = xml.indexOf('<', cursor);
     if (open < 0) return out + xml.slice(cursor);
     out += xml.slice(cursor, open);
+    // A CDATA section is text that happens to start with a `<`. Treating it as
+    // a tag threw away everything inside it — and a feed uses CDATA exactly
+    // where the text is interesting, so `<title>Dune</title>` survived and
+    // `<title><![CDATA[Dune: Messiah]]></title>` came back empty.
+    if (xml.startsWith(CDATA_OPEN, open)) {
+      const ends = xml.indexOf(CDATA_CLOSE, open + CDATA_OPEN.length);
+      if (ends < 0) return out + xml.slice(open + CDATA_OPEN.length);
+      out += xml.slice(open + CDATA_OPEN.length, ends);
+      cursor = ends + CDATA_CLOSE.length;
+      continue;
+    }
     const close = xml.indexOf('>', open);
     if (close < 0) return out;
     cursor = close + 1;
