@@ -659,13 +659,10 @@
     "frequencyHint": "Manual by default. Automatic sync runs when you open the app, never in the background.",
     "backupNow": "Back up now",
     "openLibrary": "What’s in the bucket",
-    "whole": "Whole library",
-    "perBook": "Per book ({{count}})",
     "nothingYet": "Nothing in the bucket yet.",
     "get": "Download",
     "getHint": "Downloading a backup restores it the same way a file does: books are added, nothing is overwritten.",
     "queue": "Queue ({{count}})",
-    "kind_upload-book": "Upload a book",
     "kind_upload-library": "Upload the library",
     "kind_download-bundle": "Download a backup",
     "status_pending": "Waiting",
@@ -676,7 +673,8 @@
     "pause": "Pause",
     "resume": "Resume",
     "remove": "Remove this bucket",
-    "removeConfirm": "Removes the connection and its key from this device. The bucket’s contents are not affected."
+    "removeConfirm": "Removes the connection and its key from this device. The bucket’s contents are not affected.",
+    "copies": "Copies in this bucket"
   },
   "script": {
     "conversion": "Screenplay",

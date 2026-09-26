@@ -13,20 +13,15 @@ import {
   requeueStale,
   type CloudJob,
 } from '../db/jobs';
-import { getBook, hasBooks, listBookIds } from '../db/repo';
+import { hasBooks } from '../db/repo';
 import { bucketFor, listConnections } from './connections';
 
 /**
- * Per book under `books/`, the whole library at the root, and a file per day
- * in both places — `2026-09-24-library-novel-man.zip`,
- * `books/2026-09-24-book-<id>.zip`. The day is
- * what a bucket is for: the newest copy is the one you restore from, and the
- * one from before last month's mistake is still there.
+ * One file per day at the root — `2026-09-24-library-novel-man.zip`. The day
+ * is what a bucket is for: the newest copy is the one you restore from, and
+ * the one from before last month's mistake is still there.
  */
 export const libraryKey = (at = new Date()) => bundleName('library-novel-man', at);
-export const bookKey = (bookId: string, at = new Date()) => `books/${bundleName(`book-${bookId}`, at)}`;
-/** A key belongs to one book rather than the library. */
-export const isBookKey = (key: string) => key.startsWith('books/');
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -41,11 +36,15 @@ function publish() {
   for (const listener of listeners) listener();
 }
 
-export async function queueBackup(connectionId: string, bookIds?: string[]) {
-  const ids = bookIds ?? (await listBookIds());
-  for (const bookId of ids) {
-    await enqueue({ connectionId, kind: 'upload-book', bookId });
-  }
+/**
+ * One copy of everything, and no longer one per book as well.
+ *
+ * A bundle per book meant a bucket of N+1 files a day and a page that had to
+ * explain why — for a restore nobody performs: bringing back a single book out
+ * of a backup is not what someone opens this screen to do, and the library
+ * copy holds every book in it anyway.
+ */
+export async function queueBackup(connectionId: string) {
   await enqueue({ connectionId, kind: 'upload-library' });
   publish();
   void drain();
@@ -105,14 +104,12 @@ async function run(job: CloudJob) {
     return;
   }
 
-  const isBook = job.kind === 'upload-book';
-  const key = isBook ? bookKey(job.book_id!) : libraryKey();
-  if (isBook && !(await getBook(job.book_id!))) return;
+  const key = libraryKey();
   // The library key is named for the day, so an empty shelf uploaded after a
   // wipe replaces the good copy taken earlier the same day.
-  if (!isBook && !(await hasBooks())) return;
+  if (!(await hasBooks())) return;
 
-  const bundle = await buildBundle(isBook ? [job.book_id!] : undefined);
+  const bundle = await buildBundle();
   const body = bundle.body as Uint8Array;
   // Re-uploading an unchanged bundle costs bandwidth and buys nothing.
   const hash = contentHash('bundle', fingerprint(body));
