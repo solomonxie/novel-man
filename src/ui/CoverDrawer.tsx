@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { artDirect, coverPrompt, type CoverMaterial } from '../ai/cover';
 import { drawImage, NoImageKey } from '../ai/image';
-import { writeImage } from '../storage/files';
+import { imageUri, writeImage } from '../storage/files';
 import { updateBook, type Book } from '../db/repo';
 import { radius, space, usePalette } from '../theme';
 
@@ -146,7 +146,12 @@ export function CoverDrawer({ book, material, onDrawn }: {
       {drawn ? (
         <Pressable onPress={keep} style={{ marginTop: space.md, gap: space.xs }}>
           <Image
-            source={{ uri: drawn }}
+            // What `writeImage` hands back is the name it stored, not a path:
+            // container ids change on every install, so the name is the only
+            // durable half. Everything that draws one resolves it — this was
+            // the one place passing it to `Image` raw, which is a picture that
+            // exists, is chosen, becomes the cover, and never appears here.
+            source={{ uri: imageUri(drawn) }}
             style={{ width: PREVIEW, height: Math.round(PREVIEW * 1.5), borderRadius: radius.sm }}
             resizeMode="cover"
           />
