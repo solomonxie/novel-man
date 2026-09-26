@@ -235,18 +235,17 @@ export default function ImportFromGoodreads() {
       ) : null}
 
       {/* The export file second, because it is the fallback: a download, an
-          email and an attachment. It is what answers a private profile, and
-          it carries the couple of things the feed leaves out. */}
-      <Section flush>
-        <Row
-          label={t('gr.exportTitle')}
-          detail={t('gr.how1')}
-          value={busy && !progress ? undefined : t('gr.choose')}
-          busy={busy && !progress}
-          onPress={busy ? undefined : readExport}
-          last
-        />
-      </Section>
+          email and an attachment. It is what answers a private profile, and it
+          carries the couple of things the feed leaves out. A card would say it
+          weighs the same as the link above it, which it does not. */}
+      <Pressable onPress={busy ? undefined : readExport} style={styles.link}>
+        {busy && !progress ? (
+          <ActivityIndicator />
+        ) : (
+          <Text style={{ color: palette.accent, fontSize: 17 }}>{t('gr.exportTitle')}</Text>
+        )}
+      </Pressable>
+      <Hint>{t('gr.how1')}</Hint>
 
       {error ? (
         <Text style={{ color: palette.danger, fontSize: 14, marginTop: space.md }}>{error}</Text>
@@ -321,6 +320,7 @@ const styles = StyleSheet.create({
     marginBottom: space.sm,
   },
   act: { paddingVertical: space.md, alignItems: 'center' },
+  link: { marginTop: space.xl, paddingVertical: space.sm, alignItems: 'center' },
   commit: {
     marginTop: space.xl,
     paddingVertical: space.lg,
