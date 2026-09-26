@@ -48,7 +48,8 @@
     "what": "封面和书目信息来自 Open Library 和 Google Books。选中一项会填入封面、书名、作者、出版年和 ISBN。",
     "none": "没有结果。可以写全书名，或加上作者。",
     "failed": "连不上书目库：{{error}}",
-    "noCover": "无封面"
+    "noCover": "无封面",
+    "unreachable": "暂时连不上书目库。这并不代表没有这本书——过一会儿再试。"
   },
   "shelf": {
     "title": "书架",
@@ -1060,8 +1061,6 @@
     "hintLive": "在线搜索 openlibrary.org，需要网络。",
     "categories": "分类",
     "categoriesHint": "一个分类取一次就存在本机，之后搜索不再需要网络。",
-    "showLists": "全部展开",
-    "hideLists": "收起",
     "keptTotal": "本机已存 {{count}} 条",
     "keptAsOf": "{{count}} 条 · {{date}}",
     "get": "获取",

@@ -37,6 +37,15 @@ export type IndexState = { fetchedAt: number; count: number };
  */
 const CHUNK = 120;
 
+/**
+ * How many of those bites share one transaction. A commit is a write to the
+ * journal and a flush to flash, and Gutenberg's list is 650 bites: as one
+ * transaction each, the flushing cost more than the parsing, the inserting and
+ * the download put together. Twelve to a transaction is fifty-odd commits
+ * instead of six hundred, with a turn for the UI between each.
+ */
+const PER_TRANSACTION = 12;
+
 export async function replaceIndex(
   source: string,
   rows: IndexRow[],
@@ -44,27 +53,33 @@ export async function replaceIndex(
 ): Promise<number> {
   const database = await db();
   await database.runAsync('DELETE FROM catalog WHERE source = ?', source);
-  for (let at = 0; at < rows.length; at += CHUNK) {
-    const batch = rows.slice(at, at + CHUNK);
-    const values = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
-    const args = batch.flatMap((row) => [
-      source,
-      row.extId,
-      row.title,
-      row.author,
-      row.language,
-      `${row.title} ${row.author} ${row.extra ?? ''}`.toLowerCase(),
-      row.href ?? null,
-      row.terms ?? null,
-    ]);
-    await transaction(() =>
-      database.runAsync(
-        `INSERT OR REPLACE INTO catalog (source, ext_id, title, author, language, needle, href, terms)
-         VALUES ${values}`,
-        args
-      )
-    );
-    onProgress?.(Math.min(at + CHUNK, rows.length), rows.length);
+  const span = CHUNK * PER_TRANSACTION;
+  for (let from = 0; from < rows.length; from += span) {
+    const group = rows.slice(from, from + span);
+    await transaction(async () => {
+      for (let at = 0; at < group.length; at += CHUNK) {
+        const batch = group.slice(at, at + CHUNK);
+        const values = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const args = batch.flatMap((row) => [
+          source,
+          row.extId,
+          row.title,
+          row.author,
+          row.language,
+          `${row.title} ${row.author} ${row.extra ?? ''}`.toLowerCase(),
+          row.href ?? null,
+          row.terms ?? null,
+        ]);
+        await database.runAsync(
+          `INSERT OR REPLACE INTO catalog (source, ext_id, title, author, language, needle, href, terms)
+           VALUES ${values}`,
+          args
+        );
+      }
+    });
+    onProgress?.(Math.min(from + span, rows.length), rows.length);
+    // Between transactions rather than inside one: a turn for the UI while a
+    // write is open is a turn another write can arrive in.
     await yieldToUI();
   }
   await database.runAsync(
