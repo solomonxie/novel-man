@@ -30,6 +30,8 @@ export default function IcloudBackups() {
   const palette = usePalette();
   const [files, setFiles] = useState<DriveFile[] | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Which copy is being read, so its own row can say so. */
+  const [reading, setReading] = useState<string | null>(null);
   const [report, setReport] = useState<RestoreReport | null>(null);
   /**
    * The copy that was read to summarise it, kept for the restore that usually
@@ -77,16 +79,20 @@ export default function IcloudBackups() {
    * in the hour they end up on this page.
    */
   async function ask(file: DriveFile) {
-    setBusy(true);
+    if (reading) return;
+    setReading(file.name);
     let about: BundleAbout | null = null;
     try {
+      // Pulled out of iCloud and read whole — megabytes, and not instant. The
+      // row says it is working; a spinner at the bottom of the page does not
+      // belong to the thing that was tapped.
       about = readAbout(await bytesOf(file.name));
     } catch (problem) {
-      setBusy(false);
+      setReading(null);
       Alert.alert(t('backup.failed'), describe(problem, t));
       return;
     }
-    setBusy(false);
+    setReading(null);
     Alert.alert(
       when(file),
       [about ? summarize(about, t) : t('backup.aboutUnknown'), t('backup.restoreConfirm')].join('\n\n'),
@@ -138,6 +144,7 @@ export default function IcloudBackups() {
               label={when(file)}
               detail={file.name}
               value="›"
+              busy={reading === file.name}
               onPress={() => void ask(file)}
               last={index === files.length - 1}
             />
@@ -178,7 +185,6 @@ function summarize(about: BundleAbout, t: TFunction): string {
   const parts = counted
     .filter(([count]) => count > 0)
     .map(([count, label]) => `${count.toLocaleString()} ${label}`);
-  if (about.words > 0) parts.push(t('units.words', { count: about.words.toLocaleString() }));
   return parts.length ? parts.join('  ·  ') : t('backup.aboutEmpty');
 }
 
