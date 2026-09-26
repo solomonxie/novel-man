@@ -6,7 +6,6 @@ import { supports } from '../../src/books/kinds';
 import { listTargets, pendingByChapter } from '../../src/db/translation';
 import { prepare } from '../../src/translate/run';
 import { targetLanguages } from '../../src/translate/languages';
-import { ActionMenu } from '../../src/ui/ActionMenu';
 import { PickerSheet } from '../../src/ui/PickerSheet';
 import { labelFor } from '../../src/translate/languages';
 
@@ -69,7 +68,6 @@ export default function ChapterPage() {
   const [notes, setNotes] = useState<Annotation[]>([]);
   const [writing, setWriting] = useState(false);
   const [queued, setQueued] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
   /** The languages this book is being translated into, and what is left here. */
   const [targets, setTargets] = useState<{ target: string; pending: number }[]>([]);
   const [queueError, setQueueError] = useState<string | null>(null);
@@ -153,7 +151,6 @@ export default function ChapterPage() {
     );
 
   async function queueing(work: () => Promise<unknown>) {
-    setAiOpen(false);
     setQueueError(null);
     if (await stoppedWithoutKey(t)) return;
     try {
@@ -207,17 +204,17 @@ export default function ChapterPage() {
             {skeleton ? null : (
               <Action label={t('chapter.read')} onPress={() => read()} tone="loud" />
             )}
-            {/* One AI button, whatever it can do. Two of them side by side made
-                the reader choose between "recall" and "analyze" before knowing
-                either was a model doing it, and put a price under a pair where
-                it could only belong to one. */}
-            <Action
-              tone={skeleton ? 'loud' : 'quiet'}
-              // A button with one thing behind it says that thing; only a
-              // choice is worth a word as vague as "AI".
-              label={aiActions.length > 1 ? t('chapter.aiShort') : aiActions[0].label}
-              onPress={() => (aiActions.length > 1 ? setAiOpen(true) : aiActions[0].onPress())}
-            />
+            {/* Each pass says what it is. There are at most two of them, and
+                two named buttons are cheaper to read than one vague one that
+                opens a menu holding the same two words. */}
+            {aiActions.map((action, index) => (
+              <Action
+                key={action.label}
+                tone={skeleton && index === 0 ? 'loud' : 'quiet'}
+                label={action.label}
+                onPress={action.onPress}
+              />
+            ))}
           </>
         }
         // The estimate is for the analysis pass, which is not always what the
@@ -447,13 +444,6 @@ export default function ChapterPage() {
           </>
         )}
       </Section>
-
-      <ActionMenu
-        visible={aiOpen}
-        title={t('chapter.aiShort')}
-        actions={aiActions}
-        onClose={() => setAiOpen(false)}
-      />
 
       <PickerSheet
         visible={languageOpen}

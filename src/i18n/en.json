@@ -752,8 +752,7 @@
     "terms": "Terms",
     "noTerms": "No terms recognized in this chapter.",
     "note": "Write a note",
-    "noNotes": "No notes on this chapter yet.",
-    "aiShort": "Ask AI"
+    "noNotes": "No notes on this chapter yet."
   },
   "part": {
     "read": "Read from here →",
