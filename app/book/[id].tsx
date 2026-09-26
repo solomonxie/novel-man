@@ -75,10 +75,12 @@ import { radius, space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { KindList } from '../../src/ui/KindList';
 import { kindOf, shows, supports, unitOf } from '../../src/books/kinds';
-import { isSkeleton, statusOf, STATUSES } from '../../src/books/record';
+import { isSkeleton, STARS, statusOf, STATUSES } from '../../src/books/record';
 import { Stars } from '../../src/ui/Stars';
 import { IdentifySheet } from '../../src/ui/IdentifySheet';
 import { TagsBlock } from '../../src/ui/Shelving';
+import { Timeline } from '../../src/ui/Timeline';
+import { addEvent } from '../../src/db/timeline';
 import { ListPicker } from '../../src/ui/ListPicker';
 import { CoverViewer } from '../../src/ui/CoverViewer';
 import { CoverDrawer } from '../../src/ui/CoverDrawer';
@@ -118,6 +120,10 @@ export default function BookPage() {
   const [correctOpen, setCorrectOpen] = useState(false);
   const [esvOpen, setEsvOpen] = useState(false);
   const [drawOpen, setDrawOpen] = useState(false);
+  /** Where the book stands with the reader, unfolded in the hero on a tap. */
+  const [ratingOpen, setRatingOpen] = useState(false);
+  /** Bumped when this page writes an event, so the timeline re-reads itself. */
+  const [timelineAt, setTimelineAt] = useState(0);
   const [identifyOpen, setIdentifyOpen] = useState(false);
   const [listsOpen, setListsOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
@@ -132,7 +138,6 @@ export default function BookPage() {
   const [summaryDraft, setSummaryDraft] = useState('');
   /** The page scrolls itself to the stars when the count of them is tapped. */
   const page = useRef<ScrollView>(null);
-  const ratingY = useRef(0);
   const notesY = useRef(0);
   const scenesY = useRef(0);
   const [openScenes, setOpenScenes] = useState<string | null>(null);
@@ -180,7 +185,7 @@ export default function BookPage() {
   }, []);
 
   /**
-   * The review, saved without being told to. A write per keystroke would be a
+   * What they made of it, saved without being told to. A write per keystroke would be a
    * row rewritten thirty times a sentence — and every one of those is a change
    * the backup layer notices — so it waits for the typing to stop.
    */
@@ -340,7 +345,7 @@ export default function BookPage() {
     {
       value: book.stars ? '★'.repeat(book.stars) : '—',
       label: t('book.ratingShort'),
-      onPress: scrollTo(ratingY),
+      onPress: () => setRatingOpen((was) => !was),
     },
   ];
 
@@ -460,7 +465,7 @@ export default function BookPage() {
   }
 
   async function edit(
-    field: 'title' | 'author' | 'year' | 'edition' | 'summary' | 'impressions' | 'isbn',
+    field: 'title' | 'author' | 'year' | 'edition' | 'summary' | 'isbn',
     value: string
   ) {
     await updateBook(book!.id, { [field]: value.trim() || null });
@@ -589,7 +594,8 @@ export default function BookPage() {
           value={book.title}
           placeholder={t('book.title')}
           onCommit={(value) => edit('title', value)}
-          style={{ color: palette.text, fontSize: 22, fontWeight: '700' }}
+          lines={3}
+          style={{ color: palette.text, fontSize: 20, fontWeight: '700', lineHeight: 25 }}
         />
         <InlineText
           value={book.author}
@@ -602,13 +608,13 @@ export default function BookPage() {
             value={book.year}
             placeholder={t('book.year')}
             onCommit={(value) => edit('year', value)}
-            style={{ color: palette.dim, fontSize: 14 }}
+            style={{ color: book.year ? palette.dim : palette.faint, fontSize: 14 }}
           />
           <InlineText
             value={book.edition}
             placeholder={t('book.edition')}
             onCommit={(value) => edit('edition', value)}
-            style={{ color: palette.dim, fontSize: 14 }}
+            style={{ color: book.edition ? palette.dim : palette.faint, fontSize: 14 }}
           />
         </View>
         {/* Rarely read and rarely typed, but it is the only field here that
@@ -622,6 +628,87 @@ export default function BookPage() {
         <Text style={{ color: palette.faint, fontSize: 12, marginTop: space.xs }}>
           {t(skeleton ? 'book.recordedFrom' : 'book.importedFrom', { name: book.source_name })}
         </Text>
+
+        {/* Where the book stands with the reader, which belongs beside the
+            title rather than in a block two screens down: it is the first
+            thing anybody wants to change and the shortest thing on the page.
+            One line closed, the pickers themselves open. */}
+        <Pressable
+          onPress={() => setRatingOpen((was) => !was)}
+          style={({ pressed }) => [styles.stands, { opacity: pressed ? 0.7 : 1 }]}
+        >
+          <Text style={{ color: book.stars ? palette.accent : palette.faint, fontSize: 14 }}>
+            {book.stars ? '★'.repeat(book.stars) + '☆'.repeat(STARS - book.stars) : t('book.notRated')}
+          </Text>
+          <Text style={{ color: palette.dim, fontSize: 13 }}>
+            {`·  ${t(`status.${statusOf(book.status) ?? 'none'}`)}  ${ratingOpen ? '⌃' : '⌄'}`}
+          </Text>
+        </Pressable>
+
+        {ratingOpen ? (
+          <View style={{ gap: space.sm, marginTop: space.xs }}>
+            <Stars
+              value={book.stars}
+              size={24}
+              onSet={async (stars) => {
+                await rateBook(book.id, { stars });
+                load();
+              }}
+            />
+            <View style={{ flexDirection: 'row', gap: space.xs }}>
+              {STATUSES.map((entry) => {
+                const on = statusOf(book.status) === entry;
+                return (
+                  <Pressable
+                    key={entry}
+                    // Tapping the one you are on clears it, the same way a star does.
+                    onPress={async () => {
+                      await updateBook(book.id, { status: on ? null : entry });
+                      // Clearing a status is not a thing that happened to the
+                      // book; setting one is.
+                      if (!on) {
+                        await addEvent({
+                          bookId: book.id,
+                          kind: 'status',
+                          at: Date.now(),
+                          label: entry,
+                        });
+                        setTimelineAt(Date.now());
+                      }
+                      load();
+                    }}
+                    style={({ pressed }) => [
+                      styles.stand,
+                      {
+                        backgroundColor: on ? palette.accent : palette.soft,
+                        opacity: pressed ? 0.75 : 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      style={{
+                        color: on ? palette.onAccent : palette.accent,
+                        fontSize: 13,
+                        fontWeight: '600',
+                      }}
+                    >
+                      {t(`status.${entry}`)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {book.stars ? (
+              <Text style={{ color: palette.faint, fontSize: 12 }}>
+                {t('book.ratedOn', {
+                  date: new Date(book.rated_at ?? book.created_at).toLocaleDateString(),
+                })}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
       </Hero>
 
       {/* What the book is, in its own voice rather than the reader's — italic
@@ -714,15 +801,17 @@ export default function BookPage() {
         </Writable>
       </View>
 
-      {/* The reader's own overview, and the first thing on the page that is
-          theirs. Above the stars because it is what they would actually say
-          about the book — the rating is the shorthand for it. */}
-      <Block title={t('book.impressions')}>
-        <Writable empty={!book.impressions?.trim()}>
+      {/* What the reader made of it, in one place. This page used to ask twice
+          — "impressions" in a block of its own and a "review" under the stars
+          — and nobody keeps two opinions of a book filed separately: what you
+          typed went wherever you happened to be looking. It saves itself, so
+          there is no button to forget with the text still in it. */}
+      <Block title={t('book.review')}>
+        <Writable empty={!reviewDraft.trim()}>
           <InlineText
-            value={book.impressions}
-            placeholder={t('book.impressionsPlaceholder')}
-            onCommit={(value) => edit('impressions', value)}
+            value={reviewDraft}
+            placeholder={t('book.reviewPlaceholder')}
+            onCommit={writeReview}
             style={{
               color: palette.text,
               fontSize: 15,
@@ -810,90 +899,14 @@ export default function BookPage() {
         />
       )}
 
+      {/* Tags stay on the page because they are said *about* the book. Which
+          lists it is in is not — that is read from the shelf, so from here it
+          is only the ☰ above. */}
+      <TagsBlock bookId={book.id} />
+
       {/* What the reader made of it. Every book gets this, not only the ones
           with no words: a shelf is kept for what you thought of what is on it,
           and a rating that only records books read on paper is half a shelf. */}
-      <View onLayout={(event) => { ratingY.current = event.nativeEvent.layout.y; }}>
-      <Block title={t('book.rating')}>
-        {/* Nothing folded. Three questions, all of them one tap or one line:
-            how many stars, where you are in it, and what you thought. The
-            review saves itself — a Save button on a field nobody leaves open
-            is a button that gets forgotten with the text still in it. */}
-        <Section flush>
-          <View style={[styles.rating, { borderColor: palette.border }]}>
-            <Stars
-              value={book.stars}
-              size={30}
-              onSet={async (stars) => {
-                await rateBook(book.id, { stars });
-                load();
-              }}
-            />
-            <Text style={{ color: palette.faint, fontSize: 12 }}>
-              {book.stars
-                ? t('book.ratedOn', {
-                    date: new Date(book.rated_at ?? book.created_at).toLocaleDateString(),
-                  })
-                : t('book.notRated')}
-            </Text>
-          </View>
-
-          <View style={styles.stands}>
-            <Text style={{ color: palette.dim, fontSize: 13 }}>{t('book.statusRow')}</Text>
-            <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
-              {STATUSES.map((entry) => {
-                const on = statusOf(book.status) === entry;
-                return (
-                  <Pressable
-                    key={entry}
-                    // Tapping the one you are on clears it, the same way a star does.
-                    onPress={async () => {
-                      await updateBook(book.id, { status: on ? null : entry });
-                      load();
-                    }}
-                    style={({ pressed }) => [
-                      styles.stand,
-                      {
-                        backgroundColor: on ? palette.accent : palette.soft,
-                        opacity: pressed ? 0.75 : 1,
-                      },
-                    ]}
-                  >
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        color: on ? palette.onAccent : palette.accent,
-                        fontSize: 14,
-                        fontWeight: '600',
-                      }}
-                    >
-                      {t(`status.${entry}`)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md }}>
-            <TextInput
-              value={reviewDraft}
-              onChangeText={writeReview}
-              placeholder={t('book.reviewPlaceholder')}
-              placeholderTextColor={palette.faint}
-              multiline
-              style={{
-                color: palette.text,
-                fontSize: 15,
-                lineHeight: LINE,
-                minHeight: LINE * IMPRESSION_LINES,
-                padding: 0,
-              }}
-            />
-          </View>
-        </Section>
-      </Block>
-      </View>
 
       {/* Everything written in this book, folded into the chapters it was
           written in. The page behind the heading is where a note is edited,
@@ -936,10 +949,11 @@ export default function BookPage() {
       </View>
 
 
-      {/* Tags stay on the page because they are said *about* the book. Which
-          lists it is in is not — that is read from the shelf, so from here it
-          is only the ☰ above. */}
-      <TagsBlock bookId={book.id} />
+
+      {/* How this book was read, which is the one thing on the page that is
+          about time rather than about the book. Under everything it is made
+          of, above the tools. */}
+      <Timeline bookId={book.id} reload={timelineAt} />
 
       <Block title={t('book.utilities')}>
         <Section flush>
@@ -1195,12 +1209,14 @@ function shorten(text: string): string {
 }
 
 const styles = StyleSheet.create({
-  stands: { paddingHorizontal: space.lg, paddingVertical: space.md },
+  /** In the hero, which supplies its own padding — so this adds none. */
+  stands: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.sm },
   stand: {
-    flex: 1,
+    flexShrink: 1,
     alignItems: 'center',
-    paddingVertical: space.sm + 2,
-    borderRadius: radius.md,
+    paddingVertical: space.xs + 2,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.sm,
   },
   rating: {
     alignItems: 'center',
