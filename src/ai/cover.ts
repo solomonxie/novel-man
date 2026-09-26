@@ -1,5 +1,5 @@
 import { runChat } from './keys';
-import { NO_TEXT } from './image';
+import { lettering } from './image';
 
 /**
  * A cover drawn to order, for a book that has none.
@@ -79,8 +79,8 @@ export function coverPrompt(material: CoverMaterial): string {
     about ? `The book is about: ${about}` : '',
     nouns.length ? `It features ${nouns.join(', ')}.` : '',
     'One striking image composed as a book cover: portrait, a clear focal subject,',
-    'generous margins at the top where a title would sit.',
-    NO_TEXT,
+    'and generous margins at the top where the title is set.',
+    lettering(material.title, material.author),
   ]
     .filter(Boolean)
     .join(' ');
@@ -108,14 +108,19 @@ export async function artDirect(material: CoverMaterial, signal?: AbortSignal): 
           'focal subject and what it is doing; the setting and the time of day; the light; ' +
           'the palette as three or four colours; the medium and period of the artwork (oil, ' +
           'woodcut, mid-century gouache, photographic, ink wash); and the composition, ' +
-          'which is portrait with room at the top where a title would be set. ' +
+          'which is portrait with room at the top where the title and author are set. ' +
           'Be concrete: a cover is nouns, not themes — name the thing, the place and the ' +
           'weather rather than "loss" or "the human condition". Give away no ending. ' +
-          `${NO_TEXT} Reply with the paragraph only, 90 words at most, no preamble.`,
+          'Do not write the title or the author name yourself: the words are added ' +
+          'after you, exactly as printed. Reply with the paragraph only, 90 words at ' +
+          'most, no preamble.',
       },
       { role: 'user', content: coverBriefing(material) },
     ],
     { maxTokens: 400, signal }
   );
-  return answer.trim();
+  // The lettering is not left to the art director either: it is the one part
+  // of the prompt that must survive being edited, so it is appended verbatim
+  // and the reader can see exactly which words will be drawn.
+  return `${answer.trim()} ${lettering(material.title, material.author)}`;
 }

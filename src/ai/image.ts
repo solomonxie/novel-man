@@ -55,6 +55,22 @@ export async function setGrade(grade: Grade) {
 export const NO_TEXT =
   'No text, no lettering, no title, no author name, no logo, and no writing of any kind anywhere in the image.';
 
+/**
+ * The opposite, and only ever for a cover: a cover without its title on it is
+ * a picture. Spelled out word by word because an image model left to infer
+ * lettering invents it — a plausible-looking title that is not the book's.
+ */
+export function lettering(title: string, author: string | null): string {
+  const byline = author?.trim()
+    ? ` Beneath it, smaller, the author name exactly: "${author.trim()}".`
+    : '';
+  return (
+    `Set the title on the cover in clean, legible type, spelled exactly: "${title.trim()}".` +
+    `${byline} Keep the lettering clear of the focal subject and inside the margins. ` +
+    'No other words anywhere in the image.'
+  );
+}
+
 export class NoImageKey extends Error {
   constructor() {
     super('no-image-key');
