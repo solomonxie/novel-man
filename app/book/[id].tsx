@@ -582,12 +582,14 @@ export default function BookPage() {
           </View>
         }
       >
+        {/* Wraps when read, one line when edited: a title has no second
+            line, and a return key that inserted one only ever did so by
+            accident. */}
         <InlineText
           value={book.title}
           placeholder={t('book.title')}
           onCommit={(value) => edit('title', value)}
           style={{ color: palette.text, fontSize: 22, fontWeight: '700' }}
-          multiline
         />
         <InlineText
           value={book.author}
@@ -732,6 +734,47 @@ export default function BookPage() {
         </Writable>
       </Block>
 
+      {/* What the chapters were cut into, folded the same way the notes are. */}
+      {supports(book.kind, 'scenes') && !skeleton ? (
+        <View onLayout={(event) => { scenesY.current = event.nativeEvent.layout.y; }}>
+          <Block
+            title={t('book.scenes')}
+            count={scenes.length || undefined}
+            onOpen={() => router.push(`/book/${book.id}/scenes`)}
+          >
+            {sceneGroups.length === 0 ? (
+              <Empty text={t('book.noScenes')} />
+            ) : (
+              <Section flush>
+                {sceneGroups.map((group, index) => (
+                  <Fragment key={group.key}>
+                    <Row
+                      label={group.title}
+                      value={`${group.scenes.length}  ${openScenes === group.key ? '⌃' : '⌄'}`}
+                      onPress={() =>
+                        setOpenScenes((was) => (was === group.key ? null : group.key))
+                      }
+                      last={index === sceneGroups.length - 1 && openScenes !== group.key}
+                    />
+                    {openScenes === group.key
+                      ? group.scenes.map((scene, at) => (
+                          <Item
+                            key={scene.id}
+                            badge={<Badge n={at + 1} />}
+                            title={scene.title?.trim() || t('book.sceneUnnamed', { n: at + 1 })}
+                            detail={scene.summary?.trim() || undefined}
+                            onPress={() => router.push(`/scene/${scene.id}`)}
+                            last={at === group.scenes.length - 1}
+                          />
+                        ))
+                      : null}
+                  </Fragment>
+                ))}
+              </Section>
+            )}
+          </Block>
+        </View>
+      ) : null}
 
       {supports(book.kind, 'cast') && (
         <>
@@ -892,48 +935,6 @@ export default function BookPage() {
         </Block>
       </View>
 
-
-      {/* What the chapters were cut into, folded the same way the notes are. */}
-      {supports(book.kind, 'scenes') && !skeleton ? (
-        <View onLayout={(event) => { scenesY.current = event.nativeEvent.layout.y; }}>
-          <Block
-            title={t('book.scenes')}
-            count={scenes.length || undefined}
-            onOpen={() => router.push(`/book/${book.id}/scenes`)}
-          >
-            {sceneGroups.length === 0 ? (
-              <Empty text={t('book.noScenes')} />
-            ) : (
-              <Section flush>
-                {sceneGroups.map((group, index) => (
-                  <Fragment key={group.key}>
-                    <Row
-                      label={group.title}
-                      value={`${group.scenes.length}  ${openScenes === group.key ? '⌃' : '⌄'}`}
-                      onPress={() =>
-                        setOpenScenes((was) => (was === group.key ? null : group.key))
-                      }
-                      last={index === sceneGroups.length - 1 && openScenes !== group.key}
-                    />
-                    {openScenes === group.key
-                      ? group.scenes.map((scene, at) => (
-                          <Item
-                            key={scene.id}
-                            badge={<Badge n={at + 1} />}
-                            title={scene.title?.trim() || t('book.sceneUnnamed', { n: at + 1 })}
-                            detail={scene.summary?.trim() || undefined}
-                            onPress={() => router.push(`/scene/${scene.id}`)}
-                            last={at === group.scenes.length - 1}
-                          />
-                        ))
-                      : null}
-                  </Fragment>
-                ))}
-              </Section>
-            )}
-          </Block>
-        </View>
-      ) : null}
 
       {/* Tags stay on the page because they are said *about* the book. Which
           lists it is in is not — that is read from the shelf, so from here it
