@@ -66,6 +66,7 @@ const OWN_PAGE: Partial<Record<BookSource | typeof ESV, string>> = {
   arxiv: '/source/arxiv',
   openlibrary: '/source/openlibrary',
   goodreads: '/source/goodreads',
+  douban: '/source/douban',
 };
 
 /** The order they are offered in: what you already have, then where to look. */
@@ -326,6 +327,17 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
             router.push({
               pathname: '/source/goodreads',
               params: { kind: DEFAULT_KIND, source: 'goodreads' },
+            })
+          }
+        />
+        <Row
+          label={t('source.douban')}
+          detail={t('source.doubanDetail')}
+          value="›"
+          onPress={() =>
+            router.push({
+              pathname: '/source/douban',
+              params: { kind: DEFAULT_KIND, source: 'douban' },
             })
           }
           last

@@ -14,3 +14,7 @@ android/
 
 # Apple Team ID, kept out of a public repo
 ios/Local.xcconfig
+
+# Scraped shelves and the cookie that reads a private one — personal, not code
+douban*.csv
+*.cookie

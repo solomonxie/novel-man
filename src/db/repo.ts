@@ -422,6 +422,8 @@ export type RecordedBook = {
   review?: string | null;
   rated_at?: number | null;
   status?: string | null;
+  /** What a shelf brought over knows and a catalog search would have to guess. */
+  isbn?: string | null;
 };
 
 export async function saveRecordBook(input: RecordedBook): Promise<string> {
@@ -432,8 +434,8 @@ export async function saveRecordBook(input: RecordedBook): Promise<string> {
     await database.runAsync(
       `INSERT INTO books (id, title, author, year, language, kind, source_name, source_hash,
                           source_path, source_ext, word_count, char_count, cover_hue, cover_path,
-                          summary, stars, review, rated_at, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '', 0, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                          summary, stars, review, rated_at, status, isbn, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '', 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       input.title,
       input.author ?? null,
@@ -449,6 +451,7 @@ export async function saveRecordBook(input: RecordedBook): Promise<string> {
       input.review ?? null,
       input.rated_at ?? null,
       input.status ?? null,
+      input.isbn ?? null,
       now
     );
     // Empty, but there: everything that reads a book expects a document row.

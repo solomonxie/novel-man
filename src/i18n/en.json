@@ -892,7 +892,10 @@
     "openlibraryHint": "Save a category to search it offline, or search all of Open Library while online.",
     "goodreads": "Goodreads",
     "goodreadsDetail": "Import all your books, ratings and reviews",
-    "goodreadsHint": "Goodreads retired its API, so this reads your export file or a shelf’s RSS feed."
+    "goodreadsHint": "Goodreads retired its API, so this reads your export file or a shelf’s RSS feed.",
+    "douban": "Douban",
+    "doubanDetail": "Import a file of your 读过, 在读 and 想读",
+    "doubanHint": "Douban publishes no export, so this reads a CSV made from your profile."
   },
   "find": {
     "prompt": "Type what you’re looking for, then tap Search.",
@@ -1095,6 +1098,24 @@
     "savedWhen_other": "{{count}} books · last read {{date}}",
     "savedRead": "Read again",
     "savedForget": "Stop offering this shelf here? Nothing already imported is touched."
+  },
+  "db": {
+    "why": "Douban has no API and no export of its own, and its RSS carries ten recent items of every kind — films and music among them. So there is one door here: a CSV made from your profile’s shelf pages, which do carry your ratings, comments and dates.",
+    "chooseCsv": "Choose the CSV",
+    "how": "tools/douban-shelf.py in this repo writes one: python3 tools/douban-shelf.py <your Douban id>. Save it to Files, then choose it here.",
+    "columnsTitle": "Columns the file needs",
+    "required": "Required",
+    "notACsv": "No books found in that file. Check its header row against the columns below.",
+    "col": {
+      "title": "The title, as the shelf shows it",
+      "id": "Douban’s subject number, so importing twice updates rather than duplicates",
+      "author": "The author, or the first name on the publisher line",
+      "shelf": "读过, 在读 or 想读 — read, currently-reading and to-read also work",
+      "rating": "1 to 5, or 0 where you never rated it",
+      "review": "Your 短评, kept as the review",
+      "date": "The day you finished it",
+      "isbn": "What finds a cover and the right edition later"
+    }
   },
   "status": {
     "none": "Not set",
