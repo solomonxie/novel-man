@@ -647,7 +647,6 @@
     "account": "端点",
     "bucket": "存储桶",
     "prefix": "目录",
-    "region": "区域",
     "accessKey": "Access Key（访问密钥）",
     "secretKey": "Secret Key（私密密钥）",
     "paste": "从剪贴板粘贴凭据",
@@ -674,7 +673,11 @@
     "resume": "继续",
     "remove": "移除该存储桶",
     "removeConfirm": "将从本机移除该连接及其密钥，桶内内容不受影响。",
-    "copies": "这个存储桶里的副本"
+    "copies": "这个存储桶里的副本",
+    "unreachable": "连不上 {{host}}。这与密钥无关——没有任何服务器作出回应。请检查节点地址和区域，以及手机是否联网。",
+    "endpoint_empty": "这个服务商需要填写节点地址。",
+    "endpoint_gap": "拼出来是 {{endpoint}}，这不是一个有效地址——上面缺少区域或账号。",
+    "endpoint_insecure": "iOS 不允许使用明文 http 地址。请使用 https，或配置了证书的地址。"
   },
   "script": {
     "conversion": "剧本",

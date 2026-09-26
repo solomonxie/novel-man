@@ -647,7 +647,6 @@
     "account": "Endpoint",
     "bucket": "Bucket",
     "prefix": "Folder",
-    "region": "Region",
     "accessKey": "Access key",
     "secretKey": "Secret key",
     "paste": "Paste credentials from the clipboard",
@@ -674,7 +673,11 @@
     "resume": "Resume",
     "remove": "Remove this bucket",
     "removeConfirm": "Removes the connection and its key from this device. The bucket’s contents are not affected.",
-    "copies": "Copies in this bucket"
+    "copies": "Copies in this bucket",
+    "unreachable": "Couldn’t reach {{host}}. Nothing was wrong with your keys — no server answered. Check the endpoint and the region, and that the phone is online.",
+    "endpoint_empty": "This provider needs an endpoint address.",
+    "endpoint_gap": "That works out to {{endpoint}}, which is not a real address — a region or account is missing above.",
+    "endpoint_insecure": "iOS refuses plain http addresses. Use https, or an address with a certificate."
   },
   "script": {
     "conversion": "Screenplay",
