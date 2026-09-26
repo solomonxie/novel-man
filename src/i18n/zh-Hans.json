@@ -74,7 +74,10 @@
     "noMatches": "没有匹配的书。",
     "kindTitle": "这是哪一类书？",
     "inNotes": "我的笔记（{{count}}）",
-    "addBook": "添加一本书"
+    "addBook": "添加一本书",
+    "shelf_reading": "在读",
+    "shelf_wishlist": "想读",
+    "shelf_read": "读完"
   },
   "import": {
     "title": "导入",
@@ -896,19 +899,14 @@
   },
   "kind": {
     "novel": "小说",
-    "novelPlural": "小说",
     "novelHint": "虚构作品——人物、场景、剧本和插图",
     "scripture": "圣经",
-    "scripturePlural": "圣经",
     "scriptureHint": "真实的人物与地点、经节与引用。从 eBible.org 下载。",
     "nonfiction": "非虚构",
-    "nonfictionPlural": "非虚构",
     "nonfictionHint": "真实的人物与地点，按事实处理——没有场景和剧本",
     "textbook": "教材或教程",
-    "textbookPlural": "教材与教程",
     "textbookHint": "用来学习的书——教材、手册、教程。有章节和笔记，没有人物和地点。",
     "paper": "学术论文",
-    "paperPlural": "论文",
     "paperHint": "单篇论文。按小节而非章节划分，分析时会评估它的论点。",
     "group_fiction": "虚构",
     "group_nonfiction": "非虚构",
