@@ -34,7 +34,7 @@ import { estimateDeep, queueChapterRecap, queueChapterRun } from '../../src/anal
 import { stoppedWithoutKey } from '../../src/ai/guard';
 import { sceneOpening } from '../../src/structure/scenes';
 import { formatUsd, type Estimate } from '../../src/ai/cost';
-import { getBook, getDocumentText, listChapters } from '../../src/db/repo';
+import { getBook, getDocumentText, listChapters, updateBook } from '../../src/db/repo';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item, Writable } from '../../src/ui/detail';
 import { Prose } from '../../src/ui/Prose';
@@ -43,6 +43,7 @@ import { openWorkQueue } from '../../src/ui/WorkQueue';
 import { hueFrom } from '../../src/ui/fields';
 import { NoteSheet } from '../../src/ui/NoteSheet';
 import { isSkeleton } from '../../src/books/record';
+import { addEvent } from '../../src/db/timeline';
 import { space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
 
@@ -71,6 +72,8 @@ export default function ChapterPage() {
   /** The languages this book is being translated into, and what is left here. */
   const [targets, setTargets] = useState<{ target: string; pending: number }[]>([]);
   const [queueError, setQueueError] = useState<string | null>(null);
+  /** Said once per visit: the button is a record, not a switch. */
+  const [finished, setFinished] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [preparing, setPreparing] = useState(false);
 
@@ -204,6 +207,34 @@ export default function ChapterPage() {
             {skeleton ? null : (
               <Action label={t('chapter.read')} onPress={() => read()} tone="loud" />
             )}
+            {/* Done with this one. Nothing else in the app knows when a
+                chapter was finished — progress says where you stopped, which
+                is not the same as having got to the end of something — and
+                the timeline on the book page is where that belongs. */}
+            <Action
+              label={finished ? t('chapter.finishedAgain') : t('chapter.finish')}
+              onPress={async () => {
+                await addEvent({
+                  bookId: chapter.book_id,
+                  kind: 'chapter',
+                  at: Date.now(),
+                  label: chapter.title?.trim() || `${chapter.idx + 1}`,
+                  chapterIdx: chapter.idx,
+                });
+                // Finishing a chapter of a book nobody said they were reading
+                // is a reader saying it.
+                if (!book?.status) {
+                  await updateBook(chapter.book_id, { status: 'reading' });
+                  await addEvent({
+                    bookId: chapter.book_id,
+                    kind: 'status',
+                    at: Date.now(),
+                    label: 'reading',
+                  });
+                }
+                setFinished(true);
+              }}
+            />
             {/* Each pass says what it is. There are at most two of them, and
                 two named buttons are cheaper to read than one vague one that
                 opens a menu holding the same two words. */}

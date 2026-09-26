@@ -13,6 +13,7 @@ import type { Shelved } from '../sources/goodreads';
 import { writeImage } from '../storage/files';
 import { hueFrom } from '../ui/fields';
 import { yieldToUI } from '../async/yield';
+import { addEvent } from '../db/timeline';
 
 /**
  * Putting a book on the shelf that the app has no copy of. Three things
@@ -113,7 +114,9 @@ export async function keepShelved(
     const book = books[at];
     const existing = await alreadyKept(GOODREADS, book.id, book.title, book.author);
     if (existing) {
-      if (await fill(existing, book)) count.filled += 1;
+      const changed = await fill(existing, book);
+      await remember(existing.id, book);
+      if (changed) count.filled += 1;
       else count.untouched += 1;
     } else {
       const id = await saveRecordBook({
@@ -133,6 +136,7 @@ export async function keepShelved(
       // they land where every other note about a book lands. Only on the way
       // in: a second sync must not write the same note twice.
       if (book.notes) await addStandaloneNote({ bookId: id, note: book.notes });
+      await remember(id, book);
       count.added += 1;
     }
     if (at % 20 === 0) await yieldToUI();
@@ -141,12 +145,43 @@ export async function keepShelved(
   return count;
 }
 
-/** Only what is missing. Nothing here overwrites something the reader wrote. */
+/**
+ * The dates Goodreads keeps, as moments on the book's own timeline.
+ *
+ * These are the only record anybody has of a book read in 2015, and they are
+ * the reason the timeline is worth having at all — an app installed last week
+ * cannot otherwise know when anything was read. Written by day, and written
+ * once however many times a shelf is re-read.
+ */
+async function remember(bookId: string, book: Shelved): Promise<void> {
+  if (book.added) {
+    await addEvent({
+      bookId,
+      kind: 'status',
+      at: book.added,
+      label: 'wishlist',
+      source: 'goodreads',
+    });
+  }
+  if (book.read) {
+    await addEvent({ bookId, kind: 'status', at: book.read, label: 'read', source: 'goodreads' });
+  }
+}
+
+/**
+ * What Goodreads says about a book this shelf already has.
+ *
+ * The rating, the status and the review are the reader's own answers kept
+ * somewhere else, and reading the shelf again is how they are brought over —
+ * so where Goodreads has one, it wins. This used to fill only what was blank,
+ * which meant changing a rating over there and refreshing here did nothing at
+ * all, silently. Anything Goodreads has no answer for is left exactly as it is.
+ */
 async function fill(existing: Book, book: Shelved): Promise<boolean> {
   const rating: { stars?: number | null; review?: string | null } = {};
-  if (existing.stars === null && book.stars !== null) rating.stars = book.stars;
-  if (!existing.review && book.review) rating.review = book.review;
-  const status = !existing.status && book.status ? book.status : null;
+  if (book.stars !== null && book.stars !== existing.stars) rating.stars = book.stars;
+  if (book.review && book.review !== existing.review) rating.review = book.review;
+  const status = book.status && book.status !== existing.status ? book.status : null;
   const year = !existing.year && book.year ? book.year : null;
   if (!Object.keys(rating).length && !status && !year) return false;
   if (Object.keys(rating).length) await rateBook(existing.id, rating);

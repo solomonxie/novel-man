@@ -635,4 +635,59 @@ export const migrations: string[] = [
    INSERT INTO images (id, book_id, entity_id, kind, path, prompt, created_at)
      SELECT id, book_id, entity_id, 'portrait', path, prompt, created_at FROM portraits;
    DROP TABLE portraits`,
+
+  /**
+   * Two fields for one thing. A book page asked for "impressions" in a block
+   * of its own and for a "review" under the stars, and nobody has two opinions
+   * of a book filed separately — the one you typed was whichever field you
+   * happened to be looking at. The review wins because it is the one the
+   * search indexes and the one a Goodreads import fills; anything written in
+   * the other is folded into it rather than lost.
+   *
+   * The column stays. Bundles written by older builds carry it, and a restore
+   * that silently dropped what somebody wrote would be worse than a column
+   * nothing reads.
+   */
+  `UPDATE books SET review =
+     CASE
+       WHEN COALESCE(TRIM(review), '') = '' THEN impressions
+       WHEN COALESCE(TRIM(impressions), '') = '' THEN review
+       ELSE review || char(10) || char(10) || impressions
+     END
+    WHERE COALESCE(TRIM(impressions), '') != '';
+   UPDATE books SET impressions = NULL`,
+
+  /**
+   * What happened between buying a book and finishing it.
+   *
+   * A shelf records the state a book is in; this records how it got there —
+   * wanted in March, started in June, chapter twelve on a Sunday, finished on
+   * the flight home. The state is derivable from the last event, but the
+   * events are not derivable from the state, and the reading is the part worth
+   * keeping.
+   *
+   * Three things write here and one of them is a person, so every row is
+   * editable: a status changing, a Goodreads import carrying dates from years
+   * before this app existed, a chapter marked done, or someone typing what
+   * they remember. `source` is kept so a re-import can recognise its own work.
+   *
+   * Unique on what makes an event the same event — the book, the kind, what it
+   * is about, and the day — so reading a Goodreads shelf twice does not write
+   * the same "finished" twice.
+   */
+  `CREATE TABLE reading_events (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     kind TEXT NOT NULL,
+     at INTEGER NOT NULL,
+     label TEXT,
+     chapter_idx INTEGER,
+     note TEXT,
+     source TEXT NOT NULL DEFAULT 'app',
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX reading_events_book ON reading_events(book_id, at);
+   CREATE UNIQUE INDEX reading_events_once
+     ON reading_events(book_id, kind, COALESCE(label, ''), at)`,
+
 ];

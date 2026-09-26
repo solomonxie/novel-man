@@ -178,17 +178,13 @@
     "addTerm": "＋ Add a term",
     "searchTerms": "Search terms",
     "termsAll": "All terms",
-    "rating": "Your rating",
     "ratingShort": "Rating",
     "favorite": "Like",
     "ratedOn": "Rated {{date}}",
-    "notRated": "Tap a star to rate. Tap it again to clear.",
-    "reviewPlaceholder": "What did you think of it?",
-    "impressions": "Your impressions",
-    "impressionsPlaceholder": "A few words on the book as a whole — what it was about, and what stayed with you.",
+    "notRated": "Not rated",
+    "reviewPlaceholder": "What did you make of it? A line or an essay — it saves itself.",
     "more": "More",
     "less": "Less",
-    "statusRow": "Reading status",
     "lookUpWhat": "Asks the model what it knows about this book — the author, the year and a few sentences on what it’s about. Only missing details are filled in. If the model doesn’t know the book, it says so instead of making things up.",
     "outlineRow": "Table of contents from AI",
     "outlineHint": "A chapter list for a book that has no text here.",
@@ -197,7 +193,8 @@
     "outlineWhat": "Asks the model for this book’s table of contents — every chapter in order, each with a line on what it covers. Each chapter then gets its own page for notes. If the model doesn’t know the book, it says so.",
     "outlineQueued": "Queued. You can follow it in the queue.",
     "outlineReplace": "This replaces the {{count}} existing chapters, including any edits you made to them.",
-    "recordedFrom": "Recorded from {{name}}"
+    "recordedFrom": "Recorded from {{name}}",
+    "review": "What you thought"
   },
   "reader": {
     "go": "Go",
@@ -768,7 +765,9 @@
     "terms": "Terms",
     "noTerms": "No terms recognized in this chapter.",
     "note": "Write a note",
-    "noNotes": "No notes on this chapter yet."
+    "noNotes": "No notes on this chapter yet.",
+    "finish": "Finished",
+    "finishedAgain": "Finished ✓"
   },
   "part": {
     "read": "Read from here →",
@@ -1132,5 +1131,21 @@
     "more": "More",
     "less": "Less",
     "edit": "Edit"
+  },
+  "timeline": {
+    "title": "Reading timeline",
+    "empty": "Nothing yet. Setting a status, finishing a chapter or importing from Goodreads writes here — or add a moment yourself.",
+    "add": "＋ Add a moment",
+    "save": "Save",
+    "notePlaceholder": "What happened — bought it, lent it out, gave up on page 40…",
+    "badDay": "That is not a date",
+    "badDayHint": "Write it as 2026-09-25 — year, month, day.",
+    "removeWhat": "Remove this from the timeline? The book itself is untouched.",
+    "became_reading": "Started reading",
+    "became_read": "Finished",
+    "became_wishlist": "Wanted to read",
+    "became_none": "Status cleared",
+    "finishedChapter": "Finished {{what}}",
+    "aMoment": "A moment"
   }
 }
