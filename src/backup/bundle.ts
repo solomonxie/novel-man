@@ -1,7 +1,8 @@
-import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 import { listBookIds, readBookRecord, type BookRecord } from '../db/repo';
 import { openStored, readImage } from '../storage/files';
 import { readPrefs } from './prefs';
+import { yieldToUI } from '../async/yield';
 import type { ExportFile } from '../export/types';
 import {
   BUNDLE_FORMAT,
@@ -57,25 +58,86 @@ export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
   const json = JSON.stringify(snapshot);
   trace(`stringify ${Math.round(performance.now() - at)}ms for ${json.length} chars`);
   at = performance.now();
-  const files: Record<string, Uint8Array> = { [SNAPSHOT]: strToU8(json) };
+  const entries: Entry[] = [{ path: SNAPSHOT, bytes: strToU8(json) }];
   trace(`strToU8 ${Math.round(performance.now() - at)}ms`);
   let assetBytes = 0;
   for (const [path, bytes] of Object.entries(assets)) {
-    files[path] = bytes;
+    entries.push({ path, bytes });
     assetBytes += bytes.length;
   }
-  trace(`assets ${Object.keys(assets).length} files ${assetBytes} bytes`);
+  trace(`assets ${entries.length - 1} files ${assetBytes} bytes`);
 
   const label =
     books.length === 1 ? `export-${books[0].book.title.slice(0, 40)}` : 'library-novel-man';
   at = performance.now();
-  const body = zipSync(files);
-  trace(`zipSync ${Math.round(performance.now() - at)}ms to ${body.length} bytes`);
+  const body = await archive(entries);
+  trace(`archive ${Math.round(performance.now() - at)}ms to ${body.length} bytes`);
   return {
     fileName: bundleName(label.replace(/[/\\?%*:|"<>]/g, '-') || 'library-novel-man'),
     mimeType: 'application/zip',
     body,
   };
+}
+
+type Entry = { path: string; bytes: Uint8Array };
+
+/**
+ * Enough bytes that the deflater is doing real work between turns, few enough
+ * that a turn is a frame rather than a stutter. At 512 KB the beat between
+ * chunks slipped by up to 130ms — no freeze, but eight frames nobody drew.
+ */
+const CHUNK = 128 * 1024;
+
+/**
+ * A `.docx` is a zip, a `.jpg` is already compressed: deflating either spends
+ * seconds of a phone's CPU to save nothing. They are stored whole, and only
+ * the snapshot — which is text, and is nearly all of the size — is compressed.
+ */
+const PACKED = /\.(zip|docx|epub|pdf|jpe?g|png|gif|webp|heic|mp3|m4a)$/i;
+
+/**
+ * The bundle, built a chunk at a time with the thread handed back between
+ * chunks. `zipSync` did this in one call, and a library's worth of text took
+ * ten seconds during which nothing on screen could move — not a touch, not a
+ * frame. Deflate has no suspension point of its own, so the only way to stay
+ * responsive is to feed it in pieces.
+ *
+ * Level 1, not the default 6: on a manuscript it costs a few percent of size
+ * and saves most of the time, and this runs on a phone that is also being
+ * read on.
+ */
+async function archive(entries: Entry[]): Promise<Uint8Array> {
+  const parts: Uint8Array[] = [];
+  let failure: Error | null = null;
+  const zip = new Zip((error, chunk) => {
+    if (error) failure = error;
+    else parts.push(chunk);
+  });
+
+  for (const entry of entries) {
+    const stream = PACKED.test(entry.path)
+      ? new ZipPassThrough(entry.path)
+      : new ZipDeflate(entry.path, { level: 1 });
+    zip.add(stream);
+    const { bytes } = entry;
+    for (let at = 0; at < bytes.length || at === 0; at += CHUNK) {
+      const end = Math.min(at + CHUNK, bytes.length);
+      stream.push(bytes.subarray(at, end), end >= bytes.length);
+      if (failure) throw failure;
+      await yieldToUI();
+      if (end >= bytes.length) break;
+    }
+  }
+  zip.end();
+  if (failure) throw failure;
+
+  const body = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+  let at = 0;
+  for (const part of parts) {
+    body.set(part, at);
+    at += part.length;
+  }
+  return body;
 }
 
 function withAssets(record: BookRecord, assets: Record<string, Uint8Array>): BundledBook {

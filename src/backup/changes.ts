@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
@@ -13,6 +15,49 @@ export function subscribeToChanges(listener: Listener): () => void {
 
 export function noticeChange() {
   for (const listener of listeners) listener();
+  void bump();
+}
+
+/**
+ * Which state of the library a backup was taken of. A backup used to find out
+ * whether it had anything new to say by building the whole bundle and hashing
+ * it — ten seconds of work on an untouched library, thrown away at the end.
+ * This answers the same question in two small reads, before any of it starts.
+ *
+ * A token rather than a count, because a count in memory starts again at zero
+ * on the next launch and would read as "nothing has changed since".
+ */
+const TOKEN = 'backup.token';
+const markOf = (who: string) => `backup.token.${who}`;
+
+let token: string | null = null;
+/** Whether the current token is already newer than every backup's mark. */
+let ahead = false;
+
+async function bump(): Promise<void> {
+  if (ahead) return;
+  ahead = true;
+  token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  await AsyncStorage.setItem(TOKEN, token);
+}
+
+export async function libraryToken(): Promise<string> {
+  token ??= (await AsyncStorage.getItem(TOKEN)) ?? 'first';
+  return token;
+}
+
+/** Null until this destination has ever been written to. */
+export async function backedUpAt(who: string): Promise<string | null> {
+  return AsyncStorage.getItem(markOf(who));
+}
+
+/**
+ * Recorded against the token read before the bundle was built, so a change
+ * made while it was building is still a change the next backup will see.
+ */
+export async function markBackedUp(who: string, at: string): Promise<void> {
+  ahead = false;
+  await AsyncStorage.setItem(markOf(who), at);
 }
 
 const afterRestore = new Set<Listener>();

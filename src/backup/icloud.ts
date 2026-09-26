@@ -9,7 +9,7 @@ import { lastUploadedAnywhere, lastUploadHash, recordUpload } from '../db/jobs';
 import { hasBooks, listBookIds } from '../db/repo';
 import { buildBundle, fingerprint, openBundle } from './bundle';
 import { bundleName, isBundleName } from './format';
-import { subscribeToChanges } from './changes';
+import { backedUpAt, libraryToken, markBackedUp, subscribeToChanges } from './changes';
 import { restoreBundle, type RestoreReport } from './restore';
 import { timed, trace } from '../dev/trace';
 
@@ -119,6 +119,10 @@ export async function backUp(): Promise<boolean> {
   // Recording the upload is itself a write, so without this the backup would
   // schedule the next one forever. It also keeps two from overlapping.
   if (running) return false;
+  // Two reads, and most launches end here: nothing has been written since the
+  // last copy went up, so there is nothing to say.
+  const token = await libraryToken();
+  if ((await backedUpAt(LEDGER)) === token) return false;
   // An empty shelf overwrites today's copy under the same day-named key.
   if (!(await timed('hasBooks', hasBooks()))) return false;
   if (!drive || (await timed('driveStatus', refreshDriveStatus())) !== 'available') return false;
@@ -132,6 +136,8 @@ export async function backUp(): Promise<boolean> {
     trace(`fingerprint ${Math.round(performance.now() - at)}ms of ${body.length} bytes`);
     if ((await timed('lastUploadHash', lastUploadHash(LEDGER, name))) === hash) {
       trace('unchanged — nothing uploaded');
+      // Up to date is up to date, however it got that way.
+      await markBackedUp(LEDGER, token);
       return false;
     }
 
@@ -147,6 +153,7 @@ export async function backUp(): Promise<boolean> {
       staged.delete();
     }
     await timed('recordUpload', recordUpload(LEDGER, name, hash));
+    await markBackedUp(LEDGER, token);
     await timed('prune', prune());
     return true;
   } finally {
@@ -246,6 +253,11 @@ function schedule() {
  * Backs up whenever the data changes, and again on the way out — leaving the
  * app is the one moment a pending wait would otherwise be lost, and a real
  * background task would need a permission this feature hasn't earned.
+ *
+ * Launching is deliberately not one of those moments. A backup is seconds of
+ * work, and the second the app opens is the second someone is waiting to read;
+ * anything owed from a session that ended without one is taken on the way out
+ * of this one, or by the next change, whichever comes first.
  */
 export function watchForChanges(): () => void {
   const unsubscribe = subscribeToChanges(schedule);

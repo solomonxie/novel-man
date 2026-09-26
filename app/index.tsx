@@ -44,7 +44,7 @@ import {
   type LibraryResults,
   type MetaHit,
 } from '../src/search/library';
-import { backUpIfAuto, restoreOnLaunch } from '../src/backup/icloud';
+import { restoreOnLaunch } from '../src/backup/icloud';
 import { subscribeToRestores } from '../src/backup/changes';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { radius, space, usePalette } from '../src/theme';
@@ -122,7 +122,6 @@ export default function Home() {
       // backup is exactly how a reinstall would lose what it came for.
       const restored = await timed('restoreOnLaunch', restoreOnLaunch()).catch(() => null);
       if (restored) refresh();
-      await timed('backUpIfAuto', backUpIfAuto()).catch(() => undefined);
     })();
     timed('syncOnLaunch', syncOnLaunch()).catch(() => undefined);
     timed('resumeWorkOnLaunch', resumeWorkOnLaunch()).catch(() => undefined);
