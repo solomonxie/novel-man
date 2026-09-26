@@ -991,6 +991,7 @@
     "refreshLists": "Fetch the book lists",
     "refreshListsWhy": "The catalogs above, kept on the phone so searching them is instant and works offline. Queued like any other job — you don’t have to wait here.",
     "listsQueued": "Fetching the book lists",
+    "open": "Open it",
     "recordLookUp": "Add it, then ask AI about it",
     "needsKey": "Needs an AI key",
     "needsTitle": "Type a title first"
