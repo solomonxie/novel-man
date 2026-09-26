@@ -990,7 +990,7 @@
     "catalogs": "书目来源",
     "pickOne": "在上面三种里选一个，或者直接输入书名。",
     "recordSource": "新建书骨架",
-    "elsewhere": "从其他应用导入",
+    "elsewhere": "其他来源",
     "refreshLists": "获取书目列表",
     "refreshListsWhy": "把上面这些目录存到手机上，搜索即时且离线可用。和其他任务一样排队进行——不用在这里等。",
     "listsQueued": "正在获取书目列表",
