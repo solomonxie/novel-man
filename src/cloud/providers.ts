@@ -133,3 +133,30 @@ export function endpointFor(provider: Provider, values: { region: string; accoun
     .replace('{region}', values.region)
     .replace('{account}', values.account ?? '');
 }
+
+/**
+ * An address somebody typed, as a URL something can actually be fetched from.
+ * A host on its own — `minio.example.com` — is what anybody would write down,
+ * and it is not a URL: fetch refuses it before a request is ever made.
+ */
+export function normaliseEndpoint(typed: string): string {
+  const trimmed = typed.trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+/**
+ * Why this address cannot be reached, before a request is sent to find out.
+ *
+ * An empty region turns `https://s3.{region}.amazonaws.com` into
+ * `https://s3..amazonaws.com`, which is a real host name that does not exist —
+ * so the only thing the reader saw was "Network request failed", which reads
+ * as "your credentials are wrong" and is not.
+ */
+export function endpointProblem(endpoint: string): 'empty' | 'gap' | 'insecure' | null {
+  if (!endpoint) return 'empty';
+  const host = endpoint.replace(/^https?:\/\//i, '').split('/')[0];
+  if (!host || host.startsWith('.') || host.includes('..') || host.endsWith('.')) return 'gap';
+  if (/^http:\/\//i.test(endpoint)) return 'insecure';
+  return null;
+}

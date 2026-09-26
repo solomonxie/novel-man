@@ -78,16 +78,63 @@ export class Bucket {
     // Bodies go up unsigned: hashing megabytes in JS would cost more than the
     // upload, and the connection is TLS either way.
     const signed = signRequest({ method, url, headers, credentials: this.creds() });
-    const response = await fetch(url, {
-      method,
-      headers: signed.headers,
-      body: body as BodyInit | undefined,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers: signed.headers,
+        body: body as BodyInit | undefined,
+      });
+    } catch {
+      // `fetch` throws a bare TypeError for everything that never reached a
+      // server: a host that does not resolve, a certificate iOS will not
+      // accept, a plain http address it refuses outright, no signal. Saying
+      // which host was tried is the whole difference between "your keys are
+      // wrong" and "that address is".
+      throw new CloudError(0, hostOf(url));
+    }
     if (!response.ok) {
       throw new CloudError(response.status, extractMessage(await response.text()));
     }
     return response;
   }
+}
+
+/**
+ * Which region a bucket lives in, asked of the one service that answers for
+ * free: S3 names it in `x-amz-bucket-region` on any reply about the bucket,
+ * including the 403 you get for asking without credentials.
+ *
+ * Nobody should have to know this. A region is an implementation detail of
+ * where a provider put your data, it is required in the signature of every
+ * request, and getting it wrong fails in a way that reads as a rejected key.
+ */
+export async function discoverRegion(bucket: string): Promise<string | null> {
+  if (!bucket.trim()) return null;
+  try {
+    const response = await fetch(`https://s3.amazonaws.com/${encodeURIComponent(bucket.trim())}`, {
+      method: 'HEAD',
+    });
+    return response.headers.get('x-amz-bucket-region');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The region S3 says it should have been, out of the complaint about the one
+ * it was given. Both shapes: the header on a redirect, and the XML body of an
+ * `AuthorizationHeaderMalformed`.
+ */
+export function regionFromRefusal(detail: string): string | null {
+  const stated = /<Region>([a-z0-9-]+)<\/Region>/i.exec(detail);
+  if (stated) return stated[1];
+  const expecting = /expecting '([a-z0-9-]+)'/i.exec(detail);
+  return expecting ? expecting[1] : null;
+}
+
+function hostOf(url: string): string {
+  return url.replace(/^https?:\/\//i, '').split('/')[0].split('?')[0];
 }
 
 /** ListObjectsV2 XML, read linearly — the same reason the epub parser does. */
