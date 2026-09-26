@@ -23,6 +23,7 @@ import { addEvent } from '../db/timeline';
 export const BY_HAND = 'by hand';
 export const OPEN_LIBRARY = 'openlibrary.org';
 export const GOODREADS = 'goodreads.com';
+export const DOUBAN = 'douban.com';
 
 export function keepByHand(input: {
   title: string;
@@ -107,12 +108,15 @@ export type KeptCount = { added: number; filled: number; untouched: number };
 export async function keepShelved(
   books: Shelved[],
   kind: string,
-  onProgress?: (done: number, total: number) => void
+  onProgress?: (done: number, total: number) => void,
+  /** Whose shelf it was. The ids are that site's numbering, so a re-import
+      matches against the site it came from rather than across all of them. */
+  from: string = GOODREADS
 ): Promise<KeptCount> {
   const count: KeptCount = { added: 0, filled: 0, untouched: 0 };
   for (let at = 0; at < books.length; at++) {
     const book = books[at];
-    const existing = await alreadyKept(GOODREADS, book.id, book.title, book.author);
+    const existing = await alreadyKept(from, book.id, book.title, book.author);
     if (existing) {
       const changed = await fill(existing, book);
       await remember(existing.id, book);
@@ -124,13 +128,14 @@ export async function keepShelved(
         author: book.author || null,
         year: book.year || null,
         kind,
-        source_name: GOODREADS,
+        source_name: from,
         source_hash: book.id,
         cover_hue: hueFrom(book.title),
         stars: book.stars,
         review: book.review,
         rated_at: book.at,
         status: book.status,
+        isbn: book.isbn || null,
       });
       // Their private notes are notes about the book, not a review of it — so
       // they land where every other note about a book lands. Only on the way

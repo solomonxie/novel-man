@@ -24,6 +24,7 @@ export type BookSource =
   | 'record'
   | 'openlibrary'
   | 'goodreads'
+  | 'douban'
   | 'ebible'
   | 'repo'
   | 'gutenberg'
@@ -87,7 +88,7 @@ export const bookKinds: BookKind[] = [
     fiction: true,
     features: ['cast', 'terms', 'scenes', 'script', 'visuals'],
     part: 'volume',
-    sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads'],
+    sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads', 'douban'],
     sections: ['chapters', 'scenes', 'notes', 'cast', 'places', 'terms', 'translations', 'script', 'visuals'],
   },
   {
@@ -96,7 +97,7 @@ export const bookKinds: BookKind[] = [
     subject: 'a work of nonfiction',
     fiction: false,
     features: ['cast', 'terms'],
-    sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads'],
+    sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads', 'douban'],
     sections: ['chapters', 'notes', 'cast', 'places', 'terms', 'translations'],
   },
   {
@@ -108,7 +109,7 @@ export const bookKinds: BookKind[] = [
     subject: 'an instructional book',
     fiction: false,
     features: ['terms'],
-    sources: ['files', 'link', 'record', 'openlibrary', 'goodreads'],
+    sources: ['files', 'link', 'record', 'openlibrary', 'goodreads', 'douban'],
     sections: ['chapters', 'notes', 'terms', 'translations'],
   },
   {

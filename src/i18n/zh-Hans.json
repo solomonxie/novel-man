@@ -892,7 +892,10 @@
     "openlibraryHint": "保存一个分类后可离线搜索，也可以联网搜索整个 Open Library。",
     "goodreads": "Goodreads",
     "goodreadsDetail": "导入你的全部书籍、评分和书评",
-    "goodreadsHint": "Goodreads 已关闭 API，所以这里读取你的导出文件或书架的 RSS。"
+    "goodreadsHint": "Goodreads 已关闭 API，所以这里读取你的导出文件或书架的 RSS。",
+    "douban": "豆瓣",
+    "doubanDetail": "从文件导入你的读过、在读和想读",
+    "doubanHint": "豆瓣不提供导出，所以这里读取由你主页生成的 CSV。"
   },
   "find": {
     "prompt": "输入要找的内容，然后点搜索。",
@@ -1095,6 +1098,24 @@
     "savedWhen_other": "{{count}} 本书 · 上次读取 {{date}}",
     "savedRead": "重新读取",
     "savedForget": "不再在这里显示这个书架？已导入的书不受影响。"
+  },
+  "db": {
+    "why": "豆瓣没有 API，也没有自己的导出，RSS 只有最近十条、且电影音乐混在一起。所以这里只有一扇门：由你主页的书架页面生成的 CSV——书架页面确实带着你的评分、短评和日期。",
+    "chooseCsv": "选择 CSV 文件",
+    "how": "本仓库的 tools/douban-shelf.py 可以生成：python3 tools/douban-shelf.py <你的豆瓣 ID>。存到「文件」里，再在这里选它。",
+    "columnsTitle": "文件需要的列",
+    "required": "必需",
+    "notACsv": "文件里没有找到书。请对照下面的列检查表头。",
+    "col": {
+      "title": "书名，与书架上显示的一致",
+      "id": "豆瓣的条目编号，再导入一次就是更新而不是重复添加",
+      "author": "作者，或出版信息里的第一个名字",
+      "shelf": "读过、在读或想读——read、currently-reading、to-read 也可以",
+      "rating": "1 到 5；未打分写 0",
+      "review": "你的短评，作为书评保存",
+      "date": "读完的日期",
+      "isbn": "之后用来找封面和对应的版本"
+    }
   },
   "status": {
     "none": "未设置",

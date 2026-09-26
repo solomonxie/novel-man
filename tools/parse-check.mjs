@@ -78,6 +78,7 @@ const {
   parseFeedUrl,
   pageUrl,
 } = await import(join(build, 'sources/goodreads.js'));
+const { COLUMNS, booksFromCsv } = await import(join(build, 'sources/douban.js'));
 const { stripTags } = await import(join(build, 'import/xml.js'));
 const { isSkeleton, starsOf, statusOf } = await import(join(build, 'books/record.js'));
 const { parseTypedBooks } = await import(join(build, 'books/bulk.js'));
@@ -1588,6 +1589,34 @@ console.log('\ngoodreads');
       ?.review,
     'Good & long');
   check('markup around nothing is nothing', plainText('<br/>'), null);
+}
+
+// The same reader, the other site. Douban is read from a file that
+// `tools/douban-shelf.py` writes in Goodreads' columns on purpose — so what is
+// worth checking is that the columns the page promises are the ones that work,
+// and that a shelf named in Chinese still means a shelf.
+console.log('\ndouban');
+{
+  const csv = [
+    'Book Id,Title,Author,Original Publication Year,Year Published,ISBN13,ISBN,' +
+      'My Rating,My Review,Private Notes,Exclusive Shelf,Date Read,Date Added,Bookshelves',
+    '6424904,大话数据结构,程杰,2011,2011,9787302255659,,4,"完全零基础，匆匆读完",,read,' +
+      '2018-11-10,2018-11-10,',
+    '30229839,寻秦记,黄易,,,9787536691681,,0,,,想读,,2019-10-30,',
+    '26437381,範馬刃牙 37,板垣惠介,2013,2013,9785409856175,,5,过瘾,,在读,,2020-06-12,',
+  ].join('\n');
+  const books = booksFromCsv(csv);
+  check('the scraper columns are read', books.length, 3);
+  check('the subject number is the id', books[0].id, '6424904');
+  check('a short comment is the review', books[0].review, '完全零基础，匆匆读完');
+  check('an English shelf still works', books[0].status, 'read');
+  check('and a Chinese one means the same', [books[1].status, books[2].status],
+    ['wishlist', 'reading']);
+  check('the isbn is carried', books[0].isbn, '9787302255659');
+  check('an unrated book is unrated, not nought', books[1].stars, null);
+  check('the page promises only the columns a book cannot do without',
+    COLUMNS.filter((column) => column.required).map((column) => column.name),
+    ['Title', 'Book Id']);
 }
 
 // What separates a book with no words from one whose words are fetched.
