@@ -6,11 +6,13 @@ import { keptCatalogs } from '../sources/catalog';
 import { yieldToUI } from '../async/yield';
 import type { ExportFile } from '../export/types';
 import {
+  ABOUT,
   BUNDLE_FORMAT,
   BUNDLE_VERSION,
   BundleError,
   bundleName,
   validate,
+  type BundleAbout,
   type BundledBook,
   type Snapshot,
 } from './format';
@@ -60,7 +62,10 @@ export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
   const json = JSON.stringify(snapshot);
   trace(`stringify ${Math.round(performance.now() - at)}ms for ${json.length} chars`);
   at = performance.now();
-  const entries: Entry[] = [{ path: SNAPSHOT, bytes: strToU8(json) }];
+  const entries: Entry[] = [
+    { path: ABOUT, bytes: strToU8(JSON.stringify(aboutOf(books, snapshot.createdAt))) },
+    { path: SNAPSHOT, bytes: strToU8(json) },
+  ];
   trace(`strToU8 ${Math.round(performance.now() - at)}ms`);
   let assetBytes = 0;
   for (const [path, bytes] of Object.entries(assets)) {
@@ -140,6 +145,48 @@ async function archive(entries: Entry[]): Promise<Uint8Array> {
     at += part.length;
   }
   return body;
+}
+
+/** Counted while the books are in hand, which is the only cheap moment. */
+function aboutOf(books: BundledBook[], createdAt: number): BundleAbout {
+  const about: BundleAbout = {
+    createdAt,
+    books: books.length,
+    chapters: 0,
+    notes: 0,
+    people: 0,
+    places: 0,
+    terms: 0,
+    words: 0,
+  };
+  for (const book of books) {
+    about.chapters += book.chapters.length;
+    about.notes += book.annotations.filter((note) => note.kind === 'note').length;
+    about.words += book.book.word_count;
+    for (const entity of book.entities) {
+      if (entity.kind === 'character') about.people += 1;
+      else if (entity.kind === 'place') about.places += 1;
+      else if (entity.kind === 'term') about.terms += 1;
+    }
+  }
+  return about;
+}
+
+/**
+ * What is in a backup, without opening it. Only that one entry is
+ * decompressed — the rest of the archive is skipped, so this answers in
+ * milliseconds where reading the snapshot would take seconds.
+ *
+ * Null for a bundle written before this existed: those are still restorable,
+ * they just cannot say how much is in them without being opened.
+ */
+export function readAbout(bytes: Uint8Array): BundleAbout | null {
+  try {
+    const entry = unzipSync(bytes, { filter: (file) => file.name === ABOUT })[ABOUT];
+    return entry ? (JSON.parse(strFromU8(entry)) as BundleAbout) : null;
+  } catch {
+    return null;
+  }
 }
 
 function withAssets(record: BookRecord, assets: Record<string, Uint8Array>): BundledBook {
