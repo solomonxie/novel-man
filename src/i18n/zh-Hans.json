@@ -178,17 +178,13 @@
     "addTerm": "＋ 添加术语",
     "searchTerms": "搜索术语",
     "termsAll": "全部术语",
-    "rating": "我的评分",
     "ratingShort": "评分",
     "favorite": "喜欢",
     "ratedOn": "{{date}} 打的分",
-    "notRated": "点一颗星打分，再点同一颗取消。",
-    "reviewPlaceholder": "读完觉得怎么样？",
-    "impressions": "我的感想",
-    "impressionsPlaceholder": "简单说说整本书——讲了什么，给你留下了什么。",
+    "notRated": "未评分",
+    "reviewPlaceholder": "你怎么看这本书？一句话或一篇长文都行——会自动保存。",
     "more": "展开",
     "less": "收起",
-    "statusRow": "阅读状态",
     "lookUpWhat": "让 AI 凭自己的知识说出这本书的作者、出版年份和几句简介。只填补缺失的信息；不认识这本书时会直接说不知道，而不是编造。",
     "outlineRow": "让 AI 给出目录",
     "outlineHint": "没有正文的书，由 AI 给出章节目录。",
@@ -197,7 +193,8 @@
     "outlineWhat": "让 AI 给出这本书的目录——按顺序列出每一章，各附一句内容概要。之后每一章都有自己的页面可以记笔记。不认识这本书时会直接说不知道。",
     "outlineQueued": "已提交，可在队列中查看。",
     "outlineReplace": "这会替换现有的 {{count}} 章，包括你做过的修改。",
-    "recordedFrom": "记录来自 {{name}}"
+    "recordedFrom": "记录来自 {{name}}",
+    "review": "你的想法"
   },
   "reader": {
     "go": "前往",
@@ -768,7 +765,9 @@
     "terms": "术语",
     "noTerms": "本章没有识别到术语。",
     "note": "写一条笔记",
-    "noNotes": "这一章还没有笔记。"
+    "noNotes": "这一章还没有笔记。",
+    "finish": "读完了",
+    "finishedAgain": "已记录 ✓"
   },
   "part": {
     "read": "从这里开始读 →",
@@ -1132,5 +1131,21 @@
     "more": "展开",
     "less": "收起",
     "edit": "编辑"
+  },
+  "timeline": {
+    "title": "阅读时间线",
+    "empty": "还没有记录。设置阅读状态、读完一章，或者从 Goodreads 导入，都会写在这里——你也可以自己添加一条。",
+    "add": "＋ 添加一条",
+    "save": "保存",
+    "notePlaceholder": "发生了什么——买下、借出、读到第 40 页放弃……",
+    "badDay": "这不是一个日期",
+    "badDayHint": "请按 2026-09-25 这样写——年、月、日。",
+    "removeWhat": "把这条从时间线上删掉？书本身不受影响。",
+    "became_reading": "开始读",
+    "became_read": "读完",
+    "became_wishlist": "想读",
+    "became_none": "清除了状态",
+    "finishedChapter": "读完{{what}}",
+    "aMoment": "一条记录"
   }
 }

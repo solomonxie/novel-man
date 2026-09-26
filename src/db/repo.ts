@@ -1424,6 +1424,10 @@ export const CARRIED_TABLES = [
   'relations',
   'mentions',
   'verses',
+  // When the book was read. Of everything here this is the one thing that
+  // cannot be made again from the book itself — a chapter can be re-analysed,
+  // a translation re-run, but nobody can recover the Sunday they finished it.
+  'reading_events',
 ] as const;
 
 export type CarriedRows = Record<string, Record<string, unknown>[]>;
