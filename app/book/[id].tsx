@@ -103,6 +103,7 @@ export default function BookPage() {
   const [characters, setCharacters] = useState<Entity[]>([]);
   const [places, setPlaces] = useState<Entity[]>([]);
   const [terms, setTerms] = useState<Entity[]>([]);
+  const [cards, setCards] = useState<Entity[]>([]);
   const [offset, setOffset] = useState(0);
   const [readAt, setReadAt] = useState<number | null>(null);
   const [noteCount, setNoteCount] = useState(0);
@@ -164,6 +165,7 @@ export default function BookPage() {
     timed('characters', listEntities(id, 'character')).then(setCharacters);
     timed('places', listEntities(id, 'place')).then(setPlaces);
     timed('terms', listEntities(id, 'term')).then(setTerms);
+    timed('cards', listEntities(id, 'card')).then(setCards);
     timed('getProgress', getProgress(id)).then(setOffset);
     timed('lastReadAt', lastReadAt(id)).then(setReadAt);
     timed('listAnnotations', listAnnotations(id)).then((rows) => {
@@ -321,7 +323,7 @@ export default function BookPage() {
         : supports(book.kind, 'terms')
           ? {
               value: terms.length,
-              label: t('book.terms').toLowerCase(),
+              label: t('book.termsShort'),
               onPress: () => router.push(`/book/${book.id}/terms`),
             }
           : null;
@@ -482,13 +484,6 @@ export default function BookPage() {
 
   // Created unnamed: the ＋ already says what this is, and a profile called
   // "New character" is a row you have to clean up rather than one you wanted.
-  /** Every kind of thing a book names has a page; which one is the kind. */
-  const PAGES: Record<EntityKind, string> = {
-    character: 'entity',
-    place: 'place',
-    term: 'term',
-  };
-
   async function addEntity(kind: EntityKind) {
     const entityId = await createEntity(book!.id, kind, '');
     router.push(`/${PAGES[kind]}/${entityId}`);
@@ -909,6 +904,34 @@ export default function BookPage() {
         />
       )}
 
+      {/* Made rather than found. A card's front is a sentence, not a name, so
+          these are rows to read and not chips to recognise. */}
+      {supports(book.kind, 'cards') && (
+        <Block
+          title={t('book.cards')}
+          count={cards.length || undefined}
+          onOpen={() => router.push(`/book/${book.id}/cards`)}
+          action={{ label: '＋', onPress: () => addEntity('card') }}
+        >
+          {cards.length === 0 ? (
+            <Empty
+              text={t('book.cardsEmpty')}
+              action={{ label: t('book.addOne'), onPress: () => addEntity('card') }}
+            />
+          ) : (
+            cards.slice(0, CARDS_SHOWN).map((card, index) => (
+              <Item
+                key={card.id}
+                title={card.name || t('card.frontPlaceholder')}
+                detail={card.summary ?? undefined}
+                onPress={() => router.push(`/card/${card.id}`)}
+                last={index === Math.min(cards.length, CARDS_SHOWN) - 1}
+              />
+            ))
+          )}
+        </Block>
+      )}
+
       {/* Tags stay on the page because they are said *about* the book. Which
           lists it is in is not — that is read from the shelf, so from here it
           is only the ☰ above. */}
@@ -1163,6 +1186,14 @@ export default function BookPage() {
   );
 }
 
+/** Every kind of thing a book holds has a page; which one is the kind. */
+const PAGES: Record<EntityKind, string> = {
+  character: 'entity',
+  place: 'place',
+  term: 'term',
+  card: 'card',
+};
+
 function EntitySection({ title, entities, onAdd, extra }: {
   title: string;
   entities: Entity[];
@@ -1193,9 +1224,7 @@ function EntitySection({ title, entities, onAdd, extra }: {
               // makes the row ragged for information nobody came here for.
               label={entity.name}
               hue={hueFrom(entity.name)}
-              onPress={() =>
-                router.push(entity.kind === 'place' ? `/place/${entity.id}` : `/entity/${entity.id}`)
-              }
+              onPress={() => router.push(`/${PAGES[entity.kind]}/${entity.id}`)}
             />
           ))}
         </ChipRow>
@@ -1203,6 +1232,9 @@ function EntitySection({ title, entities, onAdd, extra }: {
     </Block>
   );
 }
+
+/** Enough to know what is in there; the heading leads to the rest. */
+const CARDS_SHOWN = 5;
 
 /** A 500-chapter list is a picker, not a page section. */
 /** Below this a search field is more work than scrolling the list. */

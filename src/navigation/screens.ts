@@ -28,6 +28,8 @@ import Part from '../../app/book/[id]/part/[idx]';
 import Graph from '../../app/book/[id]/graph';
 import Translation from '../../app/book/[id]/translation';
 import Terms from '../../app/book/[id]/terms';
+import Cards from '../../app/book/[id]/cards';
+import Card from '../../app/card/[id]';
 import Mapping from '../../app/book/[id]/mapping';
 import Script from '../../app/book/[id]/script';
 import Reader from '../../app/reader/[id]';
@@ -80,6 +82,8 @@ export const screens: Screen[] = [
   { path: '/book/[id]/graph', component: Graph, header: true },
   { path: '/book/[id]/translation', component: Translation, header: true },
   { path: '/book/[id]/terms', component: Terms, header: true },
+  { path: '/book/[id]/cards', component: Cards, header: true },
+  { path: '/card/[id]', component: Card, header: true },
   { path: '/book/[id]/mapping', component: Mapping, header: true },
   { path: '/book/[id]/script', component: Script, header: true },
   { path: '/list/[id]', component: BookListScreen, header: true },
