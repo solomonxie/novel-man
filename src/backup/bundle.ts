@@ -1,5 +1,8 @@
 import { strFromU8, strToU8, unzipSync, Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 import { listBookIds, readBookRecord, type BookRecord } from '../db/repo';
+import { libraryCsv, type LibraryRow } from '../export/formats/library';
+import { annotationsMarkdownExporter } from '../export/formats/annotations';
+import { safeFileName } from '../export/types';
 import { imageName, openStored, readImage } from '../storage/files';
 import { readPrefs } from './prefs';
 import { keptCatalogs } from '../sources/catalog';
@@ -55,7 +58,11 @@ export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
     app: 'novel-man',
     books,
     settings: await readPrefs(),
-    catalogs: await keptCatalogs(),
+    // A property of the whole library, not of one book: which of somebody
+    // else's catalogs this device had kept. On a one-book bundle it would mean
+    // that restoring a single export — or taking a book back out of the trash —
+    // queued a download of eighty thousand Gutenberg rows.
+    catalogs: bookIds ? undefined : await keptCatalogs(),
   };
 
   at = performance.now();
@@ -65,6 +72,7 @@ export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
   const entries: Entry[] = [
     { path: ABOUT, bytes: strToU8(JSON.stringify(aboutOf(books, snapshot.createdAt))) },
     { path: SNAPSHOT, bytes: strToU8(json) },
+    ...(await readableEntries(books)),
   ];
   trace(`strToU8 ${Math.round(performance.now() - at)}ms`);
   let assetBytes = 0;
@@ -87,6 +95,91 @@ export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
 }
 
 type Entry = { path: string; bytes: Uint8Array };
+
+/**
+ * What a person can read, in the same zip as what the app can restore.
+ *
+ * `snapshot.json` is one line of JSON a megabyte long: perfect for coming back
+ * from, useless for looking at. These two are the answer to the deepest version
+ * of the trust question — "will I still be able to read this in ten years" —
+ * and they cost a few kilobytes on a bundle whose text is measured in
+ * megabytes, so they are in every copy rather than behind a button nobody
+ * knows to press.
+ */
+type Readable = Pick<BookRecord, 'book' | 'text' | 'chapters' | 'annotations'> & {
+  tags?: string[];
+};
+
+export const LIBRARY_CSV = 'library.csv';
+
+async function readableEntries(books: Readable[]): Promise<Entry[]> {
+  const entries: Entry[] = [
+    { path: LIBRARY_CSV, bytes: strToU8(libraryCsv(books.map(rowOf))) },
+  ];
+  // Two books can be called the same thing, and the second must not land on
+  // the first: a notes file silently overwritten is the exact failure these
+  // files exist to rule out.
+  const taken = new Set<string>();
+  for (const held of books) {
+    if (!held.annotations.length) continue;
+    const written = await annotationsMarkdownExporter.build({
+      book: held.book,
+      text: held.text,
+      chapters: held.chapters,
+      annotations: held.annotations,
+    });
+    const stem = safeFileName(held.book.title);
+    let path = `notes/${stem}.md`;
+    for (let copy = 2; taken.has(path); copy++) path = `notes/${stem} (${copy}).md`;
+    taken.add(path);
+    entries.push({ path, bytes: strToU8(String(written.body ?? '')) });
+  }
+  return entries;
+}
+
+function rowOf(held: Readable): LibraryRow {
+  return {
+    title: held.book.title,
+    author: held.book.author,
+    year: held.book.year,
+    isbn: held.book.isbn,
+    kind: held.book.kind,
+    language: held.book.language,
+    status: held.book.status,
+    stars: held.book.stars,
+    review: held.book.review,
+    summary: held.book.summary,
+    words: held.book.word_count,
+    chapters: held.chapters.length,
+    notes: held.annotations.filter((note) => note.kind === 'note').length,
+    tags: held.tags,
+    source_name: held.book.source_name,
+    source_hash: held.book.source_hash,
+    created_at: held.book.created_at,
+    rated_at: held.book.rated_at,
+  };
+}
+
+/**
+ * The readable half on its own, for a reader who wants their library somewhere
+ * that has never heard of this app. No manuscripts, no images, no JSON: the
+ * table and the notes, which is what nothing else can give them back.
+ */
+export async function buildPlainCopy(): Promise<ExportFile> {
+  const books: Readable[] = [];
+  for (const id of await listBookIds()) {
+    // Without the manuscript: a library's text is tens of megabytes and none of
+    // it is in these files. The notes carry their own quotes.
+    const record = await readBookRecord(id, { text: false });
+    if (record) books.push(record);
+    await yieldToUI();
+  }
+  return {
+    fileName: bundleName('plain-novel-man'),
+    mimeType: 'application/zip',
+    body: await archive(await readableEntries(books)),
+  };
+}
 
 /**
  * Enough bytes that the deflater is doing real work between turns, few enough
