@@ -8,7 +8,7 @@ import {
   type Book,
 } from '../db/repo';
 import { coverUrl, type Work } from '../sources/openLibrary';
-import { looksLikeImage } from '../sources/identify';
+import { isPlaceholderCover, looksLikeImage } from '../sources/identify';
 import type { Shelved } from '../sources/goodreads';
 import { writeImage } from '../storage/files';
 import { hueFrom } from '../ui/fields';
@@ -67,10 +67,12 @@ export async function keepCoverFrom(url: string, key: string): Promise<string | 
     if (!response.ok) return null;
     const bytes = new Uint8Array(await response.arrayBuffer());
     // Open Library answers a missing cover with a 1×1 rather than a 404, and
-    // Google answers a size it does not have with something that is not a
-    // picture at all. Both arrive as 200s; neither is worth a row on the
-    // shelf, and a file that is not an image is a black rectangle later.
+    // Google answers a size it does not have with a picture that says "image
+    // not available" — a real PNG of a plausible size, which is why it needs
+    // recognising by its bytes. All of them arrive as 200s; none is worth a row
+    // on the shelf, and a file that is not an image is a black rectangle later.
     if (bytes.length < 1000 || !looksLikeImage(bytes)) return null;
+    if (isPlaceholderCover(bytes)) return null;
     return writeImage(`cover-${key}.jpg`, bytes);
   } catch {
     return null;

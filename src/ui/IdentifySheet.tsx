@@ -18,10 +18,20 @@ import { useTranslation } from 'react-i18next';
 
 import { updateBook, type Book } from '../db/repo';
 import { keepCoverFrom } from '../books/save';
-import { CatalogsUnreachable, findBook, fillFromEdition, type Candidate } from '../sources/identify';
+import {
+  CatalogsUnreachable,
+  findBook,
+  fillFromEdition,
+  isChineseIsbn,
+  isIsbn,
+  type CatalogReport,
+  type Candidate,
+} from '../sources/identify';
+import { googleBooksKey } from '../sources/googleBooksKey';
+import { GoogleBooksKeyRows } from '../settings/GoogleBooksKey';
 import { useKeyboardHeight } from './keyboard';
 import { useDragDismiss } from './dismiss';
-import { Grabber } from './primitives';
+import { Grabber, Row } from './primitives';
 import { radius, space, usePalette } from '../theme';
 
 /** Ten is what fits in a glance without becoming a list to read. */
@@ -60,20 +70,33 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
   const [busy, setBusy] = useState(false);
   const [filling, setFilling] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  /** What each catalog did, so a refusal is never reported as an empty shelf. */
+  const [catalogs, setCatalogs] = useState<CatalogReport[]>([]);
+  const [asked, setAsked] = useState('');
+  /** Whether a Google key is stored — so it stays visible once it works. */
+  const [keyed, setKeyed] = useState(false);
 
-  const search = useCallback(async (asked: string) => {
-    if (!asked.trim()) return;
+  const search = useCallback(async (wanted: string) => {
+    if (!wanted.trim()) return;
     Keyboard.dismiss();
     setBusy(true);
     setFailure(null);
+    setAsked(wanted.trim());
     try {
-      setFound(await findBook(asked, LIMIT));
+      const key = await googleBooksKey();
+      setKeyed(Boolean(key));
+      const lookup = await findBook(wanted, { limit: LIMIT, googleKey: key });
+      setFound(lookup.candidates);
+      setCatalogs(lookup.catalogs);
     } catch (problem) {
       setFailure(problem instanceof CatalogsUnreachable ? t('identify.unreachable') : String(problem));
       setFound([]);
+      setCatalogs([]);
     } finally {
       setBusy(false);
     }
+    // `t` is stable for the life of the sheet, and listing it re-runs the search.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -92,10 +115,13 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
     setQuery(opening);
     setFound(null);
     setFailure(null);
+    setCatalogs([]);
     void search(opening);
   }, [appear, book.author, book.isbn, book.title, search, visible]);
 
   if (!visible) return null;
+
+  const refused = catalogs.filter((report) => !report.answered);
 
   function leave(then?: () => void) {
     Keyboard.dismiss();
@@ -209,6 +235,39 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
           <Text style={{ color: palette.faint, fontSize: 12, marginTop: space.sm }}>
             {t('identify.what')}
           </Text>
+
+          {refused.length || keyed ? (
+            <View style={{ marginTop: space.md }}>
+              {refused.map((report) => (
+                <Row
+                  key={report.source}
+                  label={t(`identify.catalog_${report.source}`)}
+                  detail={
+                    report.needsKey
+                      ? t('identify.needsKey')
+                      : t('identify.refused', { reason: report.reason ?? '' })
+                  }
+                  alarm
+                  last={!report.needsKey}
+                />
+              ))}
+              {/* Only under the refusal a key would lift, and only then: a
+                  credential offered where nothing is wrong is a credential
+                  nobody can see the point of. */}
+              {refused.some((report) => report.needsKey) || keyed ? (
+                <GoogleBooksKeyRows onSaved={() => void search(query)} />
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* The prefix that says this book was published in China, where both
+              of these catalogs are at their weakest. Better said outright than
+              left to read as "no such book". */}
+          {!busy && found?.length === 0 && isIsbn(asked) && isChineseIsbn(asked) ? (
+            <Text style={{ color: palette.dim, fontSize: 13, marginTop: space.md }}>
+              {t('identify.chineseIsbn')}
+            </Text>
+          ) : null}
 
           {busy ? (
             <View style={styles.center}><ActivityIndicator /></View>

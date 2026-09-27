@@ -120,6 +120,18 @@ export function readImage(path: string): Uint8Array | null {
   return direct.exists ? direct.bytesSync() : null;
 }
 
+/**
+ * How big it is, without reading it. For anything that has to look at every
+ * cover on the shelf: a stat each, rather than a megabyte of reads to answer a
+ * question most of them answer with their length.
+ */
+export function imageSize(path: string): number {
+  const here = new File(imagesDir(), imageName(path));
+  if (here.exists) return here.size;
+  const direct = new File(path);
+  return direct.exists ? direct.size : 0;
+}
+
 /** The row is only half of it: the bytes are ours and go with it. */
 export function removeImage(path: string) {
   const here = new File(imagesDir(), imageName(path));

@@ -49,7 +49,20 @@
     "none": "没有结果。可以写全书名，或加上作者。",
     "failed": "连不上书目库：{{error}}",
     "noCover": "无封面",
-    "unreachable": "暂时连不上书目库。这并不代表没有这本书——过一会儿再试。"
+    "unreachable": "暂时连不上书目库。这并不代表没有这本书——过一会儿再试。",
+    "catalog_openlibrary": "Open Library",
+    "catalog_google": "Google 图书",
+    "refused": "这次没有应答（{{reason}}）。这不等于它没有这本书。",
+    "needsKey": "Google 那个旧的订阅源也没有应答。它现在的 API 需要你自己的密钥——免费，而这个书目收录了本世纪出版的大部分书。",
+    "keyRow": "Google 图书密钥",
+    "keyWhy": "可选。有了它就能拿到 Google 现行 API 更完整的条目。",
+    "keyNone": "未设置",
+    "keySet": "已设置 · ••{{tail}}",
+    "keyPaste": "粘贴 API 密钥",
+    "keyStays": "保存在本机钥匙串里。不会进入备份，也只会发给 Google。",
+    "keyWhere": "获取方式：Google Cloud 控制台 → 启用 Books API → 凭据 → 创建 API 密钥。",
+    "keyForget": "忘记这个密钥",
+    "chineseIsbn": "这是中国的 ISBN（978-7-…）。两个书目都查过了，都没有这个版本——Open Library 只收录了国内出版物的一小部分。最稳的办法是直接搜中文书名。"
   },
   "shelf": {
     "title": "书架",
@@ -576,6 +589,10 @@
     "stateHereOnly": "{{count}} 份副本，全都在这台手机上",
     "stateBehind": "有改动还没离开这台手机",
     "stateOk": "上一份副本离开手机的时间：{{when}}"
+  },
+  "covers": {
+    "sweptTitle": "有 {{count}} 张封面其实不是封面",
+    "sweptWhat": "它们其实是 Google 的「图片不可用」占位图，早先的查询误存了下来。现在这些书恢复成自己的色块了——再查一次就能拿到真正的封面。\n\n{{titles}}"
   },
   "trash": {
     "title": "最近删除",

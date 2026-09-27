@@ -14,6 +14,8 @@
  * same row here and the reader picks from one list.
  */
 
+import { attr, decodeEntities, eachElement, stripTags } from '../import/xml';
+import { hex, sha256 } from '../cloud/sha256';
 import { score } from './matching';
 
 export type Candidate = {
@@ -38,6 +40,14 @@ const OL_SEARCH = 'https://openlibrary.org/search.json';
 const OL_COVER = 'https://covers.openlibrary.org/b';
 const OL_BOOK = 'https://openlibrary.org/books';
 const GOOGLE = 'https://www.googleapis.com/books/v1/volumes';
+/**
+ * The feed the old Books API left behind, and the reason this file has three
+ * doors instead of two. It answers with no key at all, and it knows Chinese
+ * editions that the current API will not serve keyless and that Open Library
+ * does not hold: 9787532776771 is 挪威的森林 here, absent there, and a 429 from
+ * the API. Atom rather than JSON, which is the only cost.
+ */
+const GOOGLE_FEED = 'https://books.google.com/books/feeds/volumes';
 
 /**
  * The digits and nothing else. An ISBN is printed with hyphens, read aloud
@@ -96,15 +106,48 @@ export function olCoverByIsbn(isbn: string, size: 'S' | 'M' | 'L'): string {
 }
 
 /**
- * Google serves one cover URL at several sizes through a `zoom` it puts in the
- * query, and curls the corner of it by default — a paper fold drawn onto a
- * picture of a paper book, which looks like damage on a shelf of flat covers.
+ * Google serves every size of a cover off one address, and curls the corner by
+ * default — a paper fold drawn onto a picture of a paper book, which looks like
+ * damage on a shelf of flat covers.
+ *
+ * The size is asked for as a width, not as `zoom=0`, and that is the fix for a
+ * real bug: `zoom=0` is the size most books do not have, and Google answers a
+ * size it does not have with a picture rather than a 404 — the grey "image not
+ * available" panel, 575×750, byte for byte identical for every book. So the
+ * cover in the grid looked right (it is the thumbnail, which exists) and the
+ * one that got kept was the panel. `zoom=1&w=640` asks the address that works
+ * for as much of it as there is, and comes back with the real cover at its own
+ * size when that is smaller.
  */
-export function googleCover(url: string, zoom: 0 | 1): string {
-  return url
+const COVER_WIDTH = 640;
+
+export function googleCover(url: string, size: 'thumb' | 'full'): string {
+  const clean = url
     .replace(/^http:/, 'https:')
     .replace(/&edge=curl/, '')
-    .replace(/([?&])zoom=\d/, `$1zoom=${zoom}`);
+    .replace(/([?&])w=\d+/, '$1')
+    .replace(/([?&])zoom=\d/, '$1zoom=1');
+  return size === 'full' ? `${clean}&w=${COVER_WIDTH}` : clean;
+}
+
+/**
+ * That panel, recognised by what it is rather than by the URL that served it.
+ * One asset, so one hash: nothing else Google returns from this endpoint is
+ * these bytes. It has to be caught, because it is a valid PNG of a plausible
+ * size — every other guard we have lets it through and it ends up on a shelf
+ * reading "image not available" where a cover should be.
+ */
+const GOOGLE_NO_COVER = '3efa8c43e5b4348f303a528c81adf435f0111ea752fe9f0f6241478b60987fa6';
+
+/**
+ * Its length, which is a necessary condition and not a sufficient one — one
+ * fixed asset has one size. Worth having so a sweep over every cover on a shelf
+ * is a stat each and a hash only for the handful that could be it.
+ */
+export const PLACEHOLDER_SIZE = 9103;
+
+export function isPlaceholderCover(bytes: Uint8Array): boolean {
+  return hex(sha256(bytes)) === GOOGLE_NO_COVER;
 }
 
 /**
@@ -158,6 +201,70 @@ export function candidatesFromOpenLibrary(payload: unknown): Candidate[] {
   return found;
 }
 
+/** Every `<tag>…</tag>` in order, where the feed repeats one. */
+function allTagText(xml: string, tag: string): string[] {
+  const found: string[] = [];
+  for (const element of eachElement(xml, tag)) {
+    const opens = element.indexOf('>');
+    if (opens < 0) continue;
+    const value = decodeEntities(stripTags(element.slice(opens + 1))).trim();
+    if (value) found.push(value);
+  }
+  return found;
+}
+
+/**
+ * A `<link rel='…' href='…'/>`, which `eachElement` skips by design — it looks
+ * for a closing tag and a link has none.
+ */
+function linkHref(entry: string, rel: string): string | null {
+  for (const piece of entry.split('<link')) {
+    if (piece.includes(rel)) return attr(piece, 'href') ?? null;
+  }
+  return null;
+}
+
+/**
+ * The feed's Atom, as the same row everything else here produces. It says less
+ * than the API — no page count, and its blurb is sometimes romanised — but it
+ * says the title, the author, the year, the language and the cover, which is
+ * the whole of what filling in a shelf entry needs.
+ */
+export function candidatesFromGoogleFeed(xml: string): Candidate[] {
+  const found: Candidate[] = [];
+  for (const entry of eachElement(xml, 'entry')) {
+    const ids = allTagText(entry, 'dc:identifier');
+    // The volume id is the one identifier that is not a numbering scheme.
+    const volume = ids.find((value) => !/^(ISBN|OCLC|LCCN|ISSN):/i.test(value));
+    // Two of them is a title and its subtitle, the way the API says them apart.
+    const title = allTagText(entry, 'dc:title').join(': ');
+    if (!volume || !title) continue;
+    const isbns = ids
+      .filter((value) => /^ISBN:/i.test(value))
+      .map((value) => cleanIsbn(value.slice(5)));
+    const thumb = linkHref(entry, '/books/2008/thumbnail');
+    found.push({
+      // Its own prefix, not the API's: the same book from both doors must not
+      // arrive as one key twice. Which of them it is, `mergeCandidates` settles
+      // on the ISBN.
+      id: `gf:${volume}`,
+      source: 'google',
+      title,
+      author: allTagText(entry, 'dc:creator')[0] ?? null,
+      year: yearOf(allTagText(entry, 'dc:date')[0]),
+      isbn: isbns.find((value) => value.length === 13) ?? isbns[0] ?? null,
+      language: allTagText(entry, 'dc:language')[0] ?? null,
+      // Served over plain http, which iOS will not load — `googleCover` is
+      // already the thing that fixes that, along with the curled corner.
+      thumb: thumb ? googleCover(thumb, 'thumb') : null,
+      cover: thumb ? googleCover(thumb, 'full') : null,
+      summary: allTagText(entry, 'dc:description')[0] ?? null,
+      edition: null,
+    });
+  }
+  return found;
+}
+
 export function candidatesFromGoogle(payload: unknown): Candidate[] {
   const items = (payload as { items?: unknown[] })?.items;
   if (!Array.isArray(items)) return [];
@@ -187,8 +294,8 @@ export function candidatesFromGoogle(payload: unknown): Candidate[] {
       year: yearOf(info.publishedDate),
       isbn: isbn ? cleanIsbn(isbn) : null,
       language: text(info.language),
-      thumb: thumb ? googleCover(thumb, 1) : null,
-      cover: thumb ? googleCover(thumb, 0) : null,
+      thumb: thumb ? googleCover(thumb, 'thumb') : null,
+      cover: thumb ? googleCover(thumb, 'full') : null,
       summary: text(info.description),
       edition: null,
     });
@@ -229,10 +336,23 @@ export function mergeCandidates(lists: Candidate[][], limit = 10, asked = ''): C
     .slice(0, limit);
 }
 
+/** The status, kept rather than flattened into a message: 429 means something. */
+export class HttpError extends Error {
+  constructor(public status: number) {
+    super(String(status));
+  }
+}
+
 async function json(url: string): Promise<unknown> {
   const response = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!response.ok) throw new Error(`${response.status}`);
+  if (!response.ok) throw new HttpError(response.status);
   return response.json();
+}
+
+async function xml(url: string): Promise<string> {
+  const response = await fetch(url, { headers: { accept: 'application/atom+xml' } });
+  if (!response.ok) throw new HttpError(response.status);
+  return response.text();
 }
 
 const OL_FIELDS = 'key,title,author_name,first_publish_year,cover_i,language,edition_key';
@@ -263,38 +383,133 @@ export function openLibraryQuery(asked: string): string {
 /** Neither catalog could be reached, which is not the same as neither knowing. */
 export class CatalogsUnreachable extends Error {}
 
-export async function findBook(query: string, limit = 10): Promise<Candidate[]> {
-  const asked = query.trim();
-  if (!asked) return [];
-  const isbn = isIsbn(asked) ? cleanIsbn(asked) : null;
+export type CatalogId = 'openlibrary' | 'google';
 
-  const answered = [false, false];
-  const [openLibrary, google] = await Promise.all([
-    json(
-      isbn
-        ? `${OL_SEARCH}?q=isbn:${isbn}&fields=${OL_FIELDS}&limit=${limit}`
-        : `${OL_SEARCH}?q=${encodeURIComponent(openLibraryQuery(asked))}&fields=${OL_FIELDS}&limit=${limit}`
-    )
-      .then((body) => {
-        answered[0] = true;
-        return candidatesFromOpenLibrary(body);
-      })
-      .catch(() => [] as Candidate[]),
-    json(
-      `${GOOGLE}?q=${encodeURIComponent(isbn ? `isbn:${isbn}` : asked)}&maxResults=${limit}`
-    )
-      .then((body) => {
-        answered[1] = true;
-        return candidatesFromGoogle(body);
-      })
-      .catch(() => [] as Candidate[]),
+/**
+ * What a catalog did, and not only what it returned.
+ *
+ * A catalog that refused used to be indistinguishable from one that had
+ * nothing: both paths ended in an empty array, and as long as the *other* one
+ * answered, the reader was told "no results" about a book that is certainly in
+ * there. Google's keyless quota went to zero at some point, so that is what has
+ * been happening on every lookup — half the search silently not running.
+ */
+export type CatalogReport = {
+  source: CatalogId;
+  answered: boolean;
+  found: number;
+  /** The status or error, where it did not answer. */
+  reason?: string;
+  /** A refusal that a key of the reader's own would lift. */
+  needsKey?: boolean;
+};
+
+export type Lookup = { candidates: Candidate[]; catalogs: CatalogReport[] };
+
+/**
+ * A Chinese ISBN. The group is the digits after the 978 prefix: 7 is China, and
+ * the old ten-digit form starts with it directly. Worth knowing because it is
+ * the one prefix where both of these catalogs are weak — Open Library holds a
+ * fraction of what China publishes and romanises much of what it does hold —
+ * and saying so is better than "no results", which reads as "no such book".
+ */
+export function isChineseIsbn(raw: string): boolean {
+  const digits = cleanIsbn(raw);
+  return digits.startsWith('9787') || (digits.length === 10 && digits.startsWith('7'));
+}
+
+async function ask(
+  source: CatalogId,
+  run: () => Promise<Candidate[]>
+): Promise<{ candidates: Candidate[]; report: CatalogReport }> {
+  try {
+    const candidates = await run();
+    return { candidates, report: { source, answered: true, found: candidates.length } };
+  } catch (problem) {
+    const status = problem instanceof HttpError ? problem.status : null;
+    return {
+      candidates: [],
+      report: {
+        source,
+        answered: false,
+        found: 0,
+        reason: status ? String(status) : String(problem),
+      },
+    };
+  }
+}
+
+/**
+ * Two catalogs, three doors.
+ *
+ * Google's current API is asked only when there is a key for it, because
+ * without one it does not answer at all — its anonymous quota is zero a day, so
+ * asking is a guaranteed round trip to a 429. Its old feed is asked always: no
+ * key, and it holds the Chinese editions that are the whole reason this needed
+ * fixing. Either door answering means Google answered; only a key buys the
+ * richer record, and nothing buys it coverage it does not have.
+ */
+export async function findBook(
+  query: string,
+  { limit = 10, googleKey }: { limit?: number; googleKey?: string | null } = {}
+): Promise<Lookup> {
+  const asked = query.trim();
+  if (!asked) return { candidates: [], catalogs: [] };
+  const isbn = isIsbn(asked) ? cleanIsbn(asked) : null;
+  const key = googleKey?.trim() || null;
+  const terms = isbn ? `isbn:${isbn}` : asked;
+
+  const [openLibrary, api, feed] = await Promise.all([
+    ask('openlibrary', async () =>
+      candidatesFromOpenLibrary(
+        await json(
+          isbn
+            ? `${OL_SEARCH}?q=isbn:${isbn}&fields=${OL_FIELDS}&limit=${limit}`
+            : `${OL_SEARCH}?q=${encodeURIComponent(openLibraryQuery(asked))}&fields=${OL_FIELDS}&limit=${limit}`
+        )
+      )
+    ),
+    key
+      ? ask('google', async () =>
+          candidatesFromGoogle(
+            await json(
+              `${GOOGLE}?q=${encodeURIComponent(terms)}&maxResults=${limit}` +
+                `&key=${encodeURIComponent(key)}`
+            )
+          )
+        )
+      : null,
+    ask('google', async () =>
+      candidatesFromGoogleFeed(
+        await xml(`${GOOGLE_FEED}?q=${encodeURIComponent(terms)}&max-results=${limit}`)
+      )
+    ),
   ]);
+
+  // One row for Google however many of its doors were tried: to a reader it is
+  // one catalog, and "the newer half of Google is rate limited" is not a
+  // sentence anybody can act on.
+  const google: CatalogReport = {
+    source: 'google',
+    answered: Boolean(api?.report.answered) || feed.report.answered,
+    found: (api?.report.found ?? 0) + feed.report.found,
+    reason: feed.report.reason ?? api?.report.reason,
+    // A key would have opened a door that was not even tried.
+    needsKey: !key && !feed.report.answered,
+  };
 
   // Both refused — a rate limit, no signal, a query one of them would not take.
   // Reporting that as "nothing found" sends someone looking for a book that is
   // there.
-  if (!answered[0] && !answered[1]) throw new CatalogsUnreachable();
-  return mergeCandidates([openLibrary, google], limit, asked);
+  if (!openLibrary.report.answered && !google.answered) throw new CatalogsUnreachable();
+  return {
+    candidates: mergeCandidates(
+      [openLibrary.candidates, api?.candidates ?? [], feed.candidates],
+      limit,
+      asked
+    ),
+    catalogs: [openLibrary.report, google],
+  };
 }
 
 /**
