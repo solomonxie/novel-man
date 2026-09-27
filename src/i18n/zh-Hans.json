@@ -93,7 +93,13 @@
     "shelf_wishlist": "想读",
     "shelf_read": "读完",
     "noneHere": "这个书架上还没有书。",
-    "inTerms": "在概念与记忆卡中（{{count}}）"
+    "inTerms": "在概念与记忆卡中（{{count}}）",
+    "sectionReviews": "书评"
+  },
+  "reviews": {
+    "title": "书评",
+    "none": "还没有写过书评。书评写在每本书自己的页面上，就在星级下面。",
+    "search": "搜索书评"
   },
   "import": {
     "title": "导入",

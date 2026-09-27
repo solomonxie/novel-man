@@ -24,6 +24,7 @@ import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/q
 import { supportedExtensions } from '../src/import/registry';
 import { Row, Section } from '../src/ui/primitives';
 import { BookTile } from '../src/ui/BookTile';
+import { ReviewCard } from '../src/ui/ReviewCard';
 import { hueFrom } from '../src/ui/fields';
 import { Chip, ChipRow } from '../src/ui/detail';
 import { coversByList, listBookLists, listTags, type BookList, type Face } from '../src/db/shelves';
@@ -54,6 +55,9 @@ import { syncOnLaunch } from '../src/cloud/sync';
 import { radius, space, usePalette } from '../src/theme';
 import { timed, trace } from '../src/dev/trace';
 import { appearances, setAppearance, useAppearance, type Appearance } from '../src/theme/appearance';
+
+/** Enough to read on the way past; the heading leads to the rest. */
+const REVIEWS_SHOWN = 3;
 
 /** The order the shelves are read in, which is not the order they are declared in. */
 const SHELVES: ReadingStatus[] = ['reading', 'wishlist', 'read'];
@@ -237,6 +241,19 @@ export default function Home() {
     () => results.meta.filter((hit) => hit.kind === 'term' || hit.kind === 'card').map(toRow),
     [results]
   );
+  /**
+   * The books this reader has written about, newest verdict first. Derived
+   * rather than queried: `listBooks` already selects the column, and a second
+   * trip for it would be a scan of the whole shelf on every focus.
+   */
+  const reviews = useMemo(
+    () =>
+      (books ?? [])
+        .filter((book) => book.review?.trim())
+        .sort((a, b) => (b.rated_at ?? 0) - (a.rated_at ?? 0)),
+    [books]
+  );
+
   const notes = useMemo(
     () => results.meta.filter((hit) => hit.kind === 'note').map(toRow),
     [results]
@@ -389,6 +406,28 @@ export default function Home() {
                   keyboardShouldPersistTaps="handled"
                   contentContainerStyle={styles.shelfRow}
                 />
+              </View>
+            ) : null}
+
+            {/* What the reader made of what they read, which is the one thing
+                on this page that is theirs rather than the book's. Rows, not a
+                sideways shelf: a review is read, not recognised. */}
+            {!query.trim() && reviews.length > 0 ? (
+              <View style={{ marginTop: space.xl }}>
+                <SectionHead
+                  title={t('shelf.sectionReviews')}
+                  count={reviews.length}
+                  onOpen={() => router.push('/reviews')}
+                />
+                <View style={{ paddingHorizontal: space.lg, gap: space.sm }}>
+                  {reviews.slice(0, REVIEWS_SHOWN).map((book) => (
+                    <ReviewCard
+                      key={book.id}
+                      book={book}
+                      onPress={() => router.push(`/book/${book.id}`)}
+                    />
+                  ))}
+                </View>
               </View>
             ) : null}
 
