@@ -10,13 +10,21 @@ import { EditableLine } from './EditableLine';
  * it, and what you can do to it — in that order, and in three different
  * weights.
  */
-export function Hero({ eyebrow, avatar, children, facts, actions, note, onNotePress, growsDown }: {
+export function Hero({ eyebrow, avatar, children, panel, facts, actions, note, onNotePress, growsDown }: {
   eyebrow?: string;
   /** A face, when the page is about someone. It leads the line rather than floating above it. */
   avatar?: React.ReactNode;
   /** For a column something unfolds inside: centred against a tall cover it
    *  would grow upwards too and shove the title with it. */
   growsDown?: boolean;
+  /**
+   * What a fact unfolds into, under the row of them and across the whole
+   * card. It sits here rather than up in the column beside the cover because
+   * the thing that opens it is one of the boxes: a panel anywhere above the
+   * row it belongs to opens upwards out of the box you just tapped, which is
+   * what this looked like for three attempts at fixing it.
+   */
+  panel?: React.ReactNode;
   children: React.ReactNode;
   facts?: React.ReactNode;
   actions?: React.ReactNode;
@@ -45,6 +53,7 @@ export function Hero({ eyebrow, avatar, children, facts, actions, note, onNotePr
         head
       )}
       {facts ? <View style={styles.facts}>{facts}</View> : null}
+      {panel ? <View style={styles.panel}>{panel}</View> : null}
       {actions ? <View style={styles.actions}>{actions}</View> : null}
       {note ? (
         <Text
@@ -419,6 +428,7 @@ const styles = StyleSheet.create({
   },
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   heroRowTop: { alignItems: 'flex-start' },
+  panel: { marginTop: space.md },
   eyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: space.xs },
   // One row, always. Four counts that wrap onto a second line read as two
   // groups of facts rather than one, so they share the width instead: each
