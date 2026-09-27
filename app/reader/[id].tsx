@@ -720,6 +720,9 @@ export default function Reader() {
     fontFamily: settings.serif ? (script === 'cjk' ? 'Songti SC' : 'Georgia') : undefined,
   };
 
+  /** What this chapter is called, or the only thing left to call it by. */
+  const heading = chapter.title.trim() || `${index + 1}`;
+
   /** In this chapter, in this language — or the words the book was written in. */
   const showing = !!target && ready.includes(target);
 
@@ -795,7 +798,7 @@ export default function Reader() {
             wheels, so the bar answers "where am I" and "where to" in one place. */}
         <Pressable onPress={() => setJumpOpen((was) => !was)} style={styles.title} hitSlop={8}>
           <Text numberOfLines={1} style={{ color: palette.text, fontSize: 17, fontWeight: '600' }}>
-            {chapter.title.trim() || `${index + 1}`}
+            {heading}
           </Text>
           <Text style={{ color: palette.accent, fontSize: 24, lineHeight: 26 }}>
             {jumpOpen ? ' ▴' : ' ▾'}
@@ -877,6 +880,27 @@ export default function Reader() {
               if (!selection) setChrome(!chromeShown.current);
             }}
           >
+            {/* The chapter's name where a printed book puts it: at the head
+                of its own page, large, with air under it, scrolling away
+                with the words. The bar carries it too and still should —
+                that answers "where am I" from the middle of a chapter. This
+                answers where the chapter begins, which is the question a
+                book has always answered by setting the title and then
+                leaving a gap. */}
+            {paragraphs.length > 0 ? (
+              <Text
+                style={{
+                  color: palette.text,
+                  fontFamily: bodyStyle.fontFamily,
+                  fontSize: Math.round(settings.fontSize * 1.7),
+                  lineHeight: Math.round(settings.fontSize * 2.1),
+                  fontWeight: '600',
+                  marginBottom: lineHeight * 1.4,
+                }}
+              >
+                {heading}
+              </Text>
+            ) : null}
             {/* A chapter nobody has translated yet, while the page is set to
                 a language: it is shown in its own words, and says so rather
                 than pretending the original is the translation. */}
@@ -1014,7 +1038,7 @@ export default function Reader() {
           {paragraphs.length > 0 ? (
             <View style={styles.ends}>
               <Text style={{ color: palette.dim, fontSize: 13, textAlign: 'center' }}>
-                {t('reader.endOfChapter', { name: chapter.title.trim() || `${index + 1}` })}
+                {t('reader.endOfChapter', { name: heading })}
               </Text>
               <View style={styles.endButtons}>
                 {index > 0 ? (
