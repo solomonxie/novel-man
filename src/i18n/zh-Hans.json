@@ -223,7 +223,9 @@
     "cards": "记忆卡",
     "cardsEmpty": "还没有记忆卡。",
     "addCard": "＋ 添加记忆卡",
-    "searchCards": "搜索记忆卡"
+    "searchCards": "搜索记忆卡",
+    "jumpNone": "这里还没有章节。",
+    "jumpSearch": "搜索章节"
   },
   "reader": {
     "go": "前往",

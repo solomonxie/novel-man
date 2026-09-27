@@ -223,7 +223,9 @@
     "cards": "Flash cards",
     "cardsEmpty": "No flash cards yet.",
     "addCard": "＋ Add a flash card",
-    "searchCards": "Search flash cards"
+    "searchCards": "Search flash cards",
+    "jumpNone": "No chapters here.",
+    "jumpSearch": "Search chapters"
   },
   "reader": {
     "go": "Go",
