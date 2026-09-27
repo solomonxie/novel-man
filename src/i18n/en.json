@@ -93,7 +93,13 @@
     "shelf_wishlist": "Want to read",
     "shelf_read": "Finished",
     "noneHere": "Nothing on this shelf yet.",
-    "inTerms": "In concepts & cards ({{count}})"
+    "inTerms": "In concepts & cards ({{count}})",
+    "sectionReviews": "Reviews"
+  },
+  "reviews": {
+    "title": "Reviews",
+    "none": "Nothing written about a book yet. A review is written on the book’s own page, under the stars.",
+    "search": "Search reviews"
   },
   "import": {
     "title": "Import",
