@@ -78,7 +78,8 @@
     "addBook": "添加一本书",
     "shelf_reading": "在读",
     "shelf_wishlist": "想读",
-    "shelf_read": "读完"
+    "shelf_read": "读完",
+    "noneHere": "这个书架上还没有书。"
   },
   "import": {
     "title": "导入",
@@ -118,7 +119,7 @@
     "importedFrom": "来自 {{name}}",
     "stats": "{{words}} · {{chapters}} 章 · {{time}}",
     "delete": "删除本书",
-    "deleteConfirm": "删除这本书？笔记和标注也会一并删除。",
+    "deleteConfirm": "删除这本书？它的笔记和划线会一起删除——会在「最近删除」里保留 30 天，之后清除。",
     "details": "详情",
     "year": "年份",
     "edition": "版本",
@@ -174,11 +175,11 @@
     "partsHint": "每一卷都有自己的页面：简介、章节，以及你在这一卷里写的全部笔记。",
     "searchParts_book": "搜索书卷",
     "searchParts_volume": "搜索卷",
-    "terms": "术语",
-    "termsEmpty": "还没有术语。",
-    "addTerm": "＋ 添加术语",
-    "searchTerms": "搜索术语",
-    "termsAll": "全部术语",
+    "terms": "概念与术语",
+    "termsEmpty": "还没有概念或术语。",
+    "addTerm": "＋ 添加概念或术语",
+    "searchTerms": "搜索概念与术语",
+    "termsAll": "全部概念与术语",
     "ratingShort": "评分",
     "favorite": "喜欢",
     "ratedOn": "{{date}} 打的分",
@@ -507,10 +508,8 @@
     "now": "立即备份",
     "nowUnchanged": "距上次备份没有任何改动。",
     "restoredWaiting": "{{count}} 本书以书骨架的形式恢复——除正文外一应俱全。",
-    "file": "备份文件",
     "exportLibrary": "导出整个书库",
     "restoreFromFile": "从文件恢复…",
-    "fileHint": "一个 .zip 文件，包含你的书、章节结构、笔记和档案，在任何地方都能打开。不含 AI 密钥。",
     "freq_off": "关闭",
     "freq_daily": "每天",
     "freq_weekly": "每周",
@@ -523,7 +522,9 @@
     "notABundle": "这不是 Novel Man 的备份文件。",
     "tooNew": "该备份来自更新的版本（v{{version}}），请先升级应用。",
     "aboutUnknown": "这是旧版本写的备份，没有记录里面有什么。恢复仍然可用。",
-    "aboutEmpty": "里面是空的。"
+    "aboutEmpty": "里面是空的。",
+    "file": "备份文件",
+    "fileHint": "一个 .zip 文件，包含你的书、章节结构、笔记和档案，在任何地方都能打开。不含 AI 密钥。"
   },
   "ai": {
     "noKeyTitle": "没有 AI 密钥",
@@ -639,7 +640,7 @@
     "backToChapters": "全部章节"
   },
   "cloud": {
-    "title": "云端备份",
+    "title": "副本存放位置",
     "hint": "每一份备份都包含除密钥以外的一切：书籍正文、笔记、翻译、人物、进度、设置，以及你导入的文件。iCloud 保留最近十份；你自己的存储桶保留每一份，并且只有你主动上传时才会上传。",
     "addConnection": "＋ 添加云存储",
     "addConnectionHint": "你自己的 S3 兼容存储桶，完整备份并保留历史版本。",
@@ -893,9 +894,9 @@
     "goodreads": "Goodreads",
     "goodreadsDetail": "导入你的全部书籍、评分和书评",
     "goodreadsHint": "Goodreads 已关闭 API，所以这里读取你的导出文件或书架的 RSS。",
-    "douban": "豆瓣",
-    "doubanDetail": "从文件导入你的读过、在读和想读",
-    "doubanHint": "豆瓣不提供导出，所以这里读取由你主页生成的 CSV。"
+    "csv": "从 CSV 文件导入",
+    "csvDetail": "从任何平台的 CSV 导入书单",
+    "csvHint": "任何平台的 CSV 都行，只要带着这一页列出的那些列。"
   },
   "find": {
     "prompt": "输入要找的内容，然后点搜索。",
@@ -1029,7 +1030,7 @@
     "err_canon": "“{{detail}}”能读，但里面不是圣经——卷名与章数对不上任何正典。"
   },
   "term": {
-    "eyebrow": "术语",
+    "eyebrow": "概念 / 术语",
     "name": "名称",
     "aliasPlaceholder": "其他称呼，用逗号分隔",
     "summaryPlaceholder": "用一两句话说明这是什么。",
@@ -1099,20 +1100,22 @@
     "savedRead": "重新读取",
     "savedForget": "不再在这里显示这个书架？已导入的书不受影响。"
   },
-  "db": {
-    "why": "豆瓣没有 API，也没有自己的导出，RSS 只有最近十条、且电影音乐混在一起。所以这里只有一扇门：由你主页的书架页面生成的 CSV——书架页面确实带着你的评分、短评和日期。",
+  "csv": {
+    "why": "任何平台的书单，只要是 CSV。Goodreads 自己的导出文件可以直接读；其他文件也一样，只要表头带着下面这些列。",
     "chooseCsv": "选择 CSV 文件",
-    "how": "本仓库的 tools/douban-shelf.py 可以生成：python3 tools/douban-shelf.py <你的豆瓣 ID>。存到「文件」里，再在这里选它。",
+    "chooseAnother": "换一个文件",
+    "chosen": "{{name}}",
+    "how": "Goodreads 在「设置 › 导入与导出」里可以导出。豆瓣不提供导出，本仓库的 tools/douban-shelf.py 可以从你的书架页面生成一份：python3 tools/douban-shelf.py <你的豆瓣 ID>。其他来源——别的应用、你自己的表格——只需要用这些列名。存到「文件」里，再在这里选它。",
     "columnsTitle": "文件需要的列",
     "required": "必需",
     "notACsv": "文件里没有找到书。请对照下面的列检查表头。",
     "col": {
       "title": "书名，与书架上显示的一致",
-      "id": "豆瓣的条目编号，再导入一次就是更新而不是重复添加",
+      "id": "该平台的条目编号，再导入一次就是更新而不是重复添加",
       "author": "作者，或出版信息里的第一个名字",
-      "shelf": "读过、在读或想读——read、currently-reading、to-read 也可以",
+      "shelf": "read、currently-reading 或 to-read——读过、在读、想读也可以",
       "rating": "1 到 5；未打分写 0",
-      "review": "你的短评，作为书评保存",
+      "review": "你写的评论，作为书评保存",
       "date": "读完的日期",
       "isbn": "之后用来找封面和对应的版本"
     }

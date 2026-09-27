@@ -693,4 +693,11 @@ export const migrations: string[] = [
   // A bundle per book is not written any more — see `cloud/sync`. Anything an
   // older build queued would now upload the whole library under a book's name.
   `DELETE FROM cloud_jobs WHERE kind = 'upload-book'`,
+
+
+  // The Douban door became the CSV door: one file format, any platform.
+  // The provenance a library import writes is now "a CSV file" rather than a
+  // site, so a re-import of the same file still matches by its own ids instead
+  // of falling back to titles. Nothing else ever wrote douban.com.
+  `UPDATE books SET source_name = 'a CSV file' WHERE source_name = 'douban.com'`,
 ];

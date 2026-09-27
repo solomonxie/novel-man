@@ -23,7 +23,7 @@ import { addEvent } from '../db/timeline';
 export const BY_HAND = 'by hand';
 export const OPEN_LIBRARY = 'openlibrary.org';
 export const GOODREADS = 'goodreads.com';
-export const DOUBAN = 'douban.com';
+export const CSV_FILE = 'a CSV file';
 
 export function keepByHand(input: {
   title: string;
