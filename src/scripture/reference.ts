@@ -24,6 +24,10 @@ export function referenceOf(chapterTitle: string, touched: Verse[]): string {
 /**
  * The reference, then the passage with every verse numbered — clipped to what
  * was selected, so half a verse quotes as half a verse under its own number.
+ *
+ * No stop after the reference. "Hebrews 3:1-3." is a sentence that has ended,
+ * and what follows it is the verse it was announcing; the bracketed number is
+ * already the break, and the period only ever read as a typo in the quote.
  */
 export function quoteWithVerses(
   text: string,
@@ -41,5 +45,5 @@ export function quoteWithVerses(
     })
     .filter((line) => line.length > `[] `.length)
     .join(' ');
-  return `${referenceOf(chapterTitle, touched)}. ${body}`;
+  return `${referenceOf(chapterTitle, touched)} ${body}`;
 }
