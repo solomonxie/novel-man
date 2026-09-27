@@ -698,6 +698,7 @@
     "nothingYet": "Nothing translated in this chapter yet.",
     "notYet": "Not translated yet",
     "editHint": "Tap a sentence to correct it. Corrections are used as examples for the sentences that follow, and can be turned into terms.",
+    "converted": "Converted {{count}} sentences on this phone — 简体 and 繁體 are the same words in another script, so no model was asked and nothing was sent.",
     "again": "Translate it again",
     "translateChapter": "Translate this chapter",
     "readInReader": "Read it in the reader. Choose the language from the Aa menu.",
