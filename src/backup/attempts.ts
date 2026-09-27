@@ -16,21 +16,98 @@ export type Attempt = {
   bytes: number | null;
 };
 
-export async function recordAttempt(
-  destination: string,
-  outcome: { ok: boolean; error?: unknown; bytes?: number }
-): Promise<void> {
+export type Outcome = {
+  ok: boolean;
+  error?: unknown;
+  bytes?: number;
+  /** The bundle written, where the attempt got as far as naming one. */
+  name?: string;
+  /** What the library measured at the time, so the log traces the work too. */
+  books?: number;
+  words?: number;
+};
+
+/**
+ * Two writes of one event. The upsert above is the state — what this
+ * destination is doing now, which is what the shelf and the copies page ask
+ * for. The append below is the history, which nothing kept: a bundle is
+ * overwritten all day and pruned after ten, so by the time someone wonders
+ * when a thing was last safe, the only record of it had been written over.
+ */
+export async function recordAttempt(destination: string, outcome: Outcome): Promise<void> {
   const database = await db();
+  const at = Date.now();
+  const error = outcome.ok ? null : reasonOf(outcome.error);
   await database.runAsync(
     `INSERT INTO backup_attempts (destination, at, ok, error, bytes) VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(destination) DO UPDATE SET
        at = excluded.at, ok = excluded.ok, error = excluded.error, bytes = excluded.bytes`,
     destination,
-    Date.now(),
+    at,
     outcome.ok ? 1 : 0,
-    outcome.ok ? null : reasonOf(outcome.error),
+    error,
     outcome.bytes ?? null
   );
+  await appendToLog(database, destination, at, error, outcome);
+}
+
+export type LogEntry = Attempt & {
+  id: number;
+  name: string | null;
+  books: number | null;
+  words: number | null;
+};
+
+/**
+ * Append-only, and bounded — a phone is not a log server, and an append-only
+ * anything with no end is a slow leak rather than a record. A thousand entries
+ * is years of one reader's backups and tens of kilobytes; past that the oldest
+ * fall off, which is the whole of the compromise.
+ */
+const KEEP = 1000;
+
+async function appendToLog(
+  database: Awaited<ReturnType<typeof db>>,
+  destination: string,
+  at: number,
+  error: string | null,
+  outcome: Outcome
+): Promise<void> {
+  await database.runAsync(
+    `INSERT INTO backup_log (destination, at, ok, error, bytes, name, books, words)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    destination,
+    at,
+    outcome.ok ? 1 : 0,
+    error,
+    outcome.bytes ?? null,
+    outcome.name ?? null,
+    outcome.books ?? null,
+    outcome.words ?? null
+  );
+  // Off the primary key, so trimming costs nothing next to the backup that
+  // just ran. Ids only ever climb: `AUTOINCREMENT` never reuses one.
+  await database.runAsync(
+    'DELETE FROM backup_log WHERE id <= (SELECT MAX(id) FROM backup_log) - ?',
+    KEEP
+  );
+}
+
+/** Newest first, which is the order the question is always asked in. */
+export async function readBackupLog(limit = 200): Promise<LogEntry[]> {
+  const database = await db();
+  const rows = await database.getAllAsync<{
+    id: number;
+    destination: string;
+    at: number;
+    ok: number;
+    error: string | null;
+    bytes: number | null;
+    name: string | null;
+    books: number | null;
+    words: number | null;
+  }>('SELECT * FROM backup_log ORDER BY at DESC, id DESC LIMIT ?', limit);
+  return rows.map((row) => ({ ...row, ok: row.ok === 1 }));
 }
 
 /** One line, because it goes in a row detail. Never the whole stack. */

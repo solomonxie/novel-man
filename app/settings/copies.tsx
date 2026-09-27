@@ -206,6 +206,12 @@ export default function YourCopies() {
           detail={t('copies.deletedHint')}
           value={`${deleted}`}
           onPress={() => router.push('/settings/deleted')}
+        />
+        <Row
+          label={t('copies.log')}
+          detail={t('copies.logHint')}
+          value="›"
+          onPress={() => router.push('/settings/backup-log')}
           last
         />
       </Section>

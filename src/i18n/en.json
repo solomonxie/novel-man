@@ -594,7 +594,9 @@
     "stateFailing": "The last copy failed: {{reason}}",
     "stateHereOnly": "{{count}} copies, all of them on this phone",
     "stateBehind": "Changes that have not left this phone yet",
-    "stateOk": "Last copy left this phone {{when}}"
+    "stateOk": "Last copy left this phone {{when}}",
+    "log": "Backup history",
+    "logHint": "Every copy taken, and what was in it"
   },
   "covers": {
     "sweptTitle": "{{count}} covers were not covers",
@@ -1278,5 +1280,14 @@
     "became_none": "Status cleared",
     "finishedChapter": "Finished {{what}}",
     "aMoment": "A moment"
+  },
+  "log": {
+    "title": "Backup history",
+    "hint": "Every copy this app has taken, newest first. The bundles themselves are named for a day, rewritten all day, and only the last ten are kept — so this is the part that remembers the rest. The most recent 1,000 entries stay here.",
+    "empty": "No copy has been taken yet.",
+    "where_icloud": "iCloud Drive",
+    "where_local": "On this phone",
+    "wrote": "{{where}} · {{books}} books · {{words}} words",
+    "failed": "{{where}} · {{reason}}"
   }
 }
