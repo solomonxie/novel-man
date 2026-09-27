@@ -48,3 +48,30 @@ export function statusOf(value: string | null | undefined): ReadingStatus | null
 export function shelfOf(book: { status?: string | null; offset?: number | null }): ReadingStatus {
   return statusOf(book.status) ?? ((book.offset ?? 0) > 0 ? 'reading' : 'wishlist');
 }
+
+/** What a reader has written about a book, with the date it was written. */
+export type Reviewed = {
+  review?: string | null;
+  reviewed_at?: number | null;
+  rated_at?: number | null;
+  created_at?: number;
+};
+
+/**
+ * The books with a verdict on them, newest written first. Shared, because the
+ * shelf's section and the page it opens are the same list twice and an order
+ * that disagrees between them reads as a bug in both.
+ *
+ * A review from before this had a date of its own falls back to the rating's,
+ * then to when the book arrived — an undated one belongs where the rest of its
+ * import is, not permanently at the bottom.
+ */
+export function reviewedAt(book: Reviewed): number {
+  return book.reviewed_at ?? book.rated_at ?? book.created_at ?? 0;
+}
+
+export function reviewedBooks<T extends Reviewed>(books: T[]): T[] {
+  return books
+    .filter((book) => book.review?.trim())
+    .sort((a, b) => reviewedAt(b) - reviewedAt(a));
+}

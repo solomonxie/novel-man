@@ -764,4 +764,13 @@ export const migrations: string[] = [
      created_at INTEGER NOT NULL
    );
    CREATE INDEX excerpts_entity ON excerpts(entity_id, at)`,
+
+  // When the verdict itself was written, which `rated_at` could not say: the
+  // stars and the review share that column, so giving a book read in 2015 its
+  // third star moved its old review to the top of the reviews list. Backfilled
+  // from the rating, because for a review written before this that is the only
+  // date there is.
+  `ALTER TABLE books ADD COLUMN reviewed_at INTEGER;
+   UPDATE books SET reviewed_at = COALESCE(rated_at, created_at)
+     WHERE COALESCE(TRIM(review), '') != ''`,
 ];
