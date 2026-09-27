@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { listBooks, type BookListItem } from '../src/db/repo';
-import { statusOf, type ReadingStatus } from '../src/books/record';
+import { shelfOf, type ReadingStatus } from '../src/books/record';
 import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
 import { supportedExtensions } from '../src/import/registry';
 import { Row, Section } from '../src/ui/primitives';
@@ -175,15 +175,12 @@ export default function Home() {
    * Three shelves and no fourth. A book nobody has said anything about is one
    * they have not read yet, which is what "want to read" means — a bucket
    * named for the absence of an answer explained nothing and held most of the
-   * library. A book is "reading" if it says so or if it has been opened and
-   * left part way through: twelve chapters in is the answer to "am I reading
-   * this", whether or not anyone set the status afterwards.
+   * library. Which shelf a book lands on is `shelfOf`.
    */
   const shelves = useMemo(() => {
     const byStatus = new Map<ReadingStatus, BookListItem[]>();
     for (const book of library) {
-      const status =
-        statusOf(book.status) ?? ((book.offset ?? 0) > 0 ? 'reading' : 'wishlist');
+      const status = shelfOf(book);
       const found = byStatus.get(status);
       if (found) found.push(book);
       else byStatus.set(status, [book]);
@@ -305,12 +302,16 @@ export default function Home() {
                    can grow without a ceiling. */
                 shelves.map(({ status, books: shelf }, index) => (
                   <View key={status} style={index > 0 ? { marginTop: space.xl } : undefined}>
-                    <View style={styles.shelfHead}>
-                      <Text style={[styles.shelfTitle, { color: palette.dim }]}>
-                        {t(`shelf.shelf_${status}`)}
-                      </Text>
-                      <Text style={{ color: palette.faint, fontSize: 12 }}>{shelf.length}</Text>
-                    </View>
+                    {/* The heading is the way to the whole shelf, the way it is
+                        the way to a full list on a book's page. The count stays
+                        the count — quiet, where it always was — and the chevron
+                        is what says it leads somewhere. A bright "More" in a row
+                        of these labels reads as a different app. */}
+                    <SectionHead
+                      title={t(`shelf.shelf_${status}`)}
+                      count={shelf.length}
+                      onOpen={() => router.push(`/status/${status}`)}
+                    />
                     <FlatList
                       horizontal
                       data={shelf}
@@ -331,11 +332,7 @@ export default function Home() {
                 while searching, when the page is about hits. */}
             {!query.trim() ? (
               <View style={{ marginTop: space.xl }}>
-                <View style={styles.shelfHead}>
-                  <Text style={[styles.shelfTitle, { color: palette.dim }]}>
-                    {t('shelf.sectionLists')}
-                  </Text>
-                </View>
+                <SectionHead title={t('shelf.sectionLists')} />
                 {/* Read sideways like the shelf above it, and drawn like a
                     record sleeve: a list is recognised by what is in it. */}
                 <FlatList
@@ -361,11 +358,7 @@ export default function Home() {
 
             {!query.trim() && tags.length > 0 ? (
               <View style={{ marginTop: space.xl }}>
-                <View style={styles.shelfHead}>
-                  <Text style={[styles.shelfTitle, { color: palette.dim }]}>
-                    {t('shelf.sectionTags')}
-                  </Text>
-                </View>
+                <SectionHead title={t('shelf.sectionTags')} />
                 <ChipRow>
                   {tags.map((entry) => (
                     <Chip
@@ -529,6 +522,29 @@ export default function Home() {
         onClose={() => setAppearanceOpen(false)}
       />
     </SafeAreaView>
+  );
+}
+
+/**
+ * The label above a part of this page, and the way into the whole of it where
+ * there is more than fits. Every section wore its own arrangement of a title
+ * and a count until they were all this.
+ */
+function SectionHead({ title, count, onOpen }: {
+  title: string;
+  count?: number;
+  onOpen?: () => void;
+}) {
+  const palette = usePalette();
+  return (
+    <Pressable onPress={onOpen} disabled={!onOpen} style={styles.shelfHead}>
+      <Text style={[styles.shelfTitle, { color: palette.dim }]}>{title}</Text>
+      {count === undefined ? null : (
+        <Text style={{ color: palette.faint, fontSize: 12 }}>
+          {onOpen ? `${count}  ›` : `${count}`}
+        </Text>
+      )}
+    </Pressable>
   );
 }
 

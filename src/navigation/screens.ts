@@ -31,6 +31,7 @@ import Script from '../../app/book/[id]/script';
 import Reader from '../../app/reader/[id]';
 import BookListScreen from '../../app/list/[id]';
 import Tag from '../../app/tag/[name]';
+import Status from '../../app/status/[name]';
 
 export type Screen = {
   /** The path the app writes: `/book/[id]/notes`, with `[…]` for a value. */
@@ -79,6 +80,7 @@ export const screens: Screen[] = [
   { path: '/book/[id]/script', component: Script, header: true },
   { path: '/list/[id]', component: BookListScreen, header: true },
   { path: '/tag/[name]', component: Tag, header: true },
+  { path: '/status/[name]', component: Status, header: true },
   { path: '/reader/[id]', component: Reader, animation: 'fade' },
 ];
 
