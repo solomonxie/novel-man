@@ -12,6 +12,7 @@
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		678F3815DD8607A4FC538889 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E555369B6D20C021B921C273 /* PrivacyInfo.xcprivacy */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		F11748502D0722820044C1DA /* ChineseVariant.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748512D0722820044C1DA /* ChineseVariant.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +27,7 @@
 		E555369B6D20C021B921C273 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = NovelMan/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = NovelMan/AppDelegate.swift; sourceTree = "<group>"; };
+		F11748512D0722820044C1DA /* ChineseVariant.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = ChineseVariant.m; path = NovelMan/ChineseVariant.m; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* NovelMan-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "NovelMan-Bridging-Header.h"; path = "NovelMan/NovelMan-Bridging-Header.h"; sourceTree = "<group>"; };
 		F55E3B88E60879C6C1010125 /* Pods-NovelMan.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NovelMan.debug.xcconfig"; path = "Target Support Files/Pods-NovelMan/Pods-NovelMan.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -46,6 +48,7 @@
 			isa = PBXGroup;
 			children = (
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
+				F11748512D0722820044C1DA /* ChineseVariant.m */,
 				F11748442D0722820044C1D9 /* NovelMan-Bridging-Header.h */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
@@ -280,6 +283,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
+				F11748502D0722820044C1DA /* ChineseVariant.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

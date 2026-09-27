@@ -37,6 +37,7 @@ import { parsePin } from '../cast/location';
 import { hasWiki, parseWikiLink } from '../cast/lookup';
 import { parseTie, TIES } from '../cast/ties';
 import { translate } from '../translate/run';
+import { convertScript } from '../translate/variant';
 import { drawImage } from '../ai/image';
 import type { ImageKind } from '../db/repo';
 import { writeImage } from '../storage/files';
@@ -1288,6 +1289,9 @@ async function translateChapter(job: WorkJob, signal: AbortSignal) {
   const book = await getBook(job.book_id);
   if (!book) throw new Error('book is gone');
   if (job.chapter_idx === null) throw new Error('no chapter to translate');
+  // A job queued before the phone's own converter was reached for, or queued by
+  // something that did not check. 简体 ⇄ 繁體 never costs a request.
+  if (await convertScript(job.book_id, target, book.language, job.chapter_idx)) return;
   const text = await getDocumentText(job.book_id);
   const run = await translate(job.book_id, target, text, book.language, {
     signal,

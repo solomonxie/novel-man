@@ -33,7 +33,8 @@ import { ensureUnitsCurrent } from '../../../src/translate/repair';
 import { queueTranslation } from '../../../src/analysis/runs';
 import { stoppedWithoutKey } from '../../../src/ai/guard';
 import { useWorkRefresh } from '../../../src/work/refresh';
-import { labelFor, targetLanguages } from '../../../src/translate/languages';
+import { labelFor } from '../../../src/translate/languages';
+import { canConvertScript, convertScript } from '../../../src/translate/variant';
 import { Hint, PrimaryAction, Row, Section } from '../../../src/ui/primitives';
 import { radius, space, usePalette } from '../../../src/theme';
 
@@ -202,10 +203,18 @@ export default function TranslationPage() {
                 // machine text either way.
                 onPress={async () => {
                   if (busy) return;
-                  if (await stoppedWithoutKey(t)) return;
+                  const local = canConvertScript(book!.language, target);
+                  if (!local && await stoppedWithoutKey(t)) return;
                   // Nothing waiting means everything here is already written,
                   // so there is something to mark before there is anything to do.
                   if (left === 0) await markChapterStale(id!, target, chapterIdx);
+                  // The phone's own table, so there is nothing to queue and
+                  // nothing to wait for: it is done before the tap is over.
+                  if (local) {
+                    await convertScript(id!, target, book!.language, chapterIdx);
+                    loadUnits();
+                    return;
+                  }
                   await queueTranslation(id!, target, [
                     { idx: chapterIdx, label: chapterLabel(chapters, chapterIdx) },
                   ]);

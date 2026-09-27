@@ -66,6 +66,7 @@ import { citedNotSent } from '../../src/analysis/context';
 import { estimateTranslation, pendingSpans, prepare } from '../../src/translate/run';
 import { pendingByChapter } from '../../src/db/translation';
 import { labelFor, targetLanguages } from '../../src/translate/languages';
+import { canConvertScript, convertScript } from '../../src/translate/variant';
 import { PickerSheet } from '../../src/ui/PickerSheet';
 import { pickImage } from '../../src/ui/fields';
 import { adoptImage } from '../../src/storage/files';
@@ -419,12 +420,25 @@ export default function BookPage() {
   }
 
   async function confirmTranslateAll(code: string) {
-    if (!book || await stoppedWithoutKey(t)) return;
+    if (!book) return;
+    // 简体 ⇄ 繁體 asks nothing of a model, so it asks nothing of the reader
+    // either: no key, no price to agree to, no queue to watch. The phone has
+    // the table and the book is written by the time this returns.
+    const local = canConvertScript(book.language, code);
+    if (!local && await stoppedWithoutKey(t)) return;
     setPreparing(true);
     try {
       // Splitting the book into sentences is what a target *is*, and it only
       // adds what is missing — an existing language keeps every line of it.
       await prepare(book.id, code, (await document.read()).text, chapters, book.language);
+      if (local) {
+        const written = await convertScript(book.id, code, book.language);
+        Alert.alert(
+          labelFor(code),
+          written ? t('translate.converted', { count: written }) : t('book.translateAllDone')
+        );
+        return;
+      }
       const spans = await pendingSpans(book.id, code);
       if (!spans.length) {
         Alert.alert(labelFor(code), t('book.translateAllDone'));

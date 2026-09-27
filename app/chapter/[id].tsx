@@ -6,6 +6,7 @@ import { supports } from '../../src/books/kinds';
 import { listTargets, pendingByChapter } from '../../src/db/translation';
 import { prepare } from '../../src/translate/run';
 import { targetLanguages } from '../../src/translate/languages';
+import { convertScript } from '../../src/translate/variant';
 import { PickerSheet } from '../../src/ui/PickerSheet';
 import { labelFor } from '../../src/translate/languages';
 
@@ -489,7 +490,11 @@ export default function ChapterPage() {
             // Splitting the book into sentences is what a target *is*; it is
             // the one part of this that is not per chapter.
             const all = await listChapters(chapter.book_id);
-            await prepare(chapter.book_id, code, await getDocumentText(chapter.book_id), all, book?.language ?? 'en');
+            const language = book?.language ?? 'en';
+            await prepare(chapter.book_id, code, await getDocumentText(chapter.book_id), all, language);
+            // 简体 ⇄ 繁體 is the phone's own table, so the whole book is already
+            // written by the time this sheet closes: no key, no queue, no price.
+            await convertScript(chapter.book_id, code, language);
             load();
           } finally {
             setPreparing(false);
