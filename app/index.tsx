@@ -216,6 +216,10 @@ export default function Home() {
     () => results.meta.filter((hit) => hit.kind === 'character' || hit.kind === 'place').map(toRow),
     [results]
   );
+  const studied = useMemo(
+    () => results.meta.filter((hit) => hit.kind === 'term' || hit.kind === 'card').map(toRow),
+    [results]
+  );
   const notes = useMemo(
     () => results.meta.filter((hit) => hit.kind === 'note').map(toRow),
     [results]
@@ -460,6 +464,7 @@ export default function Home() {
                 sentence it is all made of. */}
             <Results title={t('shelf.inChapters', { count: chapters.length })} rows={chapters} />
             <Results title={t('shelf.inCast', { count: cast.length })} rows={cast} />
+            <Results title={t('shelf.inTerms', { count: studied.length })} rows={studied} />
             <Results title={t('shelf.inNotes', { count: notes.length })} rows={notes} />
             <Results title={t('shelf.inTheText', { count: passages.length })} rows={passages} />
 
@@ -578,6 +583,8 @@ const routes: Record<MetaHit['kind'], (hit: MetaHit) => string> = {
   chapter: (hit) => `/chapter/${hit.id}`,
   character: (hit) => `/entity/${hit.id}`,
   place: (hit) => `/place/${hit.id}`,
+  term: (hit) => `/term/${hit.id}`,
+  card: (hit) => `/card/${hit.id}`,
   note: (hit) => `/book/${hit.bookId}/notes`,
 };
 

@@ -9,6 +9,8 @@ import {
   getDocumentText,
   getEntity,
   listChapters,
+  listExcerpts,
+  deleteExcerpt,
   listMentions,
   listPlaceVisits,
   parseFields,
@@ -17,6 +19,7 @@ import {
   type Chapter,
   type CustomField,
   type Entity,
+  type Excerpt,
   type PlaceVisit,
   deleteImage,
   imagesFor,
@@ -52,6 +55,7 @@ export default function TermPage() {
   const [term, setTerm] = useState<Entity | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [uses, setUses] = useState<PlaceVisit[]>([]);
+  const [excerpts, setExcerpts] = useState<Excerpt[]>([]);
   const [text, setText] = useState('');
   const [book, setBook] = useState<Book | null>(null);
   const [timeline, setTimeline] = useState<{ chapter_idx: number; count: number }[]>([]);
@@ -78,6 +82,7 @@ export default function TermPage() {
       if (!found) return;
       setChapters(await listChapters(found.book_id));
       setUses(await listPlaceVisits(found.id));
+      setExcerpts(await listExcerpts(found.id));
       setText(await getDocumentText(found.book_id));
       setBook(await getBook(found.book_id));
       setTimeline(timelineFor(await listMentions(found.book_id), found.id));
@@ -114,6 +119,20 @@ export default function TermPage() {
           setZoomed(null);
           await deleteImage(image.id);
           removeImage(image.path);
+          load();
+        },
+      },
+    ]);
+  }
+
+  function confirmRemoveExcerpt(excerpt: Excerpt) {
+    Alert.alert(t('card.removeExcerpt'), excerpt.quote, [
+      { text: t('settings.cancel'), style: 'cancel' },
+      {
+        text: t('settings.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          await deleteExcerpt(excerpt.id);
           load();
         },
       },
@@ -192,6 +211,27 @@ export default function TermPage() {
           />
         ) : null}
       </Hero>
+
+      {excerpts.length ? (
+        <Block title={t('term.excerpts')} count={excerpts.length}>
+          {excerpts.map((excerpt, index) => (
+            <Item
+              key={excerpt.id}
+              badge={<Badge n={excerpt.chapter_idx + 1} tone="quiet" />}
+              title={excerpt.quote}
+              detail={chapterOf(excerpt.chapter_idx)}
+              quiet
+              onPress={() =>
+                router.push(
+                  `/reader/${term.book_id}?chapter=${excerpt.chapter_idx}&at=${excerpt.at}`
+                )
+              }
+              onLongPress={() => confirmRemoveExcerpt(excerpt)}
+              last={index === excerpts.length - 1}
+            />
+          ))}
+        </Block>
+      ) : null}
 
       <Block title={t('term.uses')} count={uses.length || undefined}>
         {uses.length === 0 ? (

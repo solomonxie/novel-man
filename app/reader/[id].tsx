@@ -20,11 +20,14 @@ import Clipboard from '@react-native-clipboard/clipboard';
 
 import {
   addAnnotation,
+  addExcerpt,
+  createEntity,
   getBook,
   getDocumentText,
   getProgress,
   listAnnotations,
   listChapters,
+  listEntities,
   listVerses,
   removeAnnotation,
   saveProgress,
@@ -33,6 +36,7 @@ import {
   type Annotation,
   type Book,
   type Chapter,
+  type Entity,
   type Verse,
 } from '../../src/db/repo';
 import { annotationAt, layoutChapter } from '../../src/reader/model';
@@ -84,6 +88,9 @@ const CHROME_IDLE_MS = 10000;
 /** Apple and Android both put the floor at 44pt / 48dp. */
 const TOUCH = 44;
 
+/** A chosen id, or a request to make the thing first: `new:card`. */
+const NEW = 'new:';
+
 export default function Reader() {
   const { id, chapter: chapterParam, at } = useLocalSearchParams<{
     id: string;
@@ -121,6 +128,14 @@ export default function Reader() {
   const [jumpOpen, setJumpOpen] = useState(false);
   const [noteFor, setNoteFor] = useState<Span | null>(null);
   const [shareFor, setShareFor] = useState<Span | null>(null);
+  /**
+   * What a passage can be filed against: the book's own terms and, for a
+   * textbook, its flash cards. Read once with the book — the sheet has to open
+   * on a tap, and a query at that moment is a sheet that opens empty and fills
+   * in.
+   */
+  const [filable, setFilable] = useState<Entity[]>([]);
+  const [filingFor, setFilingFor] = useState<Span | null>(null);
   const [offset, setOffset] = useState(0);
   const [targets, setTargets] = useState<string[]>([]);
   /** Of those, the ones this chapter has actually been translated into. */
@@ -183,6 +198,15 @@ export default function Reader() {
    * left the page, and the bar at the bottom of it, blank for seconds on a
    * bible. What the chrome needs is three small queries, so it goes first.
    */
+  const loadFilable = useCallback(async (kind: string | undefined) => {
+    if (!id) return;
+    const wanted = (['term', 'card'] as const).filter((each) =>
+      supports(kind, each === 'term' ? 'terms' : 'cards')
+    );
+    const lists = await Promise.all(wanted.map((each) => listEntities(id, each)));
+    setFilable(lists.flat());
+  }, [id]);
+
   useEffect(() => {
     if (!id) return;
     // The shelf orders by this, and it is true the moment the page opens.
@@ -196,6 +220,7 @@ export default function Reader() {
       setBook(loadedBook);
       setChapters(loadedChapters);
       setOffset(saved);
+      void loadFilable(loadedBook?.kind);
 
       const target = at ? Number(at) : null;
       const requested = chapterParam ? Number(chapterParam) : null;
@@ -505,6 +530,8 @@ export default function Reader() {
     : null;
 
   const selected = range ? annotationAt(marks, range) : undefined;
+  /** Somewhere for a passage to go: this kind of book has terms, or cards, or both. */
+  const canFile = supports(book?.kind, 'terms') || supports(book?.kind, 'cards');
 
   async function onCopy() {
     if (!range) return;
@@ -518,6 +545,41 @@ export default function Reader() {
     await Clipboard.setString(cited ?? attributed);
     endSelection();
     flash(t('reader.copied'));
+  }
+
+  /**
+   * The passage, filed against the thing it is about — a term it explains, or a
+   * flash card it is the evidence for. A highlight marks the sentence; this
+   * says what the sentence is for, and turns up on that thing's own page.
+   *
+   * `at` is the offset in what is being read. For a fetched edition that is an
+   * offset inside the chapter rather than the book, which is why the chapter
+   * travels with it and is what the link back uses.
+   */
+  async function fileInto(choice: string) {
+    const span = filingFor;
+    if (!span || !id) return;
+    setFilingFor(null);
+    const quote = source.slice(span.start, span.end).replace(/\s+/g, ' ').trim();
+    const chapterIdx =
+      chapters.find((entry) => span.start >= entry.start && span.start < entry.end)?.idx ?? index;
+    const made = choice.startsWith(NEW);
+    const kind = made ? (choice.slice(NEW.length) as 'term' | 'card') : null;
+    try {
+      const entityId = kind ? await createEntity(id, kind, '') : choice;
+      await addExcerpt({ bookId: id, entityId, quote, at: span.start, chapterIdx });
+      endSelection();
+      if (kind) {
+        // Nothing is named yet, so the page it lands on is where it gets its
+        // name — with the passage already under it.
+        await loadFilable(book?.kind);
+        router.push(`/${kind}/${entityId}`);
+        return;
+      }
+      flash(t('reader.filed', { name: filable.find((one) => one.id === choice)?.name ?? '' }));
+    } catch (error) {
+      flash(String(error));
+    }
   }
 
   /** The colour chosen last is the one the next highlight wants. */
@@ -1089,6 +1151,18 @@ export default function Reader() {
               // note is a change of mind about the note, not about the words.
               onPress: () => setNoteFor(range!),
             },
+            ...(canFile
+              ? [
+                  {
+                    key: 'file',
+                    label: t('reader.fileTo'),
+                    // The selection stays while the sheet is open, the way it
+                    // does for a note: backing out is a change of mind about
+                    // where it goes, not about the words.
+                    onPress: () => setFilingFor(range!),
+                  },
+                ]
+              : []),
             {
               key: 'select',
               // Keeps what is chosen and lets a tap add the next sentence, so
@@ -1103,6 +1177,27 @@ export default function Reader() {
           ]}
         />
       )}
+
+      <PickerSheet
+        visible={filingFor !== null}
+        title={t('reader.fileTitle')}
+        searchPlaceholder={t('reader.fileSearch')}
+        options={[
+          ...(supports(book?.kind, 'cards')
+            ? [{ id: `${NEW}card`, label: t('reader.newCard') }]
+            : []),
+          ...(supports(book?.kind, 'terms')
+            ? [{ id: `${NEW}term`, label: t('reader.newTerm') }]
+            : []),
+          ...filable.map((one) => ({
+            id: one.id,
+            label: one.name || t(one.kind === 'card' ? 'card.frontPlaceholder' : 'term.name'),
+            detail: t(one.kind === 'card' ? 'card.eyebrow' : 'term.eyebrow'),
+          })),
+        ]}
+        onPick={fileInto}
+        onClose={() => setFilingFor(null)}
+      />
 
       <ReadingSettingsSheet
         visible={settingsOpen}

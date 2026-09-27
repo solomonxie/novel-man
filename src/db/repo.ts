@@ -70,7 +70,13 @@ export type Chapter = {
  * and the things it treats as things — an ark, a covenant, a feast, a rank.
  * One table for all three, because they differ only in what a page shows.
  */
-export type EntityKind = 'character' | 'place' | 'term';
+/**
+ * The four things a book has that are worth a page of their own. A card is the
+ * odd one: the first three are things the book names and this is something the
+ * reader made — but it is the same row in every way that matters. A name, a
+ * description, passages out of the book, pictures, custom fields.
+ */
+export type EntityKind = 'character' | 'place' | 'term' | 'card';
 
 export type CustomField = { label: string; value: string };
 
@@ -137,6 +143,15 @@ export async function listBooks(): Promise<BookListItem[]> {
             (SELECT offset FROM reading_state r WHERE r.book_id = b.id) AS offset,
             (SELECT updated_at FROM reading_state r WHERE r.book_id = b.id) AS read_at
      FROM books b ORDER BY COALESCE(read_at, b.created_at) DESC`
+  );
+}
+
+/** Every book with a picture on it, for anything that has to check them all. */
+export async function listCovered(): Promise<{ id: string; title: string; cover_path: string }[]> {
+  const database = await db();
+  return database.getAllAsync<{ id: string; title: string; cover_path: string }>(
+    `SELECT id, title, cover_path FROM books
+      WHERE cover_path IS NOT NULL AND TRIM(cover_path) != ''`
   );
 }
 
@@ -1419,6 +1434,8 @@ export const CARRIED_TABLES = [
   'translation_memory',
   'terms',
   'observations',
+  // Passages the reader filed against a term or a flash card, by hand.
+  'excerpts',
   'continuity_flags',
   'part_details',
   'part_names',
@@ -1858,6 +1875,72 @@ function mergeAliases(entity: Entity, name: string, aliases: string[]): string |
     if (alias.trim() && normalizeName(alias) !== normalizeName(entity.name)) known.add(alias.trim());
   }
   return known.size ? [...known].join(', ') : entity.alias;
+}
+
+/**
+ * A passage out of the book, filed against the thing it is about.
+ *
+ * `at` is the offset in the document rather than only the chapter, so the row
+ * can take somebody back to the exact sentence — which is the whole reason for
+ * keeping the passage rather than a note that mentions it.
+ */
+export type Excerpt = {
+  id: string;
+  book_id: string;
+  entity_id: string;
+  quote: string;
+  note: string | null;
+  at: number;
+  chapter_idx: number;
+  created_at: number;
+};
+
+export async function addExcerpt(input: {
+  bookId: string;
+  entityId: string;
+  quote: string;
+  at: number;
+  chapterIdx: number;
+  note?: string | null;
+}): Promise<string> {
+  const database = await db();
+  const id = newId();
+  await database.runAsync(
+    `INSERT INTO excerpts (id, book_id, entity_id, quote, note, at, chapter_idx, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    id,
+    input.bookId,
+    input.entityId,
+    input.quote,
+    input.note ?? null,
+    input.at,
+    input.chapterIdx,
+    Date.now()
+  );
+  return id;
+}
+
+export async function listExcerpts(entityId: string): Promise<Excerpt[]> {
+  const database = await db();
+  return database.getAllAsync<Excerpt>(
+    'SELECT * FROM excerpts WHERE entity_id = ? ORDER BY at',
+    entityId
+  );
+}
+
+/** How many each of them has, for a list that wants to say so without n queries. */
+export async function excerptCounts(bookId: string): Promise<Map<string, number>> {
+  const database = await db();
+  const rows = await database.getAllAsync<{ entity_id: string; n: number }>(
+    'SELECT entity_id, COUNT(*) AS n FROM excerpts WHERE book_id = ? GROUP BY entity_id',
+    bookId
+  );
+  return new Map(rows.map((row) => [row.entity_id, row.n]));
+}
+
+export async function deleteExcerpt(id: string) {
+  const database = await db();
+  await database.runAsync('DELETE FROM excerpts WHERE id = ?', id);
 }
 
 /** One chapter, one observation: reading it again corrects it, never doubles it. */

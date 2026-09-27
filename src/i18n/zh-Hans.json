@@ -79,7 +79,8 @@
     "shelf_reading": "在读",
     "shelf_wishlist": "想读",
     "shelf_read": "读完",
-    "noneHere": "这个书架上还没有书。"
+    "noneHere": "这个书架上还没有书。",
+    "inTerms": "在概念与记忆卡中（{{count}}）"
   },
   "import": {
     "title": "导入",
@@ -175,11 +176,11 @@
     "partsHint": "每一卷都有自己的页面：简介、章节，以及你在这一卷里写的全部笔记。",
     "searchParts_book": "搜索书卷",
     "searchParts_volume": "搜索卷",
-    "terms": "术语",
-    "termsEmpty": "还没有术语。",
-    "addTerm": "＋ 添加术语",
-    "searchTerms": "搜索术语",
-    "termsAll": "全部术语",
+    "terms": "概念与术语",
+    "termsEmpty": "还没有概念或术语。",
+    "addTerm": "＋ 添加概念或术语",
+    "searchTerms": "搜索概念与术语",
+    "termsAll": "全部概念与术语",
     "ratingShort": "评分",
     "favorite": "喜欢",
     "ratedOn": "{{date}} 打的分",
@@ -198,7 +199,12 @@
     "recordedFrom": "记录来自 {{name}}",
     "review": "你的想法",
     "deleteWhere": "在「最近删除」里等 30 天",
-    "deleteKept": "什么都没有删除"
+    "deleteKept": "什么都没有删除",
+    "termsShort": "术语",
+    "cards": "记忆卡",
+    "cardsEmpty": "还没有记忆卡。",
+    "addCard": "＋ 添加记忆卡",
+    "searchCards": "搜索记忆卡"
   },
   "reader": {
     "go": "前往",
@@ -253,7 +259,13 @@
     "openBook": "打开《{{name}}》",
     "analyzeChapter": "分析这一章",
     "prevShort": "上一章",
-    "nextShort": "下一章"
+    "nextShort": "下一章",
+    "fileTo": "归入…",
+    "fileTitle": "把这段归入",
+    "fileSearch": "搜索",
+    "newCard": "＋ 用它新建一张记忆卡",
+    "newTerm": "＋ 用它新建一个概念或术语",
+    "filed": "已归入{{name}}"
   },
   "settings": {
     "title": "设置",
@@ -1093,7 +1105,7 @@
     "err_canon": "“{{detail}}”能读，但里面不是圣经——卷名与章数对不上任何正典。"
   },
   "term": {
-    "eyebrow": "术语",
+    "eyebrow": "概念 / 术语",
     "name": "名称",
     "aliasPlaceholder": "其他称呼，用逗号分隔",
     "summaryPlaceholder": "用一两句话说明这是什么。",
@@ -1104,7 +1116,22 @@
     "firstUsed": "首次出现",
     "lastUsed": "最后出现",
     "hint": "分析这个术语出现的章节会填入它的信息。这里的内容也都可以手动编辑或添加。",
-    "deleteConfirm": "删除这个术语？"
+    "deleteConfirm": "删除这个术语？",
+    "excerpts": "你归入这里的原文"
+  },
+  "card": {
+    "eyebrow": "记忆卡",
+    "frontPlaceholder": "正面——你希望被问到的内容",
+    "backPlaceholder": "说明——你想记住的内容，用你自己的话写。",
+    "excerpts": "书中的原文",
+    "noExcerpts": "还没有摘录书中的内容。",
+    "excerptCount": "{{count}} 段原文",
+    "excerptHint": "点一段原文可以回到它出现的位置。长按可以把它从这张卡上移除。",
+    "addHint": "阅读时选中一句话，选「归入…」就能把它放到这张卡上。",
+    "hint": "这张卡是你自己的：这里的内容不会被任何一次分析写入或改写。",
+    "removeExcerpt": "把这段原文移除？",
+    "deleteConfirm": "删除这张卡？卡上的原文也会一起删除；书和你的划线不受影响。",
+    "manage": "原文"
   },
   "ol": {
     "mode_kept": "已存的分类",
