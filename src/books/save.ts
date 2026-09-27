@@ -1,7 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import {
   addStandaloneNote,
   findBookNamed,
   findRecordFrom,
+  languageEvidence,
   rateBook,
   saveRecordBook,
   updateBook,
@@ -14,6 +17,8 @@ import { writeImage } from '../storage/files';
 import { hueFrom } from '../ui/fields';
 import { yieldToUI } from '../async/yield';
 import { detectLanguage } from '../text/language';
+import { languageFrom, needsRelabel } from './language';
+import { trace } from '../dev/trace';
 import { addEvent } from '../db/timeline';
 
 /**
@@ -214,4 +219,40 @@ async function fill(existing: Book, book: Shelved): Promise<boolean> {
     });
   }
   return true;
+}
+
+
+/**
+ * The languages a lookup got wrong, put right once.
+ *
+ * `languageOfRecord` above reads a shelf entry's language off its title,
+ * which is all the evidence there is at the time — and it is wrong for every
+ * book a catalog answered in romanisation. Those books were marked English
+ * and have been summarised, briefed and outlined in English since, because
+ * language is what every pass is told to answer in.
+ *
+ * Once ever, and it says what it changed: relabelling somebody's shelf in
+ * silence is not a repair. A book with no evidence either way is left alone.
+ */
+const RELABELLED = 'books.languageRelabelled';
+
+export type Relabelled = { id: string; title: string; to: string };
+
+export async function relabelLanguages(): Promise<Relabelled[]> {
+  if (await AsyncStorage.getItem(RELABELLED)) return [];
+  const changed: Relabelled[] = [];
+  try {
+    for (const book of await languageEvidence()) {
+      const found = languageFrom(book);
+      if (!needsRelabel(book.language, found)) continue;
+      await updateBook(book.id, { language: found });
+      changed.push({ id: book.id, title: book.title, to: found });
+      await yieldToUI();
+    }
+    await AsyncStorage.setItem(RELABELLED, String(Date.now()));
+  } catch (problem) {
+    // Leaving the marker unset means the next launch picks up the rest.
+    trace(`language sweep: ${String(problem)}`);
+  }
+  return changed;
 }

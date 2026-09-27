@@ -49,6 +49,7 @@ import {
 import { restoreOnLaunch } from '../src/backup/icloud';
 import { purgeExpiredTrash } from '../src/backup/trash';
 import { clearPlaceholderCovers } from '../src/books/covers';
+import { relabelLanguages } from '../src/books/save';
 import { BackupOffer, RestoreOffer } from '../src/ui/Safekeeping';
 import { subscribeToRestores } from '../src/backup/changes';
 import { syncOnLaunch } from '../src/cloud/sync';
@@ -150,6 +151,23 @@ export default function Home() {
         Alert.alert(
           t('covers.sweptTitle', { count: cleared.length }),
           t('covers.sweptWhat', { titles: cleared.map((book) => book.title).join('\n') })
+        );
+      })
+      .catch(() => undefined);
+    // The same bargain, for the same reason: a lookup that answered in
+    // romanisation marked a Chinese book English, and English is what every
+    // pass has been told to answer in since. Changing it silently would be
+    // the app deciding what somebody's books are written in behind them.
+    relabelLanguages()
+      .then((changed) => {
+        if (!changed.length) return;
+        refresh();
+        Alert.alert(
+          t('language.fixedTitle', { count: changed.length }),
+          t('language.fixedWhat', {
+            titles: changed.slice(0, 12).map((book) => book.title).join('\n'),
+            more: Math.max(0, changed.length - 12),
+          })
         );
       })
       .catch(() => undefined);

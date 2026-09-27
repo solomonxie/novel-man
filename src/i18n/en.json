@@ -225,7 +225,9 @@
     "addCard": "＋ Add a flash card",
     "searchCards": "Search flash cards",
     "jumpNone": "No chapters here.",
-    "jumpSearch": "Search chapters"
+    "jumpSearch": "Search chapters",
+    "languageRow": "Language",
+    "languageHint": "What the book is written in. Every AI pass answers in it."
   },
   "reader": {
     "go": "Go",
@@ -1289,5 +1291,9 @@
     "where_local": "On this phone",
     "wrote": "{{where}} · {{books}} books · {{words}} words",
     "failed": "{{where}} · {{reason}}"
+  },
+  "language": {
+    "fixedTitle": "Language corrected on {{count}} books",
+    "fixedWhat": "A catalog answered these in romanised Latin, so they were filed as English — and English is what every AI pass was told to answer in. They now say what they are written in.\n\n{{titles}}"
   }
 }

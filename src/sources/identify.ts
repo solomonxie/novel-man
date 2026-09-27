@@ -312,8 +312,33 @@ export function candidatesFromGoogle(payload: unknown): Candidate[] {
  * typed, and a row with a cover comes first within that, because this list is
  * looked at rather than read. The same printing is never shown twice.
  */
+/** Han characters: whether a title is in the script the book was printed in. */
+const inHan = (text: string) => /[\u3400-\u4dbf\u4e00-\u9fff]/.test(text);
+
+/**
+ * Which of two catalogs gets to name the same printing.
+ *
+ * Open Library holds much of what China publishes only in ALA-LC
+ * romanisation: 9787536042971 is "Pei gen sui bi ji" by "Pei gen" there and
+ * 培根随笔集 by 培根 at Google. Romanised, the title has stopped being the
+ * book's name — it cannot be searched for, it is not what is on the cover,
+ * the language of the book is then detected as English, and no model asked
+ * about "Pei gen sui bi ji" can place it. It was winning only by being first
+ * in the list of catalogs to ask.
+ *
+ * Narrow on purpose: only on a Chinese ISBN, and only to take a title in Han
+ * over one without. An English book published in China is answered in Latin
+ * script by both, so there is nothing here to choose between.
+ */
+function preferred(held: Candidate, next: Candidate): Candidate {
+  if (!held.isbn || !isChineseIsbn(held.isbn)) return held;
+  if (inHan(held.title) || !inHan(next.title)) return held;
+  // The romanised row often carries the cover, and a cover is not a name.
+  return { ...next, thumb: next.thumb ?? held.thumb, cover: next.cover ?? held.cover };
+}
+
 export function mergeCandidates(lists: Candidate[][], limit = 10, asked = ''): Candidate[] {
-  const seen = new Set<string>();
+  const at = new Map<string, number>();
   const kept: Candidate[] = [];
   for (const candidate of lists.flat()) {
     // Same ISBN is the same printing whichever catalog said it; failing that,
@@ -321,14 +346,23 @@ export function mergeCandidates(lists: Candidate[][], limit = 10, asked = ''): C
     const key = candidate.isbn
       ? `i:${candidate.isbn}`
       : `t:${candidate.title.toLowerCase()}|${(candidate.author ?? '').toLowerCase()}|${candidate.year ?? ''}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const already = at.get(key);
+    if (already !== undefined) {
+      kept[already] = preferred(kept[already], candidate);
+      continue;
+    }
+    at.set(key, kept.length);
     kept.push(candidate);
   }
   const terms = asked.toLowerCase().split(/\s+/).filter(Boolean);
+  // Two catalogs that disagree about the ISBN do not collide above, so the
+  // romanised row survives as a row of its own — and a cover would float it
+  // to the top. On a Chinese ISBN the script settles it before the cover does.
+  const chinese = isIsbn(asked) && isChineseIsbn(asked);
   return kept
     .sort(
       (a, b) =>
+        (chinese ? Number(!inHan(a.title)) - Number(!inHan(b.title)) : 0) ||
         Number(!a.thumb) - Number(!b.thumb) ||
         score({ title: b.title, author: b.author ?? '' }, terms) -
           score({ title: a.title, author: a.author ?? '' }, terms)
