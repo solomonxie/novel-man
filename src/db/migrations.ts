@@ -801,4 +801,39 @@ export const migrations: string[] = [
      books INTEGER,
      words INTEGER
    );
-   CREATE INDEX backup_log_at ON backup_log(at DESC)`,];
+   CREATE INDEX backup_log_at ON backup_log(at DESC)`,
+
+  // One spelling for Chinese. Detection wrote `zh`, the picker on the book
+  // page offers `zh-Hans`, and a catalog hands back `zh-CN` — so a shelf held
+  // three names for one language, and the row marked `zh` matched nothing the
+  // picker offered. Simplified for a bare `zh`: it is what detection cannot
+  // tell apart, and a book that is not can be set to 繁體中文 in one tap.
+  `UPDATE books SET language = 'zh-Hans'
+     WHERE language = 'zh' OR language LIKE 'zh[-_]%CN%' OR language = 'zh_CN';
+   UPDATE books SET language = 'zh-Hant'
+     WHERE language IN ('zh-TW', 'zh_TW', 'zh-HK', 'zh_HK', 'zh-MO')`,
+
+  // The single volume called 未知. Asked for the parts of a book that has
+  // none, a model fills the field rather than leaving it out, and the table
+  // of contents came back with every chapter under one placeholder — so the
+  // book grew a Volumes page holding one volume that contained all of it.
+  // One part is not a division; the chapters are what was never in doubt, so
+  // they stay exactly as they are and only the level above them goes.
+  //
+  // Only where that one part holds the whole book: a book part-way through
+  // being organised by hand has chapters outside it, and that is a real
+  // division somebody is still making.
+  `UPDATE chapters SET part_idx = NULL, part_title = NULL
+     WHERE book_id IN (
+       SELECT book_id FROM chapters GROUP BY book_id
+        HAVING COUNT(DISTINCT part_idx) = 1 AND COUNT(*) = COUNT(part_idx)
+     );
+   DELETE FROM part_details WHERE NOT EXISTS (
+     SELECT 1 FROM chapters c
+      WHERE c.book_id = part_details.book_id AND c.part_idx = part_details.idx
+   );
+   DELETE FROM part_names WHERE NOT EXISTS (
+     SELECT 1 FROM chapters c
+      WHERE c.book_id = part_names.book_id AND c.part_idx = part_names.part_idx
+   )`,
+];

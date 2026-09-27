@@ -225,7 +225,9 @@
     "addCard": "＋ 添加记忆卡",
     "searchCards": "搜索记忆卡",
     "jumpNone": "这里还没有章节。",
-    "jumpSearch": "搜索章节"
+    "jumpSearch": "搜索章节",
+    "languageRow": "语言",
+    "languageHint": "这本书是用什么语言写的。所有 AI 结果都会用这个语言回答。"
   },
   "reader": {
     "go": "前往",
@@ -1289,5 +1291,9 @@
     "where_local": "本机",
     "wrote": "{{where}} · {{books}} 本书 · {{words}} 字",
     "failed": "{{where}} · {{reason}}"
+  },
+  "language": {
+    "fixedTitle": "已更正 {{count}} 本书的语言",
+    "fixedWhat": "这些书的书目信息是用拉丁拼音返回的，所以被标成了英文——而所有 AI 结果都会按这个语言回答。现在它们的语言是对的了。\n\n{{titles}}"
   }
 }

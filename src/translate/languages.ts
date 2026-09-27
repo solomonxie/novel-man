@@ -14,8 +14,26 @@ export const targetLanguages = [
 
 export type TargetCode = (typeof targetLanguages)[number]['code'];
 
+/**
+ * One spelling for one language. Detection says `zh`, this list says
+ * `zh-Hans`, and a catalog says `zh-CN` — three names for the shelf's most
+ * common language, which is how a book could be marked `zh` while the picker
+ * offering 简体中文 showed nothing selected. Simplified is the default for a
+ * bare `zh`: it is what detection cannot tell apart, and what most of what is
+ * published in it is.
+ */
+export function normalizeLanguage(code: string | null | undefined): string {
+  const raw = (code ?? '').trim();
+  if (!raw) return 'en';
+  const [base, ...rest] = raw.toLowerCase().split(/[-_]/);
+  if (base !== 'zh') return targetLanguages.some((entry) => entry.code === raw) ? raw : base;
+  const tail = rest.join('-');
+  return /hant|tw|hk|mo/.test(tail) ? 'zh-Hant' : 'zh-Hans';
+}
+
 export function labelFor(code: string): string {
-  return targetLanguages.find((entry) => entry.code === code)?.label ?? code;
+  const wanted = normalizeLanguage(code);
+  return targetLanguages.find((entry) => entry.code === wanted)?.label ?? code;
 }
 
 /** English names, because that is what the instruction to the model is in. */

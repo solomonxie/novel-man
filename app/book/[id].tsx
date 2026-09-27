@@ -111,6 +111,7 @@ export default function BookPage() {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
   const [kindOpen, setKindOpen] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   /** Every chapter at once, which is the one run worth stopping to price. */
   const [wholeBookOpen, setWholeBookOpen] = useState(false);
@@ -710,13 +711,26 @@ export default function BookPage() {
           />
         </View>
         {/* Rarely read and rarely typed, but it is the only field here that
-            names one printing — which is what makes a catalog answerable. */}
-        <InlineText
-          value={book.isbn}
-          placeholder={t('book.isbn')}
-          onCommit={(value) => edit('isbn', value)}
-          style={{ color: palette.faint, fontSize: 13, marginTop: 2 }}
-        />
+            names one printing — which is what makes a catalog answerable.
+            The language shares its line: one word, the same kind of fact
+            about the printing, and until now invisible — which is how a
+            shelf of Chinese books sat marked English with every AI pass
+            dutifully answering in it. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg, marginTop: 2 }}>
+          <InlineText
+            value={book.isbn}
+            placeholder={t('book.isbn')}
+            onCommit={(value) => edit('isbn', value)}
+            style={{ color: palette.faint, fontSize: 13 }}
+          />
+          <Text
+            onPress={() => setLanguageOpen(true)}
+            suppressHighlighting
+            style={{ color: palette.accent, fontSize: 13 }}
+          >
+            {labelFor(book.language)}
+          </Text>
+        </View>
         <Text style={{ color: palette.faint, fontSize: 12, marginTop: space.xs }}>
           {t(skeleton ? 'book.recordedFrom' : 'book.importedFrom', { name: book.source_name })}
         </Text>
@@ -1137,6 +1151,18 @@ export default function BookPage() {
         hue={book.cover_hue}
         path={book.cover_path}
         onClose={() => setCoverOpen(false)}
+      />
+
+      <PickerSheet
+        visible={languageOpen}
+        title={t('book.languageRow')}
+        options={targetLanguages.map((entry) => ({ id: entry.code, label: entry.label }))}
+        onPick={async (picked) => {
+          setLanguageOpen(false);
+          await updateBook(book.id, { language: picked });
+          load();
+        }}
+        onClose={() => setLanguageOpen(false)}
       />
 
       <PickerSheet
