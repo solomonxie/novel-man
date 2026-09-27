@@ -521,6 +521,9 @@ export default function BookPage() {
       <Stack.Screen options={{ title: book.title, headerBackTitle: ' ' }} />
 
       <Hero
+        // The rating unfolds inside the column beside the cover, so the row is
+        // top-aligned: centred, opening it pushed the title up the card.
+        growsDown
         // Nothing sits on the cover any more. It is a picture, so tapping it
         // shows the picture; what you can *do* to it is written underneath in
         // words, where a 24px glyph was a guess either way.
