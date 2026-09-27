@@ -11,6 +11,7 @@ import { buildBundle, fingerprint, openBundle } from './bundle';
 import { bundleName, isBundleName } from './format';
 import { backedUpAt, libraryToken, markBackedUp, subscribeToChanges } from './changes';
 import { restoreBundle, type RestoreReport } from './restore';
+import { recordAttempt } from './attempts';
 import { timed, trace } from '../dev/trace';
 
 const AUTO = 'icloud.auto';
@@ -125,7 +126,14 @@ export async function backUp(): Promise<boolean> {
   if ((await backedUpAt(LEDGER)) === token) return false;
   // An empty shelf overwrites today's copy under the same day-named key.
   if (!(await timed('hasBooks', hasBooks()))) return false;
-  if (!drive || (await timed('driveStatus', refreshDriveStatus())) !== 'available') return false;
+  if (!drive) return false;
+  // A destination that is switched on and cannot be reached is a failure worth
+  // recording, not a quiet nothing: it is the state someone needs told about.
+  const state = await timed('driveStatus', refreshDriveStatus());
+  if (state !== 'available') {
+    await recordAttempt('icloud', { ok: false, error: `iCloud is ${state}` });
+    return false;
+  }
   running = true;
   try {
     const name = backupName();
@@ -138,6 +146,7 @@ export async function backUp(): Promise<boolean> {
       trace('unchanged — nothing uploaded');
       // Up to date is up to date, however it got that way.
       await markBackedUp(LEDGER, token);
+      await recordAttempt('icloud', { ok: true, bytes: body.length });
       return false;
     }
 
@@ -154,8 +163,16 @@ export async function backUp(): Promise<boolean> {
     }
     await timed('recordUpload', recordUpload(LEDGER, name, hash));
     await markBackedUp(LEDGER, token);
+    await recordAttempt('icloud', { ok: true, bytes: body.length });
     await timed('prune', prune());
     return true;
+  } catch (problem) {
+    // Recorded and swallowed rather than thrown. A backup must never interrupt
+    // someone who is reading — that part was always right; throwing the reason
+    // away with the interruption was not, and is what made three weeks of
+    // failure look exactly like three weeks of nothing to do.
+    await recordAttempt('icloud', { ok: false, error: problem });
+    return false;
   } finally {
     running = false;
   }

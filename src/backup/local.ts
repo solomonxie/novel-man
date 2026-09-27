@@ -8,6 +8,7 @@ import { lastUploadedAnywhere, recordUpload } from '../db/jobs';
 import { hasBooks } from '../db/repo';
 import { buildBundle } from './bundle';
 import { dateOf, dayStamp, secondStamp } from './format';
+import { recordAttempt } from './attempts';
 
 /**
  * The copies that never leave the device, and the only ones that are instant,
@@ -26,7 +27,14 @@ const FOLDER = 'Backups';
  *  folder sorts chronologically and reads as a sentence. */
 const rollingName = () => `${dayStamp()}-daily-novel-man.zip`;
 const databaseName = () => `${dayStamp()}-database-novel-man.db`;
-const OURS = /^\d{4}-\d{2}-\d{2}-(daily|database|before-)/;
+/**
+ * Ours to sweep, which the daily and the database copy are and a pre-deletion
+ * copy never is. The guard copies were meant to be in here and were not: they
+ * are named to the second — `20260924T…-before-restore` — and this pattern
+ * asked for the dashed day, so every copy taken before an import or a restore
+ * since has been kept forever.
+ */
+const OURS = /^(\d{4}-\d{2}-\d{2}-(daily|database)|\d{14}-before-)/;
 /** A week, not a count: once an operation can add a file, a count silently
  *  caps how many imports you get before yesterday is gone. */
 const KEEP_DAYS = 7;
@@ -98,11 +106,18 @@ export async function backUpLocally(): Promise<boolean> {
   if (!(await hasBooks())) return false;
   const last = await lastUploadedAnywhere(LEDGER);
   if (last && sameDay(last, Date.now())) return false;
-  await snapshotDatabase();
+  const snapshot = await snapshotDatabase();
   const rolling = rollingName();
   const wrote = await writeBundle(rolling);
-  if (!wrote) return false;
+  if (!wrote) {
+    await recordAttempt('local', {
+      ok: false,
+      error: snapshot ? 'the daily copy could not be written' : 'no copy could be written',
+    });
+    return false;
+  }
   await recordUpload(LEDGER, rolling, dayStamp());
+  await recordAttempt('local', { ok: true, bytes: new File(folder(), rolling).size });
   prune();
   return true;
 }

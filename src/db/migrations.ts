@@ -731,4 +731,17 @@ export const migrations: string[] = [
      deleted_at INTEGER NOT NULL
    );
    CREATE INDEX deleted_books_when ON deleted_books(deleted_at DESC)`,
+
+  // Every backup attempt, not only the ones that worked. The upload ledger
+  // records successes, which is how the last-backup date is known — and a
+  // destination that has been failing for three weeks looks identical to one
+  // nobody has changed anything in since. One row per destination: what is
+  // worth saying is the state it is in now, and its reason.
+  `CREATE TABLE backup_attempts (
+     destination TEXT PRIMARY KEY NOT NULL,
+     at INTEGER NOT NULL,
+     ok INTEGER NOT NULL,
+     error TEXT,
+     bytes INTEGER
+   )`,
 ];
