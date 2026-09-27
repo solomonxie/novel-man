@@ -608,6 +608,76 @@ export default function BookPage() {
             </View>
           </View>
         }
+        // Under the row of boxes, because the rating box is one of them and
+        // that is what people tap. Opened from the star line in the column it
+        // is two blocks further down than the tap, which is the lesser of the
+        // two wrongs: the other way round it unfolds upwards out of the box.
+        panel={
+          ratingOpen ? (
+            <View style={{ gap: space.sm }}>
+              <Stars
+                value={book.stars}
+                size={24}
+                onSet={async (stars) => {
+                  await rateBook(book.id, { stars });
+                  load();
+                }}
+              />
+              <View style={{ flexDirection: 'row', gap: space.xs }}>
+                {STATUSES.map((entry) => {
+                  const on = statusOf(book.status) === entry;
+                  return (
+                    <Pressable
+                      key={entry}
+                      // Tapping the one you are on clears it, the same way a star does.
+                      onPress={async () => {
+                        await updateBook(book.id, { status: on ? null : entry });
+                        // Clearing a status is not a thing that happened to the
+                        // book; setting one is.
+                        if (!on) {
+                          await addEvent({
+                            bookId: book.id,
+                            kind: 'status',
+                            at: Date.now(),
+                            label: entry,
+                          });
+                          setTimelineAt(Date.now());
+                        }
+                        load();
+                      }}
+                      style={({ pressed }) => [
+                        styles.stand,
+                        {
+                          backgroundColor: on ? palette.accent : palette.soft,
+                          opacity: pressed ? 0.75 : 1,
+                        },
+                      ]}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        style={{
+                          color: on ? palette.onAccent : palette.accent,
+                          fontSize: 13,
+                          fontWeight: '600',
+                        }}
+                      >
+                        {t(`status.${entry}`)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {book.stars ? (
+                <Text style={{ color: palette.faint, fontSize: 12 }}>
+                  {t('book.ratedOn', {
+                    date: new Date(book.rated_at ?? book.created_at).toLocaleDateString(),
+                  })}
+                </Text>
+              ) : null}
+            </View>
+          ) : null
+        }
       >
         {/* Wraps when read, one line when edited: a title has no second
             line, and a return key that inserted one only ever did so by
@@ -662,75 +732,14 @@ export default function BookPage() {
           <Text style={{ color: book.stars ? palette.accent : palette.faint, fontSize: 14 }}>
             {book.stars ? '★'.repeat(book.stars) + '☆'.repeat(STARS - book.stars) : t('book.notRated')}
           </Text>
+          {/* No chevron. It promised the pickers would open under this line,
+              and they open under the row of boxes — an arrow pointing at a
+              disclosure that happens somewhere else is worse than none. */}
           <Text style={{ color: palette.dim, fontSize: 13 }}>
-            {`·  ${t(`status.${statusOf(book.status) ?? 'none'}`)}  ${ratingOpen ? '⌃' : '⌄'}`}
+            {`·  ${t(`status.${statusOf(book.status) ?? 'none'}`)}`}
           </Text>
         </Pressable>
 
-        {ratingOpen ? (
-          <View style={{ gap: space.sm, marginTop: space.xs }}>
-            <Stars
-              value={book.stars}
-              size={24}
-              onSet={async (stars) => {
-                await rateBook(book.id, { stars });
-                load();
-              }}
-            />
-            <View style={{ flexDirection: 'row', gap: space.xs }}>
-              {STATUSES.map((entry) => {
-                const on = statusOf(book.status) === entry;
-                return (
-                  <Pressable
-                    key={entry}
-                    // Tapping the one you are on clears it, the same way a star does.
-                    onPress={async () => {
-                      await updateBook(book.id, { status: on ? null : entry });
-                      // Clearing a status is not a thing that happened to the
-                      // book; setting one is.
-                      if (!on) {
-                        await addEvent({
-                          bookId: book.id,
-                          kind: 'status',
-                          at: Date.now(),
-                          label: entry,
-                        });
-                        setTimelineAt(Date.now());
-                      }
-                      load();
-                    }}
-                    style={({ pressed }) => [
-                      styles.stand,
-                      {
-                        backgroundColor: on ? palette.accent : palette.soft,
-                        opacity: pressed ? 0.75 : 1,
-                      },
-                    ]}
-                  >
-                    <Text
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      style={{
-                        color: on ? palette.onAccent : palette.accent,
-                        fontSize: 13,
-                        fontWeight: '600',
-                      }}
-                    >
-                      {t(`status.${entry}`)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {book.stars ? (
-              <Text style={{ color: palette.faint, fontSize: 12 }}>
-                {t('book.ratedOn', {
-                  date: new Date(book.rated_at ?? book.created_at).toLocaleDateString(),
-                })}
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
       </Hero>
 
       {/* What the book is, in its own voice rather than the reader's — italic
