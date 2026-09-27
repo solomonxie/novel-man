@@ -1215,10 +1215,10 @@ console.log('citing a passage');
 
   check('the reference leads, every verse is numbered',
     quoteWithVerses(text, { start: 0, end: 58 }, verses, 'Hebrews 3'),
-    'Hebrews 3:1-3. [1] Therefore, holy brothers. [2] Consider Jesus. [3] He was faithful.');
+    'Hebrews 3:1-3 [1] Therefore, holy brothers. [2] Consider Jesus. [3] He was faithful.');
   check('half a verse quotes as half a verse',
     quoteWithVerses(text, { start: 10, end: 41 }, verses, 'Hebrews 3'),
-    'Hebrews 3:1-2. [1] holy brothers. [2] Consider Jesus.');
+    'Hebrews 3:1-2 [1] holy brothers. [2] Consider Jesus.');
   check('a book with no verses is quoted plainly',
     quoteWithVerses(text, { start: 0, end: 20 }, [], 'Chapter 3'), null);
 }
