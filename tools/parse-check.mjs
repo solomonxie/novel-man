@@ -84,7 +84,7 @@ const {
 const { COLUMNS, booksFromCsv } = await import(join(build, 'sources/shelfCsv.js'));
 const { libraryCsv } = await import(join(build, 'export/formats/library.js'));
 const { stripTags } = await import(join(build, 'import/xml.js'));
-const { isSkeleton, starsOf, statusOf } = await import(join(build, 'books/record.js'));
+const { isSkeleton, starsOf, statusOf, withoutManuscript } = await import(join(build, 'books/record.js'));
 const { parseTypedBooks } = await import(join(build, 'books/bulk.js'));
 const { readBible } = await import(join(build, 'scripture/published.js'));
 const { bookFiles, contentsUrl, parseRepoUrl, rawUrl, searchUrl, titleFrom } =
@@ -1742,6 +1742,19 @@ BY: Borges
 
 console.log('\nskeletons');
 {
+  // The restore clears the counts for any book its bundle carried no words
+  // for. Every ESV that came back from a backup came back as a skeleton
+  // because it cleared `text_source` too — so the rule is asserted where the
+  // restore now goes through, not only where `isSkeleton` reads it.
+  check('a restore keeps where a fetched book gets its words',
+    withoutManuscript({ word_count: 0, char_count: 0, text_source: 'esv' }).text_source, 'esv');
+  check('and a restored fetched book is still not a skeleton',
+    isSkeleton(withoutManuscript({ word_count: 12, char_count: 60, text_source: 'esv' })), false);
+  check('while a book with nowhere to get them is',
+    isSkeleton(withoutManuscript({ word_count: 91000, char_count: 500000, text_source: null })), true);
+  check('a restore without a manuscript counts nothing',
+    withoutManuscript({ word_count: 91000, char_count: 500000, text_source: null }).char_count, 0);
+
   check('no words and no source is a skeleton', isSkeleton({ word_count: 0, text_source: null }), true);
   check('a licensed edition is not one',
     isSkeleton({ word_count: 0, text_source: 'esv' }), false);

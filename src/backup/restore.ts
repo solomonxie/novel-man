@@ -1,4 +1,5 @@
 import { listBooks, writeBookRecord, type BookRecord } from '../db/repo';
+import { isSkeleton, withoutManuscript } from '../books/record';
 import { restoreSourceFile, writeImage } from '../storage/files';
 import type { OpenedBundle } from './bundle';
 import type { Snapshot } from './format';
@@ -67,10 +68,11 @@ export async function restoreBundle(
     const missingText = !bundled.text?.trim();
     if (missingText) {
       record.text = '';
-      record.book = { ...record.book, word_count: 0, char_count: 0, text_source: null };
-      // Only a stripped bundle promises the words exist elsewhere. A book that
-      // was always a skeleton is restored, not waiting.
-      if (opened.snapshot.contentOmitted) report.waiting += 1;
+      record.book = withoutManuscript(record.book);
+      // Only a stripped bundle promises the words exist elsewhere, and only
+      // for a book that kept them here. One that was always a skeleton is
+      // restored, not waiting; one that fetches its own is not missing any.
+      if (opened.snapshot.contentOmitted && isSkeleton(record.book)) report.waiting += 1;
     }
 
     const sourcePath = bundled.assets?.source

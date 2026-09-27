@@ -773,4 +773,12 @@ export const migrations: string[] = [
   `ALTER TABLE books ADD COLUMN reviewed_at INTEGER;
    UPDATE books SET reviewed_at = COALESCE(rated_at, created_at)
      WHERE COALESCE(TRIM(review), '') != ''`,
-];
+
+  // The ESV, put back on its feet. It is the one book kept with no words of
+  // its own — `text_source` is where they come from, and it is the only thing
+  // separating a licensed edition from a skeleton — and a restore cleared that
+  // field for every book whose bundle carried no text. A bible that came back
+  // from a backup has been showing as a record of a book nobody can open. The
+  // source hash survives a restore, and only the ESV has ever carried this one.
+  `UPDATE books SET text_source = 'esv'
+     WHERE source_hash = 'esv' AND text_source IS NULL`,];
