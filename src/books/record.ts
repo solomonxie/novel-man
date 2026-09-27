@@ -37,3 +37,14 @@ export type ReadingStatus = (typeof STATUSES)[number];
 export function statusOf(value: string | null | undefined): ReadingStatus | null {
   return STATUSES.includes(value as ReadingStatus) ? (value as ReadingStatus) : null;
 }
+
+/**
+ * Which shelf a book sits on, which is not quite what its status column says.
+ * A book nobody has answered for is one they have not read yet, and one left
+ * twelve chapters in is one they are reading whether or not anybody said so.
+ * The home shelf and the page behind it must group identically, or a count is
+ * a promise the page it opens does not keep.
+ */
+export function shelfOf(book: { status?: string | null; offset?: number | null }): ReadingStatus {
+  return statusOf(book.status) ?? ((book.offset ?? 0) > 0 ? 'reading' : 'wishlist');
+}
