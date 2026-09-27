@@ -13,6 +13,7 @@ const { txtImporter } = await import(join(build, 'import/formats/plain.js'));
 const { normalize } = await import(join(build, 'import/normalize.js'));
 const { detectChapters } = await import(join(build, 'structure/detect.js'));
 const { detectLanguage, scriptOf, baseLanguage } = await import(join(build, 'text/language.js'));
+const { partsOf, salvageRows, meaningfulName } = await import(join(build, 'structure/document.js'));
 const { languageFrom, needsRelabel } = await import(join(build, 'books/language.js'));
 const { normalizeLanguage, labelFor } = await import(join(build, 'translate/languages.js'));
 const { layoutChapter, annotationAt } = await import(join(build, 'reader/model.js'));
@@ -187,6 +188,54 @@ console.log('what a book is written in');
   check('zh and zh-Hans are not a disagreement', needsRelabel('zh', 'zh-Hans'), false);
   check('but English and Chinese are', needsRelabel('en', 'zh-Hans'), true);
   check('and no evidence is never a disagreement', needsRelabel('en', null), false);
+}
+
+console.log('a contents that arrived cut off');
+{
+  // Run out of room mid-object and the answer is not JSON at all, so forty
+  // good chapters used to fail along with the forty-first.
+  const cut = '{"chapters":[{"title":"One","brief":"a"},{"title":"Two","brief":"b"},{"title":"Th';
+  check('the rows before the cut are kept', salvageRows(cut).length, 2);
+  check('and they are the rows they were', salvageRows(cut)[1].title, 'Two');
+  check('nothing complete is nothing salvaged', salvageRows('{"chapters":[{"title":"On').length, 0);
+  check('prose around it is not a row', salvageRows('Sorry, I cannot help.').length, 0);
+
+  check('a placeholder title is no title', meaningfulName('未知'), '');
+  check('and neither is Untitled', meaningfulName('  Untitled '), '');
+  check('a real title is left exactly as it is', meaningfulName(' 第一章 '), '第一章');
+}
+
+console.log('parts a book actually has');
+{
+  // A model asked for the parts of a book that has none fills the field
+  // rather than leaving it out, and the reader gets a Volumes page holding
+  // one volume called 未知 that contains the whole book — a level of
+  // structure standing between them and the chapters. The chapters are never
+  // the thing in doubt, so they are what is kept.
+  const one = partsOf(['未知', '未知', '未知', '未知', '未知', '未知']);
+  check('one volume is not a division', one.titles, []);
+  check('and its chapters are all still here', one.indexes, [null, null, null, null, null, null]);
+
+  const same = partsOf(['Part One', 'Part One']);
+  check('a real name used once over is still one part', same.titles, []);
+
+  const real = partsOf(['Part One', 'Part One', 'Part Two']);
+  check('two parts are a division', real.titles, ['Part One', 'Part Two']);
+  check('and each chapter knows its own', real.indexes, [0, 0, 1]);
+
+  // A placeholder among real parts is the absence of a part, not a part.
+  const mixed = partsOf(['Part One', 'unknown', 'Part Two']);
+  check('a placeholder is not a part of anything', mixed.titles, ['Part One', 'Part Two']);
+  check('and the chapter under it belongs to none', mixed.indexes, [0, null, 1]);
+  check('未知 is the same placeholder in another language',
+    partsOf(['第一卷', '未知', '第二卷']).indexes, [0, null, 1]);
+  check('and so is a dash', partsOf(['A', '—', 'B']).indexes, [0, null, 1]);
+
+  check('nothing said at all is no parts', partsOf([null, undefined, '']).titles, []);
+  // The same name returning later is another stretch of the book, because a
+  // part is consecutive chapters and not a label.
+  check('a name that comes back starts another part',
+    partsOf(['A', 'B', 'A']).indexes, [0, 1, 2]);
 }
 
 console.log('one spelling for one language');
