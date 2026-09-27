@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 /**
- * Two mechanical checks the catalogs need to stay real:
+ * Three mechanical checks the catalogs need to stay real:
  *
  *  1. Both catalogs carry the same keys. A missing key falls back to English
  *     silently, so nothing else would ever notice.
- *  2. No user-facing string is written inline in a screen. `eslint`'s
+ *  2. Every key a screen asks for is in them. A key that is in neither catalog
+ *     does not fall back to anything — i18next prints the key itself, so
+ *     `book.jumpNone` shipped to a phone and sat there where a sentence
+ *     should have been. Parity between two catalogs cannot see this: the key
+ *     was equally absent from both.
+ *  3. No user-facing string is written inline in a screen. `eslint`'s
  *     `react/jsx-no-literals` would be the natural home for this, but
  *     typescript-eslint does not support TypeScript 7 yet — so the rule lives
  *     here until it does.
@@ -42,6 +47,45 @@ console.log('catalogs');
   if (!missingZh.length && !missingEn.length) {
     console.log(`  ok   ${enKeys.size} keys in both catalogs`);
   }
+}
+
+console.log('asked-for keys');
+{
+  const en = JSON.parse(readFileSync(join(root, 'src/i18n/en.json'), 'utf8'));
+  const keys = new Set(flatten(en));
+  // `count` picks a plural at runtime, so the catalog holds `key_one` and
+  // `key_other` and never the bare name the call site writes.
+  const PLURAL = ['_zero', '_one', '_two', '_few', '_many', '_other'];
+  const known = (key) => keys.has(key) || PLURAL.some((suffix) => keys.has(key + suffix));
+  // Only keys written out in full. A key built from a variable —
+  // `status.${entry}` — cannot be checked from here, and the work-kind check
+  // below is what covers the one family of those that has bitten us.
+  const CALL = /\bt\(\s*'([a-zA-Z][\w.]*)'\s*[,)]/g;
+  let asked = 0;
+  let unknown = 0;
+  for (const path of sources(join(root, 'app')).concat(sources(join(root, 'src')))) {
+    const source = readFileSync(path, 'utf8');
+    for (const match of source.matchAll(CALL)) {
+      asked += 1;
+      if (known(match[1])) continue;
+      const line = source.slice(0, match.index).split('\n').length;
+      report(`${relative(root, path)}:${line} — no catalog entry for "${match[1]}"`);
+      unknown += 1;
+    }
+  }
+  if (!unknown) console.log(`  ok   all ${asked} named keys are in the catalog`);
+}
+
+/** Every file that can hold a `t(…)`, which is not only the screens. */
+function sources(dir) {
+  const found = [];
+  for (const entry of readdirSync(dir)) {
+    if (entry.startsWith('.') || entry === 'node_modules') continue;
+    const path = join(dir, entry);
+    if (statSync(path).isDirectory()) found.push(...sources(path));
+    else if (path.endsWith('.tsx') || path.endsWith('.ts')) found.push(path);
+  }
+  return found;
 }
 
 // Glyphs and punctuation read the same in every language and are not copy.
