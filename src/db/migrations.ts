@@ -744,4 +744,26 @@ export const migrations: string[] = [
      error TEXT,
      bytes INTEGER
    )`,
+
+  // A passage the reader picked out of the book and filed against something: a
+  // term it explains, or a flash card it is the evidence for. Not an observation
+  // — those are one per chapter per entity and get overwritten by the next
+  // analysis, which would eat what somebody chose by hand. Not a column on
+  // annotations either: a highlight is about the sentence, and this is about the
+  // thing the sentence is about.
+  //
+  // Keyed by entity_id, which the bundle already remaps on restore, so carrying
+  // it is one line rather than a new kind of id to rewrite.
+  `CREATE TABLE excerpts (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+     quote TEXT NOT NULL,
+     note TEXT,
+     at INTEGER NOT NULL,
+     chapter_idx INTEGER NOT NULL,
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX excerpts_entity ON excerpts(entity_id, at)`,
+
 ];

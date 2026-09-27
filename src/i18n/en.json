@@ -79,7 +79,8 @@
     "shelf_reading": "Reading",
     "shelf_wishlist": "Want to read",
     "shelf_read": "Finished",
-    "noneHere": "Nothing on this shelf yet."
+    "noneHere": "Nothing on this shelf yet.",
+    "inTerms": "In concepts & cards ({{count}})"
   },
   "import": {
     "title": "Import",
@@ -175,11 +176,11 @@
     "partsHint": "Each part has its own page with its description, its chapters, and every note you made in it.",
     "searchParts_book": "Search books",
     "searchParts_volume": "Search volumes",
-    "terms": "Terms",
-    "termsEmpty": "No terms yet.",
-    "addTerm": "＋ Add a term",
-    "searchTerms": "Search terms",
-    "termsAll": "All terms",
+    "terms": "Concepts & Terminologies",
+    "termsEmpty": "No concepts or terms yet.",
+    "addTerm": "＋ Add a concept or term",
+    "searchTerms": "Search concepts & terms",
+    "termsAll": "All concepts & terms",
     "ratingShort": "Rating",
     "favorite": "Like",
     "ratedOn": "Rated {{date}}",
@@ -198,7 +199,12 @@
     "recordedFrom": "Recorded from {{name}}",
     "review": "What you thought",
     "deleteWhere": "Waits 30 days in Recently deleted",
-    "deleteKept": "Nothing was deleted"
+    "deleteKept": "Nothing was deleted",
+    "termsShort": "terms",
+    "cards": "Flash cards",
+    "cardsEmpty": "No flash cards yet.",
+    "addCard": "＋ Add a flash card",
+    "searchCards": "Search flash cards"
   },
   "reader": {
     "go": "Go",
@@ -253,7 +259,13 @@
     "openBook": "Go to {{name}}",
     "analyzeChapter": "Analyze this chapter",
     "prevShort": "Prev",
-    "nextShort": "Next"
+    "nextShort": "Next",
+    "fileTo": "File this…",
+    "fileTitle": "File this passage under",
+    "fileSearch": "Search",
+    "newCard": "＋ A new flash card from this",
+    "newTerm": "＋ A new concept or term from this",
+    "filed": "Filed under {{name}}"
   },
   "settings": {
     "title": "Settings",
@@ -1093,7 +1105,7 @@
     "err_canon": "“{{detail}}” can be read, but it isn’t a Bible — its books and chapter counts don’t match any canon."
   },
   "term": {
-    "eyebrow": "Term",
+    "eyebrow": "Concept or term",
     "name": "Name",
     "aliasPlaceholder": "Other names, separated by commas",
     "summaryPlaceholder": "A line or two about what this is.",
@@ -1104,7 +1116,22 @@
     "firstUsed": "First used",
     "lastUsed": "Last used",
     "hint": "Details are filled in by analyzing the chapters this term appears in. Everything here can also be edited or added by hand.",
-    "deleteConfirm": "Delete this term?"
+    "deleteConfirm": "Delete this term?",
+    "excerpts": "Passages you filed here"
+  },
+  "card": {
+    "eyebrow": "Flash card",
+    "frontPlaceholder": "The front — what you want to be asked",
+    "backPlaceholder": "The description — what you want to recall, in your own words.",
+    "excerpts": "From the book",
+    "noExcerpts": "Nothing from the book yet.",
+    "excerptCount": "{{count}} passages",
+    "excerptHint": "Tap a passage to read it where it was written. Press and hold to take it off this card.",
+    "addHint": "While reading, select a sentence and choose “File this…” to put it on this card.",
+    "hint": "A card is yours: nothing here is written or rewritten by a pass over the book.",
+    "removeExcerpt": "Take this passage off?",
+    "deleteConfirm": "Delete this card? The passages on it go too; the book and your highlights are untouched.",
+    "manage": "Passages"
   },
   "ol": {
     "mode_kept": "Saved categories",

@@ -224,7 +224,7 @@ export function Block({ title, count, action, onOpen, children }: {
 }
 
 /** One thing in a block: a badge, what it is, and where it goes. */
-export function Item({ badge, title, detail, meta, quiet, onPress, last }: {
+export function Item({ badge, title, detail, meta, quiet, onPress, onLongPress, last }: {
   badge?: React.ReactNode;
   title: string;
   detail?: string;
@@ -232,13 +232,16 @@ export function Item({ badge, title, detail, meta, quiet, onPress, last }: {
   /** The line is the thing itself rather than a name for it — an excerpt, not a title. */
   quiet?: boolean;
   onPress?: () => void;
+  /** Taking the row away, where that is not worth a control of its own. */
+  onLongPress?: () => void;
   last?: boolean;
 }) {
   const palette = usePalette();
   return (
     <Pressable
       onPress={onPress}
-      disabled={!onPress}
+      onLongPress={onLongPress}
+      disabled={!onPress && !onLongPress}
       style={({ pressed }) => [
         styles.item,
         {
@@ -251,7 +254,13 @@ export function Item({ badge, title, detail, meta, quiet, onPress, last }: {
     >
       {badge}
       <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ color: quiet ? palette.dim : palette.text, fontSize: 16 }}>
+        {/* A title is one line, cut if it has to be. A quoted line is the thing
+            itself — cut to one line it is unreadable, which is the opposite of
+            the reason it was kept. */}
+        <Text
+          numberOfLines={quiet ? 3 : 1}
+          style={{ color: quiet ? palette.dim : palette.text, fontSize: 16 }}
+        >
           {title}
         </Text>
         {detail ? (

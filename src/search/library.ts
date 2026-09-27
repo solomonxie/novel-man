@@ -9,7 +9,7 @@ export type ContentHit = {
   excerpt: string;
 };
 
-export type MetaKind = 'chapter' | 'character' | 'place' | 'note';
+export type MetaKind = 'chapter' | 'character' | 'place' | 'term' | 'card' | 'note';
 
 /** Something the library records about a book, found by what it is called. */
 export type MetaHit = {
@@ -195,7 +195,12 @@ async function searchMeta(needle: string): Promise<MetaHit[]> {
     );
     const prose = entity.summary ?? entity.role;
     hits.push({
-      kind: entity.kind === 'place' ? 'place' : 'character',
+      // Each kind to its own page. A term used to arrive as a "character",
+      // which sent it to the cast page, and a flash card would have gone the
+      // same way — filed under a heading it has nothing to do with.
+      kind: (entity.kind === 'place' || entity.kind === 'term' || entity.kind === 'card'
+        ? entity.kind
+        : 'character') as MetaKind,
       id: entity.id,
       bookId: entity.book_id,
       label: entity.alias ? `${entity.name} · ${entity.alias}` : entity.name,
