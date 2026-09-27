@@ -1,5 +1,6 @@
 import type { NormalizedDocument, PlacedBlock } from '../import/normalize';
 import { chapterPatterns, MAX_HEADING_LENGTH } from './patterns';
+import { baseLanguage } from '../text/language';
 
 export type DetectedChapter = { title: string; start: number; end: number; confident: boolean };
 export type Detection = { chapters: DetectedChapter[]; method: 'headings' | 'patterns' | 'spine' | 'none' };
@@ -45,8 +46,11 @@ function fromHeadings(doc: NormalizedDocument): Start[] {
 }
 
 function fromPatterns(doc: NormalizedDocument, language: string): Start[] {
+  // By base language: the patterns are written for Chinese, and the book is
+  // marked zh-Hans or zh-Hant.
+  const base = baseLanguage(language);
   const patterns = chapterPatterns
-    .filter((entry) => entry.language === language || entry.language === 'any')
+    .filter((entry) => entry.language === base || entry.language === 'any')
     .map((entry) => entry.pattern);
   const starts: Start[] = [];
   for (const block of doc.blocks) {

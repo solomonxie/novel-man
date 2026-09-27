@@ -12,7 +12,9 @@ const { epubImporter } = await import(join(build, 'import/formats/epub.js'));
 const { txtImporter } = await import(join(build, 'import/formats/plain.js'));
 const { normalize } = await import(join(build, 'import/normalize.js'));
 const { detectChapters } = await import(join(build, 'structure/detect.js'));
-const { detectLanguage } = await import(join(build, 'text/language.js'));
+const { detectLanguage, scriptOf, baseLanguage } = await import(join(build, 'text/language.js'));
+const { languageFrom, needsRelabel } = await import(join(build, 'books/language.js'));
+const { normalizeLanguage, labelFor } = await import(join(build, 'translate/languages.js'));
 const { layoutChapter, annotationAt } = await import(join(build, 'reader/model.js'));
 const { imageIn, imageMarker } = await import(join(build, 'reader/images.js'));
 const { sentenceAtLine } = await import(join(build, 'reader/lines.js'));
@@ -159,10 +161,66 @@ console.log('epub');
   console.log(`  (${ms}ms)`);
 }
 
+console.log('what a book is written in');
+{
+  const of = (over) => ({ title: '', author: null, isbn: null, sample: '', ...over });
+  // A lookup that answers in romanisation gives a Latin title, which detects
+  // as English — and English is then what every pass is told to answer in.
+  check('a Chinese ISBN outs a romanised title',
+    languageFrom(of({ title: 'Pei gen sui bi ji', author: 'Pei gen', isbn: '9787536042971' })),
+    'zh-Hans');
+  check('a Han title needs no isbn', languageFrom(of({ title: '培根随笔集' })), 'zh-Hans');
+  check('and one Han name among a latin title is the tell',
+    languageFrom(of({ title: 'Essays', author: '培根' })), 'zh-Hans');
+  // The manuscript outranks everything: it is thousands of characters
+  // against a title of four.
+  check('the text beats the title it was filed under',
+    languageFrom(of({ title: 'Pei gen sui bi ji', sample: '读书足以怡情，足以傅彩，足以长才。' })),
+    'zh-Hans');
+  check('and says English where the text is English',
+    languageFrom(of({ title: '培根随笔集', sample: 'Studies serve for delight, for ornament, and for ability.' })),
+    'en');
+  // An English book can be published in China, and a book with nothing to go
+  // on keeps whatever it was given rather than being guessed at.
+  check('no evidence changes nothing', languageFrom(of({ title: 'Essays', author: 'Francis Bacon' })), null);
+
+  check('zh and zh-Hans are not a disagreement', needsRelabel('zh', 'zh-Hans'), false);
+  check('but English and Chinese are', needsRelabel('en', 'zh-Hans'), true);
+  check('and no evidence is never a disagreement', needsRelabel('en', null), false);
+}
+
+console.log('one spelling for one language');
+{
+  // A shelf held three names for Chinese — `zh` from detection, `zh-Hans`
+  // from the picker, `zh-CN` from a catalog — and everything that compared
+  // the whole string recognised one of them. A book marked `zh` matched
+  // nothing in a picker offering 简体中文, and a book marked `zh-Hans` was
+  // set in Georgia, counted in words, and had 第一章 stop being a chapter.
+  check('a bare zh is simplified', normalizeLanguage('zh'), 'zh-Hans');
+  check('and so is zh-CN', normalizeLanguage('zh-CN'), 'zh-Hans');
+  check('Taiwan and Hong Kong are traditional', normalizeLanguage('zh-TW'), 'zh-Hant');
+  check('an underscore is a separator too', normalizeLanguage('zh_HK'), 'zh-Hant');
+  check('what the picker already offers is left alone', normalizeLanguage('zh-Hant'), 'zh-Hant');
+  check('an empty language is English', normalizeLanguage(''), 'en');
+  check('a book marked zh is labelled by the picker it matches', labelFor('zh'), '简体中文');
+
+  check('zh-Hans is CJK', scriptOf('zh-Hans'), 'cjk');
+  check('so is zh-Hant', scriptOf('zh-Hant'), 'cjk');
+  check('and a bare zh still is', scriptOf('zh'), 'cjk');
+  check('Japanese still is', scriptOf('ja'), 'cjk');
+  check('English is not', scriptOf('en'), 'latin');
+  // Hangul is outside the block this app counts by; including it would move
+  // every count for Korean.
+  check('Korean is left as it was', scriptOf('ko'), 'latin');
+  check('the chapter patterns are keyed on the base', baseLanguage('zh-Hans'), 'zh');
+}
+
 console.log('txt, Chinese');
 {
   const { language, detection, ms } = await parse(txtImporter, 'sample-zh.txt');
-  check('language detected', language, 'zh');
+  // One spelling everywhere: detection says zh-Hans, and the patterns below
+  // are written for zh, so they have to be matched on the base language.
+  check('language detected', language, 'zh-Hans');
   check('序章 is kept as a chapter', detection.chapters[0].title, '序章');
   check('第N章 pattern found the rest', detection.chapters.length, 4);
   console.log(`  (${ms}ms)`);
@@ -1082,6 +1140,39 @@ console.log('one book, looked up in the catalogs');
   check('a row with a cover comes first', merged[0].thumb !== null, true);
   check('and one without sinks', merged[merged.length - 1].thumb, null);
   check('ten is the most anybody looks at', mergeCandidates([ol, google], 1).length, 1);
+
+  // Open Library romanises much of what China publishes, and it is asked
+  // first, so "Pei gen sui bi ji" was beating 培根随笔集 for the same ISBN —
+  // and a romanised title is not the book's name: unsearchable, wrong on the
+  // shelf, detected as English, and unplaceable by a model.
+  const row = (over) => ({
+    id: 'x', source: 'openlibrary', title: '', author: null, thumb: null, cover: null,
+    isbn: '9787536042971', year: 2004, language: null, summary: null, edition: null, ...over,
+  });
+  const romanised = [row({ title: 'Pei gen sui bi ji', author: 'Pei gen', thumb: 'cover' })];
+  const printed = [row({ id: 'y', source: 'google', title: '培根随笔集', author: '培根' })];
+  const both = mergeCandidates([romanised, printed], 10, '9787536042971');
+  check('one printing is still one row', both.length, 1);
+  check('the printed title wins over the romanised one', both[0].title, '培根随笔集');
+  check('and so does the author', both[0].author, '培根');
+  check('the cover the other row had is kept', both[0].thumb, 'cover');
+
+  // Only where a romanisation is what the alternative is. An English book
+  // with a Chinese ISBN is answered in Latin script by both catalogs.
+  const english = mergeCandidates(
+    [[row({ title: 'Python Crash Course', thumb: 'c' })], [row({ id: 'y', source: 'google', title: 'Python Crash Course' })]],
+    10, '9787536042971'
+  );
+  check('a Latin title is not overruled by another Latin one',
+    english[0].title, 'Python Crash Course');
+
+  // Catalogs that disagree about the ISBN never collide, so the romanised row
+  // survives on its own — and its cover would otherwise float it to the top.
+  const apart = mergeCandidates(
+    [[row({ title: 'Pei gen sui bi ji', thumb: 'cover' })], [row({ id: 'y', isbn: null, title: '培根随笔集' })]],
+    10, '9787536042971'
+  );
+  check('the printed title leads even without a cover', apart[0].title, '培根随笔集');
 
   // A catalog thinks a book *about* the King James Version answers "KJV"; the
   // grid is put back in the order of what was actually asked for.

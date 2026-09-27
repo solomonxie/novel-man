@@ -148,6 +148,23 @@ export async function listBooks(): Promise<BookListItem[]> {
   );
 }
 
+/**
+ * What each book's language can be worked out from, in one pass. The sample
+ * is a prefix rather than the manuscript: detection reads the opening anyway,
+ * and a shelf of novels read whole is tens of megabytes of evidence nobody
+ * needs.
+ */
+export async function languageEvidence(): Promise<
+  { id: string; title: string; author: string | null; language: string; isbn: string | null; sample: string }[]
+> {
+  const database = await db();
+  return database.getAllAsync(
+    `SELECT b.id, b.title, b.author, b.language, b.isbn,
+            substr(COALESCE(d.text, ''), 1, 2000) AS sample
+       FROM books b LEFT JOIN documents d ON d.book_id = b.id`
+  );
+}
+
 /** Every book with a picture on it, for anything that has to check them all. */
 export async function listCovered(): Promise<{ id: string; title: string; cover_path: string }[]> {
   const database = await db();
@@ -642,9 +659,13 @@ async function insertScenes(
   }
 }
 
+// `language` is here because it is not only a label: every AI pass is told to
+// answer in it, so a book detected wrong stays answered wrong until somebody
+// can say otherwise — and until now nothing could, because this list is what
+// the book page is allowed to edit.
 const BOOK_FIELDS = [
   'title', 'author', 'year', 'edition', 'cover_path', 'summary', 'kind', 'review', 'status',
-  'impressions', 'isbn',
+  'impressions', 'isbn', 'language',
 ] as const;
 export type EditableBookField = (typeof BOOK_FIELDS)[number];
 
