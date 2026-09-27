@@ -535,7 +535,7 @@ export default function Reader() {
 
   async function onCopy() {
     if (!range) return;
-    // "Hebrews 3:1-10. [1] … [2] …" — a bible quoted without its reference is
+    // "Hebrews 3:1-10 [1] … [2] …" — a bible quoted without its reference is
     // a quote nobody can look up.
     const cited = verses.length ? quoteWithVerses(text, range, verses, chapter.title) : null;
     const plain = source.slice(range.start, range.end);
