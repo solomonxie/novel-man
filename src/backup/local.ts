@@ -7,7 +7,7 @@ import { db, setBeforeMigrations } from '../db';
 import { lastUploadedAnywhere, recordUpload } from '../db/jobs';
 import { hasBooks } from '../db/repo';
 import { buildBundle } from './bundle';
-import { dateOf, dayStamp, secondStamp } from './format';
+import { dateOf, dayStamp, secondStamp, type BundleAbout } from './format';
 import { recordAttempt } from './attempts';
 
 /**
@@ -66,17 +66,21 @@ export async function snapshotDatabase(open?: Database): Promise<boolean> {
   }
 }
 
-/** The same bytes every other tier gets, so one can be dragged out anywhere. */
-async function writeBundle(name: string): Promise<boolean> {
+/**
+ * The same bytes every other tier gets, so one can be dragged out anywhere.
+ * Answers with what it measured rather than whether it worked: the log wants
+ * the library this copy was of, and null already means it did not happen.
+ */
+async function writeBundle(name: string): Promise<BundleAbout | null> {
   try {
     const bundle = await buildBundle();
     const file = new File(folder(), name);
     if (file.exists) file.delete();
     file.create();
     file.write(bundle.body as Uint8Array);
-    return true;
+    return bundle.about;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -88,7 +92,7 @@ async function writeBundle(name: string): Promise<boolean> {
  */
 export async function backUpBefore(what: string): Promise<boolean> {
   if (!(await hasBooks())) return false;
-  return writeBundle(`${secondStamp()}-before-${what}-novel-man.zip`);
+  return (await writeBundle(`${secondStamp()}-before-${what}-novel-man.zip`)) !== null;
 }
 
 /**
@@ -108,16 +112,23 @@ export async function backUpLocally(): Promise<boolean> {
   if (last && sameDay(last, Date.now())) return false;
   const snapshot = await snapshotDatabase();
   const rolling = rollingName();
-  const wrote = await writeBundle(rolling);
-  if (!wrote) {
+  const about = await writeBundle(rolling);
+  if (!about) {
     await recordAttempt('local', {
       ok: false,
       error: snapshot ? 'the daily copy could not be written' : 'no copy could be written',
+      name: rolling,
     });
     return false;
   }
   await recordUpload(LEDGER, rolling, dayStamp());
-  await recordAttempt('local', { ok: true, bytes: new File(folder(), rolling).size });
+  await recordAttempt('local', {
+    ok: true,
+    bytes: new File(folder(), rolling).size,
+    name: rolling,
+    books: about.books,
+    words: about.words,
+  });
   prune();
   return true;
 }

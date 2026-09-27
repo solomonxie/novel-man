@@ -8,7 +8,7 @@ import { contentHash } from '../ai/cache';
 import { lastUploadedAnywhere, lastUploadHash, recordUpload } from '../db/jobs';
 import { hasBooks, listBookIds } from '../db/repo';
 import { buildBundle, fingerprint, openBundle } from './bundle';
-import { bundleName, isBundleName } from './format';
+import { bundleName, isBundleName, type BundleAbout } from './format';
 import { backedUpAt, libraryToken, markBackedUp, subscribeToChanges } from './changes';
 import { restoreBundle, type RestoreReport } from './restore';
 import { recordAttempt } from './attempts';
@@ -18,18 +18,23 @@ const AUTO = 'icloud.auto';
 const RESTORED = 'icloud.restoredAt';
 const STAGED = 'icloud-upload.zip';
 /**
- * One file per month, overwritten all month long: `202609-library.zip`. This
- * is not a version history and was never meant to be one — it exists so that
- * deleting the app doesn't delete the work, and for that the newest copy is
- * the answer. A file per write would ask the reader to choose between a
- * thousand of them; a file per month asks them to choose between twelve, which
- * is a question someone can actually answer when a month of work went wrong.
+ * One file per day, overwritten all day long: `2026-09-27-library-novel-man.zip`.
+ * This is not a version history and was never meant to be one — it exists so
+ * that deleting the app doesn't delete the work, and for that the newest copy
+ * is the answer. A file per write would ask the reader to choose between a
+ * thousand of them; a file per day, ten of them kept, is a question someone
+ * can actually answer when a day of work went wrong.
+ *
+ * What the files cannot say is when each was written, or over what: the 9th's
+ * file is only the last thing that happened on the 9th, and the 1st's is gone.
+ * `backup_log` in `attempts.ts` is the record of every write, and is why the
+ * files are allowed to keep overwriting themselves.
  */
 const backupName = () => bundleName('library-novel-man');
 /**
  * Reuses the upload ledger the bucket sync already keeps; there is no bucket.
- * Keyed by the file name, so a new month is itself a reason to write — the
- * first change of March writes March's file rather than finding February's
+ * Keyed by the file name, so a new day is itself a reason to write — the first
+ * change after midnight writes today's file rather than finding yesterday's
  * hash unchanged and skipping.
  */
 const LEDGER = 'icloud';
@@ -102,6 +107,12 @@ export async function lastBackupAt(): Promise<number | null> {
   return lastUploadedAnywhere(LEDGER);
 }
 
+/** What the log records beside the size: the library this copy was of. */
+const counts = (bundle: { about: BundleAbout }) => ({
+  books: bundle.about.books,
+  words: bundle.about.words,
+});
+
 /** The native side works in paths, not URIs — and a URI can be percent-encoded. */
 function nativePath(file: File): string {
   return decodeURIComponent(file.uri.replace('file://', ''));
@@ -146,7 +157,7 @@ export async function backUp(): Promise<boolean> {
       trace('unchanged — nothing uploaded');
       // Up to date is up to date, however it got that way.
       await markBackedUp(LEDGER, token);
-      await recordAttempt('icloud', { ok: true, bytes: body.length });
+      await recordAttempt('icloud', { ok: true, bytes: body.length, name, ...counts(bundle) });
       return false;
     }
 
@@ -163,7 +174,7 @@ export async function backUp(): Promise<boolean> {
     }
     await timed('recordUpload', recordUpload(LEDGER, name, hash));
     await markBackedUp(LEDGER, token);
-    await recordAttempt('icloud', { ok: true, bytes: body.length });
+    await recordAttempt('icloud', { ok: true, bytes: body.length, name, ...counts(bundle) });
     await timed('prune', prune());
     return true;
   } catch (problem) {

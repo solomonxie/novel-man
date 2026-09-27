@@ -33,7 +33,9 @@ const SNAPSHOT = 'snapshot.json';
  * it, the images and the source file itself. Keys stay in the keychain and
  * travel nowhere.
  */
-export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
+export async function buildBundle(
+  bookIds?: string[]
+): Promise<ExportFile & { about: BundleAbout }> {
   let at = performance.now();
   const ids = bookIds ?? (await listBookIds());
   const assets: Record<string, Uint8Array> = {};
@@ -69,8 +71,9 @@ export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
   const json = JSON.stringify(snapshot);
   trace(`stringify ${Math.round(performance.now() - at)}ms for ${json.length} chars`);
   at = performance.now();
+  const about = aboutOf(books, snapshot.createdAt);
   const entries: Entry[] = [
-    { path: ABOUT, bytes: strToU8(JSON.stringify(aboutOf(books, snapshot.createdAt))) },
+    { path: ABOUT, bytes: strToU8(JSON.stringify(about)) },
     { path: SNAPSHOT, bytes: strToU8(json) },
     ...(await readableEntries(books)),
   ];
@@ -91,6 +94,7 @@ export async function buildBundle(bookIds?: string[]): Promise<ExportFile> {
     fileName: bundleName(label.replace(/[/\\?%*:|"<>]/g, '-') || 'library-novel-man'),
     mimeType: 'application/zip',
     body,
+    about,
   };
 }
 

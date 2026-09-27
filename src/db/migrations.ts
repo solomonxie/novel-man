@@ -781,4 +781,24 @@ export const migrations: string[] = [
   // from a backup has been showing as a record of a book nobody can open. The
   // source hash survives a restore, and only the ESV has ever carried this one.
   `UPDATE books SET text_source = 'esv'
-     WHERE source_hash = 'esv' AND text_source IS NULL`,];
+     WHERE source_hash = 'esv' AND text_source IS NULL`,
+
+  // Every backup that has been tried, not only the last one per destination.
+  // `backup_attempts` answers "is it working now", which is what the shelf
+  // needs; nothing answered "has it been", and the bundles themselves cannot —
+  // each is overwritten all day and the folder keeps ten, so a file named for
+  // the 9th is only the last thing that happened on the 9th. A row per
+  // attempt, carrying what the library measured at the time, is what makes a
+  // copy that rewrites itself daily traceable at all.
+  `CREATE TABLE backup_log (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     destination TEXT NOT NULL,
+     at INTEGER NOT NULL,
+     ok INTEGER NOT NULL,
+     error TEXT,
+     bytes INTEGER,
+     name TEXT,
+     books INTEGER,
+     words INTEGER
+   );
+   CREATE INDEX backup_log_at ON backup_log(at DESC)`,];
