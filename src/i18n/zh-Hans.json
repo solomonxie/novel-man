@@ -594,7 +594,9 @@
     "stateFailing": "上一份副本失败了：{{reason}}",
     "stateHereOnly": "{{count}} 份副本，全都在这台手机上",
     "stateBehind": "有改动还没离开这台手机",
-    "stateOk": "上一份副本离开手机的时间：{{when}}"
+    "stateOk": "上一份副本离开手机的时间：{{when}}",
+    "log": "备份记录",
+    "logHint": "每一次备份，以及当时备了什么"
   },
   "covers": {
     "sweptTitle": "有 {{count}} 张封面其实不是封面",
@@ -1278,5 +1280,14 @@
     "became_none": "清除了状态",
     "finishedChapter": "读完{{what}}",
     "aMoment": "一条记录"
+  },
+  "log": {
+    "title": "备份记录",
+    "hint": "这个应用做过的每一次备份，最新的在前。备份文件以日期命名、当天反复覆写，且只保留最近十份——所以被覆盖掉的那些，由这里记住。此处保留最近 1,000 条。",
+    "empty": "还没有做过任何备份。",
+    "where_icloud": "iCloud 云盘",
+    "where_local": "本机",
+    "wrote": "{{where}} · {{books}} 本书 · {{words}} 字",
+    "failed": "{{where}} · {{reason}}"
   }
 }
