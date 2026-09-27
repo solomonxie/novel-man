@@ -208,7 +208,7 @@
     "more": "More",
     "less": "Less",
     "lookUpWhat": "Asks the model what it knows about this book — the author, the year and a few sentences on what it’s about. Only missing details are filled in. If the model doesn’t know the book, it says so instead of making things up.",
-    "outlineRow": "Table of contents from AI",
+    "outlineRow": "Generate structure from AI",
     "outlineHint": "A chapter list for a book that has no text here.",
     "outlineAsk": "Ask",
     "outlineAgain": "Ask again",

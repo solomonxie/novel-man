@@ -208,7 +208,7 @@
     "more": "展开",
     "less": "收起",
     "lookUpWhat": "让 AI 凭自己的知识说出这本书的作者、出版年份和几句简介。只填补缺失的信息；不认识这本书时会直接说不知道，而不是编造。",
-    "outlineRow": "让 AI 给出目录",
+    "outlineRow": "让 AI 生成结构",
     "outlineHint": "没有正文的书，由 AI 给出章节目录。",
     "outlineAsk": "询问",
     "outlineAgain": "再问一次",

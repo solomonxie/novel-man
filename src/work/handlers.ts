@@ -42,6 +42,7 @@ import { drawImage } from '../ai/image';
 import type { ImageKind } from '../db/repo';
 import { writeImage } from '../storage/files';
 import { kindOf } from '../books/kinds';
+import { meaningfulName, partsOf, salvageRows } from '../structure/document';
 import { isSkeleton } from '../books/record';
 import { canonChapters, isBible } from '../scripture/canon';
 import type { WorkJob, WorkKind } from '../db/work';
@@ -175,10 +176,36 @@ const KNOWN_BOOK_RULES =
  * `{"unknown":true}`, whether it arrives alone, fenced, or wrapped in the
  * sentence of explanation some models cannot help adding. The token is the
  * contract; where it appears is not something worth failing a chapter over.
+ *
+ * An answer that parses is judged on the field, not on a search for the text.
+ * Searching the whole reply was too broad in the one place it mattered: a
+ * model that reasons out loud — "I could reply {"unknown":true}, but I do
+ * know this book" — and then answers properly was read as having refused,
+ * and its table of contents was thrown away.
  */
 function refused(answer: string): boolean {
-  const body = answer.replace(/```(?:json)?/gi, '').trim();
-  return /\{\s*"?unknown"?\s*:\s*true\s*,?\s*\}?/i.test(body);
+  try {
+    return parseJson<{ unknown?: boolean }>(answer)?.unknown === true;
+  } catch {
+    // No JSON in it at all: an apology, or the token inside a sentence.
+    const body = answer.replace(/```(?:json)?/gi, '').trim();
+    return /\{\s*"?unknown"?\s*:\s*true\s*,?\s*\}?/i.test(body);
+  }
+}
+
+/**
+ * What names the work rather than describing it. Both were on the book and
+ * neither was ever sent, which cost most on the books that need them: a
+ * translation is asked for under a title the model may only know in another
+ * language — "人月神话" for The Mythical Man-Month — and an ISBN is the one
+ * string that means exactly one published thing. An edition matters for the
+ * contents in particular, because that is the part two editions differ in.
+ */
+function identifiers(book: Book): string[] {
+  return [
+    book.isbn?.trim() ? `ISBN: ${book.isbn.trim()}` : '',
+    book.edition?.trim() ? `Edition: ${book.edition.trim()}` : '',
+  ].filter(Boolean);
 }
 
 /** The one error a reader has to be able to read off the queue row, and act on. */
@@ -248,6 +275,7 @@ async function lookUpBook(job: WorkJob, signal: AbortSignal) {
           `Title: ${book.title}`,
           book.author ? `Author: ${book.author}` : '',
           book.year ? `First published: ${book.year}` : '',
+          ...identifiers(book),
           // Filed by the reader, who may well have left the default on. It is
           // a hint, not a fact, and saying so is what stops the pass refusing
           // a bible for not being the novel it was filed as.
@@ -364,9 +392,10 @@ async function correctBook(job: WorkJob, signal: AbortSignal) {
  * contents page for a book that does not exist, and the screen that starts this
  * asks first.
  */
+type OutlineRow = { title?: string; brief?: string; part?: string };
 type Outline = {
   unknown?: boolean;
-  chapters?: { title?: string; brief?: string; part?: string }[];
+  chapters?: OutlineRow[];
 };
 
 async function outlineBook(job: WorkJob, signal: AbortSignal) {
@@ -389,21 +418,42 @@ async function outlineBook(job: WorkJob, signal: AbortSignal) {
       {
         role: 'system',
         content:
+          // Written so that answering is the easy path and refusing is the
+          // narrow one. It used to be the other way round: three separate
+          // "never"s, a brief demanded of every row, and one all-or-nothing
+          // escape — so a model that knew twelve of a book's nineteen
+          // chapters had no way to say so and took the escape. Most of the
+          // failures were not ignorance. They were a schema with no way to
+          // be partly sure.
           'You are a reference desk, asked for the table of contents of a published ' +
           'work. A translation, an edition, a scripture, a textbook, a manual and an ' +
           'anthology all count — the books of a bible, the parts of a manual and the ' +
           'stories in a collection are its contents just as chapters are a novel\'s. ' +
-          `List every ${unit} in order, as it is printed, with the ${unit}'s own ` +
-          'title where it has one and an empty title where it is only numbered. "brief" is ' +
-          `one sentence on what that ${unit} covers, and no more. ` +
+          `List the ${unit}s in order, each with its own title where it has one and an ` +
+          'empty title where it is only numbered. ' +
           (kind.part
             ? `"part" is the name of the ${kind.part} it sits under, where the book has them, ` +
-              'spelled the same way on every row that belongs to it. '
+              'spelled the same way on every row that belongs to it, and left out entirely ' +
+              'where the work is not divided into any. '
             : '') +
-          'Give the contents of this work only — never a plausible set of chapter titles, ' +
-          `never a ${unit} you are unsure it has, and never more than it has. ` +
-          'Reply {"unknown":true} only when the title is one you cannot place at all, or ' +
-          'when you know the work but genuinely do not know how it is divided. ' +
+          // Every one of these is a way of saying: answer with what you have.
+          'Give what you are sure of. Some of a contents is worth having and the reader ' +
+          `can add the rest, so a run of ${unit}s you are confident of is a good answer ` +
+          'even where you cannot recall the whole book — say nothing about the ones you ' +
+          'cannot, rather than guessing at them or abandoning the ones you can. ' +
+          '"brief" is one sentence on what it covers; leave it out of any row you do not ' +
+          'know, and answer without briefs entirely rather than inventing them. ' +
+          'Where this is a translation and you do not know the wording the translated ' +
+          `edition prints, give each ${unit}'s title from the original edition: how the ` +
+          'work is divided is what is being asked for, and an uncertain wording is not ' +
+          'an uncertain contents. ' +
+          // The one rule that has to stay absolute. Nothing downstream can
+          // tell an invented chapter from a real one later.
+          'Never invent. A plausible set of titles is the one answer worse than a short ' +
+          'one, because nothing here can tell it from the real thing afterwards. ' +
+          'Reply {"unknown":true} only if you cannot place this work at all. Knowing the ' +
+          'work but not all of it, or not the wording of one edition, is never a reason ' +
+          'to reply it — answer with the part you know. ' +
           'Reply with JSON only: {"chapters":[{"title","brief"' +
           (kind.part ? ',"part"' : '') +
           '}]}.',
@@ -414,10 +464,15 @@ async function outlineBook(job: WorkJob, signal: AbortSignal) {
           `Title: ${book.title}`,
           book.author ? `Author: ${book.author}` : '',
           book.year ? `First published: ${book.year}` : '',
+          ...identifiers(book),
           book.summary?.trim() ? `What it is: ${book.summary.trim().slice(0, 600)}` : '',
           `The reader filed it as ${kind.subject}; if that is plainly wrong, answer ` +
             'about what it really is.',
-          `Answer in ${book.language}.`,
+          // The briefs are for the reader, so they are in the reader's
+          // language. A title is what the book calls it, and translating one
+          // the model is only guessing at is how a made-up table of contents
+          // gets in here wearing the right language.
+          `Write each "brief" in ${book.language}; leave titles as the edition has them.`,
         ]
           .filter(Boolean)
           .join('\n'),
@@ -428,21 +483,32 @@ async function outlineBook(job: WorkJob, signal: AbortSignal) {
   );
   if (refused(answer)) throw new Error(UNKNOWN);
 
-  const outline = parseJson<Outline>(answer);
-  if (outline.unknown) throw new Error(UNKNOWN);
-  const rows = (outline.chapters ?? []).filter((row) => row && typeof row === 'object');
+  // Cut off mid-object, the answer is not JSON — but the rows before the cut
+  // are still answers, and forty good chapters are worth more than an error.
+  let rows: OutlineRow[] = [];
+  try {
+    const outline = parseJson<Outline>(answer);
+    if (outline.unknown) throw new Error(UNKNOWN);
+    rows = outline.chapters ?? [];
+  } catch (problem) {
+    if (problem instanceof Error && problem.message === UNKNOWN) throw problem;
+    rows = salvageRows<OutlineRow>(answer);
+    if (!rows.length) throw problem;
+  }
+  rows = rows.filter((row) => row && typeof row === 'object' && (row.title ?? row.brief));
   if (!rows.length) throw new Error('it listed no chapters');
 
   // A record has no manuscript, so every chapter is the same empty span: what
   // addresses one here is its place in the order and its name.
-  const parts: string[] = [];
+  const { titles, indexes } = partsOf(rows.map((row) => row.part));
   await replaceChapters(
     job.book_id,
     rows.map((row, at) => {
-      const part = row.part?.trim();
-      if (part && parts[parts.length - 1] !== part) parts.push(part);
+      const idx = indexes[at];
       return {
-        title: row.title?.trim() || `${at + 1}`,
+        // A placeholder is not a name: a chapter the model called "未知" is
+        // an unnamed chapter, and its number says more than that does.
+        title: meaningfulName(row.title) || `${at + 1}`,
         start: 0,
         end: 0,
         // Nothing here was read off a page: it is the model's account of a
@@ -450,8 +516,8 @@ async function outlineBook(job: WorkJob, signal: AbortSignal) {
         confident: false,
         userEdited: false,
         brief: row.brief?.trim() || null,
-        part_idx: part ? parts.length - 1 : null,
-        part_title: part ?? null,
+        part_idx: idx,
+        part_title: idx === null ? null : titles[idx],
       };
     })
   );
