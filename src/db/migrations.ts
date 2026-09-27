@@ -712,4 +712,23 @@ export const migrations: string[] = [
     WHERE language = 'en'
       AND source_name IN ('a CSV file', 'goodreads.com', 'by hand')
       AND (title GLOB '*[㐀-鿿぀-ヿ]*' OR COALESCE(author, '') GLOB '*[㐀-鿿぀-ヿ]*')`,
+
+  // A deleted book stops being gone. Its whole record leaves as a single-book
+  // bundle into Documents/Trash, and this row is what the app knows about that
+  // file: enough to list it, and the file name to put it back from. Not a
+  // deleted_at flag on books, because every query that lists a book would then
+  // have to remember to exclude it, and the one that forgot would be the leak.
+  // No foreign key: the point of the row is that the book is no longer there.
+  `CREATE TABLE deleted_books (
+     id TEXT PRIMARY KEY NOT NULL,
+     book_id TEXT NOT NULL,
+     title TEXT NOT NULL,
+     author TEXT,
+     file TEXT NOT NULL,
+     words INTEGER NOT NULL DEFAULT 0,
+     notes INTEGER NOT NULL DEFAULT 0,
+     bytes INTEGER NOT NULL DEFAULT 0,
+     deleted_at INTEGER NOT NULL
+   );
+   CREATE INDEX deleted_books_when ON deleted_books(deleted_at DESC)`,
 ];
