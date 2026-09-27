@@ -306,7 +306,8 @@
     "gradeHint_best": "1024 px on the current model, slowest setting. Follows the prompt just as closely, with more detail.",
     "removeAll": "Remove all app data",
     "removeAllTitle": "Remove all app data?",
-    "removeAllWarning": "A full backup is saved on this device first — and to iCloud and any connected buckets, if set up. It holds everything but your keys: books, notes, translations, settings, even the files they were imported from. Deletion starts only after the backups finish; if a cloud backup fails, nothing is deleted."
+    "removeAllWarning": "A full backup is saved on this device first — and to iCloud and any connected buckets, if set up. It holds everything but your keys: books, notes, translations, settings, even the files they were imported from. Deletion starts only after the backups finish; if a cloud backup fails, nothing is deleted.",
+    "removeAllKeeps": "The copy taken first stays in Files → Novel Man → Backups, and is not deleted with the rest."
   },
   "units": {
     "words": "{{count}} words",
@@ -524,9 +525,45 @@
     "notABundle": "That isn’t a Novel Man backup.",
     "tooNew": "This backup was made by a newer version (v{{version}}). Update the app first.",
     "aboutUnknown": "Written by an older version, which didn’t record what was in it. Restoring still works.",
-    "aboutEmpty": "Nothing in it.",
-    "file": "Backup file",
-    "fileHint": "A single .zip file with your books, chapters, notes and profiles. Open it anywhere. AI keys are never included."
+    "aboutEmpty": "Nothing in it."
+  },
+  "copies": {
+    "title": "Your copies",
+    "whatYouHave": "Every copy that exists",
+    "promise": "Your library is a database and a folder of files inside this app, and every copy of it is a .zip anyone can open: library.csv for the shelf, a notes file per book you annotated, and the books themselves. Nothing in a copy needs this app to be read, and none of it needs an account. Never in a copy: your AI keys and bucket secrets, which stay in this phone’s keychain.",
+    "promiseShort": "Every copy is a .zip you can open anywhere, holding a plain library.csv beside the rest. Keys never travel.",
+    "trouble": "Needs attention",
+    "icloudFailed": "The last copy to iCloud didn’t go up",
+    "nothingLeaves": "Nothing is being copied off this phone. The copies below are instant and offline, and they are deleted with the app.",
+    "onPhone": "On this phone · {{count}} · {{size}}",
+    "onPhoneHint": "Files → On My iPhone → Novel Man → Backups. Tap one to send it somewhere else. These survive a mistake, not a lost or wiped phone.",
+    "noneYet": "No copies here yet.",
+    "kind_daily": "The whole library, once a day",
+    "kind_database": "The database itself, copied whole",
+    "kind_guard": "Taken before something rewrote a lot at once",
+    "kind_pre-deletion": "Taken before everything was removed",
+    "kind_export": "A file you exported",
+    "kind_other": "A copy in this folder",
+    "offPhone": "Off this phone",
+    "icloudCount": "{{count}} copies kept in your iCloud Drive",
+    "icloudOff": "Off — no copy leaves this phone",
+    "never": "Never",
+    "bucketHint": "Your own bucket, where every copy is kept",
+    "deletedHint": "Kept 30 days, then gone",
+    "take": "Take a copy now",
+    "bundleHint": "One .zip that can restore all of it, down to the files your books came from",
+    "exportPlain": "Export a plain copy",
+    "exportPlainHint": "library.csv and a notes file per book. Readable in anything, no restore needed.",
+    "restoreHint": "Any copy above, or any .zip you kept. One book out of it, or all of them.",
+    "restoreWhich": "Restore which book?",
+    "restoreAll": "All {{count}} books",
+    "kept": "Files you exported",
+    "keptHint": "Still here, in Files → Novel Man → exports.",
+    "stateEmpty": "Nothing on the shelf to copy yet",
+    "stateFailing": "The last copy failed: {{reason}}",
+    "stateHereOnly": "{{count}} copies, all of them on this phone",
+    "stateBehind": "Changes that have not left this phone yet",
+    "stateOk": "Last copy left this phone {{when}}"
   },
   "trash": {
     "title": "Recently deleted",
@@ -541,6 +578,16 @@
     "empty": "Delete all of these for good",
     "emptyTitle": "Delete everything in Recently deleted?",
     "emptyWarning": "These books and their notes go for good. A backup taken before they were deleted still holds them."
+  },
+  "safe": {
+    "offerTitle": "Keep a copy off this phone?",
+    "offerWhat": "Your books, notes and progress go to your own iCloud Drive whenever they change — so deleting the app, or losing the phone, doesn’t take them with it. Nothing goes anywhere else, and your keys never leave this device.",
+    "notNow": "Not now",
+    "turnOn": "Turn on",
+    "foundTitle": "Your library is in iCloud",
+    "foundWhat": "A backup from {{when}} is in your iCloud Drive.",
+    "bringBack": "Bring it back",
+    "cameBack": "{{chapters}} chapters and {{notes}} notes came back with them."
   },
   "ai": {
     "noKeyTitle": "No AI key",
@@ -656,7 +703,7 @@
     "backToChapters": "All chapters"
   },
   "cloud": {
-    "title": "Cloud backup",
+    "title": "Where copies go",
     "hint": "Every backup holds everything but your keys — books, notes, translations, people, progress, settings and the files you imported. iCloud keeps the last ten copies; your own bucket keeps every one, and nothing is uploaded there until you ask.",
     "addConnection": "＋ Add a cloud connection",
     "addConnectionHint": "Your own S3-compatible bucket, for full backups with history.",

@@ -30,6 +30,7 @@ import { hasAnyKey } from '../ai/keys';
 import { Row } from './primitives';
 import { GroupTitle, KindList } from './KindList';
 import { OptionRows } from './OptionRows';
+import { sizeOf } from './fields';
 import { radius, space, usePalette } from '../theme';
 import { trace } from '../dev/trace';
 
@@ -635,13 +636,6 @@ function aboutLine(
     .filter(Boolean)
     .join(' · ');
   return `${stated}\n${t('add.gutenbergWhat')}`;
-}
-
-function sizeOf(bytes: number): string {
-  if (!bytes) return '';
-  return bytes >= 1_000_000
-    ? `${(bytes / 1_000_000).toFixed(1)} MB`
-    : `${Math.round(bytes / 1000)} KB`;
 }
 
 function describeFetch(error: unknown, t: TFunction): string {

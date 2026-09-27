@@ -46,6 +46,7 @@ import {
 } from '../src/search/library';
 import { restoreOnLaunch } from '../src/backup/icloud';
 import { purgeExpiredTrash } from '../src/backup/trash';
+import { BackupOffer, RestoreOffer } from '../src/ui/Safekeeping';
 import { subscribeToRestores } from '../src/backup/changes';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { radius, space, usePalette } from '../src/theme';
@@ -274,6 +275,9 @@ export default function Home() {
           <View style={styles.center}><ActivityIndicator /></View>
         ) : (
           <>
+            {/* Asked once, and only where there is something to lose. */}
+            {books.length > 0 && !query.trim() ? <BackupOffer /> : null}
+
             <View style={{ marginTop: space.lg }}>
               {broken ? (
                 // Books are not lost when the database will not open, and the
@@ -286,13 +290,20 @@ export default function Home() {
                   </Text>
                 </View>
               ) : books.length === 0 ? (
-                <View style={{ paddingHorizontal: space.lg }}>
-                  <Text style={{ color: palette.text, fontSize: 16 }}>{t('shelf.empty')}</Text>
-                  <Text style={{ color: palette.dim, marginTop: space.xs }}>{t('shelf.emptyHint')}</Text>
-                  <Text style={{ color: palette.faint, marginTop: space.xs, fontSize: 12 }}>
-                    {supportedExtensions.map((extension) => `.${extension}`).join('  ')}
-                  </Text>
-                </View>
+                <>
+                  {/* An empty shelf on a phone whose iCloud has a library is
+                      not an empty shelf. It leads, above the invitation to
+                      import a file, because it is the thing that reader came
+                      here for. */}
+                  <RestoreOffer onRestored={refresh} />
+                  <View style={{ paddingHorizontal: space.lg, marginTop: space.lg }}>
+                    <Text style={{ color: palette.text, fontSize: 16 }}>{t('shelf.empty')}</Text>
+                    <Text style={{ color: palette.dim, marginTop: space.xs }}>{t('shelf.emptyHint')}</Text>
+                    <Text style={{ color: palette.faint, marginTop: space.xs, fontSize: 12 }}>
+                      {supportedExtensions.map((extension) => `.${extension}`).join('  ')}
+                    </Text>
+                  </View>
+                </>
               ) : library.length === 0 ? (
                 <Text style={{ color: palette.dim, paddingHorizontal: space.lg }}>
                   {t('shelf.noMatches')}

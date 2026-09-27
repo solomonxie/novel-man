@@ -18,6 +18,7 @@ import AiRequest from '../../app/ai-request/[id]';
 import CloudLibrary from '../../app/settings/cloud-library';
 import IcloudBackups from '../../app/settings/icloud-backups';
 import RecentlyDeleted from '../../app/settings/deleted';
+import YourCopies from '../../app/settings/copies';
 import Notes from '../../app/book/[id]/notes';
 import Structure from '../../app/book/[id]/structure';
 import Cast from '../../app/book/[id]/cast';
@@ -69,6 +70,7 @@ export const screens: Screen[] = [
   { path: '/settings/cloud-library', component: CloudLibrary, header: true },
   { path: '/settings/icloud-backups', component: IcloudBackups, header: true },
   { path: '/settings/deleted', component: RecentlyDeleted, header: true },
+  { path: '/settings/copies', component: YourCopies, header: true },
   { path: '/book/[id]/notes', component: Notes, header: true },
   { path: '/book/[id]/structure', component: Structure, header: true },
   { path: '/book/[id]/cast', component: Cast, header: true },
