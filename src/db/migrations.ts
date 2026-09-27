@@ -700,4 +700,16 @@ export const migrations: string[] = [
   // site, so a re-import of the same file still matches by its own ids instead
   // of falling back to titles. Nothing else ever wrote douban.com.
   `UPDATE books SET source_name = 'a CSV file' WHERE source_name = 'douban.com'`,
+
+  // A shelf entry had no words to read a language off, so every one of them
+  // was filed as English — including a library imported from a Chinese site,
+  // which is how an AI lookup was told to answer in the wrong language. The
+  // titles are still there to read it off. Broader than the code that now runs
+  // on the way in (any Han or kana character, rather than a proportion of
+  // them), which is the right way round for a backfill of rows that were never
+  // looked at.
+  `UPDATE books SET language = 'zh'
+    WHERE language = 'en'
+      AND source_name IN ('a CSV file', 'goodreads.com', 'by hand')
+      AND (title GLOB '*[㐀-鿿぀-ヿ]*' OR COALESCE(author, '') GLOB '*[㐀-鿿぀-ヿ]*')`,
 ];

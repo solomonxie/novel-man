@@ -13,6 +13,7 @@ import type { Shelved } from '../sources/goodreads';
 import { writeImage } from '../storage/files';
 import { hueFrom } from '../ui/fields';
 import { yieldToUI } from '../async/yield';
+import { detectLanguage } from '../text/language';
 import { addEvent } from '../db/timeline';
 
 /**
@@ -25,6 +26,19 @@ export const OPEN_LIBRARY = 'openlibrary.org';
 export const GOODREADS = 'goodreads.com';
 export const CSV_FILE = 'a CSV file';
 
+/**
+ * What language a book with no words is in. Every other path learns it from the
+ * text; a shelf entry has no text, so the only evidence is what it is called —
+ * and the answer matters, because it is what an AI pass is told to answer in.
+ * Filing a Chinese library as English is how a lookup comes back romanised.
+ *
+ * The author counts too: a Chinese edition of an English book is named in both,
+ * and one name in Han among a latin title is the tell.
+ */
+export function languageOfRecord(title: string, author?: string | null): string {
+  return detectLanguage(`${title} ${author ?? ''}`).language;
+}
+
 export function keepByHand(input: {
   title: string;
   author?: string | null;
@@ -35,7 +49,7 @@ export function keepByHand(input: {
     title: input.title.trim(),
     author: input.author?.trim() || null,
     kind: input.kind,
-    language: input.language,
+    language: input.language ?? languageOfRecord(input.title, input.author),
     source_name: BY_HAND,
     cover_hue: hueFrom(input.title),
   });
@@ -127,6 +141,7 @@ export async function keepShelved(
         title: book.title,
         author: book.author || null,
         year: book.year || null,
+        language: languageOfRecord(book.title, book.author),
         kind,
         source_name: from,
         source_hash: book.id,
