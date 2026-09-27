@@ -311,11 +311,27 @@ export default function StructurePage() {
             {chapters.length >= SEARCHABLE_FROM && (
               <Search value={query} onChange={setQuery} placeholder={t('structure.search')} />
             )}
-            <Text style={[styles.sectionTitle, { color: palette.dim }]}>
-              {needle
-                ? t('structure.found', { count: shown.length })
-                : t('structure.chapters').toUpperCase()}
-            </Text>
+            {/* The heading, and beside it the one thing you can do to the
+                list under it. Adding a chapter by hand belonged up here with
+                the chapters rather than at the foot of the page among the
+                paid passes — it is free, it is instant, and it is what a
+                record's chapters are made of. */}
+            <View style={styles.heading}>
+              <Text style={[styles.sectionTitle, { color: palette.dim, marginBottom: 0 }]}>
+                {needle
+                  ? t('structure.found', { count: shown.length })
+                  : t('structure.chapters').toUpperCase()}
+              </Text>
+              {record && !needle ? (
+                <Text
+                  onPress={busy ? undefined : addChapter}
+                  suppressHighlighting
+                  style={{ color: palette.accent, fontSize: 14 }}
+                >
+                  {`＋  ${t('structure.addChapter')}`}
+                </Text>
+              ) : null}
+            </View>
           </>
         }
         ListEmptyComponent={
@@ -384,30 +400,33 @@ export default function StructurePage() {
 
         <Section>
           {record ? (
-            <>
-              <Row
-                label={t('structure.addChapter')}
-                detail={t('structure.addChapterHint')}
-                onPress={busy ? undefined : addChapter}
-              />
-              <Row
-                label={t('book.outlineRow')}
-                value={t('structure.aiDetectValue')}
-                onPress={() => setOutlineOpen(true)}
-              />
-            </>
+            /* The pass that fills an empty contents page is the reason most
+               people open this screen, and it was a grey row indistinguishable
+               from the two above it. Accent, like everything else in this app
+               you can tap — the price still stated, because it is paid. */
+            <Row
+              label={t('book.outlineRow')}
+              detail={t('book.outlineHint')}
+              value={t('structure.aiDetectValue')}
+              link
+              onPress={() => setOutlineOpen(true)}
+              last
+            />
           ) : (
             <>
               <Row label={t('structure.redetect')} onPress={redetect} />
               <Row
                 label={t('structure.aiDetect')}
                 value={t('structure.aiDetectValue')}
+                link
                 onPress={() => openSheet('chapters')}
               />
               <Row
                 label={t('structure.aiScenes')}
                 value={t('structure.aiDetectValue')}
+                link
                 onPress={() => openSheet('scenes')}
+                last
               />
             </>
           )}
@@ -673,6 +692,12 @@ function SplitPicker({ index, title, chapters, text, language, onClose, onPick }
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  heading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: space.sm,
+  },
   sectionTitle: {
     fontSize: 12,
     letterSpacing: 0.8,
