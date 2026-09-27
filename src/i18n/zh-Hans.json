@@ -306,7 +306,8 @@
     "gradeHint_best": "当前模型，1024 px，最慢的一档。同样紧扣提示词，细节更多。",
     "removeAll": "删除所有应用数据",
     "removeAllTitle": "删除所有应用数据？",
-    "removeAllWarning": "删除前会先在本机保存一份完整备份，若已设置，也会上传到 iCloud 和已连接的存储桶。备份包含除密钥以外的一切：书籍正文、笔记、翻译、设置，以及导入时用的原始文件。备份全部完成后才开始删除；若云端备份失败，则不会删除任何数据。"
+    "removeAllWarning": "删除前会先在本机保存一份完整备份，若已设置，也会上传到 iCloud 和已连接的存储桶。备份包含除密钥以外的一切：书籍正文、笔记、翻译、设置，以及导入时用的原始文件。备份全部完成后才开始删除；若云端备份失败，则不会删除任何数据。",
+    "removeAllKeeps": "删除前先留下的那份副本会保存在「文件」→ Novel Man → Backups，不会随其余数据一起删除。"
   },
   "units": {
     "words": "{{count}} 词",
@@ -524,9 +525,45 @@
     "notABundle": "这不是 Novel Man 的备份文件。",
     "tooNew": "该备份来自更新的版本（v{{version}}），请先升级应用。",
     "aboutUnknown": "这是旧版本写的备份，没有记录里面有什么。恢复仍然可用。",
-    "aboutEmpty": "里面是空的。",
-    "file": "备份文件",
-    "fileHint": "一个 .zip 文件，包含你的书、章节结构、笔记和档案，在任何地方都能打开。不含 AI 密钥。"
+    "aboutEmpty": "里面是空的。"
+  },
+  "copies": {
+    "title": "你的副本",
+    "whatYouHave": "现有的每一份副本",
+    "promise": "你的书库是这个应用里的一个数据库和一个文件夹，而它的每一份副本都是任何人都能打开的 .zip：书架是 library.csv，每本做过笔记的书有一个笔记文件，书本身也在里面。副本里的东西不需要这个应用就能读，也不需要任何账号。副本里永远不包含：你的 AI 密钥和存储桶密钥，它们只留在本机钥匙串里。",
+    "promiseShort": "每份副本都是随处可开的 .zip，里面还有一份纯文本的 library.csv。密钥从不外传。",
+    "trouble": "需要注意",
+    "icloudFailed": "上一份 iCloud 副本没有传上去",
+    "nothingLeaves": "目前没有任何副本离开这台手机。下面这些副本即时、离线，但会随应用一起被删除。",
+    "onPhone": "在这台手机上 · {{count}} · {{size}}",
+    "onPhoneHint": "「文件」→「我的 iPhone」→ Novel Man → Backups。点一份可以发到别处。它们能救回一次误操作，救不回丢失或被抹掉的手机。",
+    "noneYet": "这里还没有副本。",
+    "kind_daily": "整个书库，每天一份",
+    "kind_database": "数据库本身，整份拷贝",
+    "kind_guard": "在某次大批改写之前留下的",
+    "kind_pre-deletion": "在清空全部数据之前留下的",
+    "kind_export": "你导出的文件",
+    "kind_other": "这个文件夹里的一份副本",
+    "offPhone": "手机之外",
+    "icloudCount": "你的 iCloud Drive 里保留了 {{count}} 份",
+    "icloudOff": "未开启——没有任何副本离开这台手机",
+    "never": "从未",
+    "bucketHint": "你自己的存储桶，每一份都保留",
+    "deletedHint": "保留 30 天，之后清除",
+    "take": "现在取一份副本",
+    "bundleHint": "一个 .zip，能把一切恢复回来，连书的原始文件都在",
+    "exportPlain": "导出纯文本副本",
+    "exportPlainHint": "library.csv 加每本书的笔记文件。任何软件都能打开，不需要恢复。",
+    "restoreHint": "上面任意一份副本，或你保存过的任意 .zip。可以只恢复其中一本，也可以全部。",
+    "restoreWhich": "恢复哪一本？",
+    "restoreAll": "全部 {{count}} 本",
+    "kept": "你导出的文件",
+    "keptHint": "还在这里：「文件」→ Novel Man → exports。",
+    "stateEmpty": "书架上还没有东西可备份",
+    "stateFailing": "上一份副本失败了：{{reason}}",
+    "stateHereOnly": "{{count}} 份副本，全都在这台手机上",
+    "stateBehind": "有改动还没离开这台手机",
+    "stateOk": "上一份副本离开手机的时间：{{when}}"
   },
   "trash": {
     "title": "最近删除",
@@ -541,6 +578,16 @@
     "empty": "彻底删除这里的全部",
     "emptyTitle": "清空「最近删除」？",
     "emptyWarning": "这些书和它们的笔记将彻底消失。删除之前做的备份里仍然有它们。"
+  },
+  "safe": {
+    "offerTitle": "要在手机之外留一份副本吗？",
+    "offerWhat": "你的书、笔记和阅读进度会在有改动时存进你自己的 iCloud Drive——这样删掉应用、或者手机丢了，都不会把它们一起带走。不会发往任何其他地方，密钥也从不离开本机。",
+    "notNow": "暂时不用",
+    "turnOn": "开启",
+    "foundTitle": "你的书库在 iCloud 里",
+    "foundWhat": "你的 iCloud Drive 里有一份 {{when}} 的备份。",
+    "bringBack": "取回来",
+    "cameBack": "一起回来的还有 {{chapters}} 个章节和 {{notes}} 条笔记。"
   },
   "ai": {
     "noKeyTitle": "没有 AI 密钥",
@@ -656,7 +703,7 @@
     "backToChapters": "全部章节"
   },
   "cloud": {
-    "title": "云端备份",
+    "title": "副本存放位置",
     "hint": "每一份备份都包含除密钥以外的一切：书籍正文、笔记、翻译、人物、进度、设置，以及你导入的文件。iCloud 保留最近十份；你自己的存储桶保留每一份，并且只有你主动上传时才会上传。",
     "addConnection": "＋ 添加云存储",
     "addConnectionHint": "你自己的 S3 兼容存储桶，完整备份并保留历史版本。",
