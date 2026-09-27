@@ -175,11 +175,11 @@
     "partsHint": "Each part has its own page with its description, its chapters, and every note you made in it.",
     "searchParts_book": "Search books",
     "searchParts_volume": "Search volumes",
-    "terms": "Concepts & Terminologies",
-    "termsEmpty": "No concepts or terms yet.",
-    "addTerm": "＋ Add a concept or term",
-    "searchTerms": "Search concepts & terms",
-    "termsAll": "All concepts & terms",
+    "terms": "Terms",
+    "termsEmpty": "No terms yet.",
+    "addTerm": "＋ Add a term",
+    "searchTerms": "Search terms",
+    "termsAll": "All terms",
     "ratingShort": "Rating",
     "favorite": "Like",
     "ratedOn": "Rated {{date}}",
@@ -196,7 +196,9 @@
     "outlineQueued": "Queued. You can follow it in the queue.",
     "outlineReplace": "This replaces the {{count}} existing chapters, including any edits you made to them.",
     "recordedFrom": "Recorded from {{name}}",
-    "review": "What you thought"
+    "review": "What you thought",
+    "deleteWhere": "Waits 30 days in Recently deleted",
+    "deleteKept": "Nothing was deleted"
   },
   "reader": {
     "go": "Go",
@@ -526,6 +528,20 @@
     "file": "Backup file",
     "fileHint": "A single .zip file with your books, chapters, notes and profiles. Open it anywhere. AI keys are never included."
   },
+  "trash": {
+    "title": "Recently deleted",
+    "why": "A deleted book waits here for {{days}} days with its notes, highlights, people and reading dates — as a file in Files → Novel Man → Trash. Putting one back restores all of it.",
+    "none": "Nothing deleted.",
+    "putBack": "Put back",
+    "forget": "Delete for good",
+    "what": "Put this book back on the shelf, or delete it for good?",
+    "withNotes": "{{count}} notes",
+    "failed": "Couldn’t do that",
+    "fileGone": "The file for this book isn’t there any more.",
+    "empty": "Delete all of these for good",
+    "emptyTitle": "Delete everything in Recently deleted?",
+    "emptyWarning": "These books and their notes go for good. A backup taken before they were deleted still holds them."
+  },
   "ai": {
     "noKeyTitle": "No AI key",
     "addKey": "Add a key",
@@ -640,7 +656,7 @@
     "backToChapters": "All chapters"
   },
   "cloud": {
-    "title": "Where copies go",
+    "title": "Cloud backup",
     "hint": "Every backup holds everything but your keys — books, notes, translations, people, progress, settings and the files you imported. iCloud keeps the last ten copies; your own bucket keeps every one, and nothing is uploaded there until you ask.",
     "addConnection": "＋ Add a cloud connection",
     "addConnectionHint": "Your own S3-compatible bucket, for full backups with history.",
@@ -1030,7 +1046,7 @@
     "err_canon": "“{{detail}}” can be read, but it isn’t a Bible — its books and chapter counts don’t match any canon."
   },
   "term": {
-    "eyebrow": "Concept or term",
+    "eyebrow": "Term",
     "name": "Name",
     "aliasPlaceholder": "Other names, separated by commas",
     "summaryPlaceholder": "A line or two about what this is.",

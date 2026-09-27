@@ -20,7 +20,6 @@ import {
   listParts,
   listScenes,
   createEntity,
-  deleteBook,
   getBook,
   getProgress,
   lastReadAt,
@@ -87,6 +86,7 @@ import { CoverDrawer } from '../../src/ui/CoverDrawer';
 import { isFavorite, setFavorite } from '../../src/db/shelves';
 import { ESV_SOURCE } from '../../src/sources/esvBook';
 import { EsvKeyRows } from '../../src/settings/EsvKey';
+import { deleteBookSafely } from '../../src/backup/trash';
 import { timed, trace } from '../../src/dev/trace';
 
 /** One line of anything written on this page, and how many lines each box gets. */
@@ -126,6 +126,7 @@ export default function BookPage() {
   const [timelineAt, setTimelineAt] = useState(0);
   const [identifyOpen, setIdentifyOpen] = useState(false);
   const [listsOpen, setListsOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [askEstimate, setAskEstimate] = useState<Estimate | null>(null);
   const [favorite, setFavorited] = useState(false);
@@ -500,8 +501,17 @@ export default function BookPage() {
         text: t('book.delete'),
         style: 'destructive',
         onPress: async () => {
-          await deleteBook(book!.id);
-          router.back();
+          setDeleting(true);
+          try {
+            await deleteBookSafely(book!.id);
+            router.back();
+          } catch (problem) {
+            // The copy did not come out right, so the book is still here. That
+            // is the good outcome of a bad moment, and it has to be said.
+            Alert.alert(t('book.deleteKept'), String(problem));
+          } finally {
+            setDeleting(false);
+          }
         },
       },
     ]);
@@ -1048,7 +1058,14 @@ export default function BookPage() {
             }}
           />
         )}
-        <Row label={t('book.delete')} onPress={confirmDelete} danger last />
+        <Row
+          label={t('book.delete')}
+          detail={t('book.deleteWhere')}
+          onPress={deleting ? undefined : confirmDelete}
+          busy={deleting}
+          danger
+          last
+        />
       </Section>
 
       <AiRunSheet
