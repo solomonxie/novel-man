@@ -19,7 +19,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { listBooks, type BookListItem } from '../src/db/repo';
-import { shelfOf, type ReadingStatus } from '../src/books/record';
+import { reviewedBooks, shelfOf, type ReadingStatus } from '../src/books/record';
 import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
 import { supportedExtensions } from '../src/import/registry';
 import { Row, Section } from '../src/ui/primitives';
@@ -246,13 +246,7 @@ export default function Home() {
    * rather than queried: `listBooks` already selects the column, and a second
    * trip for it would be a scan of the whole shelf on every focus.
    */
-  const reviews = useMemo(
-    () =>
-      (books ?? [])
-        .filter((book) => book.review?.trim())
-        .sort((a, b) => (b.rated_at ?? 0) - (a.rated_at ?? 0)),
-    [books]
-  );
+  const reviews = useMemo(() => reviewedBooks(books ?? []), [books]);
 
   const notes = useMemo(
     () => results.meta.filter((hit) => hit.kind === 'note').map(toRow),

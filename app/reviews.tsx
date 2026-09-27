@@ -4,6 +4,7 @@ import { router, Stack, useFocusEffect } from '../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { listBooks, type BookListItem } from '../src/db/repo';
+import { reviewedBooks } from '../src/books/record';
 import { ReviewCard } from '../src/ui/ReviewCard';
 import { Search } from '../src/ui/primitives';
 import { space, usePalette } from '../src/theme';
@@ -31,13 +32,7 @@ export default function Reviews() {
 
   useFocusEffect(load);
 
-  const reviewed = useMemo(
-    () =>
-      books
-        .filter((book) => book.review?.trim())
-        .sort((a, b) => (b.rated_at ?? 0) - (a.rated_at ?? 0)),
-    [books]
-  );
+  const reviewed = useMemo(() => reviewedBooks(books), [books]);
 
   const typed = query.trim().toLowerCase();
   const shown = typed

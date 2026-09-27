@@ -39,6 +39,8 @@ export type Book = {
   /** Their own words about it, as long as they like. Not the summary — the verdict. */
   review: string | null;
   rated_at: number | null;
+  /** When the review was last written. The stars have a date of their own. */
+  reviewed_at: number | null;
   /** Where it stands with them: see `books/record`. Null for a book nobody has said. */
   status: string | null;
   created_at: number;
@@ -291,6 +293,7 @@ export type ImportedBook = Omit<
   | 'stars'
   | 'review'
   | 'rated_at'
+  | 'reviewed_at'
   | 'status'
   | 'impressions'
   | 'isbn'
@@ -532,6 +535,10 @@ export async function rateBook(
   if ('review' in changes) {
     fields.push('review = ?');
     values.push(changes.review?.trim() || null);
+    // Its own date, so the reviews list is ordered by when things were written
+    // and not by when a star was last tapped on a book read years ago.
+    fields.push('reviewed_at = ?');
+    values.push(Date.now());
   }
   if (!fields.length) return;
   fields.push('rated_at = ?');
@@ -1594,9 +1601,9 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
     await database.runAsync(
       `INSERT INTO books (id, title, author, year, edition, cover_path, language, kind, source_name,
                           source_hash, source_path, source_ext, word_count, char_count, cover_hue,
-                          summary, text_source, stars, review, rated_at, status, impressions,
-                          isbn, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                          summary, text_source, stars, review, rated_at, reviewed_at, status,
+                          impressions, isbn, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id, book.title, book.author, book.year, book.edition, book.cover_path, book.language,
       book.kind ?? DEFAULT_KIND, book.source_name, book.source_hash, book.source_path,
       book.source_ext, book.word_count, book.char_count, book.cover_hue, book.summary,
@@ -1604,7 +1611,8 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
       // and a rating is the reason a shelf was kept at all — a restore that
       // dropped either would hand back a different book.
       book.text_source ?? null, book.stars ?? null, book.review ?? null, book.rated_at ?? null,
-      book.status ?? null, book.impressions ?? null, book.isbn ?? null, book.created_at || now
+      book.reviewed_at ?? null, book.status ?? null, book.impressions ?? null, book.isbn ?? null,
+      book.created_at || now
     );
     await database.runAsync(
       'INSERT INTO documents (book_id, text, hints) VALUES (?, ?, ?)',
@@ -1697,10 +1705,11 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
     await database.runAsync(
       `UPDATE books SET title = ?, author = ?, year = ?, edition = ?, cover_path = ?,
                         kind = ?, cover_hue = ?, summary = ?, stars = ?, review = ?,
-                        rated_at = ?, status = ?, impressions = ?, isbn = ? WHERE id = ?`,
+                        rated_at = ?, reviewed_at = ?, status = ?, impressions = ?,
+                        isbn = ? WHERE id = ?`,
       book.title, book.author, book.year, book.edition, book.cover_path,
       book.kind ?? DEFAULT_KIND, book.cover_hue, book.summary, book.stars ?? null,
-      book.review ?? null, book.rated_at ?? null, book.status ?? null,
+      book.review ?? null, book.rated_at ?? null, book.reviewed_at ?? null, book.status ?? null,
       book.impressions ?? null, book.isbn ?? null, bookId
     );
     await database.runAsync('DELETE FROM scenes WHERE book_id = ?', bookId);
