@@ -18,6 +18,22 @@ export function isSkeleton(book: Skeletal): boolean {
   return book.word_count === 0 && !book.text_source;
 }
 
+/**
+ * A book restored out of a bundle that carried no words for it. The counts go
+ * to zero because there is nothing left to count — and `text_source` is
+ * deliberately untouched, because it is not a measurement of the text, it is
+ * where the text comes from. A restore that cleared it turned every ESV that
+ * came back from a backup into a skeleton: no reader, 1,189 chapters that
+ * opened onto nothing.
+ *
+ * It lives here rather than in the restore so that the rule above and the rule
+ * that undoes it are one thing, tested together. The restore hand-rolled this
+ * and drifted from `isSkeleton` without anything noticing.
+ */
+export function withoutManuscript<T extends Skeletal>(book: T): T {
+  return { ...book, word_count: 0, char_count: 0 };
+}
+
 /** One to five, and never a half — the count every shelf in the world uses. */
 export const STARS = 5;
 

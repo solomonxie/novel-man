@@ -1644,10 +1644,16 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
     );
     for (const annotation of record.annotations) {
       await database.runAsync(
-        `INSERT INTO annotations (id, book_id, kind, color, start, end, quote, note, prefix, suffix,
-                                  standalone, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        newId(), id, annotation.kind, annotation.color, annotation.start, annotation.end,
+        `INSERT INTO annotations (id, book_id, chapter_id, kind, color, start, end, quote, note,
+                                  prefix, suffix, standalone, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        // Which chapter the mark is in, through the same remap every other
+        // reference gets. Dropped here until now, and only a fetched edition
+        // ever felt it: a bible's chapters each start at offset zero, so a
+        // restore put all 1,189 chapters' notes on top of each other.
+        newId(), id,
+        annotation.chapter_id ? chapterMap.get(annotation.chapter_id) ?? null : null,
+        annotation.kind, annotation.color, annotation.start, annotation.end,
         annotation.quote, annotation.note, annotation.prefix ?? '', annotation.suffix ?? '',
         annotation.standalone ?? 0, annotation.created_at
       );
