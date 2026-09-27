@@ -7,10 +7,11 @@ import { space, usePalette } from '../theme';
 /**
  * What a restore did, all four parts of it.
  *
- * A copy that carries no manuscripts restores no books by definition — iCloud
- * never carries them — so "Restored 0 books" is the ordinary outcome there, and
- * on its own it reads as a failure. What is waiting for its file leads instead,
- * and the count of books is kept for the restore where nothing happened at all.
+ * Every bundle carries the manuscripts now, so the ordinary outcome is a count
+ * of books. What leads instead, where there is any, is what came back without
+ * its words — a bundle written by a build that left them out, still sitting in
+ * somebody's iCloud folder — because "Restored 0 books" on its own reads as a
+ * failure when in fact the shelf is full of skeletons waiting for their files.
  */
 export function RestoreReportView({ report }: { report: RestoreReport }) {
   const { t } = useTranslation();

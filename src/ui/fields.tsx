@@ -126,3 +126,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
+/** A file's size, in the unit somebody would say it in. Blank for nothing. */
+export function sizeOf(bytes: number): string {
+  if (!bytes) return '';
+  return bytes >= 1_000_000
+    ? `${(bytes / 1_000_000).toFixed(1)} MB`
+    : `${Math.round(bytes / 1000)} KB`;
+}

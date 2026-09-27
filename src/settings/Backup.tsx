@@ -1,17 +1,13 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Text } from 'react-native';
-import { Directory, File, Paths } from '../storage/fs';
+import { Directory, Paths } from '../storage/fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
-import { buildBundle, openBundle } from '../backup/bundle';
 import { backupBeforeRemoval } from '../backup/removal';
-import { restoreBundle, type RestoreReport } from '../backup/restore';
-import { BundleError, isBundleName } from '../backup/format';
-import { deliver } from '../export/deliver';
-import { pickBackupBundle } from '../import/sources/picker';
-import { RestoreReportView } from './RestoreReport';
+import { copiesState, type CopiesState } from '../backup/copies';
+import { router, useFocusEffect } from '../navigation/router';
 import { Hint, Row, Section } from '../ui/primitives';
 import { space, usePalette } from '../theme';
 import { db, transaction } from '../db';
@@ -24,54 +20,39 @@ import { settled as cloudSettled } from '../cloud/sync';
 import { suppressLaunchRestore } from '../backup/icloud';
 import { listConnections } from '../cloud/connections';
 import { listKeys } from '../ai/keys';
-import { noticeChange, noticeRestore } from '../backup/changes';
+import { noticeChange, noticeRestore, subscribeToRestores } from '../backup/changes';
 
+/**
+ * Not a feature called Backup: the answer to "is my work safe", one tap away
+ * from the shelf. The row says what is true right now — how many copies there
+ * are, when the last one left the phone, or that none has — and the page behind
+ * it is the list of files that proves it.
+ */
 export function BackupSettings({ onRemoved }: { onRemoved?: () => void }) {
   const { t } = useTranslation();
   const palette = usePalette();
   const [busy, setBusy] = useState(false);
-  const [report, setReport] = useState<RestoreReport | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [state, setState] = useState<CopiesState | null>(null);
+
+  const load = useCallback(() => {
+    copiesState().then(setState);
+  }, []);
+
+  useFocusEffect(load);
+  // A wipe empties what this is reporting, from this very page.
+  useEffect(() => subscribeToRestores(load), [load]);
 
   async function guard(work: () => Promise<void>) {
     setBusy(true);
-    setReport(null);
     try {
       await work();
     } catch (error) {
-      Alert.alert(t('backup.failed'), describe(error, t));
+      Alert.alert(t('backup.failed'), String(error));
     } finally {
       setBusy(false);
+      load();
     }
-  }
-
-  const exportLibrary = () =>
-    guard(async () => {
-      await deliver(await buildBundle(), 'share');
-    });
-
-  function confirmRestore(open: () => ReturnType<typeof openBundle> | null) {
-    Alert.alert(t('backup.restore'), t('backup.restoreConfirm'), [
-      { text: t('settings.cancel'), style: 'cancel' },
-      {
-        text: t('backup.restore'),
-        onPress: () =>
-          guard(async () => {
-            const opened = open();
-            if (!opened) throw new BundleError('not-a-bundle');
-            setReport(await restoreBundle(opened));
-          }),
-      },
-    ]);
-  }
-
-  function restoreFromFile() {
-    guard(async () => {
-      const picked = await pickBackupBundle();
-      if (!picked) return;
-      if (!isBundleName(picked.name)) throw new BundleError('not-a-bundle');
-      confirmRestore(() => openBundle(new File(picked.uri).bytesSync()));
-    });
   }
 
   function confirmRemoveAll() {
@@ -104,15 +85,25 @@ export function BackupSettings({ onRemoved }: { onRemoved?: () => void }) {
 
   return (
     <>
-      <Section title={t('backup.file')}>
-        <Row label={t('backup.exportLibrary')} onPress={exportLibrary} />
-        <Row label={t('backup.restoreFromFile')} onPress={restoreFromFile} last />
+      <Section title={t('copies.title')}>
+        <Row
+          label={t('copies.whatYouHave')}
+          detail={state ? stateLine(state, t) : undefined}
+          value="›"
+          alarm={Boolean(state && (state.failing || (state.books && !state.icloudOn)))}
+          onPress={() => router.push('/settings/copies')}
+        />
+        <Row
+          label={t('trash.title')}
+          detail={t('copies.deletedHint')}
+          value={state ? `${state.deleted}` : ''}
+          onPress={() => router.push('/settings/deleted')}
+          last
+        />
       </Section>
-      <Hint>{t('backup.fileHint')}</Hint>
+      <Hint>{t('copies.promiseShort')}</Hint>
 
-      {busy ? <ActivityIndicator style={{ marginTop: space.xl }} /> : null}
-
-      {report ? <RestoreReportView report={report} /> : null}
+      {busy || removing ? <ActivityIndicator style={{ marginTop: space.xl }} /> : null}
 
       <Pressable
         onPress={confirmRemoveAll}
@@ -124,8 +115,25 @@ export function BackupSettings({ onRemoved }: { onRemoved?: () => void }) {
           {t('settings.removeAll')}
         </Text>
       </Pressable>
+      <Hint>{t('settings.removeAllKeeps')}</Hint>
     </>
   );
+}
+
+/**
+ * One line, and the worst true thing first: a destination that is failing, then
+ * a library that has never left the phone, then work that has not been copied
+ * yet, and only then the good news with a date on it.
+ */
+function stateLine(state: CopiesState, t: TFunction): string {
+  if (!state.books) return t('copies.stateEmpty');
+  if (state.failing) return t('copies.stateFailing', { reason: state.failing });
+  if (!state.icloudOn) return t('copies.stateHereOnly', { count: state.onPhone });
+  if (state.behind) return t('copies.stateBehind', { count: state.onPhone });
+  return t('copies.stateOk', {
+    count: state.onPhone,
+    when: state.icloudAt ? new Date(state.icloudAt).toLocaleString() : t('copies.never'),
+  });
 }
 
 async function clearAppData(keepBackup: string) {
@@ -199,13 +207,4 @@ async function clearAppData(keepBackup: string) {
     if (entry instanceof Directory) entry.deleteContents();
     entry.delete();
   }
-}
-
-function describe(error: unknown, t: TFunction): string {
-  if (error instanceof BundleError) {
-    return error.code === 'too-new'
-      ? t('backup.tooNew', { version: error.detail })
-      : t('backup.notABundle');
-  }
-  return String(error);
 }
