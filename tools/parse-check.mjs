@@ -79,6 +79,7 @@ const {
   pageUrl,
 } = await import(join(build, 'sources/goodreads.js'));
 const { COLUMNS, booksFromCsv } = await import(join(build, 'sources/shelfCsv.js'));
+const { libraryCsv } = await import(join(build, 'export/formats/library.js'));
 const { stripTags } = await import(join(build, 'import/xml.js'));
 const { isSkeleton, starsOf, statusOf } = await import(join(build, 'books/record.js'));
 const { parseTypedBooks } = await import(join(build, 'books/bulk.js'));
@@ -1617,6 +1618,33 @@ console.log('\na library as a csv');
   check('the page promises only the columns a book cannot do without',
     COLUMNS.filter((column) => column.required).map((column) => column.name),
     ['Title', 'Book Id']);
+}
+
+// The one file in a backup a person can read without this app, and the one a
+// shelf import can read back in. What is worth checking is that a review with a
+// comma, a quote or a newline in it survives the trip out.
+console.log('\nthe library as a table');
+{
+  const row = {
+    title: 'Dune', author: 'Frank Herbert', year: '1965', isbn: '9780441013593',
+    kind: 'novel', language: 'en', status: 'read', stars: 5,
+    review: 'Great, "really".\nTwice.', summary: null, words: 188000, chapters: 48,
+    notes: 3, tags: ['sf', 'reread'], source_name: 'gutenberg.org', source_hash: 'abc',
+    created_at: new Date(2024, 2, 9).getTime(), rated_at: new Date(2025, 10, 1).getTime(),
+  };
+  const written = libraryCsv([row]);
+  check('the header leads with what a shelf import reads',
+    written.split('\n')[0].split(',').slice(0, 3), ['Title', 'Author', 'Book Id']);
+  // A review with a newline in it is one cell over two lines of the file, which
+  // is what quoting is for — and what a naive split would tear in half.
+  check('a comma and a quote and a newline all survive one cell',
+    written.includes('"Great, ""really"".\nTwice."'), true);
+  check('a rating is a number, not a star',
+    libraryCsv([{ ...row, review: null }]).split('\n')[1].split(',')[6], '5');
+  check('a date is the day it was, in local time', written.includes('2025-11-01'), true);
+  check('tags ride in the column a shelf calls Bookshelves',
+    written.includes('"sf, reread"'), true);
+  check('an empty library is still a header', libraryCsv([]).trim().split('\n').length, 1);
 }
 
 // What separates a book with no words from one whose words are fetched.
