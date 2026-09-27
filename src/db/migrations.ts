@@ -694,7 +694,6 @@ export const migrations: string[] = [
   // older build queued would now upload the whole library under a book's name.
   `DELETE FROM cloud_jobs WHERE kind = 'upload-book'`,
 
-
   // The Douban door became the CSV door: one file format, any platform.
   // The provenance a library import writes is now "a CSV file" rather than a
   // site, so a re-import of the same file still matches by its own ids instead
@@ -765,5 +764,4 @@ export const migrations: string[] = [
      created_at INTEGER NOT NULL
    );
    CREATE INDEX excerpts_entity ON excerpts(entity_id, at)`,
-
 ];

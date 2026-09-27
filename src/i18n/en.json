@@ -49,7 +49,20 @@
     "none": "No results. Try the full title, or add the author’s name.",
     "failed": "Couldn’t reach the catalogs: {{error}}",
     "noCover": "No cover",
-    "unreachable": "Couldn’t reach the catalogs just now. That is not the same as the book not being there — try again in a moment."
+    "unreachable": "Couldn’t reach the catalogs just now. That is not the same as the book not being there — try again in a moment.",
+    "catalog_openlibrary": "Open Library",
+    "catalog_google": "Google Books",
+    "refused": "Didn’t answer this time ({{reason}}). That is not the same as not having the book.",
+    "needsKey": "Google’s older feed didn’t answer either. Its current API needs a key of your own — free, and it is the catalog with most of what was published this century.",
+    "keyRow": "Google Books key",
+    "keyWhy": "Optional. It buys the fuller records from Google’s current API.",
+    "keyNone": "Not set",
+    "keySet": "Set · ••{{tail}}",
+    "keyPaste": "Paste the API key",
+    "keyStays": "Kept in this phone’s keychain. Never in a backup, and sent to nobody but Google.",
+    "keyWhere": "Get one: Google Cloud console → enable the Books API → Credentials → Create API key.",
+    "keyForget": "Forget this key",
+    "chineseIsbn": "This is a Chinese ISBN (978-7-…). Both catalogs were asked and neither holds this printing — Open Library has a fraction of what China publishes. The surest way is the title in Chinese."
   },
   "shelf": {
     "title": "Shelf",
@@ -576,6 +589,10 @@
     "stateHereOnly": "{{count}} copies, all of them on this phone",
     "stateBehind": "Changes that have not left this phone yet",
     "stateOk": "Last copy left this phone {{when}}"
+  },
+  "covers": {
+    "sweptTitle": "{{count}} covers were not covers",
+    "sweptWhat": "These were wearing Google’s “image not available” picture, which an older lookup kept by mistake. They are back to their own tiles — look one up again for a real cover.\n\n{{titles}}"
   },
   "trash": {
     "title": "Recently deleted",

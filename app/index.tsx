@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   FlatList,
@@ -46,6 +47,7 @@ import {
 } from '../src/search/library';
 import { restoreOnLaunch } from '../src/backup/icloud';
 import { purgeExpiredTrash } from '../src/backup/trash';
+import { clearPlaceholderCovers } from '../src/books/covers';
 import { BackupOffer, RestoreOffer } from '../src/ui/Safekeeping';
 import { subscribeToRestores } from '../src/backup/changes';
 import { syncOnLaunch } from '../src/cloud/sync';
@@ -133,7 +135,22 @@ export default function Home() {
     // Thirty days is a promise kept on the way in, not the next time somebody
     // happens to open the page that lists what is waiting to go.
     purgeExpiredTrash().catch(() => undefined);
+    // Once ever, and it says so: a cover quietly taken off a book is a change
+    // to the shelf, and the books it happened to are the ones worth looking up
+    // again. Silence here would be the app tidying somebody's library behind
+    // their back.
+    clearPlaceholderCovers()
+      .then((cleared) => {
+        if (!cleared.length) return;
+        refresh();
+        Alert.alert(
+          t('covers.sweptTitle', { count: cleared.length }),
+          t('covers.sweptWhat', { titles: cleared.map((book) => book.title).join('\n') })
+        );
+      })
+      .catch(() => undefined);
     return () => clearInterval(beat);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refresh]);
 
   // A finished task usually changed something on the shelf.

@@ -54,7 +54,10 @@ const { papersFrom, queryFor, authorLine, fileNameFor: paperFileName, absolute }
 const { quoteWithVerses, referenceOf, versesIn } = await import(join(build, 'scripture/reference.js'));
 const { escapeLike, looseLike, score } = await import(join(build, 'sources/matching.js'));
 const {
+  candidatesFromGoogleFeed,
   cleanIsbn,
+  isPlaceholderCover,
+  isChineseIsbn,
   isIsbn,
   googleCover,
   looksLikeImage,
@@ -956,6 +959,57 @@ console.log('one book, looked up in the catalogs');
   check('X is a check digit, not a letter', isIsbn('043942089X'), true);
   check('a year is not an isbn', isIsbn('1997'), false);
 
+  // The group after 978 says where it was published, and 7 is China — the one
+  // prefix where both catalogs are weak enough to be worth saying so.
+  // The size Google is asked for. `zoom=0` is the one most books do not have,
+  // and it answers a missing size with a picture of the words "image not
+  // available" — so the cover that got kept was not the cover on screen.
+  {
+    const served = 'http://books.google.com/books/content?id=X&printsec=frontcover&img=1&zoom=5&edge=curl';
+    check('a thumbnail is https, uncurled, at the size that exists',
+      googleCover(served, 'thumb'),
+      'https://books.google.com/books/content?id=X&printsec=frontcover&img=1&zoom=1');
+    check('and the big one asks for a width off that same address',
+      googleCover(served, 'full'),
+      'https://books.google.com/books/content?id=X&printsec=frontcover&img=1&zoom=1&w=640');
+    check('a width already on it is not asked for twice',
+      googleCover(served + '&w=120', 'full').match(/w=/g).length, 1);
+    check('anything else is not the panel', isPlaceholderCover(new Uint8Array(64)), false);
+  }
+
+  // The door that answers a Chinese ISBN. Google's current API serves nothing
+  // without a key of the reader's own, and Open Library does not hold this
+  // edition at all — the old feed has it, in Atom, in Chinese.
+  const feed = `<?xml version='1.0'?><feed xmlns:dc='http://purl.org/dc/terms'>
+    <entry><id>http://www.google.com/books/feeds/volumes/OmqWwwEACAAJ</id>
+    <title type='text'>&#25386;&#23041;&#30340;&#26862;&#26519;</title>
+    <link rel='http://schemas.google.com/books/2008/thumbnail' href='http://books.google.com/books/content?id=OmqWwwEACAAJ&amp;printsec=frontcover&amp;img=1&amp;zoom=5&amp;edge=curl'/>
+    <link rel='http://schemas.google.com/books/2008/info' href='http://books.google.com/books?id=OmqWwwEACAAJ'/>
+    <dc:creator>村上春樑</dc:creator><dc:date>2018</dc:date>
+    <dc:description>Ben shu miao xie ...</dc:description>
+    <dc:identifier>OmqWwwEACAAJ</dc:identifier><dc:identifier>ISBN:7532776778</dc:identifier>
+    <dc:identifier>ISBN:9787532776771</dc:identifier><dc:language>zh-CN</dc:language>
+    <dc:title>挠威的森林</dc:title></entry></feed>`;
+  {
+    const [one, ...rest] = candidatesFromGoogleFeed(feed);
+    check('one entry is one candidate', rest.length, 0);
+    check('the title comes back in its own script', one.title, '挠威的森林');
+    check('and the author does', one.author, '村上春樑');
+    check('the 13-digit isbn wins over the 10', one.isbn, '9787532776771');
+    check('the year is a year', one.year, '2018');
+    check('the language is the record\'s own', one.language, 'zh-CN');
+    // http is a cover iOS will not load, and the curl is drawn-on damage.
+    check('the cover is https and uncurled',
+      [one.cover.startsWith('https://'), one.cover.includes('edge=curl')], [true, false]);
+    check('its id cannot collide with the api\'s', one.id, 'gf:OmqWwwEACAAJ');
+    check('an empty feed is no candidates', candidatesFromGoogleFeed('<feed/>').length, 0);
+  }
+
+  check('978-7 is a Chinese isbn', isChineseIsbn('978-7-5327-7677-1'), true);
+  check('and so is the old ten-digit form', isChineseIsbn('7-02-000220-7'), true);
+  check('978-0 is not', isChineseIsbn('978-0-14-044913-6'), false);
+  check('nor is a ten-digit English one', isChineseIsbn('0-14-044913-2'), false);
+
   const ol = candidatesFromOpenLibrary({
     docs: [
       {
@@ -1006,8 +1060,13 @@ console.log('one book, looked up in the catalogs');
   check('the date is a year', google[0].year, '2005');
   check('the fold is taken off the cover', google[0].cover.includes('edge=curl'), false);
   check('and it is fetched over https', google[0].cover.startsWith('https://'), true);
-  check('the thumbnail stays small', googleCover(google[0].thumb, 1).includes('zoom=1'), true);
-  check('what it keeps is bigger', google[0].cover.includes('zoom=0'), true);
+  check('the thumbnail stays small',
+    googleCover(google[0].thumb, 'thumb').includes('zoom=1'), true);
+  // This used to assert `zoom=0`, which is what the bug was: that size mostly
+  // does not exist and Google answers a missing size with the "image not
+  // available" panel, so the cover that got kept was never the one on screen.
+  check('what it keeps asks for a width, not the size that does not exist',
+    [google[0].cover.includes('w=640'), google[0].cover.includes('zoom=0')], [true, false]);
 
   const pad = (head) => Uint8Array.from([...head, ...new Array(64).fill(0)]);
   check('a jpeg is a picture', looksLikeImage(pad([0xff, 0xd8, 0xff, 0xe0])), true);
