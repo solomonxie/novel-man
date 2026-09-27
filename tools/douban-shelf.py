@@ -7,9 +7,9 @@ mixed items with no paging. What is left is the shelf pages themselves —
 to anyone who asks like a browser. They carry the rating, the short comment,
 the date and the tags: everything the app wants and no catalog has.
 
-The columns written are Goodreads' export columns, so `booksFromExport` in
-src/sources/goodreads.ts reads the result with no change to the app: pick the
-file under Add › Goodreads › Export file.
+The columns written are the ones the app's CSV import accepts — Goodreads'
+export columns, listed in src/sources/shelfCsv.ts — so nothing here is
+Douban-specific to the app: pick the file under Add › From a CSV file.
 
     python3 tools/douban-shelf.py collect.zero -o douban.csv
 

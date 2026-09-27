@@ -78,7 +78,7 @@ const {
   parseFeedUrl,
   pageUrl,
 } = await import(join(build, 'sources/goodreads.js'));
-const { COLUMNS, booksFromCsv } = await import(join(build, 'sources/douban.js'));
+const { COLUMNS, booksFromCsv } = await import(join(build, 'sources/shelfCsv.js'));
 const { stripTags } = await import(join(build, 'import/xml.js'));
 const { isSkeleton, starsOf, statusOf } = await import(join(build, 'books/record.js'));
 const { parseTypedBooks } = await import(join(build, 'books/bulk.js'));
@@ -1591,11 +1591,11 @@ console.log('\ngoodreads');
   check('markup around nothing is nothing', plainText('<br/>'), null);
 }
 
-// The same reader, the other site. Douban is read from a file that
-// `tools/douban-shelf.py` writes in Goodreads' columns on purpose — so what is
-// worth checking is that the columns the page promises are the ones that work,
-// and that a shelf named in Chinese still means a shelf.
-console.log('\ndouban');
+// The same reader, any other site. A library arrives as a CSV in Goodreads'
+// columns whoever wrote it — here, what `tools/douban-shelf.py` writes — so
+// what is worth checking is that the columns the page promises are the ones
+// that work, and that a shelf named in Chinese still means a shelf.
+console.log('\na library as a csv');
 {
   const csv = [
     'Book Id,Title,Author,Original Publication Year,Year Published,ISBN13,ISBN,' +
@@ -1606,7 +1606,7 @@ console.log('\ndouban');
     '26437381,範馬刃牙 37,板垣惠介,2013,2013,9785409856175,,5,过瘾,,在读,,2020-06-12,',
   ].join('\n');
   const books = booksFromCsv(csv);
-  check('the scraper columns are read', books.length, 3);
+  check('the promised columns are read', books.length, 3);
   check('the subject number is the id', books[0].id, '6424904');
   check('a short comment is the review', books[0].review, '完全零基础，匆匆读完');
   check('an English shelf still works', books[0].status, 'read');

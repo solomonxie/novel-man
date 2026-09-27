@@ -8,7 +8,7 @@
  * sections its page has. A new kind is a row plus its catalog strings, not an
  * edit to every screen.
  */
-export type BookFeature = 'cast' | 'terms' | 'scenes' | 'script' | 'visuals' | 'verses';
+export type BookFeature = 'cast' | 'terms' | 'cards' | 'scenes' | 'script' | 'visuals' | 'verses';
 
 /**
  * A door on the Add page. Beside the two the reader brings something to —
@@ -24,7 +24,8 @@ export type BookSource =
   | 'record'
   | 'openlibrary'
   | 'goodreads'
-  | 'douban'
+  /** A library kept anywhere else, as long as its CSV carries our columns. */
+  | 'csv'
   | 'ebible'
   | 'repo'
   | 'gutenberg'
@@ -40,6 +41,8 @@ export type BookSection =
   | 'cast'
   | 'places'
   | 'terms'
+  /** Made rather than found: what the reader is trying to remember. */
+  | 'cards'
   | 'translations'
   | 'script'
   | 'visuals';
@@ -88,7 +91,7 @@ export const bookKinds: BookKind[] = [
     fiction: true,
     features: ['cast', 'terms', 'scenes', 'script', 'visuals'],
     part: 'volume',
-    sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads', 'douban'],
+    sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads', 'csv'],
     sections: ['chapters', 'scenes', 'notes', 'cast', 'places', 'terms', 'translations', 'script', 'visuals'],
   },
   {
@@ -97,7 +100,7 @@ export const bookKinds: BookKind[] = [
     subject: 'a work of nonfiction',
     fiction: false,
     features: ['cast', 'terms'],
-    sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads', 'douban'],
+    sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads', 'csv'],
     sections: ['chapters', 'notes', 'cast', 'places', 'terms', 'translations'],
   },
   {
@@ -108,9 +111,12 @@ export const bookKinds: BookKind[] = [
     group: 'nonfiction',
     subject: 'an instructional book',
     fiction: false,
-    features: ['terms'],
-    sources: ['files', 'link', 'record', 'openlibrary', 'goodreads', 'douban'],
-    sections: ['chapters', 'notes', 'terms', 'translations'],
+    // The one kind read in order to be able to do something afterwards, which
+    // is what a flash card is for. A novel does not get them: nobody drills
+    // themselves on a story.
+    features: ['terms', 'cards'],
+    sources: ['files', 'link', 'record', 'openlibrary', 'goodreads', 'csv'],
+    sections: ['chapters', 'notes', 'terms', 'cards', 'translations'],
   },
   {
     id: 'paper',

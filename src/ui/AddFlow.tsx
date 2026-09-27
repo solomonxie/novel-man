@@ -66,7 +66,7 @@ const OWN_PAGE: Partial<Record<BookSource | typeof ESV, string>> = {
   arxiv: '/source/arxiv',
   openlibrary: '/source/openlibrary',
   goodreads: '/source/goodreads',
-  douban: '/source/douban',
+  csv: '/source/csv',
 };
 
 /** The order they are offered in: what you already have, then where to look. */
@@ -331,13 +331,13 @@ export function AddFlow({ kind: initialKind, onStep, onDone }: {
           }
         />
         <Row
-          label={t('source.douban')}
-          detail={t('source.doubanDetail')}
+          label={t('source.csv')}
+          detail={t('source.csvDetail')}
           value="›"
           onPress={() =>
             router.push({
-              pathname: '/source/douban',
-              params: { kind: DEFAULT_KIND, source: 'douban' },
+              pathname: '/source/csv',
+              params: { kind: DEFAULT_KIND, source: 'csv' },
             })
           }
           last

@@ -78,7 +78,8 @@
     "addBook": "Add a book",
     "shelf_reading": "Reading",
     "shelf_wishlist": "Want to read",
-    "shelf_read": "Finished"
+    "shelf_read": "Finished",
+    "noneHere": "Nothing on this shelf yet."
   },
   "import": {
     "title": "Import",
@@ -118,7 +119,7 @@
     "importedFrom": "Imported from {{name}}",
     "stats": "{{words}} · {{chapters}} chapters · {{time}}",
     "delete": "Delete book",
-    "deleteConfirm": "Delete this book? Its notes and highlights will be deleted too.",
+    "deleteConfirm": "Delete this book? Its notes and highlights go with it — kept in Recently deleted for 30 days, then gone.",
     "details": "Details",
     "year": "Year",
     "edition": "Edition",
@@ -174,11 +175,11 @@
     "partsHint": "Each part has its own page with its description, its chapters, and every note you made in it.",
     "searchParts_book": "Search books",
     "searchParts_volume": "Search volumes",
-    "terms": "Terms",
-    "termsEmpty": "No terms yet.",
-    "addTerm": "＋ Add a term",
-    "searchTerms": "Search terms",
-    "termsAll": "All terms",
+    "terms": "Concepts & Terminologies",
+    "termsEmpty": "No concepts or terms yet.",
+    "addTerm": "＋ Add a concept or term",
+    "searchTerms": "Search concepts & terms",
+    "termsAll": "All concepts & terms",
     "ratingShort": "Rating",
     "favorite": "Like",
     "ratedOn": "Rated {{date}}",
@@ -507,10 +508,8 @@
     "now": "Back up now",
     "nowUnchanged": "Nothing has changed since the last backup.",
     "restoredWaiting": "{{count}} books came back as skeletons — everything but the text.",
-    "file": "Backup file",
     "exportLibrary": "Export the whole library",
     "restoreFromFile": "Restore from a file…",
-    "fileHint": "A single .zip file with your books, chapters, notes and profiles. Open it anywhere. AI keys are never included.",
     "freq_off": "Off",
     "freq_daily": "Daily",
     "freq_weekly": "Weekly",
@@ -523,7 +522,9 @@
     "notABundle": "That isn’t a Novel Man backup.",
     "tooNew": "This backup was made by a newer version (v{{version}}). Update the app first.",
     "aboutUnknown": "Written by an older version, which didn’t record what was in it. Restoring still works.",
-    "aboutEmpty": "Nothing in it."
+    "aboutEmpty": "Nothing in it.",
+    "file": "Backup file",
+    "fileHint": "A single .zip file with your books, chapters, notes and profiles. Open it anywhere. AI keys are never included."
   },
   "ai": {
     "noKeyTitle": "No AI key",
@@ -639,7 +640,7 @@
     "backToChapters": "All chapters"
   },
   "cloud": {
-    "title": "Cloud backup",
+    "title": "Where copies go",
     "hint": "Every backup holds everything but your keys — books, notes, translations, people, progress, settings and the files you imported. iCloud keeps the last ten copies; your own bucket keeps every one, and nothing is uploaded there until you ask.",
     "addConnection": "＋ Add a cloud connection",
     "addConnectionHint": "Your own S3-compatible bucket, for full backups with history.",
@@ -893,9 +894,9 @@
     "goodreads": "Goodreads",
     "goodreadsDetail": "Import all your books, ratings and reviews",
     "goodreadsHint": "Goodreads retired its API, so this reads your export file or a shelf’s RSS feed.",
-    "douban": "Douban",
-    "doubanDetail": "Import a file of your 读过, 在读 and 想读",
-    "doubanHint": "Douban publishes no export, so this reads a CSV made from your profile."
+    "csv": "From a CSV file",
+    "csvDetail": "Import a library from any platform’s CSV",
+    "csvHint": "Any platform’s CSV, as long as it carries the columns this page lists."
   },
   "find": {
     "prompt": "Type what you’re looking for, then tap Search.",
@@ -1029,7 +1030,7 @@
     "err_canon": "“{{detail}}” can be read, but it isn’t a Bible — its books and chapter counts don’t match any canon."
   },
   "term": {
-    "eyebrow": "Term",
+    "eyebrow": "Concept or term",
     "name": "Name",
     "aliasPlaceholder": "Other names, separated by commas",
     "summaryPlaceholder": "A line or two about what this is.",
@@ -1099,20 +1100,22 @@
     "savedRead": "Read again",
     "savedForget": "Stop offering this shelf here? Nothing already imported is touched."
   },
-  "db": {
-    "why": "Douban has no API and no export of its own, and its RSS carries ten recent items of every kind — films and music among them. So there is one door here: a CSV made from your profile’s shelf pages, which do carry your ratings, comments and dates.",
-    "chooseCsv": "Choose the CSV",
-    "how": "tools/douban-shelf.py in this repo writes one: python3 tools/douban-shelf.py <your Douban id>. Save it to Files, then choose it here.",
+  "csv": {
+    "why": "A library from anywhere, as a CSV. Goodreads’ own export is read as it stands; any other file works too, as long as its header row carries the columns below.",
+    "chooseCsv": "Choose a CSV file",
+    "chooseAnother": "Choose a different file",
+    "chosen": "{{name}}",
+    "how": "Goodreads writes one from Settings › Import and export. Douban publishes no export, so tools/douban-shelf.py in this repo makes one from your shelf pages: python3 tools/douban-shelf.py <your Douban id>. Anything else — another app, a spreadsheet of your own — needs only these column names. Save the file to Files, then choose it here.",
     "columnsTitle": "Columns the file needs",
     "required": "Required",
     "notACsv": "No books found in that file. Check its header row against the columns below.",
     "col": {
       "title": "The title, as the shelf shows it",
-      "id": "Douban’s subject number, so importing twice updates rather than duplicates",
+      "id": "The id the platform knows the book by, so importing twice updates rather than duplicates",
       "author": "The author, or the first name on the publisher line",
-      "shelf": "读过, 在读 or 想读 — read, currently-reading and to-read also work",
+      "shelf": "read, currently-reading or to-read — 读过, 在读 and 想读 also work",
       "rating": "1 to 5, or 0 where you never rated it",
-      "review": "Your 短评, kept as the review",
+      "review": "What you wrote about it, kept as the review",
       "date": "The day you finished it",
       "isbn": "What finds a cover and the right edition later"
     }
