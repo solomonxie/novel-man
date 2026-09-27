@@ -45,6 +45,7 @@ import {
   type MetaHit,
 } from '../src/search/library';
 import { restoreOnLaunch } from '../src/backup/icloud';
+import { purgeExpiredTrash } from '../src/backup/trash';
 import { subscribeToRestores } from '../src/backup/changes';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { radius, space, usePalette } from '../src/theme';
@@ -128,6 +129,9 @@ export default function Home() {
     })();
     timed('syncOnLaunch', syncOnLaunch()).catch(() => undefined);
     timed('resumeWorkOnLaunch', resumeWorkOnLaunch()).catch(() => undefined);
+    // Thirty days is a promise kept on the way in, not the next time somebody
+    // happens to open the page that lists what is waiting to go.
+    purgeExpiredTrash().catch(() => undefined);
     return () => clearInterval(beat);
   }, [refresh]);
 

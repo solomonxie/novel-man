@@ -31,13 +31,23 @@ export type RestoreReport = {
  */
 export async function restoreBundle(
   opened: OpenedBundle,
-  // A restore the user asked for promises not to overwrite what is here, and
-  // their appearance and reading settings are part of "what is here". Only
-  // the automatic first-install restore has nothing to overwrite.
-  { settings = false }: { settings?: boolean } = {}
+  {
+    // A restore the user asked for promises not to overwrite what is here, and
+    // their appearance and reading settings are part of "what is here". Only
+    // the automatic first-install restore has nothing to overwrite.
+    settings = false,
+    /** Only these books out of the bundle; everything in it when unset. */
+    only,
+    /**
+     * The guard copy below. Off only where this restore is itself the undo of
+     * something — taking a book back out of the trash adds one book and can
+     * lose nothing, so a full library bundle first is a wait for no reason.
+     */
+    guard = true,
+  }: { settings?: boolean; only?: Set<string>; guard?: boolean } = {}
 ): Promise<RestoreReport> {
   // The one copy that can undo this, written before it can be needed.
-  await backUpBefore('restore');
+  if (guard) await backUpBefore('restore');
   const existing = await listBooks();
   const known = new Set(existing.map((book) => naturalKey(book.source_hash, book.title)));
   const report: RestoreReport = { restored: [], duplicates: [], waiting: 0, unplaceable: [] };
@@ -45,6 +55,7 @@ export async function restoreBundle(
   if (settings && opened.snapshot.settings) await writePrefs(opened.snapshot.settings);
 
   for (const bundled of opened.snapshot.books) {
+    if (only && !only.has(bundled.book.id)) continue;
     const record: BookRecord = { ...bundled };
     let missingAsset = false;
 

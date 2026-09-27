@@ -175,11 +175,11 @@
     "partsHint": "每一卷都有自己的页面：简介、章节，以及你在这一卷里写的全部笔记。",
     "searchParts_book": "搜索书卷",
     "searchParts_volume": "搜索卷",
-    "terms": "概念与术语",
-    "termsEmpty": "还没有概念或术语。",
-    "addTerm": "＋ 添加概念或术语",
-    "searchTerms": "搜索概念与术语",
-    "termsAll": "全部概念与术语",
+    "terms": "术语",
+    "termsEmpty": "还没有术语。",
+    "addTerm": "＋ 添加术语",
+    "searchTerms": "搜索术语",
+    "termsAll": "全部术语",
     "ratingShort": "评分",
     "favorite": "喜欢",
     "ratedOn": "{{date}} 打的分",
@@ -196,7 +196,9 @@
     "outlineQueued": "已提交，可在队列中查看。",
     "outlineReplace": "这会替换现有的 {{count}} 章，包括你做过的修改。",
     "recordedFrom": "记录来自 {{name}}",
-    "review": "你的想法"
+    "review": "你的想法",
+    "deleteWhere": "在「最近删除」里等 30 天",
+    "deleteKept": "什么都没有删除"
   },
   "reader": {
     "go": "前往",
@@ -526,6 +528,20 @@
     "file": "备份文件",
     "fileHint": "一个 .zip 文件，包含你的书、章节结构、笔记和档案，在任何地方都能打开。不含 AI 密钥。"
   },
+  "trash": {
+    "title": "最近删除",
+    "why": "删掉的书会在这里等 {{days}} 天，笔记、划线、人物和阅读日期都在——以文件形式存放在「文件」→ Novel Man → Trash。放回去就会全部恢复。",
+    "none": "没有删除过的书。",
+    "putBack": "放回书架",
+    "forget": "彻底删除",
+    "what": "把这本书放回书架，还是彻底删除？",
+    "withNotes": "{{count}} 条笔记",
+    "failed": "没能完成",
+    "fileGone": "这本书的文件已经不在了。",
+    "empty": "彻底删除这里的全部",
+    "emptyTitle": "清空「最近删除」？",
+    "emptyWarning": "这些书和它们的笔记将彻底消失。删除之前做的备份里仍然有它们。"
+  },
   "ai": {
     "noKeyTitle": "没有 AI 密钥",
     "addKey": "添加密钥",
@@ -640,7 +656,7 @@
     "backToChapters": "全部章节"
   },
   "cloud": {
-    "title": "副本存放位置",
+    "title": "云端备份",
     "hint": "每一份备份都包含除密钥以外的一切：书籍正文、笔记、翻译、人物、进度、设置，以及你导入的文件。iCloud 保留最近十份；你自己的存储桶保留每一份，并且只有你主动上传时才会上传。",
     "addConnection": "＋ 添加云存储",
     "addConnectionHint": "你自己的 S3 兼容存储桶，完整备份并保留历史版本。",
@@ -1030,7 +1046,7 @@
     "err_canon": "“{{detail}}”能读，但里面不是圣经——卷名与章数对不上任何正典。"
   },
   "term": {
-    "eyebrow": "概念 / 术语",
+    "eyebrow": "术语",
     "name": "名称",
     "aliasPlaceholder": "其他称呼，用逗号分隔",
     "summaryPlaceholder": "用一两句话说明这是什么。",
