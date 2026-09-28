@@ -94,6 +94,7 @@ const { parseTypedBooks } = await import(join(build, 'books/bulk.js'));
 const { flagsOn, flaggedCount, flaggedGroups, missingDetails, fixFor } =
   await import(join(build, 'books/flags.js'));
 const { kindFromSource } = await import(join(build, 'sources/registry.js'));
+const { kindFromSubjects } = await import(join(build, 'books/kinds.js'));
 const { readBible } = await import(join(build, 'scripture/published.js'));
 const { bookFiles, contentsUrl, parseRepoUrl, rawUrl, searchUrl, titleFrom } =
   await import(join(build, 'sources/repo.js'));
@@ -1971,6 +1972,27 @@ console.log('what a source says a book is');
   check('a preprint server answers paper', kindFromSource('arxiv'), 'paper');
   check('a general catalog answers novel', kindFromSource('gutenberg'), 'novel');
   check('and so does one nobody listed', kindFromSource('somewhere-new'), 'novel');
+}
+
+console.log('what a catalog record says a book is');
+{
+  // An ISBN names a printing, not a genre. What answers is the record it
+  // fetches, and the one thing catalog subjects carry reliably is whether the
+  // book is made up — which is most of what the kind decides.
+  check('fiction is a novel', kindFromSubjects(['Fiction', 'English literature']), 'novel');
+  check('so is a subject that only mentions novels',
+    kindFromSubjects(['Domestic fiction', 'Sisters']), 'novel');
+  check('short stories count as made up', kindFromSubjects(['Short stories']), 'novel');
+  check('a taught subject is a textbook',
+    kindFromSubjects(['Algebra', 'Study and teaching']), 'textbook');
+  check('and so is one filed as one', kindFromSubjects(['Physics — Textbooks']), 'textbook');
+  check('teaching beats fiction where both are said',
+    kindFromSubjects(['Fiction', 'Study and teaching']), 'textbook');
+  check('anything else real is nonfiction',
+    kindFromSubjects(['Biography', 'Presidents']), 'nonfiction');
+  // Said rather than guessed: no subjects is no answer, and the caller falls
+  // back to its own default instead of being told "nonfiction" on no evidence.
+  check('no subjects is no answer', kindFromSubjects([]), null);
 }
 
 console.log('finding a book by what it is called');
