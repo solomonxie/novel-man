@@ -24,6 +24,12 @@ export type Translation = {
   /** What people call it — the name they'd type, not the catalog's id. */
   abbr: string;
   language: string;
+  /**
+   * What the language calls itself — `中文`, not `Chinese`. The catalog gives
+   * both and only the English one was kept, so a reader searching in their own
+   * language was searching a list written in somebody else's.
+   */
+  nativeLanguage: string;
   languageCode: string;
   copyright: string;
   books: number;
@@ -102,7 +108,9 @@ export async function refreshCatalog(): Promise<Catalog> {
       title: translation.title,
       author: translation.abbr,
       language: translation.language,
-      extra: `${translation.abbr} ${translation.languageCode} ${translation.language}`,
+      extra:
+        `${translation.abbr} ${translation.languageCode} ` +
+        `${translation.language} ${translation.nativeLanguage}`,
     }))
   );
   return catalog;
@@ -126,6 +134,7 @@ export function translationsFrom(csv: string): Translation[] {
       // its id when it does not.
       abbr: row.shortTitle?.trim() || id,
       language: row.languageNameInEnglish?.trim() || row.languageName?.trim() || '',
+      nativeLanguage: row.languageName?.trim() || '',
       languageCode: row.languageCode ?? '',
       copyright: row.Copyright?.trim() || '',
       books,
