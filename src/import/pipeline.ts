@@ -43,7 +43,8 @@ const WEIGHTS: Record<ImportStage, [number, number]> = {
 };
 
 export async function importFile(
-  input: { uri: string; name: string; kind?: string },
+  /** `into` lands the words on a book already on the shelf — see `saveImportedBook`. */
+  input: { uri: string; name: string; kind?: string; into?: string },
   onProgress?: (progress: ImportProgress) => void,
   confirm?: (preview: ImportPreview) => Promise<boolean>
 ): Promise<ImportResult> {
@@ -104,6 +105,7 @@ export async function importFile(
 
   report('saving');
   const bookId = await saveImportedBook({
+    into: input.into,
     book: {
       title: parsed.title?.trim() || input.name.replace(/\.[^.]+$/, ''),
       author: parsed.author?.trim() || null,

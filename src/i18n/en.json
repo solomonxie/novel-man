@@ -224,7 +224,12 @@
     "jumpNone": "No chapters here.",
     "jumpSearch": "Search chapters",
     "languageRow": "Language",
-    "languageHint": "What the book is written in. Every AI pass answers in it."
+    "languageHint": "What the book is written in. Every AI pass answers in it.",
+    "addTextFile": "Add the text from a file",
+    "addTextWhat": "The book goes on reading once its words are here. Nothing else about this record changes.",
+    "addTextLink": "Add the text from a link",
+    "gettingText": "Getting the words",
+    "gettingFailed": "Didn’t arrive"
   },
   "reader": {
     "go": "Go",
