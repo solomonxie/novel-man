@@ -397,16 +397,34 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * How long any of these is given before it is treated as not having answered.
+ *
+ * `fetch` has no timeout of its own, so a slow door held the whole lookup for
+ * as long as it felt like — and one of these doors is a deprecated Atom feed
+ * that can take tens of seconds or never reply at all. A catalog that has not
+ * spoken in five seconds is not going to be part of this search.
+ */
+const PATIENCE_MS = 5000;
+
+async function within(url: string, accept: string): Promise<Response> {
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), PATIENCE_MS);
+  try {
+    const response = await fetch(url, { headers: { accept }, signal: stop.signal });
+    if (!response.ok) throw new HttpError(response.status);
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function json(url: string): Promise<unknown> {
-  const response = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!response.ok) throw new HttpError(response.status);
-  return response.json();
+  return (await within(url, 'application/json')).json();
 }
 
 async function xml(url: string): Promise<string> {
-  const response = await fetch(url, { headers: { accept: 'application/atom+xml' } });
-  if (!response.ok) throw new HttpError(response.status);
-  return response.text();
+  return (await within(url, 'application/atom+xml')).text();
 }
 
 // `isbn` was missing, so every Open Library row came back without the number
@@ -509,7 +527,16 @@ async function ask(
  */
 export async function findBook(
   query: string,
-  { limit = 10, googleKey }: { limit?: number; googleKey?: string | null } = {}
+  {
+    limit = 10,
+    googleKey,
+    onPartial,
+  }: {
+    limit?: number;
+    googleKey?: string | null;
+    /** Called each time a catalog answers, with everything known so far. */
+    onPartial?: (lookup: Lookup) => void;
+  } = {}
 ): Promise<Lookup> {
   const asked = query.trim();
   if (!asked) return { candidates: [], catalogs: [] };
@@ -517,7 +544,7 @@ export async function findBook(
   const key = googleKey?.trim() || null;
   const terms = isbn ? `isbn:${isbn}` : asked;
 
-  const [openLibrary, api, feed] = await Promise.all([
+  const attempts = [
     ask('openlibrary', async () =>
       candidatesFromOpenLibrary(
         await json(
@@ -542,31 +569,76 @@ export async function findBook(
         await xml(`${GOOGLE_FEED}?q=${encodeURIComponent(terms)}&max-results=${limit}`)
       )
     ),
-  ]);
+  ];
 
+  /**
+   * As each door answers, not once they all have.
+   *
+   * `Promise.all` meant the fastest catalog was worth nothing: a reader
+   * waited on whichever of three was slowest, staring at a heading that said
+   * the lookup was still running because it was. Open Library usually answers in
+   * well under a second and the old feed sometimes never does, and there is
+   * no reason the first should wait for the last.
+   */
+  const landed: Answer[] = [];
+  await Promise.all(
+    // The middle door is only tried with a key, and its slot is kept either
+    // way so the three stay where `assemble` expects to find them.
+    attempts.map((attempt, at) =>
+      attempt
+        ? attempt.then((answer) => {
+            landed[at] = answer;
+            onPartial?.(assemble(landed, asked, limit, Boolean(key), false));
+          })
+        : Promise.resolve()
+    )
+  );
+  return assemble(landed, asked, limit, Boolean(key), true);
+}
+
+type Answer = { candidates: Candidate[]; report: CatalogReport };
+
+/**
+ * What is known so far, as one answer. `final` is what decides whether both
+ * catalogs being quiet is a failure or simply not finished yet.
+ */
+function assemble(
+  landed: Answer[],
+  asked: string,
+  limit: number,
+  keyed: boolean,
+  final: boolean
+): Lookup {
+  const [openLibrary, api, feed] = landed;
   // One row for Google however many of its doors were tried: to a reader it is
   // one catalog, and "the newer half of Google is rate limited" is not a
   // sentence anybody can act on.
   const google: CatalogReport = {
     source: 'google',
-    answered: Boolean(api?.report.answered) || feed.report.answered,
-    found: (api?.report.found ?? 0) + feed.report.found,
-    reason: feed.report.reason ?? api?.report.reason,
+    answered: Boolean(api?.report.answered) || Boolean(feed?.report.answered),
+    found: (api?.report.found ?? 0) + (feed?.report.found ?? 0),
+    reason: feed?.report.reason ?? api?.report.reason,
     // A key would have opened a door that was not even tried.
-    needsKey: !key && !feed.report.answered,
+    needsKey: !keyed && !feed?.report.answered,
+  };
+  const ol: CatalogReport = openLibrary?.report ?? {
+    source: 'openlibrary',
+    answered: false,
+    found: 0,
   };
 
   // Both refused — a rate limit, no signal, a query one of them would not take.
   // Reporting that as "nothing found" sends someone looking for a book that is
-  // there.
-  if (!openLibrary.report.answered && !google.answered) throw new CatalogsUnreachable();
+  // there. Only once everything has had its turn: until then it is a search
+  // still running, which is a different thing entirely.
+  if (final && !ol.answered && !google.answered) throw new CatalogsUnreachable();
   return {
     candidates: mergeCandidates(
-      [openLibrary.candidates, api?.candidates ?? [], feed.candidates],
+      [openLibrary?.candidates ?? [], api?.candidates ?? [], feed?.candidates ?? []],
       limit,
       asked
     ),
-    catalogs: [openLibrary.report, google],
+    catalogs: [ol, google],
   };
 }
 

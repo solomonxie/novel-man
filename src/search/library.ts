@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { escapeLike } from '../sources/matching';
 import type { BookListItem } from '../db/repo';
 
 export type ContentHit = {
@@ -31,7 +32,18 @@ export const NO_RESULTS: LibraryResults = { meta: [], text: [] };
 
 /** Enough books to be useful, few enough that a keystroke stays cheap. */
 const MAX_BOOKS = 8;
-const HITS_PER_BOOK = 4;
+
+/**
+ * Two, not four, and the reason is what the second query below costs.
+ *
+ * Finding where a match sits needs `lower()` — there is no case-insensitive
+ * `instr` — and every extra hit is another pass over what remains of a
+ * manuscript. Four apiece across eight books was up to thirty-two passes over
+ * megabytes, which cost more than the scan that found the books in the first
+ * place. Two apiece is sixteen passages on the page, which is already more
+ * than anybody reads before opening one.
+ */
+const HITS_PER_BOOK = 2;
 const WINDOW = 70;
 
 /** Rows the ranking may choose from, and rows a section ends up showing. */
@@ -232,13 +244,28 @@ async function searchContent(needle: string): Promise<ContentHit[]> {
   if (needle.length < 2) return [];
   const database = await db();
 
+  /**
+   * `LIKE`, not `instr(lower(text), …)`, and the difference is the whole cost
+   * of this search.
+   *
+   * `lower()` builds a second copy of its argument, and its argument here is
+   * a manuscript: a three-megabyte novel allocated and walked in full, for
+   * every book on the shelf, on every settled keystroke. Twenty books is
+   * sixty megabytes of that before a single match is reported, and it happens
+   * on the thread everything else is waiting on.
+   *
+   * `LIKE` tests without allocating. Nothing is lost by it either: SQLite's
+   * `lower()` is ASCII-only without ICU, which is exactly the folding `LIKE`
+   * already does, so the two were never case-insensitive about anything more
+   * than the Latin alphabet.
+   */
   const books = await database.getAllAsync<{ book_id: string; title: string; language: string }>(
     `SELECT d.book_id, b.title, b.language
      FROM documents d JOIN books b ON b.id = d.book_id
-     WHERE instr(lower(d.text), $needle) > 0
+     WHERE d.text LIKE $like ESCAPE '\\'
      ORDER BY b.created_at DESC
      LIMIT ${MAX_BOOKS}`,
-    { $needle: needle }
+    { $like: `%${escapeLike(needle)}%` }
   );
 
   const hits: ContentHit[] = [];
@@ -246,24 +273,33 @@ async function searchContent(needle: string): Promise<ContentHit[]> {
     // SQLite counts from 1; so does `substr`. The reader wants 0-based offsets.
     let from = 1;
     for (let found = 0; found < HITS_PER_BOOK; found++) {
-      const row = await database.getFirstAsync<{ rel: number; excerpt: string }>(
-        `SELECT instr(lower(substr(text, $from)), $needle) AS rel,
-                substr(
-                  text,
-                  max(1, $from + instr(lower(substr(text, $from)), $needle) - 1 - ${WINDOW}),
-                  ${WINDOW * 2 + 40}
-                ) AS excerpt
+      /**
+       * Where, and then what — two statements on purpose.
+       *
+       * As one, `instr(lower(substr(text, …)), …)` appeared twice: once for
+       * the offset and once inside the window the excerpt is cut from. SQLite
+       * evaluates it both times, and each evaluation lowercases everything
+       * left of the manuscript — so every hit copied a novel twice to report
+       * one sentence. The second statement below cuts from the raw text at an
+       * offset already known, which costs nothing.
+       */
+      const placed = await database.getFirstAsync<{ rel: number }>(
+        `SELECT instr(lower(substr(text, $from)), $needle) AS rel
          FROM documents WHERE book_id = $id`,
         { $from: from, $needle: needle, $id: book.book_id }
       );
-      if (!row?.rel) break;
-      const at = from + row.rel - 1;
+      if (!placed?.rel) break;
+      const at = from + placed.rel - 1;
+      const cut = await database.getFirstAsync<{ excerpt: string }>(
+        `SELECT substr(text, $at, $len) AS excerpt FROM documents WHERE book_id = $id`,
+        { $at: Math.max(1, at - WINDOW), $len: WINDOW * 2 + 40, $id: book.book_id }
+      );
       hits.push({
         bookId: book.book_id,
         title: book.title,
         language: book.language,
         offset: at - 1,
-        excerpt: row.excerpt.replace(/\s+/g, ' ').trim(),
+        excerpt: (cut?.excerpt ?? '').replace(/\s+/g, ' ').trim(),
       });
       from = at + needle.length;
     }

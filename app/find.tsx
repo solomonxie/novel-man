@@ -74,9 +74,11 @@ type Line =
   | { key: string; kind: 'row'; label: string; detail?: string; value?: string; onPress: () => void };
 
 /**
- * Long enough that a scan of every manuscript on the device is worth starting.
+ * Long enough that a scan of every manuscript is worth starting, short enough
+ * that the answer feels like it was already there. It was 220 when that scan
+ * lowercased the whole library; it no longer does.
  */
-const SETTLE = 220;
+const SETTLE = 140;
 
 /**
  * And longer again before anybody's server is asked — long enough that typing
@@ -88,7 +90,7 @@ const SETTLE = 220;
  * keystroke itself, the kept lists a breath later, and the catalogs fill in
  * underneath as they reply.
  */
-const REACH = 650;
+const REACH = 450;
 
 /** Past this, a kept list has had time to fall behind what the source publishes. */
 const STALE_DAYS = 90;
@@ -359,11 +361,25 @@ export default function Find() {
       return;
     }
     let live = true;
-    setAsking(true);
+    // Not before the request exists. Setting this at the keystroke put
+    // "Looking up published books…" on screen for the whole of the pause that
+    // guards against searching a half-typed word — most of the wait anybody
+    // complained about was this app deciding not to ask yet.
     const timer = setTimeout(() => {
+      setAsking(true);
       void (async () => {
         try {
-          const found = await findBook(term, { googleKey: await googleBooksKey() });
+          const found = await findBook(term, {
+            googleKey: await googleBooksKey(),
+            // Each catalog paints as it lands. Open Library usually answers
+            // in well under a second; the old Google feed sometimes never
+            // does, and there is no reason the first should wait for it.
+            onPartial: (partial) => {
+              if (!live) return;
+              setNamed(partial.candidates);
+              setCatalogs(partial.catalogs);
+            },
+          });
           if (!live) return;
           setNamed(found.candidates);
           setCatalogs(found.catalogs);
