@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+
+import { useSheetMount } from './sheet';
 import { router } from '../navigation/router';
 
 import { formatUsd, type Estimate } from '../ai/cost';
@@ -99,8 +101,12 @@ export function AiRunSheet({ visible, title, description, estimate, hasKey, onRu
   // missing key and a failure, and for nothing else.
   const showing = visible && (!hasKey || error !== null || slow);
 
+  // Out of the tree once it has finished going away — see the hook.
+  const sheet = useSheetMount(showing);
+  if (!sheet.mounted) return null;
+
   return (
-    <Modal visible={showing} transparent animationType="fade" onRequestClose={() => onClose(!!summary)}>
+    <Modal visible={showing} onDismiss={sheet.onDismiss} transparent animationType="fade" onRequestClose={() => onClose(!!summary)}>
       <Pressable style={[styles.scrim, { backgroundColor: palette.scrim }]} onPress={() => !running && onClose(!!summary)}>
         <Pressable
           style={[styles.sheet, { backgroundColor: palette.surface, borderColor: palette.border }]}

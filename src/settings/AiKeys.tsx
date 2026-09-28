@@ -15,6 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from '../navigation/router';
 import { useTranslation } from 'react-i18next';
 
+import { useSheetMount } from '../ui/sheet';
+
 import {
   addKey,
   getStrategy,
@@ -178,8 +180,12 @@ function AddKeySheet({ visible, onClose, onAdded }: {
     }
   }
 
+  // Out of the tree once it has finished going away — see the hook.
+  const sheet = useSheetMount(visible);
+  if (!sheet.mounted) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} onDismiss={sheet.onDismiss} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
         <View style={styles.sheetBar}>
           <Pressable onPress={onClose} hitSlop={12}>

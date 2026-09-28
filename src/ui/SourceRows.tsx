@@ -126,7 +126,11 @@ export function SourceRows({ source, onUpdated }: {
                 placeholderTextColor={palette.faint}
                 autoCapitalize="none"
                 autoCorrect={false}
-                autoFocus
+                // Never on its own initiative. These rows are shown beside a
+                // search field now, and a field that grabs the keyboard on
+                // mount takes it back off whatever the reader just tapped —
+                // which read as the search box refusing the first tap and
+                // then bouncing to an email box nobody asked for.
                 keyboardType="email-address"
                 style={[styles.input, { color: palette.text, borderColor: palette.border }]}
               />
