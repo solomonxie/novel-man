@@ -74,6 +74,10 @@ import { InlineText } from '../../src/ui/inline';
 import { radius, space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { KindList } from '../../src/ui/KindList';
+import { AddByLink } from '../../src/ui/AddSheets';
+import { addFile } from '../../src/books/add';
+import { pickManuscript } from '../../src/import/sources/picker';
+import { subscribeToQueue, type ImportJob } from '../../src/import/queue';
 import { kindOf, shows, supports, unitOf } from '../../src/books/kinds';
 import { isSkeleton, STARS, statusOf, STATUSES } from '../../src/books/record';
 import { Stars } from '../../src/ui/Stars';
@@ -148,6 +152,10 @@ export default function BookPage() {
   /** One chapter's notes at a time: a book's worth at once is a page nobody reads. */
   const [openNotes, setOpenNotes] = useState<string | null>(null);
   const [keyed, setKeyed] = useState(false);
+  /** Pasting a link for the words this record hasn't got yet. */
+  const [linkOpen, setLinkOpen] = useState(false);
+  /** The import filling this book in, while it is running. */
+  const [filling, setFilling] = useState<ImportJob | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [text, setText] = useState('');
   const document = useDocument(id);
@@ -182,6 +190,43 @@ export default function BookPage() {
   }, [id]);
 
   useFocusEffect(load);
+
+  // A record's words arrive in the queue, and this page is where the reader
+  // is waiting for them: it has to say so while they are coming, and reload
+  // itself when they land. Otherwise a download that worked looks like a page
+  // that did nothing until it is left and come back to.
+  useEffect(
+    () =>
+      subscribeToQueue((all) => {
+        const mine = all.find((job) => job.bookId === id);
+        // A failed one is kept: it is the only thing that can say the words
+        // did not arrive, and the job it points at is where Retry lives.
+        setFilling(mine && mine.status !== 'done' ? mine : null);
+        if (mine && mine.status === 'done') load();
+      }),
+    [id, load]
+  );
+
+  /**
+   * The words for a book that is already on the shelf. Every book starts as a
+   * record — found in a catalog, or typed from memory — so a manuscript is
+   * something a book is given rather than something that makes one, and this
+   * is the only door it comes through.
+   */
+  async function attach(file: { uri: string; name: string }) {
+    setLinkOpen(false);
+    if (!id) return;
+    router.push(addFile(file, id));
+  }
+
+  async function attachFile() {
+    try {
+      const picked = await pickManuscript();
+      if (picked) await attach(picked);
+    } catch (problem) {
+      Alert.alert(t('import.failed'), String(problem));
+    }
+  }
   // A pass that lands while this page is open has to show up on it.
   useWorkRefresh(load);
 
@@ -1031,12 +1076,50 @@ export default function BookPage() {
       <Block title={t('book.utilities')}>
         <Section flush>
         {skeleton ? (
-          <Row
-            label={t('book.outlineRow')}
-            detail={t('book.outlineHint')}
-            value={chapters.length ? t('book.outlineAgain') : t('book.outlineAsk')}
-            onPress={openOutline}
-          />
+          <>
+            {/* The record is here and the manuscript is not. This is where it
+                arrives — a file or a link, landing on this book rather than
+                making a second one beside it. */}
+            {/* While it runs, how far along — and the job doing it, which is
+                also where Retry is. The two doors stay hidden then, because
+                they would be a second way to start what is already running;
+                they come back the moment it fails. */}
+            {filling ? (
+              <Row
+                label={t('book.gettingText')}
+                detail={filling.name}
+                value={
+                  filling.status === 'failed'
+                    ? t('book.gettingFailed')
+                    : `${Math.round(filling.fraction * 100)}%`
+                }
+                alarm={filling.status === 'failed'}
+                onPress={() => router.push(`/job/${filling.id}`)}
+              />
+            ) : null}
+            {!filling || filling.status === 'failed' ? (
+              <>
+                <Row
+                  label={t('book.addTextFile')}
+                  detail={t('book.addTextWhat')}
+                  value="›"
+                  onPress={attachFile}
+                />
+                <Row
+                  label={t('book.addTextLink')}
+                  detail={t('shelf.fromLinkHint')}
+                  value="›"
+                  onPress={() => setLinkOpen(true)}
+                />
+              </>
+            ) : null}
+            <Row
+              label={t('book.outlineRow')}
+              detail={t('book.outlineHint')}
+              value={chapters.length ? t('book.outlineAgain') : t('book.outlineAsk')}
+              onPress={openOutline}
+            />
+          </>
         ) : null}
         <Row
           label={t('book.kindRow')}
@@ -1234,6 +1317,9 @@ export default function BookPage() {
         onClose={() => setExportOpen(false)}
       />
 
+      {linkOpen ? (
+        <AddByLink onFile={(file) => void attach(file)} onClose={() => setLinkOpen(false)} />
+      ) : null}
     </ScrollView>
   );
 }

@@ -325,29 +325,65 @@ export async function saveImportedBook(input: {
   /** Scripture: the citable unit, and what this edition calls its own books. */
   verses?: { chapterIndex: number; number: number; start: number; end: number }[];
   partNames?: { part_idx: number; names: string[] }[];
+  /**
+   * A book that is already on the shelf, waiting for its words.
+   *
+   * Every book arrives as a record first now — found in a catalog, or typed
+   * from memory — and the manuscript comes afterwards. So an import has to be
+   * able to land on a row that exists rather than always making a new one:
+   * the rating, the review, the notes, the lists and tags all hang off that
+   * id, and writing a second book beside it would leave the reader with two
+   * of everything and their own writing on the wrong one.
+   */
+  into?: string;
 }): Promise<string> {
   const database = await db();
-  const id = newId();
+  const id = input.into ?? newId();
   const now = Date.now();
   await transaction(async () => {
-    await database.runAsync(
-      `INSERT INTO books (id, title, author, language, kind, source_name, source_hash, source_path,
-                          source_ext, word_count, char_count, cover_hue, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      id,
-      input.book.title,
-      input.book.author,
-      input.book.language,
-      input.book.kind,
-      input.book.source_name,
-      input.book.source_hash,
-      input.book.source_path,
-      input.book.source_ext,
-      input.book.word_count,
-      input.book.char_count,
-      input.book.cover_hue,
-      now
-    );
+    if (input.into) {
+      // What the file decides, and nothing else. The title and the author
+      // came from a catalog or from the reader, and both are better than a
+      // PDF's first line — which is what `parsed.title` is for most of these.
+      await database.runAsync(
+        `UPDATE books SET language = ?, source_name = ?, source_hash = ?, source_path = ?,
+                          source_ext = ?, word_count = ?, char_count = ?
+          WHERE id = ?`,
+        input.book.language,
+        input.book.source_name,
+        input.book.source_hash,
+        input.book.source_path,
+        input.book.source_ext,
+        input.book.word_count,
+        input.book.char_count,
+        id
+      );
+      await database.runAsync('DELETE FROM documents WHERE book_id = ?', id);
+      // A note written on the record keeps its book and loses only the
+      // chapter that is about to stop existing. Dropping the note with the
+      // chapter would be throwing away the one thing here nobody else wrote.
+      await database.runAsync('UPDATE annotations SET chapter_id = NULL WHERE book_id = ?', id);
+      await database.runAsync('DELETE FROM chapters WHERE book_id = ?', id);
+    } else {
+      await database.runAsync(
+        `INSERT INTO books (id, title, author, language, kind, source_name, source_hash, source_path,
+                            source_ext, word_count, char_count, cover_hue, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id,
+        input.book.title,
+        input.book.author,
+        input.book.language,
+        input.book.kind,
+        input.book.source_name,
+        input.book.source_hash,
+        input.book.source_path,
+        input.book.source_ext,
+        input.book.word_count,
+        input.book.char_count,
+        input.book.cover_hue,
+        now
+      );
+    }
     await database.runAsync(
       'INSERT INTO documents (book_id, text, hints) VALUES (?, ?, ?)',
       id,
@@ -366,7 +402,7 @@ export async function saveImportedBook(input: {
       }
     }
     await database.runAsync(
-      'INSERT INTO reading_state (book_id, offset, updated_at) VALUES (?, 0, ?)',
+      'INSERT OR IGNORE INTO reading_state (book_id, offset, updated_at) VALUES (?, 0, ?)',
       id,
       now
     );
