@@ -39,7 +39,7 @@ import { ConfirmAdd } from '../src/ui/AddSheets';
 import { BookLine } from '../src/ui/BookLine';
 import { HitCard, toRow, type ResultRow } from '../src/ui/HitCard';
 import { Row, Section } from '../src/ui/primitives';
-import { SearchBar } from '../src/ui/SearchBar';
+import { SearchBar, SEARCH_BAR_HEIGHT, searchBarOffset } from '../src/ui/SearchBar';
 import { SourceRows } from '../src/ui/SourceRows';
 import { useKeyboardLift } from '../src/ui/keyboard';
 import { radius, space, usePalette } from '../src/theme';
@@ -482,7 +482,7 @@ export default function Find() {
           keyExtractor={(line) => line.key}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
+          contentContainerStyle={{ padding: space.lg, paddingBottom: SEARCH_BAR_HEIGHT + space.xxl }}
           renderItem={({ item }) =>
             item.kind === 'note' ? (
               <View
@@ -549,7 +549,7 @@ export default function Find() {
 
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
+            contentContainerStyle={{ padding: space.lg, paddingBottom: SEARCH_BAR_HEIGHT + space.xxl }}
             keyboardShouldPersistTaps="handled"
           >
             {/* Flush only for whichever comes first: a section's own top
@@ -563,15 +563,13 @@ export default function Find() {
       {/* It rides the keyboard up rather than being covered by it, and the
           page above gives up exactly that much room — a margin rather than a
           transform, so what is left is still scrollable to its end. */}
-      <Animated.View style={{ marginBottom: lift }}>
-        <SearchBar
-          value={query}
-          onChange={setQuery}
-          placeholder={t('find.placeholder')}
-          bottom={insets.bottom}
-          autoFocus
-        />
-      </Animated.View>
+      <SearchBar
+        value={query}
+        onChange={setQuery}
+        placeholder={t('find.placeholder')}
+        bottom={Animated.add(lift, searchBarOffset(insets.bottom))}
+        autoFocus
+      />
 
       {choice ? (
         <ConfirmAdd
