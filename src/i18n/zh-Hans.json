@@ -291,7 +291,6 @@
     "filed": "已归入{{name}}"
   },
   "settings": {
-    "title": "设置",
     "language": "语言",
     "languageSystem": "跟随系统",
     "ai": "AI 密钥",
@@ -343,6 +342,32 @@
     "removeAllTitle": "删除所有应用数据？",
     "removeAllWarning": "删除前会先在本机保存一份完整备份，若已设置，也会上传到 iCloud 和已连接的存储桶。备份包含除密钥以外的一切：书籍正文、笔记、翻译、设置，以及导入时用的原始文件。备份全部完成后才开始删除；若云端备份失败，则不会删除任何数据。",
     "removeAllKeeps": "删除前先留下的那份副本会保存在「文件」→ Novel Man → Backups，不会随其余数据一起删除。"
+  },
+  "more": {
+    "title": "更多",
+    "utilities": "工具"
+  },
+  "flags": {
+    "title": "待处理的书",
+    "row": "待处理的书",
+    "rowWhy": "缺封面、作者、年份或章节的书",
+    "count_one": "{{count}} 本",
+    "count_other": "{{count}} 本",
+    "clear": "全部齐备",
+    "none": "没有需要处理的书。",
+    "allWell": "书架上每本书都有封面、作者、年份和章节。这里没有要做的。",
+    "toc": "没有章节",
+    "tocWhy": "无从翻页：导入时没有找到目录。到这本书的结构页重新识别。",
+    "oneChapter": "整本书只有一章",
+    "oneChapterWhy": "这么长的书只识别出一章，几乎总是意味着一章也没识别出来。到结构页拆分它。",
+    "details": "资料不全",
+    "detailsWhy": "缺作者，或缺年份。查一次两者都能补上——而没有作者，哪个书目站都无从查起。",
+    "cover": "没有封面",
+    "coverWhy": "书架上没有可辨认的样子。去书目站查一张封面，或让 AI 画一张。",
+    "missing_author": "缺作者",
+    "missing_year": "缺年份",
+    "words_one": "{{count}} 字",
+    "words_other": "{{count}} 字"
   },
   "units": {
     "words": "{{count}} 词",

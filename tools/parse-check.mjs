@@ -89,6 +89,8 @@ const { libraryCsv } = await import(join(build, 'export/formats/library.js'));
 const { stripTags } = await import(join(build, 'import/xml.js'));
 const { isSkeleton, starsOf, statusOf, withoutManuscript } = await import(join(build, 'books/record.js'));
 const { parseTypedBooks } = await import(join(build, 'books/bulk.js'));
+const { flagsOn, flaggedCount, flaggedGroups, missingDetails, fixFor } =
+  await import(join(build, 'books/flags.js'));
 const { readBible } = await import(join(build, 'scripture/published.js'));
 const { bookFiles, contentsUrl, parseRepoUrl, rawUrl, searchUrl, titleFrom } =
   await import(join(build, 'sources/repo.js'));
@@ -1905,6 +1907,57 @@ console.log('\nskeletons');
   check('nothing is nothing', starsOf(null), 0);
   check('a status from nowhere is no status', statusOf('abandoned'), null);
   check('and one from the list is itself', statusOf('reading'), 'reading');
+}
+
+console.log('what is wrong with a book');
+{
+  /** A finished book: everything filled in, chapters found. */
+  const whole = {
+    id: 'a', title: 'North and South', author: 'Elizabeth Gaskell', year: '1855',
+    cover_path: 'covers/a.jpg', chapter_count: 52, word_count: 180000, text_source: null,
+  };
+  const without = (changes) => ({ ...whole, ...changes });
+
+  check('nothing is wrong with a finished book', flagsOn(whole), []);
+  check('a missing cover is', flagsOn(without({ cover_path: null })), ['cover']);
+  check('a blank one counts as missing', flagsOn(without({ cover_path: '   ' })), ['cover']);
+  check('no author is a missing detail', flagsOn(without({ author: null })), ['details']);
+  check('and so is no year', flagsOn(without({ year: null })), ['details']);
+  check('both missing is still one flag',
+    flagsOn(without({ author: null, year: null })), ['details']);
+  check('and the row says which two',
+    missingDetails(without({ author: null, year: null })), ['author', 'year']);
+
+  check('a manuscript with no chapters is flagged',
+    flagsOn(without({ chapter_count: 0 })), ['toc']);
+  check('a long book found as one chapter is flagged once, not twice',
+    flagsOn(without({ chapter_count: 1 })), ['oneChapter']);
+  check('a short one genuinely can be one chapter',
+    flagsOn(without({ chapter_count: 1, word_count: 3000 })), []);
+
+  // The rule the whole page turns on: a book somebody read on paper is not a
+  // broken import, and telling them it has no chapters is telling them
+  // nothing they can act on.
+  check('a skeleton is not missing its chapters',
+    flagsOn(without({ chapter_count: 0, word_count: 0 })), []);
+  check('a licensed edition still is, having somewhere to get them',
+    flagsOn(without({ chapter_count: 0, word_count: 0, text_source: 'esv' })), ['toc']);
+
+  check('the worst comes first',
+    flagsOn(without({ chapter_count: 0, author: null, cover_path: null })),
+    ['toc', 'details', 'cover']);
+  check('the count is books, not problems',
+    flaggedCount([whole, without({ id: 'b', author: null, cover_path: null })]), 1);
+  check('and a clean shelf counts none', flaggedCount([whole, whole]), 0);
+
+  const groups = flaggedGroups([whole, without({ id: 'b', author: null, cover_path: null })]);
+  check('a group per problem, and none for a problem nobody has',
+    groups.map((group) => group.flag), ['details', 'cover']);
+  check('a book with two problems is on both errands',
+    groups.every((group) => group.books[0].id === 'b'), true);
+  check('a chapter problem is fixed where chapters are',
+    fixFor('toc', 'x'), '/book/x/structure');
+  check('and a missing author on the book itself', fixFor('details', 'x'), '/book/x');
 }
 
 console.log(failures ? `\n${failures} failing` : '\nall passing');

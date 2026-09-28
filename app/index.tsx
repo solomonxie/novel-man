@@ -20,6 +20,7 @@ import type { TFunction } from 'i18next';
 
 import { listBooks, type BookListItem } from '../src/db/repo';
 import { reviewedBooks, shelfOf, type ReadingStatus } from '../src/books/record';
+import { flaggedCount } from '../src/books/flags';
 import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
 import { supportedExtensions } from '../src/import/registry';
 import { Row, Section } from '../src/ui/primitives';
@@ -265,6 +266,13 @@ export default function Home() {
    * trip for it would be a scan of the whole shelf on every focus.
    */
   const reviews = useMemo(() => reviewedBooks(books ?? []), [books]);
+
+  /**
+   * How many books have something missing. Derived, like the reviews above
+   * it: `listBooks` already selected every column the rules read, so the
+   * number beside the row costs an array walk rather than a query.
+   */
+  const flagged = useMemo(() => flaggedCount(books ?? []), [books]);
 
   const notes = useMemo(
     () => results.meta.filter((hit) => hit.kind === 'note').map(toRow),
@@ -536,12 +544,29 @@ export default function Home() {
             <Results title={t('shelf.inNotes', { count: notes.length })} rows={notes} />
             <Results title={t('shelf.inTheText', { count: passages.length })} rows={passages} />
 
-            {/* Settings are sections of this page, not destinations behind it.
-                A page whose only job is holding four rows gets deleted. */}
+            {/* Everything that is not the shelf. Settings are sections of this
+                page, not destinations behind it — a page whose only job is
+                holding four rows gets deleted — and the tools that act on the
+                whole library sit with them, above the things that are merely
+                set once. */}
             <View style={{ paddingHorizontal: space.lg }}>
               <Text style={[styles.shelfTitle, { color: palette.dim, marginTop: space.xxl }]}>
-                {t('settings.title')}
+                {t('more.title')}
               </Text>
+
+              {/* The one row here that is about the books rather than the app.
+                  It leads with a number because the number is the whole point:
+                  a library quietly rots one missing cover at a time, and
+                  nothing else on this page would ever say so. */}
+              <Section title={t('more.utilities')}>
+                <Row
+                  label={t('flags.row')}
+                  detail={t('flags.rowWhy')}
+                  value={flagged > 0 ? t('flags.count', { count: flagged }) : t('flags.clear')}
+                  onPress={() => router.push('/flagged')}
+                  last
+                />
+              </Section>
 
               <Section title={t('settings.general')}>
                 <Row
