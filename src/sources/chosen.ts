@@ -25,6 +25,15 @@ export function choose(choice: Choice) {
   held = choice;
 }
 
+/**
+ * Whether one is waiting, without spending it. The page a pick comes back to
+ * has to know to open the menu that consumes it, and the menu is what
+ * consumes it — so looking and taking are two questions.
+ */
+export function pendingChoice(): Choice | null {
+  return held;
+}
+
 export function takeChoice(): Choice | null {
   const choice = held;
   held = null;

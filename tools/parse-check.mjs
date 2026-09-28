@@ -93,6 +93,7 @@ const { isSkeleton, starsOf, statusOf, withoutManuscript } = await import(join(b
 const { parseTypedBooks } = await import(join(build, 'books/bulk.js'));
 const { flagsOn, flaggedCount, flaggedGroups, missingDetails, fixFor } =
   await import(join(build, 'books/flags.js'));
+const { kindFromSource } = await import(join(build, 'sources/registry.js'));
 const { readBible } = await import(join(build, 'scripture/published.js'));
 const { bookFiles, contentsUrl, parseRepoUrl, rawUrl, searchUrl, titleFrom } =
   await import(join(build, 'sources/repo.js'));
@@ -1960,6 +1961,16 @@ console.log('what is wrong with a book');
   check('a chapter problem is fixed where chapters are',
     fixFor('toc', 'x'), '/book/x/structure');
   check('and a missing author on the book itself', fixFor('details', 'x'), '/book/x');
+}
+
+console.log('what a source says a book is');
+{
+  check('a bible catalog answers scripture', kindFromSource('ebible'), 'scripture');
+  check('so does the repository of editions', kindFromSource('repo'), 'scripture');
+  check('and the one edition behind a key', kindFromSource('esv'), 'scripture');
+  check('a preprint server answers paper', kindFromSource('arxiv'), 'paper');
+  check('a general catalog answers novel', kindFromSource('gutenberg'), 'novel');
+  check('and so does one nobody listed', kindFromSource('somewhere-new'), 'novel');
 }
 
 console.log('finding a book by what it is called');

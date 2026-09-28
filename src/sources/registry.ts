@@ -1,4 +1,4 @@
-import type { BookSource } from '../books/kinds';
+import { DEFAULT_KIND, type BookSource } from '../books/kinds';
 
 /**
  * The sources books come from, as data. A source is a name, the page that
@@ -20,6 +20,15 @@ export type PublicSource = {
    * together, on the device; the rest are searched where they live.
    */
   indexed: boolean;
+  /**
+   * True when the source answers a search of its own, over the network. The
+   * one search box offers these as a row apiece rather than asking them —
+   * nothing is fetched from a stranger's API until somebody taps it.
+   *
+   * Not the same as `!indexed`: Goodreads is neither. It is one reader's own
+   * shelves, and the way in is a file they export, not a query.
+   */
+  remote?: boolean;
   /** True when nothing can be fetched until the reader supplies their own. */
   credential?: boolean;
 };
@@ -37,17 +46,34 @@ export const publicSources: PublicSource[] = [
   { id: 'standardebooks', host: 'standardebooks.org', indexed: true, credential: true },
   // A preprint server is a firehose, not a list: 2.6 million papers, hundreds
   // a day. It is searched where it lives.
-  { id: 'arxiv', find: '/source/arxiv', host: 'arxiv.org', indexed: false },
+  { id: 'arxiv', find: '/source/arxiv', host: 'arxiv.org', indexed: false, remote: true },
   // The catalog that hands over no books at all — 40 million records, no key,
   // no quota. Its page keeps the lists rather than this row, because what is
   // kept is one category at a time and a single "get the list" would mean
   // downloading a library catalog in full.
-  { id: 'openlibrary', find: '/source/openlibrary', host: 'openlibrary.org', indexed: false },
+  { id: 'openlibrary', find: '/source/openlibrary', host: 'openlibrary.org', indexed: false, remote: true },
   // Not a catalog: one reader's own shelves, brought over from where they kept
   // them. Their API was retired in 2020, so the door is the export and the
   // shelf feed — both of which they still hand to whoever owns the account.
   { id: 'goodreads', find: '/source/goodreads', host: 'goodreads.com', indexed: false },
 ];
+
+/**
+ * What a book from this source is, when nobody was asked.
+ *
+ * Kind decides which sections a book's page has, and it used to be the first
+ * question the Add menu asked — before the title, before the source, before
+ * anything the reader actually came to do. But a search result already knows
+ * where it came from, and a catalog of one thing answers for its own kind: a
+ * bible is scripture and a preprint is a paper, whoever is asking. The
+ * general catalogs answer `novel`, which is most of what they carry and what
+ * this app is, and it is one tap to change on the book's own page.
+ */
+export function kindFromSource(source: string): string {
+  if (source === 'ebible' || source === 'repo' || source === 'esv') return 'scripture';
+  if (source === 'arxiv') return 'paper';
+  return DEFAULT_KIND;
+}
 
 export function sourcesFor(sources: BookSource[]): PublicSource[] {
   return publicSources.filter((source) => sources.includes(source.id));

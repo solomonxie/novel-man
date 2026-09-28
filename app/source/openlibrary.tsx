@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, Stack } from '../../src/navigation/router';
+import { router, Stack, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -30,10 +30,14 @@ type Mode = 'kept' | 'live';
  * somebody's hand, and it is the one that needs a signal.
  */
 export default function FindOnOpenLibrary() {
+  const { q } = useLocalSearchParams<{ q?: string }>();
   const { t, i18n } = useTranslation();
   const palette = usePalette();
-  const [mode, setMode] = useState<Mode>('kept');
-  const [query, setQuery] = useState('');
+  // A query arriving from the one search box has already been put to every
+  // list on this device — that is what offering this page was the answer to.
+  // So it opens on the half of the page that needs a signal.
+  const [mode, setMode] = useState<Mode>(q?.trim() ? 'live' : 'kept');
+  const [query, setQuery] = useState(q ?? '');
   const [found, setFound] = useState<Work[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +75,15 @@ export default function FindOnOpenLibrary() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, mode, keptTotal]);
+
+  // The words came with the page, so the search they were handed over for
+  // runs itself. Pressing return on something you already typed somewhere
+  // else is the search box asking to be typed into twice.
+  useEffect(() => {
+    if (q?.trim()) void runLive();
+    // Once, on the way in: after that the field and the return key own it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function runLive() {
     if (!query.trim()) return;

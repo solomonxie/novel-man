@@ -24,12 +24,15 @@ const FIELDS: PaperField[] = ['all', 'ti', 'au', 'cat'];
  * choosing one runs the search on the spot.
  */
 export default function FindOnArxiv() {
-  const { kind } = useLocalSearchParams<{ kind?: string }>();
+  const { q } = useLocalSearchParams<{ q?: string }>();
   const { t } = useTranslation();
   const palette = usePalette();
   const [field, setField] = useState<PaperField>('all');
-  const [query, setQuery] = useState('');
-  const [runKey, setRunKey] = useState(0);
+  const [query, setQuery] = useState(q ?? '');
+  // 1 rather than 0 when a query arrived with the page: the one search box
+  // handed this one the words, and asking for them a second time is asking
+  // the reader to press return on something they already typed.
+  const [runKey, setRunKey] = useState(q?.trim() ? 1 : 0);
   const [picking, setPicking] = useState(false);
 
   const categories = useMemo(

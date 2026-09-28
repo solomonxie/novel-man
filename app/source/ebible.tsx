@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { FlatList, Text, View } from 'react-native';
-import { router, Stack, useLocalSearchParams } from '../../src/navigation/router';
+import { router, Stack } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { readCatalog, type Translation } from '../../src/sources/ebible';
@@ -18,7 +18,6 @@ import { space, usePalette } from '../../src/theme';
 const EBIBLE = publicSources.find((source) => source.id === 'ebible')!;
 
 export default function Translations() {
-  const { kind } = useLocalSearchParams<{ kind?: string }>();
   const { t } = useTranslation();
   const palette = usePalette();
   /** Bumped when the list is fetched here, which is what re-reads it. */
