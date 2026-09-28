@@ -431,11 +431,21 @@ async function outlineBook(job: WorkJob, signal: AbortSignal) {
           'stories in a collection are its contents just as chapters are a novel\'s. ' +
           `List the ${unit}s in order, each with its own title where it has one and an ` +
           'empty title where it is only numbered. ' +
+          // Don Quixote came back as two rows — "Part One" and "Part Two" —
+          // for a work with 126 chapters. Nothing above forbade it: the model
+          // was told to list what it was sure of, and the two halves of a book
+          // are the thing anybody is surest of. So the level is now named, and
+          // the division above it is named as the thing that is not a row.
+          `Every row is one ${unit} — the level a reader turns, and the smallest numbered ` +
+          'division the work has. ' +
           (kind.part
-            ? `"part" is the name of the ${kind.part} it sits under, where the book has them, ` +
-              'spelled the same way on every row that belongs to it, and left out entirely ' +
-              'where the work is not divided into any. '
-            : '') +
+            ? `A ${kind.part} is never a row of its own: it is what the rows under it carry ` +
+              `in "part", spelled the same way on each, and left out entirely where the ` +
+              `work is not divided into any. Answering with the ${kind.part}s of a work — ` +
+              `two rows for a book in two ${kind.part}s — is a wrong answer however sure ` +
+              `you are of them, because it is not the contents. A work in two ${kind.part}s ` +
+              `of forty ${unit}s each has eighty rows. `
+            : `A part, a volume or a section heading is not a row: list what is under it. `) +
           // Every one of these is a way of saying: answer with what you have.
           'Give what you are sure of. Some of a contents is worth having and the reader ' +
           `can add the rest, so a run of ${unit}s you are confident of is a good answer ` +
@@ -478,7 +488,12 @@ async function outlineBook(job: WorkJob, signal: AbortSignal) {
           .join('\n'),
       },
     ],
-    4000,
+    // A novel's full contents does not fit in 4,000 — a hundred-odd rows with
+    // a sentence each, in a language where a sentence is dense in tokens, runs
+    // past it — and the ceiling was half of why the answers came back coarse:
+    // what will not fit gets summarised. It is a cap, not a charge; a short
+    // contents still costs what a short contents costs.
+    8000,
     signal
   );
   if (refused(answer)) throw new Error(UNKNOWN);
