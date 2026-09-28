@@ -291,7 +291,6 @@
     "filed": "Filed under {{name}}"
   },
   "settings": {
-    "title": "Settings",
     "language": "Language",
     "languageSystem": "System",
     "ai": "AI keys",
@@ -343,6 +342,32 @@
     "removeAllTitle": "Remove all app data?",
     "removeAllWarning": "A full backup is saved on this device first — and to iCloud and any connected buckets, if set up. It holds everything but your keys: books, notes, translations, settings, even the files they were imported from. Deletion starts only after the backups finish; if a cloud backup fails, nothing is deleted.",
     "removeAllKeeps": "The copy taken first stays in Files → Novel Man → Backups, and is not deleted with the rest."
+  },
+  "more": {
+    "title": "More",
+    "utilities": "Utilities"
+  },
+  "flags": {
+    "title": "Flagged works",
+    "row": "Flagged works",
+    "rowWhy": "Books missing a cover, an author, a year or their chapters",
+    "count_one": "{{count}} book",
+    "count_other": "{{count}} books",
+    "clear": "All clear",
+    "none": "Nothing is flagged.",
+    "allWell": "Every book on your shelf has a cover, an author, a year and its chapters. Nothing to fix here.",
+    "toc": "No chapters",
+    "tocWhy": "Nothing to turn: the import never found a table of contents. Detect them on the book’s structure page.",
+    "oneChapter": "One chapter, whole book",
+    "oneChapterWhy": "A book this long found as a single chapter almost always means none were found at all. Split it on the structure page.",
+    "details": "Missing details",
+    "detailsWhy": "No author, or no year. One lookup fills both — and no catalog can be asked about a book with no author.",
+    "cover": "No cover",
+    "coverWhy": "Nothing to recognise it by on the shelf. Look it up for a catalog cover, or have one drawn.",
+    "missing_author": "No author",
+    "missing_year": "No year",
+    "words_one": "{{count}} word",
+    "words_other": "{{count}} words"
   },
   "units": {
     "words": "{{count}} words",
