@@ -8,6 +8,8 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+
+import { useSheetMount } from './sheet';
 import type { TFunction } from 'i18next';
 
 import { answerPreview, clearFinished, retryJob, type ImportJob } from '../import/queue';
@@ -72,8 +74,12 @@ export function QueueSheet({ jobs, visible, onClose }: {
 
   // Half the screen: a queue is a glance at a few short rows, and a full-height
   // card makes checking on one read as leaving what you were doing.
+  // Out of the tree once it has finished going away — see the hook.
+  const sheet = useSheetMount(visible);
+  if (!sheet.mounted) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} onDismiss={sheet.onDismiss} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={[styles.scrim, { backgroundColor: palette.scrim }]} onPress={onClose}>
       <Pressable
         onPress={(event) => event.stopPropagation()}

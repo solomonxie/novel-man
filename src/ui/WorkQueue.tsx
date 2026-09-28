@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+
+import { useSheetMount } from './sheet';
 import type { TFunction } from 'i18next';
 
 import type { WorkCounts, WorkUnit } from '../db/work';
@@ -181,8 +183,12 @@ export function WorkSheet({ feed, visible, onClose }: {
   // Half the screen, not all of it. Watching a queue is a glance at a list of
   // short rows; a full-height card made checking on a run read as leaving
   // whatever you were doing, and there is nothing here that needs the room.
+  // Out of the tree once it has finished going away — see the hook.
+  const sheet = useSheetMount(visible);
+  if (!sheet.mounted) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} onDismiss={sheet.onDismiss} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={[styles.scrim, { backgroundColor: palette.scrim }]} onPress={onClose}>
       <Pressable
         onPress={(event) => event.stopPropagation()}

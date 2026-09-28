@@ -3,6 +3,8 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
+import { useSheetMount } from './sheet';
+
 import {
   annotationExporters,
   castExporters,
@@ -48,8 +50,12 @@ export function ExportSheet({ visible, input, onClose }: {
     }
   }
 
+  // Out of the tree once it has finished going away — see the hook.
+  const sheet = useSheetMount(visible);
+  if (!sheet.mounted) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} onDismiss={sheet.onDismiss} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
         <View style={styles.head}>
           <Pressable onPress={onClose} hitSlop={12}>
