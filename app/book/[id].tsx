@@ -74,7 +74,11 @@ import { InlineText } from '../../src/ui/inline';
 import { radius, space, usePalette } from '../../src/theme';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { KindList } from '../../src/ui/KindList';
-import { AddByLink } from '../../src/ui/AddSheets';
+import { AddByLink, ConfirmAdd } from '../../src/ui/AddSheets';
+import { TextSource } from '../../src/ui/TextSource';
+import { addChoice } from '../../src/books/add';
+import { choiceFromIndex } from '../../src/sources/chosen';
+import type { Choice } from '../../src/sources/chosen';
 import { addFile } from '../../src/books/add';
 import { pickManuscript } from '../../src/import/sources/picker';
 import { subscribeToQueue, type ImportJob } from '../../src/import/queue';
@@ -152,8 +156,10 @@ export default function BookPage() {
   /** One chapter's notes at a time: a book's worth at once is a page nobody reads. */
   const [openNotes, setOpenNotes] = useState<string | null>(null);
   const [keyed, setKeyed] = useState(false);
-  /** Pasting a link for the words this record hasn't got yet. */
+  /** Choosing where this record's words come from, and the two that need a sheet. */
+  const [sourceOpen, setSourceOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [fetching, setFetching] = useState<Choice | null>(null);
   /** The import filling this book in, while it is running. */
   const [filling, setFilling] = useState<ImportJob | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
@@ -215,6 +221,7 @@ export default function BookPage() {
    */
   async function attach(file: { uri: string; name: string }) {
     setLinkOpen(false);
+    setSourceOpen(false);
     if (!id) return;
     router.push(addFile(file, id));
   }
@@ -223,6 +230,21 @@ export default function BookPage() {
     try {
       const picked = await pickManuscript();
       if (picked) await attach(picked);
+    } catch (problem) {
+      Alert.alert(t('import.failed'), String(problem));
+    }
+  }
+
+  /**
+   * An edition from a kept list, for a book already on the shelf. The download
+   * lands on this book rather than making a second one beside it.
+   */
+  async function fetchInto(choice: Choice) {
+    setFetching(null);
+    setSourceOpen(false);
+    if (!id) return;
+    try {
+      router.push(await addChoice(choice, {}, id));
     } catch (problem) {
       Alert.alert(t('import.failed'), String(problem));
     }
@@ -1098,20 +1120,16 @@ export default function BookPage() {
               />
             ) : null}
             {!filling || filling.status === 'failed' ? (
-              <>
-                <Row
-                  label={t('book.addTextFile')}
-                  detail={t('book.addTextWhat')}
-                  value="›"
-                  onPress={attachFile}
-                />
-                <Row
-                  label={t('book.addTextLink')}
-                  detail={t('shelf.fromLinkHint')}
-                  value="›"
-                  onPress={() => setLinkOpen(true)}
-                />
-              </>
+              // One door, because "where do the words come from" is one
+              // question. What can answer it depends on the book, so what is
+              // behind this row is worked out from the book rather than
+              // listed here for every book alike.
+              <Row
+                label={t('book.textSource')}
+                detail={t('book.textSourceWhy')}
+                value="›"
+                onPress={() => setSourceOpen(true)}
+              />
             ) : null}
             <Row
               label={t('book.outlineRow')}
@@ -1317,6 +1335,25 @@ export default function BookPage() {
         onClose={() => setExportOpen(false)}
       />
 
+      {sourceOpen ? (
+        <TextSource
+          book={book}
+          onFile={attachFile}
+          onLink={() => {
+            setSourceOpen(false);
+            setLinkOpen(true);
+          }}
+          onPick={(hit) => setFetching(choiceFromIndex(hit))}
+          onClose={() => setSourceOpen(false)}
+        />
+      ) : null}
+      {fetching ? (
+        <ConfirmAdd
+          choice={fetching}
+          onAdd={() => void fetchInto(fetching)}
+          onClose={() => setFetching(null)}
+        />
+      ) : null}
       {linkOpen ? (
         <AddByLink onFile={(file) => void attach(file)} onClose={() => setLinkOpen(false)} />
       ) : null}

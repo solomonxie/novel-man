@@ -180,3 +180,27 @@ export function unitOf(kind: string | null | undefined): 'chapter' | 'section' {
 export function shows(kind: string | null | undefined, section: BookSection): boolean {
   return kindOf(kind).sections.includes(section);
 }
+
+/**
+ * What a catalog record says this is.
+ *
+ * An ISBN does not carry a kind — it names a printing, not a genre — so what
+ * answers is the record the number fetches. Catalogs file books under
+ * subjects, and the one distinction they carry reliably is made up or not: a
+ * story gets a cast, scenes and a screenplay, an argument gets none of them,
+ * and that is most of what the kind decides.
+ *
+ * Anything finer is guesswork these subjects cannot support. "Study and
+ * teaching" is the exception worth taking, because a book somebody drills
+ * themselves on is the one kind that wants flash cards. Everything else that
+ * is not plainly fiction is answered `nonfiction`, and a reader who disagrees
+ * changes it in one tap on the book's own page — which is the only reason
+ * guessing at all is safe.
+ */
+export function kindFromSubjects(subjects: string[]): string | null {
+  if (!subjects.length) return null;
+  const said = subjects.join(' · ').toLowerCase();
+  if (/\b(textbooks?|study and teaching|problems, exercises)\b/.test(said)) return 'textbook';
+  if (/\bfiction\b|\bnovels?\b|\bstories\b/.test(said)) return 'novel';
+  return 'nonfiction';
+}

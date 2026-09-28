@@ -24,6 +24,12 @@ export type IndexRow = {
    */
   href?: string;
   terms?: string;
+  /**
+   * The whole record, for a row that was remembered rather than fetched in a
+   * list — see `sources/seen`. Nothing searches it; it is what rebuilds the
+   * thing the row stands for when there is no network to ask again.
+   */
+  payload?: string;
 };
 
 export type IndexedBook = IndexRow & { source: string };
@@ -32,10 +38,11 @@ export type IndexState = { fetchedAt: number; count: number };
 
 /**
  * Rows are written in bites, so a 78,000-row catalog never blocks the UI — and
- * small enough that eight bound values a row stays under SQLite's older limit
- * of 999 parameters per statement, whatever build is underneath.
+ * small enough that nine bound values a row stays under SQLite's older limit
+ * of 999 parameters per statement, whatever build is underneath. It was 120
+ * at eight values; `payload` is the ninth, and 120 of those would be 1,080.
  */
-const CHUNK = 120;
+const CHUNK = 110;
 
 /**
  * How many of those bites share one transaction. A commit is a write to the
@@ -59,22 +66,7 @@ export async function replaceIndex(
     await transaction(async () => {
       for (let at = 0; at < group.length; at += CHUNK) {
         const batch = group.slice(at, at + CHUNK);
-        const values = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
-        const args = batch.flatMap((row) => [
-          source,
-          row.extId,
-          row.title,
-          row.author,
-          row.language,
-          `${row.title} ${row.author} ${row.extra ?? ''}`.toLowerCase(),
-          row.href ?? null,
-          row.terms ?? null,
-        ]);
-        await database.runAsync(
-          `INSERT OR REPLACE INTO catalog (source, ext_id, title, author, language, needle, href, terms)
-           VALUES ${values}`,
-          args
-        );
+        await writeRows(database, source, batch);
       }
     });
     onProgress?.(Math.min(from + span, rows.length), rows.length);
@@ -87,6 +79,72 @@ export async function replaceIndex(
     source, Date.now(), rows.length
   );
   return rows.length;
+}
+
+/** The one statement every write goes through, so the columns are listed once. */
+async function writeRows(
+  database: Awaited<ReturnType<typeof db>>,
+  source: string,
+  rows: IndexRow[]
+) {
+  const values = rows.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+  const args = rows.flatMap((row) => [
+    source,
+    row.extId,
+    row.title,
+    row.author,
+    row.language,
+    `${row.title} ${row.author} ${row.extra ?? ''}`.toLowerCase(),
+    row.href ?? null,
+    row.terms ?? null,
+    row.payload ?? null,
+  ]);
+  await database.runAsync(
+    `INSERT OR REPLACE INTO catalog
+       (source, ext_id, title, author, language, needle, href, terms, payload)
+     VALUES ${values}`,
+    args
+  );
+}
+
+/**
+ * Rows added to a list rather than replacing one, and a ceiling on how many
+ * of them there can be.
+ *
+ * A fetched list is whole and arrives at once, so `replaceIndex` empties the
+ * source first. A remembered one grows a book at a time and must not: what is
+ * already there is the point of it. The oldest go when it gets too big —
+ * `rowid` is insertion order, which is the only clock this table has.
+ */
+export async function rememberRows(source: string, rows: IndexRow[], ceiling: number) {
+  if (!rows.length) return;
+  const database = await db();
+  await transaction(async () => {
+    for (let at = 0; at < rows.length; at += CHUNK) {
+      await writeRows(database, source, rows.slice(at, at + CHUNK));
+    }
+    const counted = await database.getFirstAsync<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM catalog WHERE source = ?',
+      source
+    );
+    let total = counted?.n ?? 0;
+    // Only when it is actually full. This runs after every search, and the
+    // prune sorts every row the source owns — thousands of them, to throw
+    // away none, on a table nobody asked to tidy.
+    if (total > ceiling) {
+      await database.runAsync(
+        `DELETE FROM catalog WHERE source = ? AND rowid NOT IN (
+           SELECT rowid FROM catalog WHERE source = ? ORDER BY rowid DESC LIMIT ?
+         )`,
+        source, source, ceiling
+      );
+      total = ceiling;
+    }
+    await database.runAsync(
+      'INSERT OR REPLACE INTO catalog_state (source, fetched_at, count) VALUES (?, ?, ?)',
+      source, Date.now(), total
+    );
+  });
 }
 
 export async function indexState(source: string): Promise<IndexState | null> {
@@ -201,8 +259,9 @@ async function select(
     language: string;
     href: string | null;
     terms: string | null;
+    payload: string | null;
   }>(
-    `SELECT source, ext_id, title, author, language, href, terms FROM catalog
+    `SELECT source, ext_id, title, author, language, href, terms, payload FROM catalog
       WHERE ${where}
       ORDER BY length(title)
       LIMIT ?`,
@@ -216,6 +275,7 @@ async function select(
     language: row.language,
     href: row.href ?? undefined,
     terms: row.terms ?? undefined,
+    payload: row.payload ?? undefined,
   }));
 }
 

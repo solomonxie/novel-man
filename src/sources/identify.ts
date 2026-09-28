@@ -34,6 +34,14 @@ export type Candidate = {
   summary: string | null;
   /** Open Library only: the edition, for asking it the things a search omits. */
   edition: string | null;
+  /**
+   * What the catalog files it under. Not decoration: it is the only thing in
+   * a bibliographic record that says whether this is a story or an argument,
+   * which is what decides the sections a book's page gets. Messy by nature —
+   * one catalog's "Fiction" is another's "Fiction, general" — so it is read
+   * for the one distinction it reliably carries and never trusted further.
+   */
+  subjects: string[];
 };
 
 const OL_SEARCH = 'https://openlibrary.org/search.json';
@@ -88,6 +96,15 @@ function text(value: unknown): string | null {
 
 function firstString(value: unknown): string | null {
   return Array.isArray(value) ? text(value[0]) : text(value);
+}
+
+/** Every string in a catalog's list field, trimmed and without the blanks. */
+function strings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 /** `1997-06` and `June 1997` and `1997` are all the year, which is all we keep. */
@@ -196,6 +213,7 @@ export function candidatesFromOpenLibrary(payload: unknown): Candidate[] {
       cover: coverId ? olCover(coverId, 'L') : isbn ? olCoverByIsbn(isbn, 'L') : null,
       summary: null,
       edition: firstString(doc.edition_key),
+      subjects: strings(doc.subject),
     });
   }
   return found;
@@ -260,6 +278,7 @@ export function candidatesFromGoogleFeed(xml: string): Candidate[] {
       cover: thumb ? googleCover(thumb, 'full') : null,
       summary: allTagText(entry, 'dc:description')[0] ?? null,
       edition: null,
+      subjects: [],
     });
   }
   return found;
@@ -298,6 +317,7 @@ export function candidatesFromGoogle(payload: unknown): Candidate[] {
       cover: thumb ? googleCover(thumb, 'full') : null,
       summary: text(info.description),
       edition: null,
+      subjects: strings(info.categories),
     });
   }
   return found;
@@ -389,7 +409,11 @@ async function xml(url: string): Promise<string> {
   return response.text();
 }
 
-const OL_FIELDS = 'key,title,author_name,first_publish_year,cover_i,language,edition_key';
+// `isbn` was missing, so every Open Library row came back without the number
+// it is looked up by — and `subject` is what a kind can be guessed from. Both
+// ride the request that was already being made.
+const OL_FIELDS =
+  'key,title,author_name,first_publish_year,cover_i,language,edition_key,isbn,subject';
 
 /**
  * What the reader typed, asked of both catalogs at once. An ISBN is a lookup
