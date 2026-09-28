@@ -224,7 +224,12 @@
     "jumpNone": "这里还没有章节。",
     "jumpSearch": "搜索章节",
     "languageRow": "语言",
-    "languageHint": "这本书是用什么语言写的。所有 AI 结果都会用这个语言回答。"
+    "languageHint": "这本书是用什么语言写的。所有 AI 结果都会用这个语言回答。",
+    "addTextFile": "从文件添加正文",
+    "addTextWhat": "正文到位后就能开读。这条记录的其余信息不会改变。",
+    "addTextLink": "从链接添加正文",
+    "gettingText": "正在获取正文",
+    "gettingFailed": "没能获取"
   },
   "reader": {
     "go": "前往",

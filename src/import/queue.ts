@@ -47,12 +47,12 @@ type Listener = (jobs: ImportJob[]) => void;
  * is only who produces the book at the end of it.
  */
 export type QueuedSource =
-  | { via: 'file'; uri: string; name: string; kind?: string }
+  | { via: 'file'; uri: string; name: string; kind?: string; into?: string }
   | { via: 'ebible'; translation: Translation; apocrypha: boolean }
   | { via: 'repo'; edition: RepoEdition }
-  | { via: 'gutenberg'; book: GutenbergBook; kind?: string }
-  | { via: 'standardebooks'; book: StandardEbook; kind?: string }
-  | { via: 'arxiv'; paper: Paper; kind?: string }
+  | { via: 'gutenberg'; book: GutenbergBook; kind?: string; into?: string }
+  | { via: 'standardebooks'; book: StandardEbook; kind?: string; into?: string }
+  | { via: 'arxiv'; paper: Paper; kind?: string; into?: string }
   /** Not a book but a list of them: a source's whole catalog, kept for search. */
   | { via: 'catalog'; source: CatalogSource };
 
@@ -91,7 +91,17 @@ export function answerPreview(id: string, accepted: boolean) {
   gate(accepted);
 }
 
-export function enqueueImport(input: { uri: string; name: string; kind?: string }): string {
+/**
+ * `into` is the book these words belong to, already on the shelf. Every book
+ * starts as a record now and the manuscript follows, so most jobs here are
+ * filling one in rather than making one — see `saveImportedBook`.
+ */
+export function enqueueImport(input: {
+  uri: string;
+  name: string;
+  kind?: string;
+  into?: string;
+}): string {
   return enqueue({ ...input, via: 'file' }, input.name);
 }
 
@@ -105,16 +115,16 @@ export function enqueueRepoBible(edition: RepoEdition): string {
   return enqueue({ via: 'repo', edition }, edition.title);
 }
 
-export function enqueueGutenberg(book: GutenbergBook, kind?: string): string {
-  return enqueue({ via: 'gutenberg', book, kind }, book.title);
+export function enqueueGutenberg(book: GutenbergBook, kind?: string, into?: string): string {
+  return enqueue({ via: 'gutenberg', book, kind, into }, book.title);
 }
 
-export function enqueueStandardEbook(book: StandardEbook, kind?: string): string {
-  return enqueue({ via: 'standardebooks', book, kind }, book.title);
+export function enqueueStandardEbook(book: StandardEbook, kind?: string, into?: string): string {
+  return enqueue({ via: 'standardebooks', book, kind, into }, book.title);
 }
 
-export function enqueuePaper(paper: Paper, kind?: string): string {
-  return enqueue({ via: 'arxiv', paper, kind }, paper.title);
+export function enqueuePaper(paper: Paper, kind?: string, into?: string): string {
+  return enqueue({ via: 'arxiv', paper, kind, into }, paper.title);
 }
 
 /**
@@ -132,7 +142,11 @@ export function enqueueCatalogs(sources: CatalogSource[], name: (source: Catalog
 
 function enqueue(source: QueuedSource, name: string): string {
   const id = newId();
-  jobs.unshift({ id, name, status: 'pending', stage: null, fraction: 0 });
+  // A job that is filling a book already on the shelf says so from the start,
+  // not only once it has finished. That book's own page is where somebody is
+  // waiting for it, and it has to be able to find the job that is coming.
+  const into = 'into' in source ? source.into : undefined;
+  jobs.unshift({ id, name, status: 'pending', stage: null, fraction: 0, bookId: into });
   sources.set(id, source);
   publish();
   void drain();
@@ -239,7 +253,7 @@ async function runJob(job: ImportJob, source: QueuedSource): Promise<Produced> {
     // in a screen's state from whenever the list was last searched.
     const edition = await readGutenbergBook(source.book);
     const file = await fetchManuscript(edition.url, edition.fileName);
-    return importFrom({ ...file, kind: source.kind }, job);
+    return importFrom({ ...file, kind: source.kind, into: source.into }, job);
   }
 
   if (source.via === 'standardebooks') {
@@ -262,7 +276,7 @@ async function runJob(job: ImportJob, source: QueuedSource): Promise<Produced> {
       }
       throw problem;
     }
-    return importFrom({ ...file, kind: source.kind }, job);
+    return importFrom({ ...file, kind: source.kind, into: source.into }, job);
   }
 
   if (source.via === 'arxiv') {
@@ -273,7 +287,7 @@ async function runJob(job: ImportJob, source: QueuedSource): Promise<Produced> {
     const file = html
       ? saveDownload(paperFileName(source.paper, 'html'), html)
       : await fetchManuscript(source.paper.pdf, paperFileName(source.paper));
-    const result = await importFrom({ ...file, kind: source.kind }, job);
+    const result = await importFrom({ ...file, kind: source.kind, into: source.into }, job);
     // A PDF's first page is a guess at what the paper is called; arXiv is not.
     await updateBook(result.bookId, {
       title: source.paper.title,
@@ -314,7 +328,7 @@ async function runJob(job: ImportJob, source: QueuedSource): Promise<Produced> {
 type Produced = { bookId?: string; chapters?: number; kept?: number };
 
 /** Every path ends here: a file on disk, the preview gate, the same stages. */
-function importFrom(file: { uri: string; name: string; kind?: string }, job: ImportJob) {
+function importFrom(file: { uri: string; name: string; kind?: string; into?: string }, job: ImportJob) {
   return importFile(
     file,
     (progress) => {
