@@ -1,4 +1,5 @@
 import type { ChapterInsert } from '../db/repo';
+import { licensedAbbreviations } from '../sources/special';
 
 /**
  * How many chapters each book has, and what the books are called. Facts about
@@ -76,7 +77,25 @@ export function codeOf(book: string): string {
  * The 66 are the Protestant canon, so an edition carrying the deuterocanon is
  * not one of these, and is left to be asked about instead.
  */
-const EDITION = /\b(?:kjv|nkjv|niv|tniv|nasb|esv|nlt|nrsv|rsv|asv|csb|hcsb|web|ylt|net|erv|cev|gnt|amp)\b|\b(?:king james|new international|english standard|new living|new revised standard|revised standard|american standard|christian standard|good news|world english|young'?s literal)\b/i;
+/**
+ * The editions anyone may publish, which is why they are not in
+ * `licensedEditions` — that list is the ones nobody here can hand over, and
+ * between them the two cover every translation a title is likely to name.
+ */
+const FREELY_PUBLISHED = ['kjv', 'esv', 'asv', 'web', 'ylt', 'net', 'erv', 'darby'];
+
+/**
+ * A title that names a translation. Built from the two lists rather than
+ * written out, because the acronyms were in both places and a translation
+ * added to one would have gone missing from the other.
+ */
+const EDITION = new RegExp(
+  `\\b(?:${[...licensedAbbreviations, ...FREELY_PUBLISHED].join('|')})\\b` +
+    `|\\b(?:king james|new international|english standard|new living|new revised standard` +
+    `|revised standard|american standard|christian standard|good news|world english` +
+    `|young'?s literal)\\b`,
+  'i'
+);
 const WHOLE = /^(?:the\s+)?(?:holy\s+)?bible$|^(?:the\s+)?(?:old|new)\s+testament$/i;
 const WIDER_CANON = /\b(?:catholic|douay|rheims|nabre|jerusalem|orthodox|apocrypha|deuterocanon\w*|vulgate|septuagint)\b/i;
 

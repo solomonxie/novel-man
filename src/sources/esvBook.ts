@@ -2,6 +2,7 @@ import { saveRemoteBook } from '../db/repo';
 import { canonChapters, CHAPTERS } from '../scripture/canon';
 import { cachePassage, cachedPassage } from './passages';
 import { lookUpEsv, type Passage } from './esv';
+import { ESV_SOURCE, ESV_TITLE } from './special';
 
 /**
  * The ESV as a book on the shelf, with everything about it except its words.
@@ -13,8 +14,7 @@ import { lookUpEsv, type Passage } from './esv';
  * and permits nobody to redistribute it, so what this holds is a cache of what
  * has been read, bounded, and nothing else.
  */
-export const ESV_SOURCE = 'esv';
-export const ESV_TITLE = 'English Standard Version';
+export { ESV_SOURCE, ESV_TITLE } from './special';
 
 export async function addEsvBook(): Promise<string> {
   return saveRemoteBook({
