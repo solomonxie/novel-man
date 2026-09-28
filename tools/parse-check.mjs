@@ -55,7 +55,9 @@ const { blocksFromHtml, bytesFromBase64 } = await import(join(build, 'import/for
 const { papersFrom, queryFor, authorLine, fileNameFor: paperFileName, absolute } =
   await import(join(build, 'sources/arxiv.js'));
 const { quoteWithVerses, referenceOf, versesIn } = await import(join(build, 'scripture/reference.js'));
-const { escapeLike, looseLike, score } = await import(join(build, 'sources/matching.js'));
+const { escapeLike, looseLike, score, wordLike, isAcronym, hasWordBreaks } =
+  await import(join(build, 'sources/matching.js'));
+const { searchLicensed } = await import(join(build, 'sources/special.js'));
 const {
   candidatesFromGoogleFeed,
   cleanIsbn,
@@ -1958,6 +1960,82 @@ console.log('what is wrong with a book');
   check('a chapter problem is fixed where chapters are',
     fixFor('toc', 'x'), '/book/x/structure');
   check('and a missing author on the book itself', fixFor('details', 'x'), '/book/x');
+}
+
+console.log('finding a book by what it is called');
+{
+  const of = (title, author = '') => ({ title, author });
+  const niv = ['niv'];
+
+  // The whole reason any of this changed: `%niv%` is three thousand
+  // Universities, and the reader was asking about a bible.
+  check('a word beats the same letters inside one',
+    score(of('NIV Study Bible'), niv) > score(of('University Days'), niv), true);
+  check('and it is not close enough for a short title to close',
+    score(of('Univ'), niv) < score(of('The Bible, NIV'), niv), true);
+  check('an exact title wins outright',
+    score(of('NIV'), niv) > score(of('NIV Study Bible'), niv), true);
+  check('a match in the author counts',
+    score(of('Holy Bible', 'NIV'), niv) > score(of('University Days'), niv), true);
+  check('no match at all still scores something',
+    score(of('Middlemarch'), niv), 1);
+
+  check('a word is looked for where words start',
+    wordLike('niv'), ['niv%', '% niv%']);
+  check('and its wildcards are escaped', wordLike('100%')[0], '100\\%%');
+  check('three letters is an abbreviation', isAcronym(['niv']), true);
+  check('four still is', isAcronym(['kjv1']), true);
+  check('five is a word', isAcronym(['pride']), false);
+  check('and one long word among short ones is a word',
+    isAcronym(['the', 'prejudice']), false);
+
+  // What the loose pass is for, and the reason it still exists.
+  check('letters in order, gaps allowed', looseLike('abc'), '%a%b%c%');
+  check('a title is allowed an underscore', escapeLike('a_b'), 'a\\_b');
+}
+
+console.log('a language that is written without spaces');
+{
+  // eBible lists `cmn-cu89s` as 新标点和合本, and it is redistributable — so the
+  // edition was there all along. What was not there was any way to match it:
+  // 和合本 sits three characters in with no space in front of it, and at three
+  // characters the abbreviation rule cut off every fallback as well.
+  check('Han has no word breaks', hasWordBreaks('和合本'), false);
+  check('kana neither', hasWordBreaks('ひらがな'), false);
+  check('Hangul neither', hasWordBreaks('한국어'), false);
+  check('latin does', hasWordBreaks('niv'), true);
+  check('and a title with both is taken as unspaced',
+    hasWordBreaks('Biblica® 圣经当代译本'), false);
+
+  check('so it is looked for anywhere in the row',
+    wordLike('和合本'), ['%和合本%']);
+  check('three Han characters are a title, not initials',
+    isAcronym(['和合本']), false);
+  check('while three latin letters still are', isAcronym(['niv']), true);
+
+  const union = { title: '新标点和合本', author: 'Chinese Union Version (simplified)' };
+  const other = { title: '新译本', author: 'Chinese New Version (simplified)' };
+  check('the edition that carries it scores',
+    score(union, ['和合本']) > score(other, ['和合本']), true);
+  check('and one titled exactly that would win outright',
+    score({ title: '和合本', author: '' }, ['和合本']) > score(union, ['和合本']), true);
+  check('the language in its own name finds it too',
+    score({ title: '新标点和合本', author: '中文' }, ['中文']) > 1, true);
+}
+
+console.log('a bible nobody here may hand over');
+{
+  check('the abbreviation names it', searchLicensed('NIV')?.id, 'niv');
+  check('lower case too', searchLicensed('niv')?.id, 'niv');
+  check('its family counts as it', searchLicensed('nirv')?.id, 'niv');
+  check('so does the full name', searchLicensed('new international version')?.id, 'niv');
+  check('who holds it is part of the answer',
+    searchLicensed('nkjv')?.holder, 'Thomas Nelson');
+  // The ESV is licensed too, and is the one that can still be read — so it is
+  // a source with a page, not an explanation of why there is nothing.
+  check('the ESV is not one of these', searchLicensed('esv'), null);
+  check('nor is a book that merely rhymes', searchLicensed('nivea'), null);
+  check('and nothing typed names nothing', searchLicensed('  '), null);
 }
 
 console.log(failures ? `\n${failures} failing` : '\nall passing');

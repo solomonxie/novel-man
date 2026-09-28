@@ -1,6 +1,6 @@
 import { db, transaction } from '../db';
 import { yieldToUI } from '../async/yield';
-import { escapeLike, looseLike, score } from './matching';
+import { escapeLike, isAcronym, looseLike, score, wordLike } from './matching';
 
 /**
  * The index a source publishes, kept on the device — `apt update`, for books.
@@ -127,18 +127,26 @@ export async function keptIndexes(
 
 /**
  * Every word has to appear somewhere in the row — "austen pride" finds the one
- * book rather than everything by her and everything proud. Ordered by the
- * shortest title, because a search for `Emma` wants Emma and not `Emma, and
- * Other Early Works`.
+ * book rather than everything by her and everything proud.
  *
  * An empty query is not an empty answer: it is what the list already holds.
  * A search page that opens blank asks the reader to guess what is in it.
  *
- * Two passes, strict then loose. The strict one is a substring per word and
- * answers most searches on its own; the loose one asks only that the letters
- * appear in order, which is what finds `Prejudice` from "prejudce" and
- * `Nietzsche` from "nietzche" — the two ways anybody actually mistypes a name
- * they have only ever read.
+ * Three passes, narrowest first, and each only runs if the one before it came
+ * up short:
+ *
+ *  1. Where a word starts. This is what a reader means, and for a short word
+ *     it is the only thing they can mean.
+ *  2. Anywhere in the row, which is what finds a word inside a compound or a
+ *     hyphenation.
+ *  3. The letters in order, gaps allowed — what finds `Prejudice` from
+ *     "prejudce" and `Nietzsche` from "nietzche", the two ways anybody
+ *     mistypes a name they have only ever read.
+ *
+ * The last two are skipped entirely for an abbreviation. `NIV` under `%niv%`
+ * is three thousand Universities, and under letters-in-order it is most of the
+ * catalog — so a short word that matches no word matches nothing, and the page
+ * gets to say so instead of burying it.
  */
 export async function searchIndex(
   query: string,
@@ -147,23 +155,43 @@ export async function searchIndex(
 ): Promise<IndexedBook[]> {
   if (!sources.length) return [];
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const strict = await select(sources, terms.map((term) => `%${escapeLike(term)}%`), limit);
-  if (!terms.length || strict.length >= limit) return rank(strict, terms, limit);
+  if (!terms.length) return rank(await select(sources, [], limit), terms, limit);
 
-  const loose = await select(sources, terms.map(looseLike), limit);
-  const seen = new Set(strict.map((row) => `${row.source}-${row.extId}`));
-  return rank(
-    [...strict, ...loose.filter((row) => !seen.has(`${row.source}-${row.extId}`))],
-    terms,
-    limit
-  );
+  const whole = await select(sources, terms.map(wordLike), limit);
+  if (whole.length >= limit || isAcronym(terms)) return rank(whole, terms, limit);
+
+  const seen = new Set(whole.map(keyOf));
+  const inside = (await select(sources, terms.map((term) => [`%${escapeLike(term)}%`]), limit))
+    .filter((row) => !seen.has(keyOf(row)));
+  const found = [...whole, ...inside];
+  if (found.length >= limit) return rank(found, terms, limit);
+
+  for (const row of inside) seen.add(keyOf(row));
+  const loose = (await select(sources, terms.map((term) => [looseLike(term)]), limit))
+    .filter((row) => !seen.has(keyOf(row)));
+  return rank([...found, ...loose], terms, limit);
 }
 
-async function select(sources: string[], patterns: string[], limit: number): Promise<IndexedBook[]> {
+function keyOf(row: IndexedBook): string {
+  return `${row.source}-${row.extId}`;
+}
+
+/**
+ * One group of patterns per term, and a row has to satisfy one pattern from
+ * every group — "either spelling of this word, and then the next word too".
+ */
+async function select(
+  sources: string[],
+  groups: string[][],
+  limit: number
+): Promise<IndexedBook[]> {
   const database = await db();
   const where = [
     `source IN (${sources.map(() => '?').join(', ')})`,
-    ...patterns.map(() => "needle LIKE ? ESCAPE '\\'"),
+    ...groups.map(
+      (alternatives) =>
+        `(${alternatives.map(() => "needle LIKE ? ESCAPE '\\'").join(' OR ')})`
+    ),
   ].join(' AND ');
   const rows = await database.getAllAsync<{
     source: string;
@@ -178,7 +206,7 @@ async function select(sources: string[], patterns: string[], limit: number): Pro
       WHERE ${where}
       ORDER BY length(title)
       LIMIT ?`,
-    [...sources, ...patterns, limit * 4]
+    [...sources, ...groups.flat(), limit * 4]
   );
   return rows.map((row) => ({
     source: row.source,
