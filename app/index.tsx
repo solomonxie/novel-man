@@ -33,7 +33,7 @@ import { CloudSettings } from '../src/settings/Cloud';
 import { setUiLanguage, SUPPORTED, type UiLanguage } from '../src/i18n';
 import { QueueSheet, QueueStrip } from '../src/ui/ImportQueue';
 import { PickerSheet } from '../src/ui/PickerSheet';
-import { SearchBar } from '../src/ui/SearchBar';
+import { SearchBar, SEARCH_BAR_HEIGHT, searchBarOffset } from '../src/ui/SearchBar';
 import { openWorkQueue, useWorkFeed } from '../src/ui/WorkQueue';
 import { resumeWorkOnLaunch } from '../src/work/queue';
 import { useWorkRefresh } from '../src/work/refresh';
@@ -206,7 +206,7 @@ export default function Home() {
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }} edges={['top']}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: space.xxl }}
+        contentContainerStyle={{ paddingBottom: SEARCH_BAR_HEIGHT + space.xxl }}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
       >
@@ -435,12 +435,14 @@ export default function Home() {
         )}
       </ScrollView>
 
-      {/* The way in to both things somebody opens this app to do — and the
-          same bar the page it opens is wearing, so tapping one becomes the
-          other rather than replacing it. */}
+      {/* The way in to both things somebody opens this app to do, floating
+          where the thumb already is — and the same pill the page it opens is
+          wearing, so tapping one becomes the other rather than replacing it.
+          The shelf carries on underneath it, which is what says there is more
+          of it down there. */}
       <SearchBar
         placeholder={t('find.placeholder')}
-        bottom={insets.bottom}
+        bottom={searchBarOffset(insets.bottom)}
         onPress={() => router.push('/find')}
       />
 
