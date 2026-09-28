@@ -183,6 +183,36 @@ export async function keptIndexes(
   return rows.map((row) => ({ source: row.source, fetchedAt: row.fetched_at, count: row.count }));
 }
 
+export async function searchIndex(
+  query: string,
+  sources: string[],
+  limit = 50
+): Promise<IndexedBook[]> {
+  if (!sources.length) return [];
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (sources.length === 1) return within(sources, terms, limit);
+
+  /**
+   * A budget per list rather than one pool for all of them.
+   *
+   * Gutenberg holds 78,000 rows and eBible 1,286, so on any common word
+   * Gutenberg took the whole limit and eBible's three matches never appeared
+   * — while the page went on printing a heading for each source, implying
+   * every one of them had been given a hearing. The rows scanned are the same
+   * either way: the primary key leads with `source`, so a query per list
+   * reads exactly the rows that list owns.
+   */
+  const share = Math.max(PER_SOURCE, Math.ceil(limit / sources.length));
+  const found = await Promise.all(sources.map((source) => within([source], terms, share)));
+  return rank(found.flat(), terms, limit);
+}
+
+/**
+ * Enough of a list to be worth a heading. Below this a source that genuinely
+ * has the book looks like one that nearly does.
+ */
+const PER_SOURCE = 6;
+
 /**
  * Every word has to appear somewhere in the row — "austen pride" finds the one
  * book rather than everything by her and everything proud.
@@ -206,13 +236,11 @@ export async function keptIndexes(
  * catalog — so a short word that matches no word matches nothing, and the page
  * gets to say so instead of burying it.
  */
-export async function searchIndex(
-  query: string,
+async function within(
   sources: string[],
-  limit = 50
+  terms: string[],
+  limit: number
 ): Promise<IndexedBook[]> {
-  if (!sources.length) return [];
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (!terms.length) return rank(await select(sources, [], limit), terms, limit);
 
   const whole = await select(sources, terms.map(wordLike), limit);

@@ -2027,6 +2027,18 @@ console.log('finding a book by what it is called');
   check('a title is allowed an underscore', escapeLike('a_b'), 'a\\_b');
 }
 
+console.log('a query that reaches more than one list');
+{
+  // Gutenberg holds 78,000 rows and eBible 1,286. Pooling one limit across
+  // both meant the big list took all of it on any common word, while the page
+  // went on printing a heading per source as though each had been heard.
+  const budget = (limit, lists) => Math.max(6, Math.ceil(limit / lists));
+  check('two lists split the limit', budget(50, 2), 25);
+  check('five lists still get a hearing each', budget(50, 5), 10);
+  check('and a list never drops below a headingful', budget(50, 20), 6);
+  check('one list keeps the whole limit', budget(50, 1), 50);
+}
+
 console.log('a language that is written without spaces');
 {
   // eBible lists `cmn-cu89s` as 新标点和合本, and it is redistributable — so the
