@@ -836,4 +836,11 @@ export const migrations: string[] = [
      SELECT 1 FROM chapters c
       WHERE c.book_id = part_names.book_id AND c.part_idx = part_names.part_idx
    )`,
+
+  // A published record this device has seen, kept whole. The columns beside
+  // it hold what a row is searched and shown by; this holds the rest of what
+  // the catalog said — the number, the cover, the summary — so a book looked
+  // up once can be added again on a plane. Empty for every fetched list,
+  // which is why it is a column rather than a table.
+  `ALTER TABLE catalog ADD COLUMN payload TEXT;`,
 ];

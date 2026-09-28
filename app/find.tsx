@@ -13,19 +13,20 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { router, Stack, useFocusEffect } from '../src/navigation/router';
 
 import { listBooks, type BookListItem } from '../src/db/repo';
-import { addChoice, addTyped } from '../src/books/add';
+import { addCandidate, addChoice, addTyped } from '../src/books/add';
+import { findBook, isIsbn, type Candidate, type CatalogReport } from '../src/sources/identify';
+import { googleBooksKey } from '../src/sources/googleBooksKey';
+import { rememberSeen, seenCandidate, SEEN } from '../src/sources/seen';
 import { NO_RESULTS, rankBook, searchLibrary, type LibraryResults } from '../src/search/library';
 import { keptCatalogs, searchIndex, type IndexedBook } from '../src/sources/catalog';
 import { publicSources, type PublicSource } from '../src/sources/registry';
-import { takeChoice, type Choice } from '../src/sources/chosen';
-import { bookFromIndex } from '../src/sources/gutenberg';
-import { bookFromIndex as standardEbookFromIndex } from '../src/sources/standardEbooks';
-import { readCatalog } from '../src/sources/ebible';
-import { workOf } from '../src/sources/openLibrary';
+import { choiceFromIndex, takeChoice, type Choice } from '../src/sources/chosen';
 import { ESV_TITLE, searchLicensed, searchSpecial } from '../src/sources/special';
+import { forgetSearches, recentSearches, remember } from '../src/search/history';
 
 import { esvKey } from '../src/sources/esvKey';
 import { standardEbooksEmail } from '../src/sources/standardEbooksEmail';
@@ -39,7 +40,7 @@ import { ConfirmAdd } from '../src/ui/AddSheets';
 import { BookLine } from '../src/ui/BookLine';
 import { HitCard, toRow, type ResultRow } from '../src/ui/HitCard';
 import { Row, Section } from '../src/ui/primitives';
-import { SearchBar, SEARCH_BAR_HEIGHT, searchBarOffset } from '../src/ui/SearchBar';
+import { SearchBar, SearchGlass, SEARCH_BAR_HEIGHT, searchBarOffset } from '../src/ui/SearchBar';
 import { SourceRows } from '../src/ui/SourceRows';
 import { useKeyboardLift } from '../src/ui/keyboard';
 import { radius, space, usePalette } from '../src/theme';
@@ -72,8 +73,22 @@ type Line =
   | { key: string; kind: 'hit'; row: ResultRow }
   | { key: string; kind: 'row'; label: string; detail?: string; value?: string; onPress: () => void };
 
-/** Long enough that a scan of every manuscript on the device is worth starting. */
+/**
+ * Long enough that a scan of every manuscript on the device is worth starting.
+ */
 const SETTLE = 220;
+
+/**
+ * And longer again before anybody's server is asked — long enough that typing
+ * a title does not fire a request per word. The lists on the device answer
+ * while this is still waiting, which is the order a reader wants anyway: what
+ * you have, then what exists.
+ *
+ * Nothing on screen waits for it. The shelf answers from memory on the
+ * keystroke itself, the kept lists a breath later, and the catalogs fill in
+ * underneath as they reply.
+ */
+const REACH = 650;
 
 /** Past this, a kept list has had time to fall behind what the source publishes. */
 const STALE_DAYS = 90;
@@ -112,11 +127,18 @@ export default function Find() {
   const [emailed, setEmailed] = useState(false);
   const [keyed, setKeyed] = useState(false);
   const [choice, setChoice] = useState<Choice | null>(null);
+  /** What the catalogs say the book *is*, as opposed to where to get it. */
+  const [named, setNamed] = useState<Candidate[]>([]);
+  const [catalogs, setCatalogs] = useState<CatalogReport[]>([]);
+  const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   /** Queued for an update, until the queue says otherwise. */
   const [updating, setUpdating] = useState<string[]>([]);
   /** The one source that wants a credential before its list is worth fetching. */
   const [settingUp, setSettingUp] = useState<PublicSource | null>(null);
+  /** What has been looked for before, and which shelf of sources is open. */
+  const [recent, setRecent] = useState<string[]>([]);
+  const [opened, setOpened] = useState<'available' | 'waiting' | null>(null);
 
   const readSources = useCallback(() => {
     keptCatalogs().then(setKept).catch(() => undefined);
@@ -131,6 +153,7 @@ export default function Find() {
     // editions — hands its pick back by leaving it here on the way out.
     const taken = takeChoice();
     if (taken) setChoice(taken);
+    recentSearches().then(setRecent).catch(() => undefined);
   }, [readSources]);
 
   useFocusEffect(load);
@@ -152,6 +175,7 @@ export default function Find() {
     // Open Library keeps a list per category — `openlibrary:fiction` and a
     // dozen siblings — and to the board they are one source with one total.
     for (const row of kept) {
+      if (row.source === SEEN) continue;
       const base = row.source.split(':')[0];
       const found = byId.get(base);
       byId.set(base, {
@@ -162,7 +186,13 @@ export default function Find() {
     return byId;
   }, [kept]);
 
-  const held = useMemo(() => kept.reduce((total, row) => total + row.count, 0), [kept]);
+  const held = useMemo(
+    () =>
+      kept
+        .filter((row) => row.source !== SEEN)
+        .reduce((total, row) => total + row.count, 0),
+    [kept]
+  );
 
   /** Everything a search could reach, each as the one row that says where it stands. */
   const cards = useMemo<SourceCard[]>(() => {
@@ -259,9 +289,37 @@ export default function Find() {
   }, [books, query]);
 
   const specials = useMemo(() => searchSpecial(query), [query]);
+
+  /**
+   * A kept list either records what a book is or hands over its words, and
+   * those are different answers to different questions. Open Library is the
+   * first; everything else kept here is the second.
+   */
+  const works = useMemo(
+    () =>
+      hits.filter((hit) => {
+        const base = hit.source.split(':')[0];
+        return base === 'openlibrary' || base === SEEN;
+      }),
+    [hits]
+  );
+  const texts = useMemo(
+    () =>
+      hits.filter((hit) => {
+        const base = hit.source.split(':')[0];
+        return base !== 'openlibrary' && base !== SEEN;
+      }),
+    [hits]
+  );
   /** Named, and not ours to give — see `licensedEditions`. */
   const licensed = useMemo(() => searchLicensed(query), [query]);
-  const sources = useMemo(() => kept.map((row) => row.source), [kept]);
+  /**
+   * Which lists a query goes to, as a value rather than an array — the search
+   * below depends on it, and a fresh array of the same names every time the
+   * catalogs are re-read would re-run a scan of every manuscript for nothing.
+   */
+  const sourceKey = useMemo(() => kept.map((row) => row.source).sort().join(','), [kept]);
+  const sources = useMemo(() => (sourceKey ? sourceKey.split(',') : []), [sourceKey]);
 
   // Everything else is a query per keystroke, so it waits for a pause: one is
   // a scan of every short column in the library, the other of every word of
@@ -281,6 +339,91 @@ export default function Find() {
   }, [query, sources]);
 
   /**
+   * Published books of this name, asked of the catalogs that record them.
+   *
+   * This is the front door of adding a book now. What a reader types is a
+   * name, and what should come back is the work — the book as published,
+   * whoever wrote it and whenever it came out — rather than a file somebody
+   * happens to be able to supply. Those are two different questions and only
+   * this one has an answer for every book.
+   *
+   * A number typed instead of a name is the same question with no ambiguity
+   * in it, so it goes straight out rather than waiting for the pause that
+   * guards against searching on a half-typed word.
+   */
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 3) {
+      setNamed([]);
+      setCatalogs([]);
+      return;
+    }
+    let live = true;
+    setAsking(true);
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const found = await findBook(term, { googleKey: await googleBooksKey() });
+          if (!live) return;
+          setNamed(found.candidates);
+          setCatalogs(found.catalogs);
+          // Written down on the way past, so the same book answers without a
+          // request next time — and on a plane.
+          //
+          // Nothing is re-read afterwards, deliberately. Refreshing the kept
+          // lists here changed `sources`, which is what the local search
+          // depends on, which re-ran a scan of every manuscript on the device
+          // a second after the first one finished. The cache is for the next
+          // query; this one already has its answer on screen.
+          void rememberSeen(found.candidates).catch(() => undefined);
+        } catch {
+          // Both catalogs unreachable. Keeping that as a report rather than
+          // an empty list is the difference between "no such book" and "no
+          // signal", and offline they are very different sentences.
+          if (live) {
+            setNamed([]);
+            setCatalogs([
+              { source: 'openlibrary', answered: false, found: 0 },
+              { source: 'google', answered: false, found: 0 },
+            ]);
+          }
+        } finally {
+          if (live) setAsking(false);
+        }
+      })();
+    }, isIsbn(term) ? 0 : REACH);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  /** A work chosen by name: the record goes on the shelf, the words follow. */
+  async function name(candidate: Candidate) {
+    setBusy(true);
+    keep();
+    try {
+      const route = await addCandidate(candidate);
+      setBusy(false);
+      router.back();
+      router.push(route);
+    } catch (problem) {
+      setBusy(false);
+      Alert.alert(t('import.failed'), String(problem));
+    }
+  }
+
+  /**
+   * A query somebody did something with, which is the only kind worth
+   * keeping. Recording every settled keystroke would fill the list with the
+   * prefixes of one search.
+   */
+  function keep() {
+    const asked = query.trim();
+    if (asked) void remember(asked).then(setRecent);
+  }
+
+  /**
    * Onto the shelf, and out of the way: the page that follows is the answer,
    * so this one goes. A frame first — this is called from inside a native
    * modal, and popping the screen under one in the same frame it is told to
@@ -297,20 +440,16 @@ export default function Find() {
 
   /** A catalog hit, taken up — as a choice, which is what every source hands over. */
   function take(hit: IndexedBook) {
-    const base = hit.source.split(':')[0];
-    if (base === 'gutenberg') setChoice({ source: 'gutenberg', book: bookFromIndex(hit) });
-    else if (base === 'standardebooks') {
-      setChoice({ source: 'standardebooks', book: standardEbookFromIndex(hit) });
-    } else if (base === 'openlibrary') setChoice({ source: 'openlibrary', work: workOf(hit) });
-    else {
-      const translation = readCatalog()?.translations.find((entry) => entry.id === hit.extId);
+    const picked = choiceFromIndex(hit);
+    if (!picked) {
       // The index knows this edition and the file describing it is gone — a
       // restore can bring one back without the other. Fetching the list again
       // writes both.
-      if (!translation) return update('ebible');
-      setChoice({ source: 'ebible', translation });
+      return update('ebible');
     }
+    setChoice(picked);
     Keyboard.dismiss();
+    keep();
   }
 
   async function confirm(picked: Choice, options: { apocrypha: boolean }) {
@@ -342,6 +481,69 @@ export default function Find() {
     if (shelf.length) {
       head('shelf', t('find.onShelf', { count: shelf.length }));
       for (const book of shelf) flat.push({ key: `book-${book.id}`, kind: 'book', book });
+    }
+
+    /**
+     * What the book *is*, before what is inside anything. Somebody typing a
+     * title is naming a work, and the catalogs of published books are who
+     * knows works.
+     *
+     * Two sources, one tier. A subject list kept on this device is a list of
+     * published records — the same kind of thing the network returns, only
+     * already here — so it answers instantly and without a request, and what
+     * comes back over the wire fills in behind it. These were separate
+     * sections until now, with the local ones filed under "text from Open
+     * Library", which is a heading for a catalog that hands over no text.
+     */
+    // One catalog writes "Jane Austen" and the other "Austen, Jane", so the
+    // author's words are sorted before they are compared and the punctuation
+    // between them is dropped. An ISBN, where both have one, is better than
+    // any of that and is checked first.
+    const already = new Set(works.map(sameBook));
+    const numbers = new Set(
+      works.map((row) => seenCandidate(row)?.isbn).filter((isbn): isbn is string => Boolean(isbn))
+    );
+    const fresh = named.filter(
+      (candidate) =>
+        !(candidate.isbn && numbers.has(candidate.isbn)) && !already.has(sameBook(candidate))
+    );
+    if (works.length || fresh.length || asking) {
+      // A heading reading "Published books (0)" over nothing, for the second
+      // the catalogs take to answer, is a section saying it found none — and
+      // then contradicting itself. While there is nothing yet it says what it
+      // is doing instead of counting it.
+      const none = works.length + fresh.length === 0;
+      head(
+        'named',
+        none && asking ? t('find.lookingUp') : t('find.named', { count: works.length + fresh.length }),
+        none && asking ? undefined : asking ? t('find.asking') : refused(catalogs, t)
+      );
+      for (const row of works) {
+        const remembered = row.source === SEEN ? seenCandidate(row) : null;
+        flat.push({
+          key: `work-${row.source}-${row.extId}`,
+          kind: 'row',
+          label: row.title,
+          detail:
+            [row.author, remembered?.year, remembered?.isbn ?? row.language]
+              .filter(Boolean)
+              .join(' · ') || undefined,
+          value: t('find.keepIt'),
+          onPress: () => (remembered ? void name(remembered) : take(row)),
+        });
+      }
+      for (const candidate of fresh) {
+        flat.push({
+          key: `named-${candidate.id}`,
+          kind: 'row',
+          label: candidate.title,
+          detail:
+            [candidate.author, candidate.year, candidate.isbn].filter(Boolean).join(' · ') ||
+            undefined,
+          value: t('find.keepIt'),
+          onPress: () => void name(candidate),
+        });
+      }
     }
 
     const found: Record<string, ResultRow[]> = {
@@ -393,14 +595,14 @@ export default function Find() {
     // what tells you whether a row is a book you can read or a record to
     // keep notes on.
     const byCatalog = new Map<string, IndexedBook[]>();
-    for (const hit of hits) {
+    for (const hit of texts) {
       const base = hit.source.split(':')[0];
       const found = byCatalog.get(base);
       if (found) found.push(hit);
       else byCatalog.set(base, [hit]);
     }
     for (const [base, rows] of byCatalog) {
-      head(`catalog-${base}`, `${t(`source.${base}`)} · ${rows.length}`);
+      head(`catalog-${base}`, t('find.textFrom', { source: t(`source.${base}`) , count: rows.length }));
       for (const hit of rows) {
         flat.push({
           key: `hit-${hit.source}-${hit.extId}`,
@@ -421,7 +623,10 @@ export default function Find() {
       label: t('find.keepTyped', { title: term }),
       detail: t('find.keepTypedWhy'),
       value: '›',
-      onPress: () => void addTyped(term).then(leaveFor),
+      onPress: () => {
+        keep();
+        void addTyped(term).then(leaveFor);
+      },
     });
     for (const source of online) {
       flat.push({
@@ -449,26 +654,49 @@ export default function Find() {
     return flat;
     // The handlers read only state these already depend on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shelf, results, hits, specials, licensed, online, waiting, query, t]);
+  }, [shelf, named, asking, catalogs, results, works, texts, specials, licensed, online, waiting, query, t]);
 
   const typed = query.trim().length > 0;
 
-  function board(title: string, flush: boolean, rows: SourceCard[]) {
-    if (!rows.length) return null;
-    return (
-      <Section title={title} flush={flush}>
-        {rows.map((card, index) => (
-          <Row
-            key={card.id}
-            label={card.label}
-            detail={card.detail}
-            value={card.value}
-            onPress={card.onPress}
-            last={index === rows.length - 1}
-          />
-        ))}
-      </Section>
-    );
+  /**
+ * Whether two rows are the same book, across catalogs that disagree about how
+ * to write a name. Not an identity — two editions of one work collapse into
+ * one row here, which in a list of works is the right answer anyway.
+ */
+function sameBook(row: { title: string; author?: string | null }): string {
+  const words = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+  return `${words(row.title).join(' ')}|${words(row.author ?? '').sort().join(' ')}`;
+}
+
+/**
+ * A catalog that refused, said out loud. Both of them answering with nothing
+ * means the book is not in either; one of them refusing means half the search
+ * did not run, and "no results" would be a lie about a book that is in there.
+ */
+function refused(catalogs: CatalogReport[], t: TFunction): string | undefined {
+  const quiet = catalogs.filter((report) => !report.answered);
+  if (!quiet.length || quiet.length === catalogs.length) return undefined;
+  return t('find.catalogQuiet', {
+    catalogs: quiet.map((report) => t(`identify.catalog_${report.source}`)).join(' · '),
+  });
+}
+
+/** The rows inside a folded group; the group owns the card around them. */
+  function rows(cards: SourceCard[]) {
+    return cards.map((card) => (
+      <Row
+        key={card.id}
+        label={card.label}
+        detail={card.detail}
+        value={card.value}
+        onPress={card.onPress}
+      />
+    ));
   }
 
   return (
@@ -518,7 +746,10 @@ export default function Find() {
                   <BookLine
                     book={item.book}
                     last
-                    onPress={() => router.push(`/book/${item.book.id}`)}
+                    onPress={() => {
+                      keep();
+                      router.push(`/book/${item.book.id}`);
+                    }}
                   />
                 ) : (
                   <Row
@@ -534,39 +765,83 @@ export default function Find() {
           }
         />
       ) : (
-        <>
-          {/* What this box can actually reach, said before it is typed into.
-              Fixed rather than scrolled: it is the page's statement of itself,
-              the way the shelf's count is, and it does not move. */}
-          <View style={[styles.masthead, { borderColor: palette.border }]}>
-            <Text style={[styles.mastheadTitle, { color: palette.text }]}>
-              {t('find.sourcesTitle')}
-            </Text>
-            <Text style={{ color: palette.dim, fontSize: 14, marginTop: 2 }}>
-              {held ? t('find.sourcesHeld', { count: held }) : t('find.sourcesNone')}
-            </Text>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: space.lg, paddingBottom: SEARCH_BAR_HEIGHT + space.xxl }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* What the box does, said once and plainly. This page is empty
+              until somebody types, and an empty page that explains itself is
+              worth more than one listing machinery nobody came for. */}
+          <View style={[styles.tip, { backgroundColor: palette.soft }]}>
+            <SearchGlass color={palette.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: palette.accent, fontSize: 16, fontWeight: '600' }}>
+                {t('find.tipTitle')}
+              </Text>
+              <Text style={{ color: palette.dim, fontSize: 13, lineHeight: 19, marginTop: 4 }}>
+                {t('find.tipBody')}
+              </Text>
+            </View>
           </View>
 
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{ padding: space.lg, paddingBottom: SEARCH_BAR_HEIGHT + space.xxl }}
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* Flush only for whichever comes first: a section's own top
-                margin under the masthead reads as a gap nobody left. */}
-            {board(t('find.available'), true, available)}
-            {board(t('find.toUpdate'), available.length === 0, waiting)}
-          </ScrollView>
-        </>
+          {/* Folded. These are the plumbing behind the box, and most openings
+              of this page want nothing to do with them — but the count on the
+              row is the answer to "why did my search find nothing", so it is
+              said without having to be opened for. */}
+          <Section flush>
+            <Row
+              label={t('find.availableSources')}
+              detail={held ? t('find.sourcesHeld', { count: held }) : t('find.sourcesNone')}
+              value={`${available.length}  ${opened === 'available' ? '⌃' : '⌄'}`}
+              onPress={() => setOpened(opened === 'available' ? null : 'available')}
+              last={opened !== 'available' && waiting.length === 0}
+            />
+            {opened === 'available' ? rows(available) : null}
+            {waiting.length ? (
+              <>
+                <Row
+                  label={t('find.toUpdateSources')}
+                  detail={t('find.toUpdateWhy')}
+                  value={`${waiting.length}  ${opened === 'waiting' ? '⌃' : '⌄'}`}
+                  onPress={() => setOpened(opened === 'waiting' ? null : 'waiting')}
+                  last={opened !== 'waiting'}
+                />
+                {opened === 'waiting' ? rows(waiting) : null}
+              </>
+            ) : null}
+          </Section>
+
+          {recent.length ? (
+            <Section
+              title={t('find.recent')}
+              action={{
+                label: t('find.forget'),
+                onPress: () => void forgetSearches().then(() => setRecent([])),
+              }}
+            >
+              {recent.map((asked, index) => (
+                <Row
+                  key={asked}
+                  label={asked}
+                  value="↖"
+                  onPress={() => setQuery(asked)}
+                  last={index === recent.length - 1}
+                />
+              ))}
+            </Section>
+          ) : null}
+        </ScrollView>
       )}
 
-      {/* It rides the keyboard up rather than being covered by it, and the
-          page above gives up exactly that much room — a margin rather than a
-          transform, so what is left is still scrollable to its end. */}
+      {/* It rides the keyboard up rather than being covered by it: the same
+          gap it already keeps off the bottom edge, plus however far the
+          keyboard has come. */}
       <SearchBar
         value={query}
         onChange={setQuery}
         placeholder={t('find.placeholder')}
+        onSubmit={keep}
         bottom={Animated.add(lift, searchBarOffset(insets.bottom))}
         autoFocus
       />
@@ -620,13 +895,13 @@ const styles = StyleSheet.create({
     marginTop: space.lg,
     marginBottom: space.sm,
   },
-  masthead: {
-    paddingHorizontal: space.lg,
-    paddingTop: space.md,
-    paddingBottom: space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  tip: {
+    flexDirection: 'row',
+    gap: space.md,
+    padding: space.md,
+    borderRadius: radius.md,
+    marginBottom: space.lg,
   },
-  mastheadTitle: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
   card: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,

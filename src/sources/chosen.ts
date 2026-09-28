@@ -1,9 +1,11 @@
-import type { GutenbergBook } from './gutenberg';
-import type { StandardEbook } from './standardEbooks';
+import { bookFromIndex, type GutenbergBook } from './gutenberg';
+import { bookFromIndex as standardEbookFromIndex, type StandardEbook } from './standardEbooks';
 import type { Paper } from './arxiv';
 import type { Translation } from './ebible';
 import type { RepoEdition } from './repoBible';
-import type { Work } from './openLibrary';
+import { workOf, type Work } from './openLibrary';
+import { readCatalog } from './ebible';
+import type { IndexedBook } from './catalog';
 
 /**
  * What the reader picked on a find page, on its way back to the Add page. It
@@ -38,4 +40,25 @@ export function takeChoice(): Choice | null {
   const choice = held;
   held = null;
   return choice;
+}
+
+/**
+ * A row out of a kept list, as the thing every source hands over.
+ *
+ * Open Library keeps a list per category, so a kept source is
+ * `openlibrary:fiction` and the source it belongs to is the part before the
+ * colon. A bible is the one that can come back null: the index knows the
+ * edition and the catalog file describing it can be missing — a restore
+ * brings one back without the other — and there is nothing to choose until
+ * that list is fetched again.
+ */
+export function choiceFromIndex(hit: IndexedBook): Choice | null {
+  const base = hit.source.split(':')[0];
+  if (base === 'gutenberg') return { source: 'gutenberg', book: bookFromIndex(hit) };
+  if (base === 'standardebooks') {
+    return { source: 'standardebooks', book: standardEbookFromIndex(hit) };
+  }
+  if (base === 'openlibrary') return { source: 'openlibrary', work: workOf(hit) };
+  const translation = readCatalog()?.translations.find((entry) => entry.id === hit.extId);
+  return translation ? { source: 'ebible', translation } : null;
 }
