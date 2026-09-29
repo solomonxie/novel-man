@@ -44,6 +44,8 @@
     "title": "查书目",
     "hint": "封面、书名、作者、出版年和 ISBN，来自 Open Library 与 Google Books。",
     "search": "搜索",
+    "byIsbn": "按 ISBN",
+    "byTitle": "按书名",
     "placeholder": "书名、作者或 ISBN",
     "what": "封面和书目信息来自 Open Library 和 Google Books。选中一项会填入封面、书名、作者、出版年和 ISBN。",
     "none": "没有结果。可以写全书名，或加上作者。",
@@ -592,7 +594,8 @@
     "notABundle": "这不是 Novel Man 的备份文件。",
     "tooNew": "该备份来自更新的版本（v{{version}}），请先升级应用。",
     "aboutUnknown": "这是旧版本写的备份，没有记录里面有什么。恢复仍然可用。",
-    "aboutEmpty": "里面是空的。"
+    "aboutEmpty": "里面是空的。",
+    "repaired": "已把 {{count}} 张丢失的封面补回书架上原有的书。"
   },
   "copies": {
     "title": "你的副本",
@@ -636,7 +639,9 @@
   },
   "covers": {
     "sweptTitle": "有 {{count}} 张封面其实不是封面",
-    "sweptWhat": "它们其实是 Google 的「图片不可用」占位图，早先的查询误存了下来。现在这些书恢复成自己的色块了——再查一次就能拿到真正的封面。\n\n{{titles}}"
+    "sweptWhat": "它们其实是 Google 的「图片不可用」占位图，早先的查询误存了下来。现在这些书恢复成自己的色块了——再查一次就能拿到真正的封面。\n\n{{titles}}",
+    "lostTitle": "有 {{count}} 张封面的图片文件丢失了",
+    "lostWhat": "这些书的封面图片已不在本机，所以它们恢复成了自己的色块。可以再查一次封面，或者从仍有这些图片的备份恢复——恢复会把图片补回你已有的书上，不会新增副本。\n\n{{titles}}"
   },
   "trash": {
     "title": "最近删除",

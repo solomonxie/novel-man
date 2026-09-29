@@ -144,9 +144,16 @@ export function RestoreOffer({ onRestored }: { onRestored: () => void }) {
       const about = readAbout(bytes);
       const report = await restoreBundle(openBundle(bytes), { settings: true });
       onRestored();
+      // Pictures put back on books already here are not in any count of
+      // restored books, and are the whole of what happened when a backup is
+      // reached for because the covers went blank.
+      const said = [
+        about ? t('safe.cameBack', { notes: about.notes, chapters: about.chapters }) : '',
+        report.repaired.length ? t('backup.repaired', { count: report.repaired.length }) : '',
+      ].filter(Boolean);
       Alert.alert(
         t('backup.restored', { count: report.restored.length }),
-        about ? t('safe.cameBack', { notes: about.notes, chapters: about.chapters }) : undefined
+        said.length ? said.join('\n\n') : undefined
       );
     } catch (problem) {
       Alert.alert(t('backup.failed'), String(problem));

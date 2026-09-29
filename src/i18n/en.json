@@ -44,6 +44,8 @@
     "title": "Lookup",
     "hint": "Cover, title, author, year and ISBN, from Open Library and Google Books.",
     "search": "Search",
+    "byIsbn": "By ISBN",
+    "byTitle": "By title",
     "placeholder": "Title, author, or ISBN",
     "what": "Search Open Library and Google Books. Pick a result to fill in the cover, title, author, year and ISBN.",
     "none": "No results. Try the full title, or add the author’s name.",
@@ -592,7 +594,8 @@
     "notABundle": "That isn’t a Novel Man backup.",
     "tooNew": "This backup was made by a newer version (v{{version}}). Update the app first.",
     "aboutUnknown": "Written by an older version, which didn’t record what was in it. Restoring still works.",
-    "aboutEmpty": "Nothing in it."
+    "aboutEmpty": "Nothing in it.",
+    "repaired": "Put {{count}} missing covers back on books already on your shelf."
   },
   "copies": {
     "title": "Your copies",
@@ -636,7 +639,9 @@
   },
   "covers": {
     "sweptTitle": "{{count}} covers were not covers",
-    "sweptWhat": "These were wearing Google’s “image not available” picture, which an older lookup kept by mistake. They are back to their own tiles — look one up again for a real cover.\n\n{{titles}}"
+    "sweptWhat": "These were wearing Google’s “image not available” picture, which an older lookup kept by mistake. They are back to their own tiles — look one up again for a real cover.\n\n{{titles}}",
+    "lostTitle": "{{count}} covers have lost their files",
+    "lostWhat": "Their picture files are no longer on this device, so these books are back to their own tiles. Look one up again, or restore a backup that still holds them — a restore puts pictures back on books you already have, without adding copies.\n\n{{titles}}"
   },
   "trash": {
     "title": "Recently deleted",
