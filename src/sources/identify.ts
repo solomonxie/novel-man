@@ -410,26 +410,26 @@ const PATIENCE_MS = 5000;
 async function within(url: string, accept: string, signal?: AbortSignal): Promise<Response> {
   const stop = new AbortController();
   const timer = setTimeout(() => stop.abort(), PATIENCE_MS);
-  try {
-    const response = await fetch(url, { headers: { accept }, signal: stop.signal });
-    if (!response.ok) throw new HttpError(response.status);
-    return response;
-  } finally {
-    clearTimeout(timer);
-  }
   // The caller's own reason to stop — the search was abandoned, the screen
   // left — on top of the deadline. A request nobody is waiting for should not
   // go on holding the radio for the five seconds it was allowed.
   const give = () => stop.abort();
   if (signal?.aborted) give();
   signal?.addEventListener('abort', give);
+  try {
+    const response = await fetch(url, { headers: { accept }, signal: stop.signal });
+    if (!response.ok) throw new HttpError(response.status);
+    return response;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', give);
+  }
 }
 
 async function json(url: string, signal?: AbortSignal): Promise<unknown> {
   return (await within(url, 'application/json', signal)).json();
 }
 
-    signal?.removeEventListener('abort', give);
 async function xml(url: string, signal?: AbortSignal): Promise<string> {
   return (await within(url, 'application/atom+xml', signal)).text();
 }
@@ -538,11 +538,14 @@ export async function findBook(
     limit = 10,
     googleKey,
     onPartial,
+    signal,
   }: {
     limit?: number;
     googleKey?: string | null;
     /** Called each time a catalog answers, with everything known so far. */
     onPartial?: (lookup: Lookup) => void;
+    /** Abandon the lookup: nobody is waiting for this search any more. */
+    signal?: AbortSignal;
   } = {}
 ): Promise<Lookup> {
   const asked = query.trim();
@@ -561,14 +564,11 @@ export async function findBook(
           signal
         )
       )
-    signal,
     ),
     key
       ? ask('google', async () =>
           candidatesFromGoogle(
             await json(
-    /** Abandon the lookup: nobody is waiting for this search any more. */
-    signal?: AbortSignal;
               `${GOOGLE}?q=${encodeURIComponent(terms)}&maxResults=${limit}` +
                 `&key=${encodeURIComponent(key)}`,
               signal
