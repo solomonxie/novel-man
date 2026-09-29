@@ -18,10 +18,17 @@ import { router, Stack, useFocusEffect } from '../src/navigation/router';
 
 import { listBooks, type BookListItem } from '../src/db/repo';
 import { addCandidate, addChoice, addTyped } from '../src/books/add';
-import { findBook, isIsbn, type Candidate, type CatalogReport } from '../src/sources/identify';
+import {
+  findBook,
+  isIsbn,
+  type Candidate,
+  type CatalogReport,
+  type Lookup,
+} from '../src/sources/identify';
 import { googleBooksKey } from '../src/sources/googleBooksKey';
 import { rememberSeen, seenCandidate, SEEN } from '../src/sources/seen';
 import { NO_RESULTS, rankBook, searchLibrary, type LibraryResults } from '../src/search/library';
+import { oneAtATime } from '../src/search/oneAtATime';
 import { keptCatalogs, searchIndex, type IndexedBook } from '../src/sources/catalog';
 import { publicSources, type PublicSource } from '../src/sources/registry';
 import { choiceFromIndex, takeChoice, type Choice } from '../src/sources/chosen';
@@ -353,66 +360,66 @@ export default function Find() {
    * in it, so it goes straight out rather than waiting for the pause that
    * guards against searching on a half-typed word.
    */
-  useEffect(() => {
-    const term = query.trim();
-    if (term.length < 3) {
-      setNamed([]);
-      setCatalogs([]);
-      return;
-    }
-    let live = true;
-    // Not before the request exists. Setting this at the keystroke put
-    // "Looking up published books…" on screen for the whole of the pause that
-    // guards against searching a half-typed word — most of the wait anybody
-    // complained about was this app deciding not to ask yet.
-    const timer = setTimeout(() => {
-      setAsking(true);
-      void (async () => {
-        try {
-          const found = await findBook(term, {
-            googleKey: await googleBooksKey(),
+  const lookup = useMemo(
+    () =>
+      oneAtATime<Lookup>(
+        (term, { signal, partial }) =>
+          googleBooksKey()
+            .catch(() => null)
             // Each catalog paints as it lands. Open Library usually answers
             // in well under a second; the old Google feed sometimes never
             // does, and there is no reason the first should wait for it.
-            onPartial: (partial) => {
-              if (!live) return;
-              setNamed(partial.candidates);
-              setCatalogs(partial.catalogs);
-            },
-          });
-          if (!live) return;
-          setNamed(found.candidates);
-          setCatalogs(found.catalogs);
-          // Written down on the way past, so the same book answers without a
-          // request next time — and on a plane.
-          //
-          // Nothing is re-read afterwards, deliberately. Refreshing the kept
-          // lists here changed `sources`, which is what the local search
-          // depends on, which re-ran a scan of every manuscript on the device
-          // a second after the first one finished. The cache is for the next
-          // query; this one already has its answer on screen.
-          void rememberSeen(found.candidates).catch(() => undefined);
-        } catch {
-          // Both catalogs unreachable. Keeping that as a report rather than
-          // an empty list is the difference between "no such book" and "no
+            .then((googleKey) => findBook(term, { googleKey, signal, onPartial: partial })),
+        {
+          answer: (_term, found, settled) => {
+            setNamed(found.candidates);
+            setCatalogs(found.catalogs);
+            // Written down on the way past, so the same book answers without a
+            // request next time — and on a plane.
+            //
+            // Nothing is re-read afterwards, deliberately. Refreshing the kept
+            // lists here changed `sources`, which is what the local search
+            // depends on, which re-ran a scan of every manuscript on the device
+            // a second after the first one finished. The cache is for the next
+            // query; this one already has its answer on screen.
+            if (settled) void rememberSeen(found.candidates).catch(() => undefined);
+          },
+          // Both catalogs unreachable. Keeping that as a report rather than an
+          // empty list is the difference between "no such book" and "no
           // signal", and offline they are very different sentences.
-          if (live) {
+          failed: () => {
             setNamed([]);
             setCatalogs([
               { source: 'openlibrary', answered: false, found: 0 },
               { source: 'google', answered: false, found: 0 },
             ]);
-          }
-        } finally {
-          if (live) setAsking(false);
+          },
+          waiting: setAsking,
         }
-      })();
-    }, isIsbn(term) ? 0 : REACH);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [query]);
+      ),
+    []
+  );
+
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 3) {
+      lookup.stop();
+      setNamed([]);
+      setCatalogs([]);
+      return;
+    }
+    // Not before the request exists. Setting `asking` at the keystroke put
+    // "Looking up published books…" on screen for the whole of the pause that
+    // guards against searching a half-typed word — most of the wait anybody
+    // complained about was this app deciding not to ask yet. It is the lookup
+    // itself that says when it is busy now.
+    const timer = setTimeout(() => lookup.ask(term), isIsbn(term) ? 0 : REACH);
+    return () => clearTimeout(timer);
+  }, [query, lookup]);
+
+  // Leaving the screen is a good enough reason to stop asking about a book
+  // nobody is looking for any more.
+  useEffect(() => () => lookup.stop(), [lookup]);
 
   /** A work chosen by name: the record goes on the shelf, the words follow. */
   async function name(candidate: Candidate) {

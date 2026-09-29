@@ -58,6 +58,7 @@ const { quoteWithVerses, referenceOf, versesIn } = await import(join(build, 'scr
 const { escapeLike, looseLike, score, wordLike, isAcronym, hasWordBreaks } =
   await import(join(build, 'sources/matching.js'));
 const { searchLicensed } = await import(join(build, 'sources/special.js'));
+const { oneAtATime } = await import(join(build, 'search/oneAtATime.js'));
 const {
   candidatesFromGoogleFeed,
   cleanIsbn,
@@ -2082,6 +2083,99 @@ console.log('a bible nobody here may hand over');
   check('nor is a book that merely rhymes', searchLicensed('nivea'), null);
   check('and nothing typed names nothing', searchLicensed('  '), null);
 }
+
+
+console.log('one question out on the network at a time');
+{
+  const settle = () => new Promise((done) => setImmediate(done));
+  const started = [];
+  const waits = new Map();
+  const said = [];
+  const busy = [];
+  const lookup = oneAtATime(
+    (term) => {
+      started.push(term);
+      return new Promise((resolve, reject) => waits.set(term, { resolve, reject }));
+    },
+    {
+      answer: (term, value, settled) => said.push(`${term}:${value}${settled ? '' : '\u2026'}`),
+      failed: (term) => said.push(`${term}:failed`),
+      waiting: (on) => busy.push(on),
+    }
+  );
+
+  // Three pauses in typing one title. Sending all three races them over one
+  // radio and the answer anybody wants queues behind two that are stale.
+  lookup.ask('pri');
+  lookup.ask('pride');
+  lookup.ask('pride and');
+  check('only the first goes out', started, ['pri']);
+  check('and the newest waits its turn', lookup.held(), 'pride and');
+
+  waits.get('pri').resolve('A');
+  await settle();
+  check('which goes the moment the wire is free', started, ['pri', 'pride and']);
+  check('the prefix typed straight through is never asked', started.includes('pride'), false);
+  check('and the first answer was still worth showing', said, ['pri:A']);
+
+  waits.get('pride and').resolve('B');
+  await settle();
+  check('the last answer lands', said, ['pri:A', 'pride and:B']);
+  check('with nothing out and nothing held', [lookup.outstanding(), lookup.held()], [null, null]);
+  check('and the page is told it has stopped asking', busy, [true, true, false]);
+
+  // Backspacing onto something already asked.
+  lookup.ask('pri');
+  check('a term asked before answers from memory', said.at(-1), 'pri:A');
+  check('and sends nothing', started.length, 2);
+}
+
+console.log('an answer that arrives after a newer one');
+{
+  const settle = () => new Promise((done) => setImmediate(done));
+  const waits = new Map();
+  const said = [];
+  const lookup = oneAtATime(
+    (term) => new Promise((resolve, reject) => waits.set(term, { resolve, reject })),
+    { answer: (term, value) => said.push(`${term}:${value}`), failed: () => undefined }
+  );
+
+  lookup.ask('emma');
+  waits.get('emma').resolve('E');
+  await settle();
+  lookup.ask('emma woodhouse');
+  lookup.ask('emma');
+  check('the older term paints from memory at once', said, ['emma:E', 'emma:E']);
+  waits.get('emma woodhouse').resolve('W');
+  await settle();
+  check('and what it asked for first does not overwrite it', said.at(-1), 'emma:E');
+}
+
+console.log('a search nobody is waiting for any more');
+{
+  const settle = () => new Promise((done) => setImmediate(done));
+  const dropped = [];
+  const waits = new Map();
+  const said = [];
+  const lookup = oneAtATime(
+    (term, { signal }) => {
+      signal.addEventListener('abort', () => dropped.push(term));
+      return new Promise((resolve, reject) => waits.set(term, { resolve, reject }));
+    },
+    { answer: (term) => said.push(term), failed: (term) => said.push(`${term}:failed`) }
+  );
+
+  lookup.ask('war and');
+  lookup.ask('war and peace');
+  lookup.stop();
+  check('what was out is abandoned', dropped, ['war and']);
+  check('and what was held is dropped with it', [lookup.outstanding(), lookup.held()], [null, null]);
+
+  waits.get('war and').reject(new Error('aborted'));
+  await settle();
+  check('a run already in the air says nothing more', said, []);
+}
+
 
 console.log(failures ? `\n${failures} failing` : '\nall passing');
 process.exit(failures ? 1 : 0);
