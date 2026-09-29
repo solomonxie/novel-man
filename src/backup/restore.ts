@@ -1,6 +1,7 @@
 import { listBooks, writeBookRecord, type BookRecord } from '../db/repo';
 import { isSkeleton, withoutManuscript } from '../books/record';
 import { restoreSourceFile, writeImage } from '../storage/files';
+import { naturalKey, repairMissingCovers } from './repair';
 import type { OpenedBundle } from './bundle';
 import type { Snapshot } from './format';
 import { writePrefs } from './prefs';
@@ -22,6 +23,12 @@ export type RestoreReport = {
    */
   waiting: number;
   unplaceable: { title: string; reason: 'missing-asset' }[];
+  /**
+   * Books already on the shelf whose cover file had gone missing and whose
+   * bytes this bundle still held. Nothing was added for these — see
+   * `repairMissingCovers`.
+   */
+  repaired: { title: string }[];
 };
 
 /**
@@ -51,7 +58,14 @@ export async function restoreBundle(
   if (guard) await backUpBefore('restore');
   const existing = await listBooks();
   const known = new Set(existing.map((book) => naturalKey(book.source_hash, book.title)));
-  const report: RestoreReport = { restored: [], duplicates: [], waiting: 0, unplaceable: [] };
+  const report: RestoreReport = {
+    restored: [], duplicates: [], waiting: 0, unplaceable: [], repaired: [],
+  };
+
+  // Before anything is added: the books that are here and have lost their
+  // pictures are the reason someone reaches for a backup at all, and adding a
+  // second copy of each of them is not an answer to it.
+  report.repaired = await repairMissingCovers(opened, only);
 
   if (settings && opened.snapshot.settings) await writePrefs(opened.snapshot.settings);
 
@@ -150,8 +164,4 @@ function restoreAsset(opened: OpenedBundle, path: string): string | null {
   const bytes = opened.assets[path];
   if (!bytes) return null;
   return writeImage(path.replace('assets/', ''), bytes);
-}
-
-function naturalKey(hash: string, title: string): string {
-  return `${hash}::${title.trim().toLowerCase()}`;
 }
