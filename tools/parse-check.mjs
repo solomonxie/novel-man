@@ -2177,5 +2177,50 @@ console.log('a search nobody is waiting for any more');
 }
 
 
+console.log('a web page, read as a book');
+{
+  const page = `<html><head><title>Site</title></head><body>
+    <header class="site"><nav><h2>Menu</h2><a href="/">Home</a></nav></header>
+    <article>
+      <header class="entry"><h1>Linux Applications Performance</h1></header>
+      <p>The first paragraph of the thing itself.</p>
+      <h2>Part I</h2>
+      <p>What a server does before it does anything.</p>
+      <footer class="meta"><p>Posted in Linux</p></footer>
+    </article>
+    <aside id="sidebar"><h2>Recent Posts</h2><h2>Categories</h2></aside>
+    <footer class="site"><h2>About this blog</h2></footer>
+    <script>var x = "<h2>not a heading</h2>";</script>
+  </body></html>`;
+  const blocks = await blocksFromHtml(page);
+  const headings = blocks.filter((block) => block.heading).map((block) => block.text);
+  // A widget's h2 is a heading like any other, so a sidebar left in makes
+  // "Categories" a chapter and the article one section of a book about a blog.
+  check('the article is what comes through', headings, ['Linux Applications Performance', 'Part I']);
+  check('the post\u2019s own title keeps its level', blocks.find((b) => b.heading)?.heading, 1);
+  check('the sidebar is gone', blocks.some((b) => /Recent Posts|Categories/.test(b.text)), false);
+  check('so is the site chrome', blocks.some((b) => /Menu|About this blog/.test(b.text)), false);
+  check('and the post meta under it', blocks.some((b) => /Posted in Linux/.test(b.text)), false);
+  check('the prose is all there', blocks.filter((b) => !b.heading).length, 2);
+}
+
+console.log('a page with no article of its own');
+{
+  const page = `<body><nav><h3>Menu</h3></nav><h1>A Title</h1><p>A paragraph.</p></body>`;
+  const blocks = await blocksFromHtml(page);
+  check('falls back to the body', blocks.map((block) => block.text), ['A Title', 'A paragraph.']);
+}
+
+console.log('a page carrying several posts');
+{
+  const page =
+    '<body><main><article><h1>One</h1><p>First.</p></article>' +
+    '<article><h1>Two</h1><p>Second.</p></article></main></body>';
+  const blocks = await blocksFromHtml(page);
+  // First opening tag to *last* closing one: stopping at the first `</article>`
+  // would take one post off a page that holds four.
+  check('comes through whole', blocks.map((block) => block.text), ['One', 'First.', 'Two', 'Second.']);
+}
+
 console.log(failures ? `\n${failures} failing` : '\nall passing');
 process.exit(failures ? 1 : 0);

@@ -34,10 +34,44 @@ export const htmlImporter: Importer = {
 const MARK = '\uE000';
 const TOKEN = (at: number) => `${MARK}math${at}${MARK}`;
 
+/**
+ * The part of a page that is the thing, rather than the site around it.
+ *
+ * `<body>` is a whole web page: masthead, sidebar, footer, a column of
+ * "recent posts". Those are not paragraphs in a book, and the sidebar ones are
+ * worse than noise — a widget's `<h2>` is a heading like any other, so
+ * `detectChapters` takes "Categories" and "Recent Posts" for chapters and the
+ * article itself becomes one section of a book about the blog.
+ *
+ * `<article>` and `<main>` are the page saying which part it means, and every
+ * publishing platform emits one. From the first opening tag to the *last*
+ * closing one, so a page carrying several posts comes through whole rather
+ * than stopping at the end of the first.
+ */
+function contentOf(body: string): string {
+  for (const tag of ['article', 'main']) {
+    const opens = new RegExp(`<${tag}[^>]*>`, 'i').exec(body);
+    const closes = body.toLowerCase().lastIndexOf(`</${tag}>`);
+    if (opens && closes > opens.index) {
+      return body.slice(opens.index + opens[0].length, closes);
+    }
+  }
+  return body;
+}
+
+/**
+ * What is never prose, whichever part of the page it sits in.
+ *
+ * `<header>` is deliberately absent: on every blog theme it is what wraps the
+ * post's own `<h1>`, and stripping it throws away the one heading that names
+ * the chapter.
+ */
+const FURNITURE = /<(script|style|noscript|nav|aside|footer|form)(?=[\s/>])[^>]*>[\s\S]*?<\/\1>/gi;
+
 export async function blocksFromHtml(html: string, context?: ParseContext): Promise<Block[]> {
   const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html)?.[1] ?? html;
-  const withoutNoise = body
-    .replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, '')
+  const withoutNoise = contentOf(body)
+    .replace(FURNITURE, '')
     .replace(/<br\s*\/?>/gi, '\n');
 
   // Every formula is lifted out before the tags go, because stripping tags is
