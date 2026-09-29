@@ -200,7 +200,14 @@ export function candidatesFromOpenLibrary(payload: unknown): Candidate[] {
     const key = text(doc.key)?.replace(/^\/works\//, '');
     if (!title || !key) continue;
     const coverId = typeof doc.cover_i === 'number' ? doc.cover_i : null;
-    const isbn = firstString(doc.isbn);
+    // The edition subquery, where the whole `isbn` and `edition_key` lists
+    // used to be. An older reply that still carries those is read first, so a
+    // cached page from before this changed still means something.
+    const editions = (doc.editions as { docs?: unknown[] } | undefined)?.docs;
+    const edition = (Array.isArray(editions) ? editions[0] : undefined) as
+      | Record<string, unknown>
+      | undefined;
+    const isbn = firstString(doc.isbn) ?? firstString(edition?.isbn);
     found.push({
       id: `ol:${key}`,
       source: 'openlibrary',
@@ -212,7 +219,7 @@ export function candidatesFromOpenLibrary(payload: unknown): Candidate[] {
       thumb: coverId ? olCover(coverId, 'M') : isbn ? olCoverByIsbn(isbn, 'M') : null,
       cover: coverId ? olCover(coverId, 'L') : isbn ? olCoverByIsbn(isbn, 'L') : null,
       summary: null,
-      edition: firstString(doc.edition_key),
+      edition: firstString(doc.edition_key) ?? text(edition?.key)?.replace(/^\/books\//, '') ?? null,
       subjects: strings(doc.subject),
     });
   }
@@ -434,11 +441,26 @@ async function xml(url: string, signal?: AbortSignal): Promise<string> {
   return (await within(url, 'application/atom+xml', signal)).text();
 }
 
-// `isbn` was missing, so every Open Library row came back without the number
-// it is looked up by — and `subject` is what a kind can be guessed from. Both
-// ride the request that was already being made.
+/**
+ * What is asked of Open Library, and every one of these is here on purpose.
+ *
+ * `isbn` and `edition_key` used to be, and they are what a search of a famous
+ * book costs: Open Library answers a *work*, so those two arrive as every
+ * printing it has ever had. Ten rows for "pride and prejudice" is 162KB, of
+ * which 155 is lists of numbers for editions nobody asked about — downloaded
+ * over somebody's cellular connection and parsed on the thread that is drawing
+ * the page, on a lookup that has five seconds to finish.
+ *
+ * `editions` is the same question narrowed: the subquery returns the one
+ * edition Open Library would show, with its key and, where it has one, its
+ * ISBN. The same ten rows are 9.7KB — seventeen times less — and the number
+ * that is still missing is fetched by `fillFromEdition` if somebody actually
+ * picks the row. `subject` stays: it is 6KB and it is what a kind is guessed
+ * from.
+ */
 const OL_FIELDS =
-  'key,title,author_name,first_publish_year,cover_i,language,edition_key,isbn,subject';
+  'key,title,author_name,first_publish_year,cover_i,language,subject' +
+  ',editions,editions.key,editions.isbn';
 
 /**
  * What the reader typed, asked of both catalogs at once. An ISBN is a lookup
