@@ -13,6 +13,7 @@ import {
 import type { RemoteObject } from '../../src/cloud/client';
 import type { Connection } from '../../src/cloud/providers';
 import type { RestoreReport } from '../../src/backup/restore';
+import { RestoreReportView } from '../../src/settings/RestoreReport';
 import { dateOf } from '../../src/backup/format';
 import { Hint, PrimaryAction, Row, Section } from '../../src/ui/primitives';
 import { PickerSheet } from '../../src/ui/PickerSheet';
@@ -149,18 +150,7 @@ export default function CloudLibrary() {
         <PrimaryAction label={t('cloud.backupNow')} onPress={() => queueBackup(connection.id)} />
       </View>
 
-      {report ? (
-        <View style={{ marginTop: space.xl }}>
-          <Text style={{ color: palette.text, fontSize: 15 }}>
-            {t('backup.restored', { count: report.restored.length })}
-          </Text>
-          {report.unplaceable.map((item, index) => (
-            <Text key={index} style={{ color: palette.danger, fontSize: 13, marginTop: space.xs }}>
-              {t(`backup.unplaceable_${item.reason}`, { title: item.title })}
-            </Text>
-          ))}
-        </View>
-      ) : null}
+      {report ? <RestoreReportView report={report} /> : null}
 
       <Section>
         <Row label={t('cloud.remove')} onPress={confirmRemove} danger last />
