@@ -551,7 +551,7 @@ export default function Find() {
             [row.author, remembered?.year, remembered?.isbn ?? row.language]
               .filter(Boolean)
               .join(' · ') || undefined,
-          value: t('find.keepIt'),
+          value: t('find.add'),
           onPress: () => (remembered ? void name(remembered) : take(row)),
         });
       }
@@ -563,7 +563,7 @@ export default function Find() {
           detail:
             [candidate.author, candidate.year, candidate.isbn].filter(Boolean).join(' · ') ||
             undefined,
-          value: t('find.keepIt'),
+          value: t('find.add'),
           onPress: () => void name(candidate),
         });
       }
