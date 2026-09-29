@@ -1064,6 +1064,7 @@
     "named": "已出版的书（{{count}}）",
     "asking": "正在查询已出版的书…",
     "catalogQuiet": "{{catalogs}} 没有应答，所以这只是一半的书目站。",
+    "catalogsQuiet": "没有书目服务响应，以下是本机已保存的清单。",
     "textFrom": "来自 {{source}} 的正文 · {{count}}",
     "lookingUp": "正在查询已出版的书…"
   },
