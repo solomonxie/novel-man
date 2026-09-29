@@ -47,3 +47,35 @@ export async function clearPlaceholderCovers(): Promise<SweptCover[]> {
   }
   return cleared;
 }
+
+export type LostCover = { id: string; title: string };
+
+/**
+ * The covers whose file is no longer there.
+ *
+ * `cover_path` is a name, and the folder it names can be emptied from outside
+ * the app — a wipe, a botched copy onto the device, a restore that put the
+ * rows back and not the bytes. The row then claims a picture that does not
+ * exist, and two things go wrong at once: the tile draws an `Image` at a
+ * missing file, which is a blank rectangle rather than the book's own tile,
+ * and `flagsOn` reads the row as having a cover, so "these have no cover"
+ * never lists the book and there is no way back to looking one up.
+ *
+ * One stat per covered book, every launch — not once ever, because unlike the
+ * placeholder sweep this can happen again. Nothing is deleted: the bytes are
+ * already gone, and blanking the row is what hands the book back its tile.
+ */
+export async function clearMissingCovers(): Promise<LostCover[]> {
+  const lost: LostCover[] = [];
+  try {
+    for (const book of await listCovered()) {
+      if (imageSize(book.cover_path) > 0) continue;
+      await updateBook(book.id, { cover_path: null });
+      lost.push({ id: book.id, title: book.title });
+      await yieldToUI();
+    }
+  } catch (problem) {
+    trace(`missing cover sweep: ${String(problem)}`);
+  }
+  return lost;
+}
