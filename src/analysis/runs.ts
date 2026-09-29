@@ -1,5 +1,6 @@
 import { estimate, type Estimate } from '../ai/cost';
-import type { Book, Chapter, ImageKind } from '../db/repo';
+import { getBook, type Book, type Chapter, type ImageKind } from '../db/repo';
+import { isSkeleton } from '../books/record';
 import { queueWork } from '../work/queue';
 import { bookHeader, chapterBody, citedNotSent, passageBody } from './context';
 
@@ -81,6 +82,7 @@ export async function queueChapterRun(
   kind: 'chapter-brief' | 'deep-analyze' | 'cast-chapter',
   chapters: Chapter[]
 ): Promise<string> {
+  await identifyFirst(bookId);
   const runId = await queueWork({
     bookId,
     kind,
@@ -96,11 +98,36 @@ export async function queueChapterRun(
 }
 
 /**
+ * The book, named before its chapters are asked about.
+ *
+ * A chapter of a book this app holds no copy of is answered from memory, and
+ * what the model is given to recognise it by is the header `assemble` puts
+ * first: the title, the author, the year, and the line saying what the book is
+ * about. A record typed in by hand often has only a title — and then twelve
+ * chapters are asked about a work that was never identified, which is exactly
+ * the failure that comes back as "could not place this chapter".
+ *
+ * So the lookup goes first, in the same queue: `claimNext` orders by
+ * `created_at`, so a job enqueued before the run is a job that runs before it,
+ * and what it fills in is on the book by the time the first chapter is asked.
+ *
+ * Only where it would say something. A book whose words are here needs no
+ * recall, and one that already has a summary has already been identified —
+ * and the lookup writes only into blanks either way.
+ */
+async function identifyFirst(bookId: string) {
+  const book = await getBook(bookId);
+  if (!book || !isSkeleton(book) || book.summary?.trim()) return;
+  await queueBookLookup(bookId, book.title);
+}
+
+/**
  * What a chapter with no words says, from what a model remembers of the book.
  * One chapter at a time like every other pass, and offered only where there is
  * nothing to read — see `handlers.recapChapter`.
  */
-export function queueChapterRecap(bookId: string, chapter: Chapter): Promise<string> {
+export async function queueChapterRecap(bookId: string, chapter: Chapter): Promise<string> {
+  await identifyFirst(bookId);
   return queueWork({
     bookId,
     kind: 'chapter-recap',
