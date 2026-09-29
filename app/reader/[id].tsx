@@ -1087,6 +1087,7 @@ export default function Reader() {
           ink={palette.text}
           accent={palette.accent}
           surface={palette.bg}
+          tint={palette.tint}
           offsetOf={whereScrolled}
           onScrollTo={scrollPageTo}
         />
