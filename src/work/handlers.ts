@@ -99,13 +99,38 @@ async function notHere(): Promise<void> {
  * button that does nothing. It is also the answer most likely to change: the
  * reader adds the author, or the pass stops asking for the impossible.
  */
-async function ask(kind: string, messages: ChatMessage[], maxTokens: number, signal: AbortSignal) {
+async function ask(
+  kind: string,
+  messages: ChatMessage[],
+  maxTokens: number,
+  signal: AbortSignal,
+  /**
+   * Whether this answer is worth keeping, beyond not being a refusal.
+   *
+   * A pass that reads JSON has a second answer it must not cache: the one it
+   * cannot parse. Cached, it is read back by Retry and fails in the same
+   * instant without asking anybody — the same button that does nothing the
+   * refusal rule above was written for. Left out by a pass whose answer is
+   * prose, and by the outline, which salvages the rows out of a cut-off one.
+   */
+  keep: (answer: string) => boolean = () => true
+) {
   const hash = contentHash(kind, ...messages.map((message) => message.content));
   const cached = await readCache(hash);
-  if (cached !== null && !refused(cached)) return cached;
+  if (cached !== null && !refused(cached) && keep(cached)) return cached;
   const answer = await runChat(messages, { maxTokens, signal });
-  if (!refused(answer)) await writeCache(hash, kind, answer);
+  if (!refused(answer) && keep(answer)) await writeCache(hash, kind, answer);
   return answer;
+}
+
+/** An answer a JSON pass could not read is no more worth keeping than a refusal. */
+function readable(answer: string): boolean {
+  try {
+    parseJson(answer);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function loadChapter(job: WorkJob): Promise<{
@@ -208,6 +233,24 @@ function identifiers(book: Book): string[] {
   ].filter(Boolean);
 }
 
+/**
+ * What a chapter answered from memory may come back empty-handed about.
+ *
+ * Every pass here asks for a cast, and a book recalled rather than read is
+ * often one that has none: the default kind is `novel`, so a technology book
+ * typed in by hand is asked who is in chapter five of it. Told only that
+ * invention is forbidden, the honest answer to that is `{"unknown":true}` —
+ * and a reader watched every chapter of a book the model knows perfectly well
+ * fail, and be told to go and write better briefs. An empty array is the
+ * answer that was wanted, so it is the one that gets asked for.
+ */
+const NOTHING_TO_LIST =
+  'You are answering from your memory of this published work; none of it is in ' +
+  'front of you. Where this chapter simply has none of something — no ' +
+  'characters, no places, no named terms — reply with an empty array for it. ' +
+  'Unknown is only for a chapter you cannot identify at all, never for one you ' +
+  'can identify that happens to have no cast.';
+
 /** The one error a reader has to be able to read off the queue row, and act on. */
 const UNKNOWN =
   'the model could not place this title — try the fuller title, or add the author';
@@ -236,23 +279,49 @@ function cannotPlace(chapter: Chapter): string {
 }
 
 /**
+ * An answer that arrived and could not be read — which is not the same thing
+ * as a model that did not know the book, and used to be reported as though it
+ * were.
+ *
+ * Every chapter of a book failing with "add a line to its brief" sends a
+ * reader to edit twelve briefs that were never the problem. What actually
+ * happened is in the reply, so the reply is what this says: cut off before it
+ * closed, or prose where JSON was asked for, in the model's own first words.
+ * The whole of it is kept in `ai_requests` either way.
+ */
+function unreadable(answer: string): string {
+  const body = answer.replace(/```(?:json)?/gi, '').replace(/\s+/g, ' ').trim();
+  if (!body) return 'the model answered with nothing at all — worth a retry';
+  // It started an object and never closed one: the budget ran out mid-answer.
+  if (/[[{]/.test(body) && !/[\]}]$/.test(body)) {
+    return 'the answer was cut off before it finished — worth a retry, and worth ' +
+      'shortening the chapter brief if it keeps happening';
+  }
+  return `the model answered in prose instead of the JSON asked for: “${body.slice(0, 90)}”`;
+}
+
+/**
  * The answer to a question about a book whose words were never sent. Three
  * shapes all mean the same thing — the token, `unknown` among the fields, and
  * the prose a model writes when it would rather explain than answer — and all
  * three are a failure the reader can see rather than a chapter that quietly
  * comes back empty. Nothing here can tell an invented chapter from a real one
  * later, so nothing invented may be written down now.
+ *
+ * They are not, however, the same failure, and saying so is the whole of what
+ * `chapter` is for: a refusal is about the book, and an unreadable answer is
+ * about the reply.
  */
-function readCited<T>(answer: string): T {
-  if (refused(answer)) throw new Error(UNKNOWN_CHAPTER);
+function readCited<T>(answer: string, chapter?: Chapter): T {
+  const refusal = () => new Error(chapter ? cannotPlace(chapter) : UNKNOWN_CHAPTER);
+  if (refused(answer)) throw refusal();
   let result: T & { unknown?: boolean };
   try {
     result = parseJson<T & { unknown?: boolean }>(answer);
   } catch {
-    // Not JSON at all: an apology, or a request for the text nobody can send.
-    throw new Error(UNKNOWN_CHAPTER);
+    throw new Error(unreadable(answer));
   }
-  if (result.unknown) throw new Error(UNKNOWN_CHAPTER);
+  if (result.unknown) throw refusal();
   return result;
 }
 
@@ -288,7 +357,8 @@ async function lookUpBook(job: WorkJob, signal: AbortSignal) {
       },
     ],
     700,
-    signal
+    signal,
+    readable
   );
   if (refused(answer)) throw new Error(UNKNOWN);
 
@@ -361,7 +431,8 @@ async function correctBook(job: WorkJob, signal: AbortSignal) {
       },
     ],
     400,
-    signal
+    signal,
+    readable
   );
   if (refused(answer)) throw new Error(UNKNOWN);
 
@@ -1063,6 +1134,7 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
     .join(',');
 
   const rules = [
+    citedNotSent(book) && NOTHING_TO_LIST,
     // A story is followed; an argument is weighed. Same pass, different question.
     kind.reads === 'argument' &&
       'This is one section of a paper, not a chapter of a story. The brief says what ' +
@@ -1122,10 +1194,13 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
     // Terms are the fifth of six answers, so a budget that fits without them
     // is a budget they fall off the end of.
     wantsCast ? (wantsTerms ? 3000 : 2400) : 400,
-    signal
+    signal,
+    readable
   );
 
-  const result = citedNotSent(book) ? readCited<DeepResult>(answer) : parseJson<DeepResult>(answer);
+  const result = citedNotSent(book)
+    ? readCited<DeepResult>(answer, chapter)
+    : parseJson<DeepResult>(answer);
   if (result.brief?.trim()) await setChapterBrief(chapter.id, result.brief.trim());
 
   if (wantsCast) {
@@ -1198,7 +1273,8 @@ async function polishPlace(job: WorkJob, signal: AbortSignal) {
       },
     ],
     700,
-    signal
+    signal,
+    readable
   );
 
   const polished = parseJson<{ summary?: string; details?: Detail[]; location?: unknown }>(answer);
@@ -1225,7 +1301,8 @@ async function castChapter(job: WorkJob, signal: AbortSignal) {
           `{"characters":[${PROFILE_SHAPE}],` +
           `"places":[${pinned ? PINNED_PLACE_SHAPE : PLACE_SHAPE}]}. Reuse the exact ` +
           'names already known; put a new form in "aliases". ' +
-          `${PROFILE_RULES} ${PLACE_RULES}${pinned ? ` ${PIN_RULES}` : ''}`,
+          `${PROFILE_RULES} ${PLACE_RULES}${pinned ? ` ${PIN_RULES}` : ''}` +
+          `${citedNotSent(book) ? ` ${NOTHING_TO_LIST}` : ''}`,
       },
       {
         role: 'user',
@@ -1239,13 +1316,16 @@ async function castChapter(job: WorkJob, signal: AbortSignal) {
       },
     ],
     1200,
-    signal
+    signal,
+    readable
   );
 
   // A refusal here used to parse to nothing and finish as a success, so a
   // chapter nobody could answer for came back with an empty cast and no sign
   // that anything had gone wrong.
-  const result = citedNotSent(book) ? readCited<DeepResult>(answer) : parseJson<DeepResult>(answer);
+  const result = citedNotSent(book)
+    ? readCited<DeepResult>(answer, chapter)
+    : parseJson<DeepResult>(answer);
   await recordCharacters(job.book_id, chapter.idx, result.characters ?? []);
   await recordPlaces(job.book_id, chapter.idx, result.places ?? []);
 }
@@ -1288,7 +1368,8 @@ async function locatePlaces(job: WorkJob, signal: AbortSignal) {
       },
     ],
     Math.min(2400, 200 + places.length * 40),
-    signal
+    signal,
+    readable
   );
 
   const result = parseJson<{ places?: { name?: string }[] }>(answer);
@@ -1346,7 +1427,8 @@ async function linkPeople(job: WorkJob, signal: AbortSignal) {
       },
     ],
     Math.min(2400, 200 + people.length * 40),
-    signal
+    signal,
+    readable
   );
 
   const result = parseJson<{ people?: { name?: string; wikipedia?: string }[] }>(answer);
@@ -1518,7 +1600,8 @@ async function polishCharacter(job: WorkJob, signal: AbortSignal) {
       },
     ],
     800,
-    signal
+    signal,
+    readable
   );
 
   const polished = parseJson<Polished>(answer);
