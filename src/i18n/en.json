@@ -1064,6 +1064,7 @@
     "named": "Published books ({{count}})",
     "asking": "Looking up published books…",
     "catalogQuiet": "{{catalogs}} didn’t answer, so this is only half the catalogues.",
+    "catalogsQuiet": "No catalogue answered, so these are the lists kept on this device.",
     "textFrom": "Text from {{source}} · {{count}}",
     "lookingUp": "Looking up published books…"
   },

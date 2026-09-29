@@ -323,6 +323,19 @@ export default function Find() {
   /** Named, and not ours to give — see `licensedEditions`. */
   const licensed = useMemo(() => searchLicensed(query), [query]);
   /**
+   * Not one catalog answered — no signal, or every door refusing at once.
+   *
+   * Worth its own word because the page did nothing at all about it: the
+   * published-books section is drawn only when it has rows or is waiting for
+   * some, so a lookup that failed removed the section, and a reader saw their
+   * shelf and then nothing, with no indication that half the search had not
+   * run. Below, this is what puts the lists on the device in its place.
+   */
+  const quiet = useMemo(
+    () => catalogs.length > 0 && catalogs.every((report) => !report.answered),
+    [catalogs]
+  );
+  /**
    * Which lists a query goes to, as a value rather than an array — the search
    * below depends on it, and a fresh array of the same names every time the
    * catalogs are re-read would re-run a scan of every manuscript for nothing.
@@ -530,16 +543,35 @@ export default function Find() {
       (candidate) =>
         !(candidate.isbn && numbers.has(candidate.isbn)) && !already.has(sameBook(candidate))
     );
-    if (works.length || fresh.length || asking) {
+    /**
+     * Nothing answered, so the lists on this device answer instead.
+     *
+     * A Gutenberg or eBible row is a published record like any other — it is
+     * simply one that is already here. Filed under "text from Project
+     * Gutenberg" it reads as a download rather than as the book somebody was
+     * looking for, and with the catalogs quiet it is the only answer there is,
+     * so it moves up here and out of the per-source sections below.
+     */
+    const standIn = quiet && !asking
+      ? texts.filter((row) => !already.has(sameBook(row)))
+      : [];
+    if (works.length || fresh.length || standIn.length || asking || quiet) {
       // A heading reading "Published books (0)" over nothing, for the second
       // the catalogs take to answer, is a section saying it found none — and
       // then contradicting itself. While there is nothing yet it says what it
       // is doing instead of counting it.
-      const none = works.length + fresh.length === 0;
+      const shown = works.length + fresh.length + standIn.length;
+      const none = shown === 0;
       head(
         'named',
-        none && asking ? t('find.lookingUp') : t('find.named', { count: works.length + fresh.length }),
-        none && asking ? undefined : asking ? t('find.asking') : refused(catalogs, t)
+        none && asking ? t('find.lookingUp') : t('find.named', { count: shown }),
+        none && asking
+          ? undefined
+          : asking
+            ? t('find.asking')
+            : quiet
+              ? t('find.catalogsQuiet')
+              : refused(catalogs, t)
       );
       for (const row of works) {
         const remembered = row.source === SEEN ? seenCandidate(row) : null;
@@ -553,6 +585,16 @@ export default function Find() {
               .join(' · ') || undefined,
           value: t('find.add'),
           onPress: () => (remembered ? void name(remembered) : take(row)),
+        });
+      }
+      for (const hit of standIn) {
+        flat.push({
+          key: `hit-${hit.source}-${hit.extId}`,
+          kind: 'row',
+          label: hit.title,
+          detail: [hit.author, hit.language].filter(Boolean).join(' · ') || undefined,
+          value: t('find.add'),
+          onPress: () => take(hit),
         });
       }
       for (const candidate of fresh) {
@@ -618,7 +660,7 @@ export default function Find() {
     // what tells you whether a row is a book you can read or a record to
     // keep notes on.
     const byCatalog = new Map<string, IndexedBook[]>();
-    for (const hit of texts) {
+    for (const hit of quiet && !asking ? [] : texts) {
       const base = hit.source.split(':')[0];
       const found = byCatalog.get(base);
       if (found) found.push(hit);
@@ -677,7 +719,7 @@ export default function Find() {
     return flat;
     // The handlers read only state these already depend on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shelf, named, asking, catalogs, results, works, texts, specials, licensed, online, waiting, query, t]);
+  }, [shelf, named, asking, quiet, catalogs, results, works, texts, specials, licensed, online, waiting, query, t]);
 
   const typed = query.trim().length > 0;
 
