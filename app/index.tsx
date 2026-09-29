@@ -39,7 +39,7 @@ import { resumeWorkOnLaunch } from '../src/work/queue';
 import { useWorkRefresh } from '../src/work/refresh';
 import { restoreOnLaunch } from '../src/backup/icloud';
 import { purgeExpiredTrash } from '../src/backup/trash';
-import { clearPlaceholderCovers } from '../src/books/covers';
+import { clearMissingCovers, clearPlaceholderCovers } from '../src/books/covers';
 import { relabelLanguages } from '../src/books/save';
 import { BackupOffer, RestoreOffer } from '../src/ui/Safekeeping';
 import { subscribeToRestores } from '../src/backup/changes';
@@ -122,6 +122,21 @@ export default function Home() {
         Alert.alert(
           t('covers.sweptTitle', { count: cleared.length }),
           t('covers.sweptWhat', { titles: cleared.map((book) => book.title).join('\n') })
+        );
+      })
+      .catch(() => undefined);
+    // A cover whose file is gone, said out loud rather than left as a blank
+    // rectangle nothing on the shelf can explain. These are the books to look
+    // up again — or to point at a backup that still holds their pictures.
+    clearMissingCovers()
+      .then((lost) => {
+        if (!lost.length) return;
+        refresh();
+        Alert.alert(
+          t('covers.lostTitle', { count: lost.length }),
+          t('covers.lostWhat', {
+            titles: lost.slice(0, 12).map((book) => book.title).join('\n'),
+          })
         );
       })
       .catch(() => undefined);
