@@ -7,6 +7,10 @@ import { radius, space } from '../theme';
 const INSET = 40;
 /** A handle is a thing you take hold of, which means it is thumb-sized. */
 const SIZE = 44;
+/** Off the glass edge. Flush against a rounded corner reads as a mistake. */
+const EDGE = space.xs;
+/** The line it runs along: thin enough to ignore, there enough to follow. */
+const TRACK = 3;
 
 /**
  * The scroll bar, as something you can take hold of.
@@ -23,13 +27,25 @@ const SIZE = 44;
  * held it says how far through the chapter it has got, because a handle with
  * no readout is a guess with a grip on it.
  */
-export function Scrubber({ scrollY, content, layout, ink, accent, surface, offsetOf, onScrollTo }: {
+export function Scrubber({
+  scrollY,
+  content,
+  layout,
+  ink,
+  accent,
+  surface,
+  tint,
+  offsetOf,
+  onScrollTo,
+}: {
   scrollY: Animated.Value;
   content: number;
   layout: number;
   ink: string;
   accent: string;
   surface: string;
+  /** The page's own raised surface — what makes the handle a thing on paper. */
+  tint: string;
   offsetOf: () => number;
   onScrollTo: (y: number) => void;
 }) {
@@ -90,9 +106,14 @@ export function Scrubber({ scrollY, content, layout, ink, accent, surface, offse
     // Only the handle takes a touch: the rest of this strip is the page's own
     // tap zone, and covering it would cost the page-forward tap.
     <View style={[styles.rail, { top: INSET, height: layout - INSET * 2 }]} pointerEvents="box-none">
+      {/* The line the handle runs along. It is what makes a dot at the edge of
+          the page read as a position in a chapter rather than a stray mark —
+          and it is the only part that says how much is left. Faint enough to
+          disappear while reading, and it never takes a touch. */}
+      <View pointerEvents="none" style={[styles.track, { backgroundColor: ink + '14' }]} />
       <Animated.View style={[styles.holder, { transform: [{ translateY }] }]} pointerEvents="box-none">
         {dragging ? (
-          <View style={[styles.bubble, { backgroundColor: surface, borderColor: ink + '22' }]}>
+          <View style={[styles.bubble, { backgroundColor: surface, borderColor: ink + '33' }]}>
             <Text style={{ color: ink, fontSize: 13, fontWeight: '600' }}>{percent}%</Text>
           </View>
         ) : null}
@@ -101,13 +122,32 @@ export function Scrubber({ scrollY, content, layout, ink, accent, surface, offse
           style={[
             styles.handle,
             {
-              backgroundColor: dragging ? accent : surface,
+              // `tint` rather than `surface`, and no blanket opacity. It was
+              // the page's own background at 55%: a white disc on white paper
+              // behind a border already down to a tenth of its ink, which is
+              // a handle nobody could see and so nobody used.
+              backgroundColor: dragging ? accent : tint,
               borderColor: dragging ? accent : ink + '33',
-              opacity: dragging ? 1 : 0.55,
+              // Coloured by the ink, so the same rule lifts it off white
+              // paper as a shadow and off a night page as a faint halo.
+              shadowColor: ink,
             },
           ]}
         >
-          <Text style={{ color: dragging ? surface : ink, fontSize: 15, lineHeight: 18 }}>⇕</Text>
+          {/* Three bars, not a `⇕`. A glyph is drawn by whatever font the page
+              is set in and sits a pixel off centre in most of them; these are
+              the same at every size and read as something to take hold of. */}
+          <View style={styles.grip}>
+            {[0, 1, 2].map((line) => (
+              <View
+                key={line}
+                style={[
+                  styles.gripLine,
+                  { backgroundColor: dragging ? surface : ink, opacity: dragging ? 0.9 : 0.45 },
+                ]}
+              />
+            ))}
+          </View>
         </View>
       </Animated.View>
     </View>
@@ -115,16 +155,36 @@ export function Scrubber({ scrollY, content, layout, ink, accent, surface, offse
 }
 
 const styles = StyleSheet.create({
-  rail: { position: 'absolute', right: 0, width: SIZE + space.sm },
-  holder: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: space.xs },
+  rail: { position: 'absolute', right: 0, width: SIZE + EDGE + space.sm },
+  track: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: TRACK,
+    borderRadius: TRACK / 2,
+    right: EDGE + SIZE / 2 - TRACK / 2,
+  },
+  holder: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: space.xs,
+    paddingRight: EDGE,
+  },
   handle: {
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowOpacity: 0.16,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
   },
+  grip: { gap: 3, alignItems: 'center' },
+  gripLine: { width: 15, height: 1.5, borderRadius: 1 },
   bubble: {
     paddingHorizontal: space.sm,
     paddingVertical: space.xs,
