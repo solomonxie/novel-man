@@ -407,7 +407,7 @@ export class HttpError extends Error {
  */
 const PATIENCE_MS = 5000;
 
-async function within(url: string, accept: string): Promise<Response> {
+async function within(url: string, accept: string, signal?: AbortSignal): Promise<Response> {
   const stop = new AbortController();
   const timer = setTimeout(() => stop.abort(), PATIENCE_MS);
   try {
@@ -417,14 +417,21 @@ async function within(url: string, accept: string): Promise<Response> {
   } finally {
     clearTimeout(timer);
   }
+  // The caller's own reason to stop — the search was abandoned, the screen
+  // left — on top of the deadline. A request nobody is waiting for should not
+  // go on holding the radio for the five seconds it was allowed.
+  const give = () => stop.abort();
+  if (signal?.aborted) give();
+  signal?.addEventListener('abort', give);
 }
 
-async function json(url: string): Promise<unknown> {
-  return (await within(url, 'application/json')).json();
+async function json(url: string, signal?: AbortSignal): Promise<unknown> {
+  return (await within(url, 'application/json', signal)).json();
 }
 
-async function xml(url: string): Promise<string> {
-  return (await within(url, 'application/atom+xml')).text();
+    signal?.removeEventListener('abort', give);
+async function xml(url: string, signal?: AbortSignal): Promise<string> {
+  return (await within(url, 'application/atom+xml', signal)).text();
 }
 
 // `isbn` was missing, so every Open Library row came back without the number
@@ -550,23 +557,28 @@ export async function findBook(
         await json(
           isbn
             ? `${OL_SEARCH}?q=isbn:${isbn}&fields=${OL_FIELDS}&limit=${limit}`
-            : `${OL_SEARCH}?q=${encodeURIComponent(openLibraryQuery(asked))}&fields=${OL_FIELDS}&limit=${limit}`
+            : `${OL_SEARCH}?q=${encodeURIComponent(openLibraryQuery(asked))}&fields=${OL_FIELDS}&limit=${limit}`,
+          signal
         )
       )
+    signal,
     ),
     key
       ? ask('google', async () =>
           candidatesFromGoogle(
             await json(
+    /** Abandon the lookup: nobody is waiting for this search any more. */
+    signal?: AbortSignal;
               `${GOOGLE}?q=${encodeURIComponent(terms)}&maxResults=${limit}` +
-                `&key=${encodeURIComponent(key)}`
+                `&key=${encodeURIComponent(key)}`,
+              signal
             )
           )
         )
       : null,
     ask('google', async () =>
       candidatesFromGoogleFeed(
-        await xml(`${GOOGLE_FEED}?q=${encodeURIComponent(terms)}&max-results=${limit}`)
+        await xml(`${GOOGLE_FEED}?q=${encodeURIComponent(terms)}&max-results=${limit}`, signal)
       )
     ),
   ];
