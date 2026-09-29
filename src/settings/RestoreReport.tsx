@@ -5,13 +5,16 @@ import type { RestoreReport } from '../backup/restore';
 import { space, usePalette } from '../theme';
 
 /**
- * What a restore did, all four parts of it.
+ * What a restore did, all five parts of it.
  *
  * Every bundle carries the manuscripts now, so the ordinary outcome is a count
  * of books. What leads instead, where there is any, is what came back without
  * its words — a bundle written by a build that left them out, still sitting in
  * somebody's iCloud folder — because "Restored 0 books" on its own reads as a
  * failure when in fact the shelf is full of skeletons waiting for their files.
+ *
+ * The pictures put back on books already here are said separately, and have to
+ * be: nothing was added for those, so no count of restored books mentions them.
  */
 export function RestoreReportView({ report }: { report: RestoreReport }) {
   const { t } = useTranslation();
@@ -29,6 +32,11 @@ export function RestoreReportView({ report }: { report: RestoreReport }) {
       {report.waiting > 0 ? (
         <Text style={line(palette, showRestored)}>
           {t('backup.restoredWaiting', { count: report.waiting })}
+        </Text>
+      ) : null}
+      {report.repaired.length > 0 ? (
+        <Text style={line(palette, true)}>
+          {t('backup.repaired', { count: report.repaired.length })}
         </Text>
       ) : null}
       {report.duplicates.length > 0 ? (
