@@ -9,7 +9,7 @@ const build = process.env.BUILD_DIR ?? join(here, '..', '.parse-check');
 
 const { docxImporter } = await import(join(build, 'import/formats/docx.js'));
 const { epubImporter } = await import(join(build, 'import/formats/epub.js'));
-const { txtImporter } = await import(join(build, 'import/formats/plain.js'));
+const { txtImporter, markdownImporter } = await import(join(build, 'import/formats/plain.js'));
 const { normalize } = await import(join(build, 'import/normalize.js'));
 const { detectChapters } = await import(join(build, 'structure/detect.js'));
 const { detectLanguage, scriptOf, baseLanguage } = await import(join(build, 'text/language.js'));
@@ -2222,5 +2222,139 @@ console.log('a page carrying several posts');
   check('comes through whole', blocks.map((block) => block.text), ['One', 'First.', 'Two', 'Second.']);
 }
 
-console.log(failures ? `\n${failures} failing` : '\nall passing');
-process.exit(failures ? 1 : 0);
+console.log('a page whose author commented something out');
+{
+  // The CppCoreGuidelines sidebar, verbatim: a commented-out heading with
+  // someone's attempt at a nested comment inside it. Read past, it cost two
+  // paragraphs of debris and a chapter that was never written.
+  const page = `<body><div class="sidebar"><img src="logo.png"/>
+      <!--
+      <h3>
+        <!- -<a href="/Guidelines">- ->
+        <a href="https://github.com/isocpp/CppCoreGuidelines">
+          C++ Core Guidelines
+        </a>
+      </h3>
+      -->
+    </div><h1>C++ Core Guidelines</h1><p>A living document.</p></body>`;
+  const blocks = await blocksFromHtml(page);
+  check('the comment leaves no text behind', blocks.some((b) => /--|- ->/.test(b.text)), false);
+  check('and no chapter either', blocks.filter((b) => b.heading).map((b) => b.text),
+    ['C++ Core Guidelines']);
+  check('the page itself is unharmed', blocks.map((b) => b.text),
+    ['C++ Core Guidelines', 'A living document.']);
+}
+
+console.log('markdown');
+{
+  const md = [
+    '# <a name="main"></a>C++ Core Guidelines',
+    'Prose on the very next line, with no blank line above it.',
+    '',
+    '## <a name="s-abstract"></a>Abstract',
+    '',
+    'Use `vector<int>` rather than an array, and `#include <span>` for a view.',
+    '',
+    '    class Date {',
+    '    public:',
+    '        Month month() const;',
+    '',
+    '        int year() const;',
+    '    };',
+    '',
+    'After the listing.',
+    '',
+    '* a bullet',
+    '    * a bullet under it',
+    '',
+    '```cpp',
+    'int main() {',
+    '',
+    '  return 0;',
+    '}',
+    '```',
+  ].join('\n');
+  const parsed = await markdownImporter.parse(new TextEncoder().encode(md), 'guide.md');
+  const blocks = parsed.blocks;
+  const headings = blocks.filter((b) => b.heading);
+
+  // Every one of 2,627 chapters in the real document was called
+  // `<a name="s-abstract"></a>Abstract` until the anchors came out.
+  check('an anchor is markup, not a chapter name', headings.map((b) => b.text),
+    ['C++ Core Guidelines', 'Abstract']);
+  check('and not a book title either', parsed.title, 'C++ Core Guidelines');
+  // Splitting the file on blank lines first lost this heading entirely: the
+  // chunk was two lines, which the heading pattern could not match.
+  check('a heading with prose under it is still a heading', headings.length, 2);
+  check('the prose under it survives', blocks.some((b) => /very next line/.test(b.text)), true);
+
+  // `span` is an HTML element and a standard header. A tag-name list eats the
+  // code; asking whether it is *written* as a tag does not.
+  const prose = blocks.find((b) => /rather than an array/.test(b.text));
+  check('code spans keep their angle brackets', prose?.text,
+    'Use `vector<int>` rather than an array, and `#include <span>` for a view.');
+
+  const code = blocks.filter((b) => codeBlockIn(b.text));
+  check('an indented listing is code', code.length, 2);
+  check('held open across the blank line inside it', codeBlockIn(code[0].text),
+    'class Date {\npublic:\n    Month month() const;\n\n    int year() const;\n};');
+  // Torn into three paragraphs before, none of which began with a fence, so a
+  // C++ listing was set as prose and wrapped.
+  check('and so is a fence with a blank line in it', codeBlockIn(code[1].text),
+    'int main() {\n\n  return 0;\n}');
+  check('a nested bullet is a list, not a listing',
+    blocks.some((b) => /a bullet under it/.test(b.text) && !codeBlockIn(b.text)), true);
+  check('the paragraph after a listing is prose',
+    blocks.some((b) => b.text === 'After the listing.'), true);
+}
+
+console.log('markdown that states what it is');
+{
+  const md = [
+    '---',
+    'title: 自卑与超越',
+    'author: 【奥】阿德勒',
+    'note: ignored',
+    '---',
+    '# [1]前言',
+    '',
+    'A paragraph with a ==marked phrase== in it.',
+  ].join('\n');
+  const parsed = await markdownImporter.parse(new TextEncoder().encode(md), 'whatever.md');
+  // The two things a file name cannot carry. Without them a converted book
+  // arrives called `whatever` with no author at all.
+  check('the title comes from the front matter', parsed.title, '自卑与超越');
+  check('and so does the author', parsed.author, '【奥】阿德勒');
+  check('the block itself is not read as prose',
+    parsed.blocks.some((b) => /^title:|^---$|ignored/.test(b.text)), false);
+  check('the first heading is still a heading',
+    parsed.blocks.filter((b) => b.heading).map((b) => b.text), ['[1]前言']);
+  // `==this==` is the one piece of inline syntax that means highlight, and
+  // the reader renders it; the importer must leave it alone.
+  check('a mark is left for the reader to draw',
+    parsed.blocks.some((b) => b.text.includes('==marked phrase==')), true);
+}
+
+console.log('a hash that is not a heading');
+{
+  // A Python comment out of a code listing. Read as a heading it became a
+  // chapter of the book, seven times over in one converted textbook.
+  const md = '# Real heading\n\n\\# Create model\n\nProse after it.';
+  const parsed = await markdownImporter.parse(new TextEncoder().encode(md), 'x.md');
+  check('the escaped one is a paragraph', parsed.blocks.map((b) => b.text),
+    ['Real heading', '# Create model', 'Prose after it.']);
+  check('and only the real one is a heading',
+    parsed.blocks.filter((b) => b.heading).map((b) => b.text), ['Real heading']);
+  check('the backslash does not survive into the book',
+    parsed.blocks.some((b) => b.text.includes('\\')), false);
+}
+
+console.log('markdown with no front matter at all');
+{
+  const parsed = await markdownImporter.parse(
+    new TextEncoder().encode('Not front matter.\n\n---\n\nA rule, not a block.'),
+    'x.md'
+  );
+  check('a horizontal rule is not front matter', parsed.title, undefined);
+  check('and the prose either side of it survives', parsed.blocks.length, 3);
+}

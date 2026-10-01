@@ -1,4 +1,4 @@
-.PHONY: help check ios release screenshots manuscript
+.PHONY: help check ios release screenshots manuscript annotations
 
 .DEFAULT_GOAL := help
 
@@ -9,6 +9,7 @@ help:
 	@echo "make check        typecheck, parsers, catalogs, hooks"
 	@echo "make screenshots  SHOTS=<dir>  resize to the App Store slots"
 	@echo "make manuscript   URL=\"<url> [url...]\"  [OUT=book.md]  a web page as a book"
+	@echo "make annotations  [FROM=<dir>] [OUT=<dir>]  Word reading notes as books"
 
 check:
 	npm run check
@@ -32,3 +33,9 @@ screenshots:
 # article wrapped in a masthead, a sidebar and a column of comments.
 manuscript:
 	@python3 tools/fetch-manuscript.py $(URL) $(if $(OUT),-o $(OUT))
+
+# Reading notes exported from Word, as Markdown books this app imports. The
+# `.doc` files are binary Word 97 and are converted here, on a Mac, rather than
+# by a parser that would live in the bundle for ever to serve one migration.
+annotations:
+	@node tools/convert-annotations.mjs $(if $(FROM),--from "$(FROM)") $(if $(OUT),--out "$(OUT)")
