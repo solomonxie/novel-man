@@ -43,6 +43,7 @@
     "@react-native/metro-config": "^0.86.3",
     "@react-native/typescript-config": "^0.86.3",
     "@types/react": "^19.3.0",
+    "pdfjs-dist": "^4.7.76",
     "typescript": "^7.0.2"
   },
   "overrides": {
