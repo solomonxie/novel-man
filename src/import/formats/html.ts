@@ -68,9 +68,26 @@ function contentOf(body: string): string {
  */
 const FURNITURE = /<(script|style|noscript|nav|aside|footer|form)(?=[\s/>])[^>]*>[\s\S]*?<\/\1>/gi;
 
+/**
+ * What the author took out. It has to go before anything else looks at the
+ * markup, because a comment is not inert once the tags are stripped: the
+ * CppCoreGuidelines sidebar carries a commented-out `<h3>` around the project's
+ * own name, and reading past it cost the import twice over — the `-->` arrived
+ * as a paragraph of the book, and the dead `<h3>` arrived as a chapter, so the
+ * first thing anyone saw of a 700,000-character document was `- ->` and `-->`.
+ *
+ * Non-greedy, and that is the whole subtlety. The same comment contains
+ * `<!- -<a …>- ->` — someone's attempt at nesting one comment in another, which
+ * HTML has never allowed. Those are not delimiters, the first real `-->` is the
+ * close, and stopping there is exactly right.
+ */
+const COMMENTS = /<!--[\s\S]*?-->/g;
+
 export async function blocksFromHtml(html: string, context?: ParseContext): Promise<Block[]> {
   const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html)?.[1] ?? html;
-  const withoutNoise = contentOf(body)
+  // Comments first: `contentOf` looks for an `<article>`, and a commented-out
+  // one would otherwise choose the part of the page to read.
+  const withoutNoise = contentOf(body.replace(COMMENTS, ''))
     .replace(FURNITURE, '')
     .replace(/<br\s*\/?>/gi, '\n');
 
