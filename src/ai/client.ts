@@ -102,6 +102,22 @@ export class AiError extends Error {
   }
 }
 
+/**
+ * The request never answered.
+ *
+ * Its own class because it means something different from every other
+ * failure: the key may be perfectly good and the *model* gone. A vendor that
+ * has retired a model id does not always say so — DeepSeek answers a retired
+ * id with nothing at all — and `fetch` waits for ever by default, so without
+ * this a dead model and a wrong key looked identical from the outside: a
+ * spinner that never stopped.
+ */
+export class AiTimeout extends Error {
+  constructor(public vendor: string) {
+    super('timeout');
+  }
+}
+
 export function clientFor(vendorId: string) {
   const vendor = vendorById(vendorId);
   if (!vendor) throw new Error(`unknown vendor ${vendorId}`);

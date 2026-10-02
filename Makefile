@@ -1,9 +1,10 @@
-.PHONY: help check ios release screenshots manuscript annotations
+.PHONY: help check ios install-ios release screenshots manuscript annotations
 
 .DEFAULT_GOAL := help
 
 help:
 	@echo "make ios          Release build onto the paired iPhone"
+	@echo "make install-ios STOREFRONT=CHN   the same phone, built as the China App Store build"
 	@echo "make release      check, then archive + upload to App Store Connect"
 	@echo "make release BUILD=202609241830   same, with the build number pinned"
 	@echo "make check        typecheck, parsers, catalogs, hooks"
@@ -14,8 +15,40 @@ help:
 check:
 	npm run check
 
-install-ios:
+# Which App Store this build is for. `STOREFRONT=CHN` (or CN, or CHINA) builds
+# what the China store gets: only the AI vendors filed there, no drawing, and
+# Chinese as the opening language. `STORE=china` means the same thing.
+#
+# It installs over the same bundle id, so iOS treats it as an upgrade and the
+# app's Documents — the library, the covers, the manuscripts — are untouched.
+# Nothing in the China build deletes anything either: the vendor list only
+# governs what is *offered*, so keys already stored stay stored.
+#
+# The value is written into src/store/override.ts for the build and put back
+# straight after, so the tree never says one thing while the installed app
+# does another, and nothing switchable ever reaches a reviewer.
+CHINA := $(filter CHN CN CHINA chn cn china,$(STOREFRONT)$(STORE))
+
+ios install-ios:
+ifneq ($(CHINA),)
+	@echo "Building the China App Store build."
+	@cp src/store/override.ts /tmp/novelman-store-override.ts
+	@sed -i '' "s/^export const STORE: string = .*/export const STORE: string = 'china';/" src/store/override.ts
+	@npm run ios; status=$$?; \
+	  cp /tmp/novelman-store-override.ts src/store/override.ts; \
+	  rm -f /tmp/novelman-store-override.ts; \
+	  exit $$status
+else
 	npm run ios
+endif
+
+# Archive, sign for the App Store and upload, all of it — no Xcode Organizer.
+# Needs ios/Local.xcconfig (Team ID) and the app record already created in
+# App Store Connect. Uploads whatever is on disk, so say so when that is not
+# a commit.
+release: check
+	@git diff --quiet HEAD -- || echo "warning: uncommitted changes are going into this build"
+	scripts/release-ios.sh $(BUILD)
 
 # Archive, sign for the App Store and upload, all of it — no Xcode Organizer.
 # Needs ios/Local.xcconfig (Team ID) and the app record already created in

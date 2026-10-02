@@ -104,6 +104,7 @@ const { bookFiles, contentsUrl, parseRepoUrl, rawUrl, searchUrl, titleFrom } =
 const { normaliseEndpoint, endpointProblem } = await import(join(build, 'cloud/providers.js'));
 const { parsePin, mapUrl, pinLabel } = await import(join(build, 'cast/location.js'));
 const { placeNamed } = await import(join(build, 'cast/gazetteer.js'));
+const { modelFor, vendorById, vendorsFor } = await import(join(build, 'ai/vendors.js'));
 const { parseWikiLink, isLink } = await import(join(build, 'cast/lookup.js'));
 const { parseTie, tieOf, reverseTie, TIES, TIE_OPPOSITE } = await import(join(build, 'cast/ties.js'));
 const { answer, deckFor, isDue, nextDueAt, unseen, DAY, START_EASE } =
@@ -2502,3 +2503,34 @@ console.log('markdown with no front matter at all');
   check('a horizontal rule is not front matter', parsed.title, undefined);
   check('and the prose either side of it survives', parsed.blocks.length, 3);
 }
+
+console.log('which model a key runs on');
+{
+  const deepseek = vendorById('deepseek');
+  check('the default is the live one', modelFor(deepseek).id, 'deepseek-v4-pro');
+  check('a chosen model is honoured', modelFor(deepseek, 'deepseek-reasoner').id,
+    'deepseek-reasoner');
+  // A key saved before the model went away still has it written against it,
+  // and at this vendor a retired id does not answer at all — the request
+  // hangs rather than failing, so the app waits for ever.
+  check('a retired model falls back to the default', modelFor(deepseek, 'deepseek-chat').id,
+    'deepseek-v4-pro');
+  check('and so does the other one', modelFor(deepseek, 'deepseek-flash').id,
+    'deepseek-v4-pro');
+  // Not knowing an id is a different case: it is probably newer than this
+  // build, and a typed id is the escape hatch for exactly that.
+  check('an unknown model is still run', modelFor(deepseek, 'deepseek-v5').id, 'deepseek-v5');
+  check('borrowing the default price', modelFor(deepseek, 'deepseek-v5').price,
+    deepseek.models[0].price);
+}
+
+console.log('which vendors a build offers');
+{
+  check('everything, outside China', vendorsFor('world').length, 10);
+  const china = vendorsFor('china').map((vendor) => vendor.id);
+  check('only the filed ones in it', china, ['deepseek', 'qwen', 'moonshot', 'zhipu']);
+  check('and OpenAI is not among them', china.includes('openai'), false);
+}
+
+console.log(failures ? `\n${failures} failing` : '\nall passing');
+process.exit(failures ? 1 : 0);
