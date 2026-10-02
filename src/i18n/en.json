@@ -302,6 +302,7 @@
     "word": "Word"
   },
   "settings": {
+    "title": "Settings",
     "language": "Language",
     "languageSystem": "System",
     "ai": "AI keys",

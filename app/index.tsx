@@ -17,7 +17,6 @@ import type { TFunction } from 'i18next';
 
 import { listBooks, type BookListItem } from '../src/db/repo';
 import { reviewedBooks, shelfOf, type ReadingStatus } from '../src/books/record';
-import { flaggedCount } from '../src/books/flags';
 import { subscribeToQueue, type ImportJob } from '../src/import/queue';
 import { supportedExtensions } from '../src/import/registry';
 import { Row, Section } from '../src/ui/primitives';
@@ -25,16 +24,10 @@ import { BookTile } from '../src/ui/BookTile';
 import { ReviewCard } from '../src/ui/ReviewCard';
 import { hueFrom } from '../src/ui/fields';
 import { Chip, ChipRow } from '../src/ui/detail';
-import { coversByList, listBookLists, listTags, type BookList, type Face } from '../src/db/shelves';
+import { listBookLists, listTags, type BookList } from '../src/db/shelves';
 import { ListAlbum } from '../src/ui/ListAlbum';
-import { AiKeysSettings } from '../src/settings/AiKeys';
-import { BackupSettings } from '../src/settings/Backup';
-import { CloudSettings } from '../src/settings/Cloud';
-import { setUiLanguage, SUPPORTED, type UiLanguage } from '../src/i18n';
 import { QueueSheet, QueueStrip } from '../src/ui/ImportQueue';
-import { PickerSheet } from '../src/ui/PickerSheet';
 import { SearchBar, SEARCH_BAR_HEIGHT, searchBarOffset } from '../src/ui/SearchBar';
-import { openWorkQueue, useWorkFeed } from '../src/ui/WorkQueue';
 import { resumeWorkOnLaunch } from '../src/work/queue';
 import { useWorkRefresh } from '../src/work/refresh';
 import { restoreOnLaunch } from '../src/backup/icloud';
@@ -46,7 +39,6 @@ import { subscribeToRestores } from '../src/backup/changes';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { space, usePalette } from '../src/theme';
 import { timed, trace } from '../src/dev/trace';
-import { appearances, setAppearance, useAppearance, type Appearance } from '../src/theme/appearance';
 
 /** Enough to read on the way past; the heading leads to the rest. */
 const REVIEWS_SHOWN = 3;
@@ -57,26 +49,20 @@ const SHELVES: ReadingStatus[] = ['reading', 'wishlist', 'read'];
 /** Three across and a sliver of a fourth — the sliver is what says it scrolls. */
 const PER_SCREEN = 3.2;
 
-const LANGUAGE_LABELS: Record<UiLanguage, string> = { en: 'English', 'zh-Hans': '简体中文' };
 
 export default function Home() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const palette = usePalette();
-  const appearance = useAppearance();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [books, setBooks] = useState<BookListItem[] | null>(null);
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [queueOpen, setQueueOpen] = useState(false);
-  const [languageOpen, setLanguageOpen] = useState(false);
-  const [appearanceOpen, setAppearanceOpen] = useState(false);
   /** The two ways the shelf is grouped without moving anything. */
   const [lists, setLists] = useState<BookList[]>([]);
   const [tags, setTags] = useState<{ tag: string; books: number }[]>([]);
-  const [faces, setFaces] = useState<Map<string, Face[]>>(new Map());
   /** A shelf that cannot be read is not an empty shelf, and must not say it is. */
   const [broken, setBroken] = useState<string | null>(null);
-  const work = useWorkFeed();
 
   const refresh = useCallback(() => {
     trace('refresh start');
@@ -90,7 +76,6 @@ export default function Home() {
         setBroken(String(problem));
       });
     timed('listBookLists', listBookLists()).then(setLists).catch(() => undefined);
-    timed('coversByList', coversByList()).then(setFaces).catch(() => undefined);
     timed('listTags', listTags()).then(setTags).catch(() => undefined);
   }, []);
 
@@ -213,7 +198,6 @@ export default function Home() {
    * it: `listBooks` already selected every column the rules read, so the
    * number beside the row costs an array walk rather than a query.
    */
-  const flagged = useMemo(() => flaggedCount(books ?? []), [books]);
 
   const tileWidth = Math.floor((width - space.lg * 2 - space.md * 2) / PER_SCREEN);
 
@@ -311,7 +295,7 @@ export default function Home() {
             <View style={{ marginTop: space.xl }}>
               <SectionHead title={t('shelf.sectionLists')} />
               {/* Read sideways like the shelf above it, and drawn like a
-                  record sleeve: a list is recognised by what is in it. */}
+                  record sleeve, with its own made cover. */}
               <FlatList
                 horizontal
                 data={lists}
@@ -320,8 +304,7 @@ export default function Home() {
                   <ListAlbum
                     name={item.system ? t('lists.favorites') : item.name}
                     detail={t('lists.count', { count: item.books })}
-                    faces={faces.get(item.id) ?? []}
-                    glyph={item.system ? '♥' : undefined}
+                    heart={!!item.system}
                     width={tileWidth}
                     onPress={() => router.push(`/list/${item.id}`)}
                   />
@@ -371,80 +354,24 @@ export default function Home() {
               </View>
             ) : null}
 
-            {/* Everything that is not the shelf. Settings are sections of this
-                page, not destinations behind it — a page whose only job is
-                holding four rows gets deleted — and the tools that act on the
-                whole library sit with them, above the things that are merely
-                set once. */}
-            <View style={{ paddingHorizontal: space.lg }}>
-              <Text style={[styles.shelfTitle, { color: palette.dim, marginTop: space.xxl }]}>
-                {t('more.title')}
-              </Text>
-
-              {/* The rows that are about the books rather than about the app.
-                  Flagged works leads with a number because the number is the
-                  whole point: a library quietly rots one missing cover at a
-                  time, and nothing else would ever say so.
-
-                  The two importers sit here rather than with the search
-                  sources, where they used to. Nothing about them is a source
-                  you search — a Goodreads export is one reader's own shelves,
-                  arriving once, as a file. It is a thing you do to a library,
-                  which is what this section is. */}
-              <Section title={t('more.utilities')}>
+            {/* Nothing is left on the shelf but the shelf and the way out of
+                it. The utilities went to the settings page with the rest: a
+                Goodreads import is something you do once, and it was sitting
+                under the books you read every day. */}
+            <View style={{ paddingHorizontal: space.lg, marginTop: space.xxl }}>
+              {/* The last thing on the page, and the only one that is not
+                  about the books. A row rather than a gear in the masthead:
+                  settings are opened rarely and deliberately, so they belong
+                  at the end of the page you were already scrolling, not in
+                  the corner of the one thing you open the app to look at. */}
+              <Section>
                 <Row
-                  label={t('flags.row')}
-                  detail={t('flags.rowWhy')}
-                  value={flagged > 0 ? t('flags.count', { count: flagged }) : t('flags.clear')}
-                  onPress={() => router.push('/flagged')}
-                />
-                <Row
-                  label={t('source.goodreads')}
-                  detail={t('source.goodreadsDetail')}
+                  label={t('settings.title')}
                   value="›"
-                  onPress={() => router.push('/source/goodreads')}
-                />
-                <Row
-                  label={t('source.csv')}
-                  detail={t('source.csvDetail')}
-                  value="›"
-                  onPress={() => router.push('/source/csv')}
+                  onPress={() => router.push('/settings')}
                   last
                 />
               </Section>
-
-              <Section title={t('settings.general')}>
-                <Row
-                  label={t('settings.language')}
-                  value={LANGUAGE_LABELS[i18n.language as UiLanguage] ?? 'English'}
-                  onPress={() => setLanguageOpen(true)}
-                />
-                <Row
-                  label={t('settings.appearance')}
-                  value={t(`settings.appearance_${appearance}`)}
-                  onPress={() => setAppearanceOpen(true)}
-                />
-                {/* Work is started from a book's own pages and then watched
-                    from wherever you are — so it needs a door that is always
-                    in the same place, not only a strip that appears mid-run.
-                    Under the two things that are set once and never thought
-                    about again, because this is the one that is ever doing
-                    anything. */}
-                <Row
-                  label={t('work.open')}
-                  value={
-                    work.counts.pending + work.counts.running > 0
-                      ? t('work.busy', { count: work.counts.pending + work.counts.running })
-                      : t('work.idle')
-                  }
-                  onPress={openWorkQueue}
-                  last
-                />
-              </Section>
-
-              <AiKeysSettings />
-              <CloudSettings />
-              <BackupSettings onRemoved={refresh} />
             </View>
           </>
         )}
@@ -463,33 +390,6 @@ export default function Home() {
 
       <QueueSheet jobs={jobs} visible={queueOpen} onClose={() => setQueueOpen(false)} />
 
-      <PickerSheet
-        visible={languageOpen}
-        title={t('settings.language')}
-        options={SUPPORTED.map((code) => ({ id: code, label: LANGUAGE_LABELS[code] }))}
-        selectedId={i18n.language}
-        onPick={(code) => {
-          setUiLanguage(code as UiLanguage);
-          setLanguageOpen(false);
-        }}
-        onClose={() => setLanguageOpen(false)}
-      />
-
-      <PickerSheet
-        visible={appearanceOpen}
-        title={t('settings.appearance')}
-        options={appearances.map((option) => ({
-          id: option,
-          label: t(`settings.appearance_${option}`),
-          detail: option === 'system' ? t('settings.appearanceSystemHint') : undefined,
-        }))}
-        selectedId={appearance}
-        onPick={(option) => {
-          setAppearance(option as Appearance);
-          setAppearanceOpen(false);
-        }}
-        onClose={() => setAppearanceOpen(false)}
-      />
     </SafeAreaView>
   );
 }
