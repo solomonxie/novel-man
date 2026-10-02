@@ -72,6 +72,7 @@ import { pickImage } from '../../src/ui/fields';
 import { adoptImage } from '../../src/storage/files';
 import { InlineText } from '../../src/ui/inline';
 import { radius, space, usePalette } from '../../src/theme';
+import { studyState, type StudyState } from '../../src/db/study';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { KindList } from '../../src/ui/KindList';
 import { AddByLink, ConfirmAdd } from '../../src/ui/AddSheets';
@@ -113,6 +114,9 @@ export default function BookPage() {
   const [places, setPlaces] = useState<Entity[]>([]);
   const [terms, setTerms] = useState<Entity[]>([]);
   const [cards, setCards] = useState<Entity[]>([]);
+  const [words, setWords] = useState<Entity[]>([]);
+  /** How much of this book is waiting to be studied, for the row that offers it. */
+  const [study, setStudy] = useState<StudyState | null>(null);
   const [offset, setOffset] = useState(0);
   const [readAt, setReadAt] = useState<number | null>(null);
   const [noteCount, setNoteCount] = useState(0);
@@ -181,7 +185,9 @@ export default function BookPage() {
     timed('characters', listEntities(id, 'character')).then(setCharacters);
     timed('places', listEntities(id, 'place')).then(setPlaces);
     timed('terms', listEntities(id, 'term')).then(setTerms);
+    timed('words', listEntities(id, 'word')).then(setWords);
     timed('cards', listEntities(id, 'card')).then(setCards);
+    timed('study', studyState(id)).then(setStudy);
     timed('getProgress', getProgress(id)).then(setOffset);
     timed('lastReadAt', lastReadAt(id)).then(setReadAt);
     timed('listAnnotations', listAnnotations(id)).then((rows) => {
@@ -1011,6 +1017,21 @@ export default function BookPage() {
         />
       )}
 
+      {/* The reader's own vocabulary. Chips rather than rows: a word is
+          recognised at a glance, which is the whole point of having kept it. */}
+      {supports(book.kind, 'words') && (
+        <EntitySection
+          title={t('book.words')}
+          entities={byFrequency(words, mentions)}
+          onAdd={() => addEntity('word')}
+          extra={{
+            label: t('book.wordsAll'),
+            value: `${words.length}  ›`,
+            onPress: () => router.push(`/book/${book.id}/words`),
+          }}
+        />
+      )}
+
       {/* Made rather than found. A card's front is a sentence, not a name, so
           these are rows to read and not chips to recognise. */}
       {supports(book.kind, 'cards') && (
@@ -1020,6 +1041,21 @@ export default function BookPage() {
           onOpen={() => router.push(`/book/${book.id}/cards`)}
           action={{ label: '＋', onPress: () => addEntity('card') }}
         >
+          {/* The deck is wider than the cards: what a reader drills is
+              everything they kept, the terms and the words included. So the
+              count here is the deck's and not this section's. */}
+          {study && study.total > 0 ? (
+            <Row
+              label={study.due > 0 ? t('study.startDue', { n: study.due }) : t('study.start')}
+              detail={
+                study.due > 0
+                  ? t('study.kept', { n: study.total })
+                  : t('study.caughtUp')
+              }
+              link
+              onPress={() => router.push(`/book/${book.id}/study`)}
+            />
+          ) : null}
           {cards.length === 0 ? (
             <Empty
               text={t('book.cardsEmpty')}
@@ -1366,6 +1402,7 @@ const PAGES: Record<EntityKind, string> = {
   character: 'entity',
   place: 'place',
   term: 'term',
+  word: 'word',
   card: 'card',
 };
 

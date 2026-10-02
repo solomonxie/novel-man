@@ -12,6 +12,7 @@ import Entity from '../../app/entity/[id]';
 import Chapter from '../../app/chapter/[id]';
 import Place from '../../app/place/[id]';
 import Term from '../../app/term/[id]';
+import Word from '../../app/word/[id]';
 import Scene from '../../app/scene/[id]';
 import AiKey from '../../app/ai-key/[id]';
 import AiRequest from '../../app/ai-request/[id]';
@@ -29,7 +30,9 @@ import Part from '../../app/book/[id]/part/[idx]';
 import Graph from '../../app/book/[id]/graph';
 import Translation from '../../app/book/[id]/translation';
 import Terms from '../../app/book/[id]/terms';
+import Words from '../../app/book/[id]/words';
 import Cards from '../../app/book/[id]/cards';
+import Study from '../../app/book/[id]/study';
 import Card from '../../app/card/[id]';
 import Mapping from '../../app/book/[id]/mapping';
 import Script from '../../app/book/[id]/script';
@@ -69,6 +72,7 @@ export const screens: Screen[] = [
   { path: '/chapter/[id]', component: Chapter, header: true },
   { path: '/place/[id]', component: Place, header: true },
   { path: '/term/[id]', component: Term, header: true },
+  { path: '/word/[id]', component: Word, header: true },
   { path: '/scene/[id]', component: Scene, header: true },
   { path: '/ai-key/[id]', component: AiKey, header: true },
   { path: '/ai-request/[id]', component: AiRequest, header: true },
@@ -86,6 +90,8 @@ export const screens: Screen[] = [
   { path: '/book/[id]/graph', component: Graph, header: true },
   { path: '/book/[id]/translation', component: Translation, header: true },
   { path: '/book/[id]/terms', component: Terms, header: true },
+  { path: '/book/[id]/words', component: Words, header: true },
+  { path: '/book/[id]/study', component: Study, header: true },
   { path: '/book/[id]/cards', component: Cards, header: true },
   { path: '/card/[id]', component: Card, header: true },
   { path: '/book/[id]/mapping', component: Mapping, header: true },

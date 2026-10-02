@@ -237,7 +237,12 @@
     "textSourceWhy": "This book is a record so far. Give it a manuscript and it opens for reading.",
     "textYours": "What you have",
     "textFound": "Found on this device ({{count}})",
-    "textNoneFound": "No kept list has this one. Fetch a list from the search page, or bring the file yourself."
+    "textNoneFound": "No kept list has this one. Fetch a list from the search page, or bring the file yourself.",
+    "words": "Words",
+    "wordsEmpty": "Words and phrases you keep while reading show up here.",
+    "addWord": "＋ Keep a word",
+    "searchWords": "Search words",
+    "wordsAll": "All words"
   },
   "reader": {
     "go": "Go",
@@ -293,7 +298,8 @@
     "prevShort": "Prev",
     "nextShort": "Next",
     "newCard": "＋ A new flash card from this",
-    "newTerm": "＋ A new concept or term from this"
+    "newTerm": "＋ A new concept or term from this",
+    "word": "Word"
   },
   "settings": {
     "language": "Language",
@@ -1188,6 +1194,28 @@
     "deleteConfirm": "Delete this term?",
     "excerpts": "Passages you filed here"
   },
+  "word": {
+    "eyebrow": "Word",
+    "name": "The word or phrase",
+    "aliasPlaceholder": "Other forms — a plural, the other script",
+    "summaryPlaceholder": "What it means, and anything you want to remember about it",
+    "lookUp": "Look it up",
+    "lookUpDetail": "The dictionary on this phone — senses, examples, thesaurus",
+    "wiktionary": "Wiktionary",
+    "gloss": "What it means in {{language}}",
+    "glossDetail": "One line, from the sentence it was said in. Uses a key.",
+    "glossing": "Asking…",
+    "glossFailed": "Couldn’t get a meaning for it.",
+    "noSystemEntry": "This phone’s dictionaries don’t carry it. Wiktionary covers the languages they don’t.",
+    "said": "Where the book says it",
+    "notSaid": "Not found anywhere else in this book.",
+    "timesSaid": "times",
+    "firstSaid": "first in",
+    "inChapters": "chapters",
+    "fields": "Anything else",
+    "hint": "Words you keep show up in this book’s flash cards.",
+    "deleteConfirm": "Forget this word?"
+  },
   "card": {
     "eyebrow": "Flash card",
     "frontPlaceholder": "The front — what you want to be asked",
@@ -1201,6 +1229,34 @@
     "removeExcerpt": "Take this passage off?",
     "deleteConfirm": "Delete this card? The passages on it go too; the book and your highlights are untouched.",
     "manage": "Passages"
+  },
+  "study": {
+    "title": "Flash cards",
+    "start": "Study",
+    "startDue": "Study {{n}} due",
+    "caughtUp": "Nothing due",
+    "lastStudied": "Last studied {{when}}",
+    "kept": "{{n}} kept",
+    "nothingKept": "Nothing kept from this book yet. Cards, terms and words you keep all end up here.",
+    "nothingDue": "Nothing due. Come back when the schedule says so — studying early is how spacing stops working.",
+    "noBacks": "Nothing here has a meaning written on it yet, so there is nothing to check a recall against.",
+    "position": "{{done}} of {{of}}",
+    "sofar": "{{right}} right · {{wrong}} missed",
+    "tapToTurn": "Tap to turn it over",
+    "turn": "Turn it over",
+    "gotIt": "Got it",
+    "missed": "Missed it",
+    "open": "Open it",
+    "score": "{{right}} of {{of}}",
+    "nextDue": "Next card {{when}}.",
+    "allCaught": "That is everything.",
+    "laterToday": "later today",
+    "tomorrow": "tomorrow",
+    "inDays": "in {{n}} days",
+    "done": "Done",
+    "kind_card": "Card",
+    "kind_term": "Term",
+    "kind_word": "Word"
   },
   "ol": {
     "mode_kept": "Saved categories",

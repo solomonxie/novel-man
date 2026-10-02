@@ -105,6 +105,8 @@ const { normaliseEndpoint, endpointProblem } = await import(join(build, 'cloud/p
 const { parsePin, mapUrl, pinLabel } = await import(join(build, 'cast/location.js'));
 const { parseWikiLink, isLink } = await import(join(build, 'cast/lookup.js'));
 const { parseTie, tieOf, reverseTie, TIES, TIE_OPPOSITE } = await import(join(build, 'cast/ties.js'));
+const { answer, deckFor, isDue, nextDueAt, unseen, DAY, START_EASE } =
+  await import(join(build, 'study/schedule.js'));
 
 let failures = 0;
 
@@ -2308,6 +2310,62 @@ console.log('markdown');
     blocks.some((b) => /a bullet under it/.test(b.text) && !codeBlockIn(b.text)), true);
   check('the paragraph after a listing is prose',
     blocks.some((b) => b.text === 'After the listing.'), true);
+}
+
+console.log('when a card comes back');
+{
+  const now = 1_000_000_000_000;
+  const fresh = unseen(now);
+  check('a card nobody has studied is due', isDue(fresh, now), true);
+
+  const first = answer(fresh, 'right', now);
+  check('right, once, is tomorrow', first.intervalDays, 1);
+  const second = answer(first, 'right', now);
+  check('right, twice, is next week', second.intervalDays, 6);
+  const third = answer(second, 'right', now);
+  // 6 days times the ease it has earned, which is the whole of SM-2.
+  check('after that the gap is the ease', third.intervalDays, Math.round(6 * second.ease));
+  check('and it is a fortnight out', Math.round((third.dueAt - now) / DAY), third.intervalDays);
+  check('being right makes it easier', third.ease > START_EASE, true);
+
+  const missed = answer(third, 'wrong', now);
+  check('a miss sends it back to the start', missed.reps, 0);
+  check('and is counted', missed.lapses, 1);
+  check('and makes it harder', missed.ease < third.ease, true);
+  // Tomorrow is too late for a card you just failed: it stays in the sitting.
+  check('a missed card comes back today', missed.dueAt - now < DAY, true);
+
+  // The floor matters: without it the gaps stop growing and the card is shown
+  // for ever. SM-2 stops at 1.3.
+  let hard = unseen(now);
+  for (let at = 0; at < 20; at++) hard = answer(hard, 'wrong', now);
+  check('the ease has a floor', hard.ease, 1.3);
+
+  let easy = unseen(now);
+  for (let at = 0; at < 20; at++) easy = answer(easy, 'right', now);
+  check('and a ceiling, so nothing is scheduled years out', easy.ease, 2.8);
+}
+
+console.log('what to study');
+{
+  const now = 1_000_000_000_000;
+  const cards = [
+    { id: 'later', schedule: { ...unseen(now), dueAt: now + 5 * DAY, lastAt: now } },
+    { id: 'overdue', schedule: { ...unseen(now), dueAt: now - 30 * DAY, lastAt: now - 60 * DAY } },
+    { id: 'new', schedule: unseen(now) },
+    { id: 'due', schedule: { ...unseen(now), dueAt: now - 1 * DAY, lastAt: now - 7 * DAY } },
+  ];
+  const deck = deckFor(cards, now);
+  // Overdue first and the most overdue first, because that is the card closest
+  // to being lost. New ones come after: fifty new cards do not help a reader
+  // who has let fifty go overdue.
+  check('due first, most overdue first, new last', deck.map((one) => one.id),
+    ['overdue', 'due', 'new']);
+  check('nothing is studied ahead of its schedule',
+    deck.some((one) => one.id === 'later'), false);
+  check('and the session can say when the rest come back',
+    nextDueAt(cards.map((one) => one.schedule), now), now + 5 * DAY);
+  check('with nothing left, nothing to say', nextDueAt([], now), null);
 }
 
 console.log('markdown that states what it is');

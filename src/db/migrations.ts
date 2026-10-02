@@ -843,4 +843,25 @@ export const migrations: string[] = [
   // up once can be added again on a plane. Empty for every fetched list,
   // which is why it is a column rather than a table.
   `ALTER TABLE catalog ADD COLUMN payload TEXT;`,
+
+  // When each card comes back. One row per thing being studied — a card, a
+  // term, a word — and a table rather than columns on `entities`, because
+  // most entities are never studied and a schedule is not a property of the
+  // thing: it is a property of one reader's memory of it.
+  //
+  // `ease` and `interval_days` are SM-2's, and `src/study/schedule.ts` is the
+  // only thing that writes them. Deleting the entity takes its schedule with
+  // it; forgetting a word should not leave its revision history behind.
+  `CREATE TABLE study (
+     entity_id TEXT PRIMARY KEY NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     reps INTEGER NOT NULL DEFAULT 0,
+     lapses INTEGER NOT NULL DEFAULT 0,
+     ease REAL NOT NULL DEFAULT 2.5,
+     interval_days REAL NOT NULL DEFAULT 0,
+     due_at INTEGER NOT NULL,
+     last_at INTEGER,
+     last_recalled INTEGER
+   );
+   CREATE INDEX study_due ON study(book_id, due_at);`,
 ];

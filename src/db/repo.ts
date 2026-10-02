@@ -78,7 +78,7 @@ export type Chapter = {
  * reader made — but it is the same row in every way that matters. A name, a
  * description, passages out of the book, pictures, custom fields.
  */
-export type EntityKind = 'character' | 'place' | 'term' | 'card';
+export type EntityKind = 'character' | 'place' | 'term' | 'word' | 'card';
 
 export type CustomField = { label: string; value: string };
 
@@ -748,6 +748,33 @@ export async function countEntities(bookId: string, kind: EntityKind): Promise<n
 export async function getEntity(id: string): Promise<Entity | null> {
   const database = await db();
   return database.getFirstAsync<Entity>('SELECT * FROM entities WHERE id = ?', id);
+}
+
+/**
+ * The same word, selected twice. A reader who marks `觥筹交错` in chapter two
+ * and again in chapter forty means the one entry, and silently collecting two
+ * of them would split its appearances and its notes down the middle. Matched
+ * case-insensitively on the name and on the alias, because the second
+ * selection is as likely to be the plural or the other script.
+ */
+export async function findEntityNamed(
+  bookId: string,
+  kind: EntityKind,
+  name: string
+): Promise<Entity | null> {
+  const wanted = name.trim();
+  if (!wanted) return null;
+  const database = await db();
+  return database.getFirstAsync<Entity>(
+    `SELECT * FROM entities
+      WHERE book_id = ? AND kind = ?
+        AND (name = ? COLLATE NOCASE OR alias = ? COLLATE NOCASE)
+      ORDER BY sort_index LIMIT 1`,
+    bookId,
+    kind,
+    wanted,
+    wanted
+  );
 }
 
 export async function createEntity(bookId: string, kind: EntityKind, name: string): Promise<string> {

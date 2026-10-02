@@ -24,4 +24,13 @@ export function setUiLanguage(lang: UiLanguage | 'system') {
   i18n.changeLanguage(lang === 'system' ? deviceLanguage() : lang);
 }
 
+/**
+ * Which language the app is being read in — not the device's, which may differ
+ * once the reader has chosen. What answers to a gloss or a lookup is this one:
+ * a Chinese novel read with the app in English wants its words in English.
+ */
+export function uiLanguage(): UiLanguage {
+  return /^zh/i.test(i18n.language ?? '') ? 'zh-Hans' : 'en';
+}
+
 export default i18n;

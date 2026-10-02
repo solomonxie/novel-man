@@ -8,7 +8,21 @@
  * sections its page has. A new kind is a row plus its catalog strings, not an
  * edit to every screen.
  */
-export type BookFeature = 'cast' | 'terms' | 'cards' | 'scenes' | 'script' | 'visuals' | 'verses';
+export type BookFeature =
+  | 'cast'
+  | 'terms'
+  /**
+   * A word, a phrase or a turn of speech the reader wants to keep. Every kind
+   * has it, which is the one feature that is true of all of them: a name in
+   * Judges, `Conway's law` in a design book, an idiom in a 武侠 novel. The
+   * thing being collected is the language, and every book is made of it.
+   */
+  | 'words'
+  | 'cards'
+  | 'scenes'
+  | 'script'
+  | 'visuals'
+  | 'verses';
 
 /**
  * A door on the Add page. Beside the two the reader brings something to —
@@ -41,6 +55,8 @@ export type BookSection =
   | 'cast'
   | 'places'
   | 'terms'
+  /** The reader's own vocabulary out of this book. */
+  | 'words'
   /** Made rather than found: what the reader is trying to remember. */
   | 'cards'
   | 'translations'
@@ -89,19 +105,19 @@ export const bookKinds: BookKind[] = [
     group: 'fiction',
     subject: 'a novel',
     fiction: true,
-    features: ['cast', 'terms', 'scenes', 'script', 'visuals'],
+    features: ['cast', 'terms', 'words', 'cards', 'scenes', 'script', 'visuals'],
     part: 'volume',
     sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads', 'csv'],
-    sections: ['chapters', 'scenes', 'notes', 'cast', 'places', 'terms', 'translations', 'script', 'visuals'],
+    sections: ['chapters', 'scenes', 'notes', 'cast', 'places', 'terms', 'words', 'cards', 'translations', 'script', 'visuals'],
   },
   {
     id: 'nonfiction',
     group: 'nonfiction',
     subject: 'a work of nonfiction',
     fiction: false,
-    features: ['cast', 'terms'],
+    features: ['cast', 'terms', 'words', 'cards'],
     sources: ['gutenberg', 'standardebooks', 'files', 'link', 'record', 'openlibrary', 'goodreads', 'csv'],
-    sections: ['chapters', 'notes', 'cast', 'places', 'terms', 'translations'],
+    sections: ['chapters', 'notes', 'cast', 'places', 'terms', 'words', 'cards', 'translations'],
   },
   {
     // A tutorial and a textbook were two rows for one book: something you read
@@ -111,12 +127,12 @@ export const bookKinds: BookKind[] = [
     group: 'nonfiction',
     subject: 'an instructional book',
     fiction: false,
-    // The one kind read in order to be able to do something afterwards, which
-    // is what a flash card is for. A novel does not get them: nobody drills
-    // themselves on a story.
-    features: ['terms', 'cards'],
+    // Cards began here, as the one kind read in order to be able to do
+    // something afterwards. They are everywhere now: what a reader drills is
+    // the vocabulary, and a 武侠 novel has more of it than a tutorial does.
+    features: ['terms', 'words', 'cards'],
     sources: ['files', 'link', 'record', 'openlibrary', 'goodreads', 'csv'],
-    sections: ['chapters', 'notes', 'terms', 'cards', 'translations'],
+    sections: ['chapters', 'notes', 'terms', 'words', 'cards', 'translations'],
   },
   {
     id: 'paper',
@@ -127,9 +143,9 @@ export const bookKinds: BookKind[] = [
     unit: 'section',
     // No cast, no scenes: the people in a paper are its authors, and they are
     // on the cover rather than in the text.
-    features: [],
+    features: ['words'],
     sources: ['arxiv', 'files', 'link', 'record'],
-    sections: ['chapters', 'notes', 'translations'],
+    sections: ['chapters', 'notes', 'words', 'translations'],
   },
   {
     id: 'scripture',
@@ -139,7 +155,7 @@ export const bookKinds: BookKind[] = [
     // Scenes, because scripture has them: the ship, the storm, the lots, the
     // sea. What it does not have is paragraphs anyone can number — the words
     // are cited to a pass rather than sent — so a scene here starts at a verse.
-    features: ['cast', 'terms', 'verses', 'scenes'],
+    features: ['cast', 'terms', 'words', 'cards', 'verses', 'scenes'],
     part: 'book',
     // The file picker still works for a bible someone already has; the preset
     // source leads because nobody has a USFM zip lying around. A link covers
@@ -149,7 +165,7 @@ export const bookKinds: BookKind[] = [
     sources: ['ebible', 'files', 'link'],
     // A bible is read in the edition it was downloaded as; retranslating one
     // is not what this app is for.
-    sections: ['parts', 'chapters', 'scenes', 'notes', 'cast', 'places', 'terms'],
+    sections: ['parts', 'chapters', 'scenes', 'notes', 'cast', 'places', 'terms', 'words', 'cards'],
   },
 ];
 
