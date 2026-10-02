@@ -103,6 +103,7 @@ const { bookFiles, contentsUrl, parseRepoUrl, rawUrl, searchUrl, titleFrom } =
   await import(join(build, 'sources/repo.js'));
 const { normaliseEndpoint, endpointProblem } = await import(join(build, 'cloud/providers.js'));
 const { parsePin, mapUrl, pinLabel } = await import(join(build, 'cast/location.js'));
+const { placeNamed } = await import(join(build, 'cast/gazetteer.js'));
 const { parseWikiLink, isLink } = await import(join(build, 'cast/lookup.js'));
 const { parseTie, tieOf, reverseTie, TIES, TIE_OPPOSITE } = await import(join(build, 'cast/ties.js'));
 const { answer, deckFor, isDue, nextDueAt, unseen, DAY, START_EASE } =
@@ -2366,6 +2367,41 @@ console.log('what to study');
   check('and the session can say when the rest come back',
     nextDueAt(cards.map((one) => one.schedule), now), now + 5 * DAY);
   check('with nothing left, nothing to say', nextDueAt([], now), null);
+}
+
+console.log('places a table can answer');
+{
+  // The whole point: a bible or a history is mostly countries and places with
+  // a known modern name, and paying a model to be told Egypt is Egypt was the
+  // old way round.
+  check('a country is itself', placeNamed('Egypt'),
+    { modern: 'Egypt', how: 'country', certainty: 'certain' });
+  check('and keeps the spelling the book used', placeNamed('egypt')?.modern, 'egypt');
+  check('the book’s furniture comes off', placeNamed('the land of Egypt'),
+    { modern: 'Egypt', how: 'country', certainty: 'certain' });
+
+  // The part that earns its bytes: no map search resolves any of these.
+  check('an ancient name becomes a modern one', placeNamed('Shushan'),
+    { modern: 'Susa, Iran', how: 'ancient', certainty: 'certain' });
+  check('two words and all', placeNamed('Caesarea Philippi')?.modern, 'Banias, Golan Heights');
+  check('Constantinople is Istanbul', placeNamed('Constantinople')?.modern, 'Istanbul, Turkey');
+
+  // A disputed identification is written as disputed, so the reader can see
+  // the claim and correct it rather than trusting a confident pin in a field.
+  check('a disputed site says so', placeNamed('Ur of the Chaldees')?.certainty, 'probable');
+  check('an undisputed one does not', placeNamed('Memphis')?.certainty, 'certain');
+
+  check('a mountain is found under its name', placeNamed('Mount Carmel')?.modern,
+    'Mount Carmel, Israel');
+  check('and with the honorific stripped too', placeNamed('Mt. Nebo')?.modern,
+    'Mount Nebo, Jordan');
+  check('trailing punctuation is not part of a name', placeNamed('Rome,')?.modern, 'Rome, Italy');
+
+  // Not in the table is not an error: the map search takes it, and a wrong
+  // pin would be worse than no pin.
+  check('an invented place is nobody’s business', placeNamed('Gormenghast'), null);
+  check('nor is a sentence', placeNamed('somewhere east of the river'), null);
+  check('nor nothing', placeNamed('   '), null);
 }
 
 console.log('markdown that states what it is');

@@ -1214,7 +1214,8 @@
     "inChapters": "章",
     "fields": "其他信息",
     "hint": "你收集的词语会出现在本书的记忆卡中。",
-    "deleteConfirm": "不再保留这个词？"
+    "deleteConfirm": "不再保留这个词？",
+    "study": "深入研读"
   },
   "card": {
     "eyebrow": "记忆卡",
