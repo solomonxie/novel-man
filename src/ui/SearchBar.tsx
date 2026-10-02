@@ -1,3 +1,4 @@
+import type { RefObject } from 'react';
 import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { radius, space, usePalette } from '../theme';
@@ -26,6 +27,7 @@ export function SearchBar({
   onChange,
   onSubmit,
   autoFocus,
+  field,
 }: {
   /** What is in it. Absent on the shelf, where it is a button drawn as a field. */
   value?: string;
@@ -37,6 +39,11 @@ export function SearchBar({
   /** The return key, which is the one moment a query was certainly meant. */
   onSubmit?: () => void;
   autoFocus?: boolean;
+  /**
+   * A handle on the field, for a page that would rather raise the keyboard
+   * itself than have it come up while the screen is still sliding in.
+   */
+  field?: RefObject<TextInput | null>;
 }) {
   const palette = usePalette();
   const typing = Boolean(onChange);
@@ -54,6 +61,7 @@ export function SearchBar({
       <SearchGlass color={palette.dim} />
       {typing ? (
         <TextInput
+          ref={field}
           value={value}
           onChangeText={onChange}
           placeholder={placeholder}
