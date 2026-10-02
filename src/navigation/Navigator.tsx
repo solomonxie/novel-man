@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StatusBar } from 'react-native';
 import { NavigationContainer, ThemeProvider, type Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import '../i18n';
+import { loadUiLanguage } from '../i18n';
 import { Extractor } from '../import/extractor';
 import { WorkOverlay } from '../ui/WorkQueue';
 import { listenForIncoming } from '../import/sources/incoming';
@@ -12,12 +12,32 @@ import { loadAppearance } from '../theme/appearance';
 import { watchForChanges } from '../backup/icloud';
 import { watchForLocalBackup } from '../backup/local';
 import { palettes, usePalette, useScheme, type Palette, type Scheme } from '../theme';
+import { loadDemoMode } from '../dev/demo';
 import { navigationRef } from './router';
 import { screens } from './screens';
 
 const Stack = createNativeStackNavigator();
 
+/**
+ * Which library this is has to be settled before anything opens a database or
+ * builds a folder name, and the answer is on disk. One `AsyncStorage` read, in
+ * front of everything — the launch screen is still up for it, and starting the
+ * app against the wrong library for even one query is how a demo would write
+ * into the real one.
+ */
 export default function App() {
+  const [library, setLibrary] = useState(false);
+
+  useEffect(() => {
+    // Both before the first screen: which library, and which language.
+    Promise.all([loadDemoMode(), loadUiLanguage()]).then(() => setLibrary(true));
+  }, []);
+
+  // The splash screen is what is on screen here, so there is nothing to draw.
+  return library ? <Shell /> : null;
+}
+
+function Shell() {
   // "Open in Novel Man" can arrive before any screen has mounted.
   useEffect(listenForIncoming, []);
   useEffect(() => {

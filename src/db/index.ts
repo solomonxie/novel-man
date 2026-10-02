@@ -1,4 +1,5 @@
 import { openDatabase, type Scalar } from './driver';
+import { databaseName } from '../dev/demo';
 import { noticeChange } from '../backup/changes';
 import { migrations } from './migrations';
 
@@ -33,6 +34,16 @@ export function setBeforeMigrations(hook: typeof beforeMigrations) {
   beforeMigrations = hook;
 }
 
+/**
+ * Lets go of the open database so the next `db()` opens whichever file the
+ * demo switch now names. Only that switch calls this: a handle dropped while
+ * a query is in flight is a query that fails, so it is done from a settings
+ * row with nothing else happening and the app sent back to the shelf after.
+ */
+export function closeDatabase() {
+  handle = null;
+}
+
 export function db(): Promise<Database> {
   if (!handle) {
     handle = open();
@@ -48,8 +59,9 @@ export function db(): Promise<Database> {
 
 async function open() {
   // The same file, in the same place expo-sqlite kept it. Opening anywhere
-  // else would silently start an empty library.
-  const driver = openDatabase('novelman.db');
+  // else would silently start an empty library — which is also exactly what
+  // demo mode wants, under a name of its own.
+  const driver = openDatabase(databaseName());
   const database: Database = {
     async execAsync(sql) {
       // Migrations arrive as several statements at once; the driver takes one.
