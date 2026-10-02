@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { promptFor, type Subject } from '../ai/imagery';
 import { imageUri } from '../storage/files';
+import { isChinaStore } from '../store/storefront';
 import { radius, space, usePalette } from '../theme';
 import { Block, Empty } from './detail';
 import type { Drawing } from '../db/repo';
@@ -50,12 +51,21 @@ export function Gallery({ title, subject, images, onSubmit, onOpen, empty }: {
   const [edited, setEdited] = useState<string | null>(null);
   const prompt = edited ?? (subject ? promptFor(subject) : '');
 
+  /**
+   * Drawing is OpenAI's and nobody else's — see `src/ai/image.ts` — so on the
+   * China store there is no key that could do it and no filed vendor to get
+   * one from. Offering the button anyway would be offering a service this
+   * build is not allowed to offer, which is the whole of what got the app
+   * rejected. Drawings already made are still shown: they are the reader's.
+   */
+  const offered = subject && !isChinaStore();
+
   return (
     <Block
       title={title}
       count={images.length || undefined}
       action={
-        subject
+        offered
           ? {
               label: drawing ? t('gallery.cancel') : t('gallery.draw'),
               onPress: () => setDrawing((was) => !was),
@@ -63,7 +73,7 @@ export function Gallery({ title, subject, images, onSubmit, onOpen, empty }: {
           : undefined
       }
     >
-      {drawing && subject ? (
+      {drawing && offered ? (
         <View style={{ gap: space.sm, paddingBottom: space.sm }}>
           <TextInput
             value={prompt}

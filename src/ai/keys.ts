@@ -1,5 +1,5 @@
 import * as SecureStore from '../storage/secrets';
-import { chat, type ChatMessage, type ChatOptions } from './client';
+import { AiTimeout, chat, type ChatMessage, type ChatOptions } from './client';
 import { modelFor, vendorById } from './vendors';
 import { recordRequest } from '../db/requests';
 
@@ -42,11 +42,35 @@ export async function setStrategy(strategy: Strategy) {
   await SecureStore.setItemAsync(STRATEGY, strategy);
 }
 
+/**
+ * How long the test waits before calling it a failure.
+ *
+ * It needs one at all because a request can hang rather than fail: a model id
+ * a vendor has retired answers nothing at DeepSeek, and `fetch` has no timeout
+ * of its own — so saving a key sat on a spinner for ever and the reader had no
+ * way to tell a wrong key from a dead model. Ten seconds is several times what
+ * a working key takes (two, at this vendor) and short enough to be worth
+ * waiting out.
+ */
+const TEST_TIMEOUT = 10_000;
+
 /** Save is the test: one real cheap request, and nothing is stored unless it works. */
 export async function addKey(vendorId: string, apiKey: string): Promise<StoredKey> {
   const vendor = vendorById(vendorId);
   if (!vendor) throw new Error('unknown-vendor');
-  await chat(vendor, apiKey.trim(), [{ role: 'user', content: 'Reply with OK.' }]);
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), TEST_TIMEOUT);
+  try {
+    await chat(vendor, apiKey.trim(), [{ role: 'user', content: 'Reply with OK.' }], {
+      signal: stop.signal,
+    });
+  } catch (problem) {
+    // An abort is this timer, not the vendor: said as a timeout so the reader
+    // looks at the model rather than at the key they just pasted.
+    throw stop.signal.aborted ? new AiTimeout(vendor.name) : problem;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const id = `${vendorId}-${Date.now().toString(36)}`;
   await SecureStore.setItemAsync(secretKey(id), apiKey.trim(), SECRET_OPTIONS);

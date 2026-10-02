@@ -27,7 +27,9 @@ import {
   type StoredKey,
   type Strategy,
 } from '../ai/keys';
-import { modelFor, vendorById, vendors } from '../ai/vendors';
+import { AiTimeout } from '../ai/client';
+import { modelFor, vendorById, vendorsFor } from '../ai/vendors';
+import { storefront } from '../store/storefront';
 import { Hint, Row, Section } from '../ui/primitives';
 import { radius, space, usePalette } from '../theme';
 
@@ -159,7 +161,10 @@ function AddKeySheet({ visible, onClose, onAdded }: {
 }) {
   const { t } = useTranslation();
   const palette = usePalette();
-  const [vendorId, setVendorId] = useState(vendors[0].id);
+  // What this build may offer, which on the China store is only the vendors
+  // that have been filed there. See `src/store/storefront.ts`.
+  const offered = vendorsFor(storefront());
+  const [vendorId, setVendorId] = useState(offered[0].id);
   const [secret, setSecret] = useState('');
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -173,6 +178,13 @@ function AddKeySheet({ visible, onClose, onAdded }: {
       setSecret('');
       onAdded();
     } catch (problem) {
+      // A timeout is about the model, not the key that was just pasted, and
+      // saying so is the difference between changing the model and typing the
+      // key again.
+      if (problem instanceof AiTimeout) {
+        setError(t('settings.aiTimeout', { vendor: problem.vendor }));
+        return;
+      }
       // The vendor's own message names the field to fix; ours never could.
       setError(String((problem as Error)?.message ?? problem));
     } finally {
@@ -206,7 +218,7 @@ function AddKeySheet({ visible, onClose, onAdded }: {
             {t('settings.aiVendor')}
           </Text>
           <View style={styles.vendorWrap}>
-            {vendors.map((entry) => (
+            {offered.map((entry) => (
               <Pressable
                 key={entry.id}
                 onPress={() => setVendorId(entry.id)}

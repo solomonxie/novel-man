@@ -352,7 +352,8 @@
     "removeAll": "Remove all app data",
     "removeAllTitle": "Remove all app data?",
     "removeAllWarning": "A full backup is saved on this device first — and to iCloud and any connected buckets, if set up. It holds everything but your keys: books, notes, translations, settings, even the files they were imported from. Deletion starts only after the backups finish; if a cloud backup fails, nothing is deleted.",
-    "removeAllKeeps": "The copy taken first stays in Files → Novel Man → Backups, and is not deleted with the rest."
+    "removeAllKeeps": "The copy taken first stays in Files → Novel Man → Backups, and is not deleted with the rest.",
+    "aiTimeout": "{{vendor}} didn’t answer within 10 seconds. The key may be fine — a model this vendor has retired can hang instead of failing. Try another model."
   },
   "more": {
     "utilities": "Utilities"
