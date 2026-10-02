@@ -26,6 +26,7 @@ import {
   listAnnotations,
   listChapters,
   listEntities,
+  clearManuscript,
   listMentions,
   listRelations,
   rateBook,
@@ -144,6 +145,7 @@ export default function BookPage() {
   const [identifyOpen, setIdentifyOpen] = useState(false);
   const [listsOpen, setListsOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [linking, setLinking] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [askEstimate, setAskEstimate] = useState<Estimate | null>(null);
@@ -578,6 +580,88 @@ export default function BookPage() {
   async function addEntity(kind: EntityKind) {
     const entityId = await createEntity(book!.id, kind, '');
     router.push(`/${PAGES[kind]}/${entityId}`);
+  }
+
+  /**
+   * Empty the book of its words, with a choice about the chapters.
+   *
+   * Two steps rather than one: the first asks which, the second confirms it.
+   * This is destructive and not undoable, and a single tap that quietly threw
+   * away a 3.6 MB manuscript would be a bad control to have on this page.
+   */
+  /**
+   * The PDF this book was converted from, kept beside it so a page can be
+   * looked at when the conversion is confusing.
+   *
+   * Refused outright when it is not the same file. A page number means nothing
+   * against a different printing, and opening the wrong page confidently is
+   * the one outcome worth writing code to prevent — see `books/original.ts`.
+   */
+  async function linkPdf() {
+    if (linking) return;
+    try {
+      const picked = await pickOriginalPdf();
+      if (!picked) return;
+      setLinking(true);
+      const result = await linkOriginal(book!, picked);
+      if ('path' in result) load();
+      else if (result.kind === 'pages') {
+        Alert.alert(
+          t('book.originalWrong'),
+          t('book.originalPages', { expected: result.expected, found: result.found })
+        );
+      } else if (result.kind === 'bytes') {
+        Alert.alert(t('book.originalWrong'), t('book.originalSize'));
+      } else {
+        Alert.alert(t('book.originalWrong'), t('book.originalContents'));
+      }
+    } catch (problem) {
+      Alert.alert(t('book.originalWrong'), String(problem));
+    } finally {
+      setLinking(false);
+    }
+  }
+
+  function confirmClear() {
+    Alert.alert(t('book.clearText'), t('book.clearWhat'), [
+      { text: t('settings.cancel'), style: 'cancel' },
+      {
+        text: t('book.clearContentOnly'),
+        onPress: () => askToClear('keep'),
+      },
+      {
+        text: t('book.clearBoth'),
+        style: 'destructive',
+        onPress: () => askToClear('drop'),
+      },
+    ]);
+  }
+
+  function askToClear(structure: 'keep' | 'drop') {
+    Alert.alert(
+      t('book.clearText'),
+      t(structure === 'keep' ? 'book.clearConfirmContent' : 'book.clearConfirmBoth'),
+      [
+        { text: t('settings.cancel'), style: 'cancel' },
+        {
+          text: t('book.clearGo'),
+          style: 'destructive',
+          onPress: async () => {
+            setClearing(true);
+            try {
+              await clearManuscript(book!.id, structure);
+              // Everything on this page is derived from what was just emptied.
+              setText('');
+              load();
+            } catch (problem) {
+              Alert.alert(t('book.clearFailed'), String(problem));
+            } finally {
+              setClearing(false);
+            }
+          },
+        },
+      ]
+    );
   }
 
   function confirmDelete() {
@@ -1289,6 +1373,23 @@ export default function BookPage() {
           />
         ) : null}
 
+        {/* Above deleting the book, because it is the gentler of the two and
+            the one somebody reaches for by mistake less often: the words go,
+            and every note made about them stays.
+
+            Only for a book that actually holds a manuscript. A book with a
+            `text_source` — an ESV fetched a chapter at a time — stores no text
+            to remove, and emptying its document would take away nothing while
+            telling the reader it had taken away their book. */}
+        {skeleton || book.text_source ? null : (
+          <Row
+            label={t('book.clearText')}
+            detail={t('book.clearWhy')}
+            onPress={clearing ? undefined : confirmClear}
+            busy={clearing}
+            danger
+          />
+        )}
         <Row
           label={t('book.delete')}
           detail={t('book.deleteWhere')}

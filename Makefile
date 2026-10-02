@@ -1,4 +1,4 @@
-.PHONY: help check ios install-ios release screenshots manuscript annotations pdf annotations
+.PHONY: help check ios install-ios release screenshots manuscript annotations
 
 .DEFAULT_GOAL := help
 
@@ -12,7 +12,6 @@ help:
 	@echo "make manuscript   URL=\"<url> [url...]\"  [OUT=book.md]  a web page as a book"
 	@echo "make annotations  [FROM=<dir>] [OUT=<dir>]  Word reading notes as books"
 	@echo "make pdf FILE=book.pdf  [OUT=<dir>]  a PDF as an EPUB, figures and all"
-	@echo "make annotations  [FROM=<dir>] [OUT=<dir>]  Word reading notes as books"
 
 check:
 	npm run check
@@ -52,14 +51,6 @@ release: check
 	@git diff --quiet HEAD -- || echo "warning: uncommitted changes are going into this build"
 	scripts/release-ios.sh $(BUILD)
 
-# Archive, sign for the App Store and upload, all of it — no Xcode Organizer.
-# Needs ios/Local.xcconfig (Team ID) and the app record already created in
-# App Store Connect. Uploads whatever is on disk, so say so when that is not
-# a commit.
-release: check
-	@git diff --quiet HEAD -- || echo "warning: uncommitted changes are going into this build"
-	scripts/release-ios.sh $(BUILD)
-
 screenshots:
 	scripts/store-screenshots.sh $(SHOTS)
 
@@ -68,12 +59,6 @@ screenshots:
 # article wrapped in a masthead, a sidebar and a column of comments.
 manuscript:
 	@python3 tools/fetch-manuscript.py $(URL) $(if $(OUT),-o $(OUT))
-
-# Reading notes exported from Word, as Markdown books this app imports. The
-# `.doc` files are binary Word 97 and are converted here, on a Mac, rather than
-# by a parser that would live in the bundle for ever to serve one migration.
-annotations:
-	@node tools/convert-annotations.mjs $(if $(FROM),--from "$(FROM)") $(if $(OUT),--out "$(OUT)")
 
 # A PDF as an EPUB, which is the one conversion the app cannot do for itself.
 # Reading one on the phone meant pdf.js in a hidden WebView and the whole file
