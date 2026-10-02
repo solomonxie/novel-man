@@ -302,6 +302,7 @@
     "word": "词语"
   },
   "settings": {
+    "title": "设置",
     "language": "语言",
     "languageSystem": "跟随系统",
     "ai": "AI 密钥",
