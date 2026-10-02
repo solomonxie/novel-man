@@ -107,8 +107,8 @@
     "detecting": "Finding chapters…",
     "saving": "Saving…",
     "done": "Imported",
-    "noText": "No text found in this file. If it’s a scanned PDF, the pages are images and can’t be read.",
-    "unsupported": "{{ext}} files aren’t supported yet.",
+    "noText": "No text found in this file.",
+    "unsupported": "{{ext}} files aren’t read on the phone. Convert it on a computer first — `make pdf FILE=…` turns one into an EPUB, figures and all.",
     "failed": "Import failed",
     "cancel": "Cancel",
     "tryAnother": "Try another file",
@@ -118,7 +118,8 @@
     "previewEmpty": "No readable text was found. Scanned pages are images and can’t be read.",
     "keep": "Keep",
     "discard": "Discard",
-    "discarded": "You discarded this import."
+    "discarded": "You discarded this import.",
+    "unreadable": "Couldn’t read this file: {{detail}}"
   },
   "book": {
     "continue": "Continue",
@@ -277,7 +278,6 @@
     "bilingual_off": "Original",
     "bilingual_target": "Translation",
     "bilingual_both": "Both",
-    "select": "Select",
     "selectHint": "Tap another sentence to extend the selection",
     "esvShort": "ESV",
     "done": "Done",
@@ -292,12 +292,8 @@
     "analyzeChapter": "Analyze this chapter",
     "prevShort": "Prev",
     "nextShort": "Next",
-    "fileTo": "File this…",
-    "fileTitle": "File this passage under",
-    "fileSearch": "Search",
     "newCard": "＋ A new flash card from this",
-    "newTerm": "＋ A new concept or term from this",
-    "filed": "Filed under {{name}}"
+    "newTerm": "＋ A new concept or term from this"
   },
   "settings": {
     "language": "Language",
@@ -353,7 +349,6 @@
     "removeAllKeeps": "The copy taken first stays in Files → Novel Man → Backups, and is not deleted with the rest."
   },
   "more": {
-    "title": "More",
     "utilities": "Utilities"
   },
   "flags": {

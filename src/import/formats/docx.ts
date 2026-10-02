@@ -1,6 +1,7 @@
 import { unzipSync } from 'fflate';
 import type { Block, Importer, ParseContext } from '../types';
 import { attrValue, decodeEntities, eachElement, firstTagText } from '../xml';
+import { decodeUtf8 } from '../decode';
 
 const HEADING_STYLE = /^(?:Heading|heading|标题)\s*([1-6])$/;
 const YIELD_EVERY = 2000;
@@ -91,5 +92,5 @@ function isTitleStyle(paragraph: string): boolean {
 
 function readEntry(zip: Record<string, Uint8Array>, path: string): string | undefined {
   const entry = zip[path];
-  return entry ? new TextDecoder('utf-8').decode(entry) : undefined;
+  return entry ? decodeUtf8(entry) : undefined;
 }
