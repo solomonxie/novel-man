@@ -2,7 +2,7 @@ import { Pressable, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { router } from '../navigation/router';
-import { Cover } from './primitives';
+import { Cover } from './Cover';
 import { formatCount } from '../text/counts';
 import { isSkeleton, statusOf } from '../books/record';
 import type { BookListItem } from '../db/repo';
@@ -25,7 +25,13 @@ export function BookTile({ book, width }: { book: BookListItem; width: number })
       }}
       style={{ width }}
     >
-      <Cover title={book.title} hue={book.cover_hue} width={width} path={book.cover_path} />
+      <Cover
+        title={book.title}
+        author={book.author}
+        hue={book.cover_hue}
+        width={width}
+        path={book.cover_path}
+      />
       <Text numberOfLines={2} style={{ color: palette.text, fontSize: 13, marginTop: space.xs }}>
         {book.title}
       </Text>

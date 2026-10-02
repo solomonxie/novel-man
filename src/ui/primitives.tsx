@@ -262,26 +262,6 @@ export function Grabber() {
   return <View style={[styles.grabber, { backgroundColor: palette.faint }]} />;
 }
 
-export function Cover({ title, hue, width, path }: {
-  title: string;
-  hue: number;
-  width: number;
-  path?: string | null;
-}) {
-  const height = Math.round(width * 1.45);
-  // Resolved rather than used as written: what is stored is a name, and what
-  // a path from an older install points at no longer exists. See `imageUri`.
-  const uri = path ? imageUri(path) : undefined;
-  if (uri) {
-    return <Image source={{ uri }} style={[styles.cover, { width, height }]} />;
-  }
-  return (
-    <View style={[styles.cover, { width, height, backgroundColor: `hsl(${hue}, 32%, 62%)` }]}>
-      <Text numberOfLines={4} style={styles.coverTitle}>{title}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   grabber: {
     width: 36,
@@ -330,10 +310,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryLabel: { fontSize: 17, fontWeight: '600' },
-  cover: {
-    borderRadius: radius.sm,
-    padding: space.sm,
-    justifyContent: 'flex-end',
-  },
-  coverTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
 });
