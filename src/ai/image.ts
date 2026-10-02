@@ -1,6 +1,7 @@
 import * as SecureStore from '../storage/secrets';
 import { listKeys } from './keys';
 import { vendorById } from './vendors';
+import { isChinaStore } from '../store/storefront';
 import { fromBase64 } from '../import/base64';
 
 /**
@@ -79,6 +80,11 @@ export class NoImageKey extends Error {
 
 /** The first OpenAI key there is; the others cannot draw. */
 async function drawingKey(): Promise<{ secret: string; baseUrl: string } | null> {
+  // Belt as well as braces. The China build cannot offer OpenAI as a vendor,
+  // so no key for it can be added there — but a library restored from a
+  // backup made elsewhere carries the keys' index, and this is the line that
+  // makes that harmless.
+  if (isChinaStore()) return null;
   for (const entry of await listKeys()) {
     if (entry.vendorId !== 'openai') continue;
     const secret = await SecureStore.getItemAsync(`ai.key.${entry.id}`);
