@@ -21,7 +21,7 @@ import {
 import { standardEbooksEmail } from '../sources/standardEbooksEmail';
 import { fetchManuscript, FetchError } from './sources/url';
 import { saveDownload } from './sources/downloads';
-import { importFile, type ImportPreview, type ImportProgress } from './pipeline';
+import { ImportError, importFile, type ImportPreview, type ImportProgress } from './pipeline';
 
 export type JobStatus = 'pending' | 'running' | 'awaiting' | 'done' | 'failed';
 
@@ -282,11 +282,21 @@ async function runJob(job: ImportJob, source: QueuedSource): Promise<Produced> {
   if (source.via === 'arxiv') {
     job.stage = 'reading';
     publish();
-    // The rendered HTML when the paper has one, the PDF when it does not.
+    /**
+     * arXiv's own rendering of the paper's LaTeX, which is the better half of
+     * it anyway: real headings, real figures, and the author's TeX sitting in
+     * `alttext` on every formula.
+     *
+     * There is no PDF fallback any more. Reading one needed pdf.js in a hidden
+     * WebView with the whole file crossing the bridge as base64, and what came
+     * back was a text layer with the formulas turned to gravel — which is most
+     * of a paper. `tools/convert-pdf.mjs` does it properly on a Mac, so a
+     * paper arXiv has not rendered is a download and a conversion rather than
+     * a worse import.
+     */
     const html = await fetchPaperHtml(source.paper);
-    const file = html
-      ? saveDownload(paperFileName(source.paper, 'html'), html)
-      : await fetchManuscript(source.paper.pdf, paperFileName(source.paper));
+    if (!html) throw new ImportError('unsupported', 'pdf');
+    const file = saveDownload(paperFileName(source.paper, 'html'), html);
     const result = await importFrom({ ...file, kind: source.kind, into: source.into }, job);
     // A PDF's first page is a guess at what the paper is called; arXiv is not.
     await updateBook(result.bookId, {
