@@ -1,4 +1,4 @@
-.PHONY: help check ios install-ios release screenshots manuscript annotations
+.PHONY: help check ios install-ios release screenshots manuscript annotations pdf annotations
 
 .DEFAULT_GOAL := help
 
@@ -10,6 +10,8 @@ help:
 	@echo "make check        typecheck, parsers, catalogs, hooks"
 	@echo "make screenshots  SHOTS=<dir>  resize to the App Store slots"
 	@echo "make manuscript   URL=\"<url> [url...]\"  [OUT=book.md]  a web page as a book"
+	@echo "make annotations  [FROM=<dir>] [OUT=<dir>]  Word reading notes as books"
+	@echo "make pdf FILE=book.pdf  [OUT=<dir>]  a PDF as an EPUB, figures and all"
 	@echo "make annotations  [FROM=<dir>] [OUT=<dir>]  Word reading notes as books"
 
 check:
@@ -66,6 +68,21 @@ screenshots:
 # article wrapped in a masthead, a sidebar and a column of comments.
 manuscript:
 	@python3 tools/fetch-manuscript.py $(URL) $(if $(OUT),-o $(OUT))
+
+# Reading notes exported from Word, as Markdown books this app imports. The
+# `.doc` files are binary Word 97 and are converted here, on a Mac, rather than
+# by a parser that would live in the bundle for ever to serve one migration.
+annotations:
+	@node tools/convert-annotations.mjs $(if $(FROM),--from "$(FROM)") $(if $(OUT),--out "$(OUT)")
+
+# A PDF as an EPUB, which is the one conversion the app cannot do for itself.
+# Reading one on the phone meant pdf.js in a hidden WebView and the whole file
+# crossing the bridge as base64; here there is a canvas, so the figures are
+# re-rendered rather than lost — and nearly every figure in a textbook is
+# vector art with nothing to extract. Comes back as an EPUB because the app's
+# own EPUB importer already knows how to store the pictures.
+pdf:
+	@node tools/convert-pdf.mjs --file "$(FILE)" $(if $(OUT),--out "$(OUT)")
 
 # Reading notes exported from Word, as Markdown books this app imports. The
 # `.doc` files are binary Word 97 and are converted here, on a Mac, rather than

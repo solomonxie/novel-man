@@ -1,8 +1,18 @@
 import type { Importer } from './types';
+
+/**
+ * What the app itself reads: formats that are already text, and a zip of it.
+ *
+ * PDF is deliberately absent. It needed pdf.js inside a hidden WebView, fetched
+ * from a CDN, with the whole file crossing the bridge as base64 — a 35 MB book
+ * became a 47 MB JavaScript string in one call — and what came back was a
+ * reconstruction either way, because a PDF describes a page rather than a text.
+ * `tools/convert-pdf.mjs` does that job on a Mac, where there is memory and
+ * time to do it properly, and hands back an EPUB this list already reads.
+ */
 import { txtImporter, markdownImporter } from './formats/plain';
 import { docxImporter } from './formats/docx';
 import { epubImporter } from './formats/epub';
-import { pdfImporter } from './formats/pdf';
 import { htmlImporter } from './formats/html';
 
 export const importers: Importer[] = [
@@ -10,7 +20,6 @@ export const importers: Importer[] = [
   markdownImporter,
   docxImporter,
   epubImporter,
-  pdfImporter,
   htmlImporter,
 ];
 

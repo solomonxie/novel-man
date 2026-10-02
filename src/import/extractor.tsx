@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { base64 } from './base64';
-import type { Block, ParseContext } from './types';
+import type { ParseContext } from './types';
 
 /**
  * PDF text lives behind a layout engine, and there is no pure-JS extractor
@@ -32,10 +31,6 @@ export class ExtractorError extends Error {
   constructor(public code: 'not-mounted' | 'no-network' | 'failed', detail?: string) {
     super(detail ?? code);
   }
-}
-
-export function extractPdf(bytes: Uint8Array, context?: ParseContext): Promise<Block[]> {
-  return ask<Block[]>('pdf', { data: base64(bytes) }, context);
 }
 
 /**
@@ -79,7 +74,6 @@ export function Extractor() {
     let payload: {
       id: string;
       type: string;
-      blocks?: Block[];
       values?: string[];
       done?: number;
       total?: number;
@@ -97,7 +91,7 @@ export function Extractor() {
       return;
     }
     pending.delete(payload.id);
-    if (payload.type === 'done') waiting.resolve((payload.blocks ?? payload.values ?? []) as never);
+    if (payload.type === 'done') waiting.resolve((payload.values ?? []) as never);
     else waiting.reject(new ExtractorError('failed', payload.error));
   }
 
@@ -115,84 +109,11 @@ export function Extractor() {
   );
 }
 
-const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build';
 const MATHJAX = 'https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js';
 
 const HOST_HTML = `<!doctype html><html><head><meta charset="utf-8" /></head><body>
 <script type="module">
   const post = (message) => window.ReactNativeWebView.postMessage(JSON.stringify(message));
-  let pdfjs = null;
-
-  async function library() {
-    if (pdfjs) return pdfjs;
-    pdfjs = await import('${PDFJS}/pdf.min.mjs');
-    pdfjs.GlobalWorkerOptions.workerSrc = '${PDFJS}/pdf.worker.min.mjs';
-    return pdfjs;
-  }
-
-  function bytesOf(base64) {
-    const binary = atob(base64);
-    const out = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-    return out;
-  }
-
-  // A PDF has lines, not paragraphs. A new line that starts further left than
-  // the one above it, or after a vertical gap, is where a paragraph begins.
-  function paragraphsOf(items) {
-    const lines = [];
-    let current = null;
-    for (const item of items) {
-      if (!item.str) continue;
-      const y = Math.round(item.transform[5]);
-      const x = Math.round(item.transform[4]);
-      if (!current || Math.abs(current.y - y) > 3) {
-        current = { y, x, text: item.str };
-        lines.push(current);
-      } else {
-        current.text += item.str;
-      }
-    }
-
-    const paragraphs = [];
-    let buffer = '';
-    let lastY = null;
-    let leftMargin = Math.min(...lines.map((line) => line.x));
-    for (const line of lines) {
-      const text = line.text.replace(/\\s+/g, ' ').trim();
-      if (!text) continue;
-      const gap = lastY === null ? 0 : lastY - line.y;
-      const indented = line.x > leftMargin + 8;
-      if (buffer && (gap > 22 || indented)) {
-        paragraphs.push(buffer.trim());
-        buffer = '';
-      }
-      buffer += (buffer ? ' ' : '') + text;
-      lastY = line.y;
-    }
-    if (buffer.trim()) paragraphs.push(buffer.trim());
-    return paragraphs;
-  }
-
-  let mathjax = null;
-
-  async function math() {
-    if (mathjax) return mathjax;
-    window.MathJax = { startup: { typeset: false } };
-    await new Promise((resolve, reject) => {
-      const tag = document.createElement('script');
-      tag.src = '${MATHJAX}';
-      tag.onload = resolve;
-      tag.onerror = () => reject(new Error('mathjax'));
-      document.head.appendChild(tag);
-    });
-    await window.MathJax.startup.promise;
-    mathjax = window.MathJax;
-    return mathjax;
-  }
-
-  // MathJax sizes its SVG in ex, which a canvas has no opinion about, so the
-  // box is converted to pixels first and drawn at 3x for a retina page.
   async function pngOf(latex) {
     const mj = await math();
     const svg = mj.tex2svg(latex, { display: true }).querySelector('svg');
@@ -235,15 +156,7 @@ const HOST_HTML = `<!doctype html><html><head><meta charset="utf-8" /></head><bo
         post({ id: request.id, type: 'done', values });
         return;
       }
-      const lib = await library();
-      const document = await lib.getDocument({ data: bytesOf(request.data) }).promise;
-      const blocks = [];
-      for (let page = 1; page <= document.numPages; page++) {
-        const content = await document.getPage(page).then((p) => p.getTextContent());
-        for (const paragraph of paragraphsOf(content.items)) blocks.push({ text: paragraph });
-        post({ id: request.id, type: 'progress', done: page, total: document.numPages });
-      }
-      post({ id: request.id, type: 'done', blocks });
+      post({ id: request.id, type: 'error', error: 'unknown request ' + request.kind });
     } catch (error) {
       post({ id: request.id, type: 'error', error: String(error && error.message ? error.message : error) });
     }
