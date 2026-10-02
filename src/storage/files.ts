@@ -23,7 +23,13 @@ export async function adoptSourceFile(uri: string, originalName: string) {
   const hash = sha256Hex(bytesFingerprint(bytes));
   const ext = extensionOf(originalName);
   const stored = new File(sourcesDir(), ext ? `${hash}.${ext}` : hash);
-  if (!stored.exists) stored.write(bytes);
+  // Copied by the filesystem, not written back through JavaScript. `write`
+  // takes a `Uint8Array` to base64 to hand it over — see `storage/fs.ts` —
+  // which for a 3.9 MB book is five million characters built one at a time in
+  // Hermes, on top of the five million already decoded to read it. The bytes
+  // are needed in memory anyway for the parser, but there is no reason to
+  // send them back out the way they came.
+  if (!stored.exists) picked.copy(stored);
   return { hash, path: stored.uri, size: stored.size, bytes };
 }
 

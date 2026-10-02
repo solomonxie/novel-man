@@ -1,6 +1,7 @@
 import { unzipSync } from 'fflate';
 import type { Block, Importer, ParseContext } from '../types';
 import { attr, decodeEntities, firstTagText, stripTags } from '../xml';
+import { decodeUtf8 } from '../decode';
 import { imageMarker } from '../../reader/images';
 
 const BLOCK_END = /<\/(p|div|h[1-6]|li|blockquote|section)\s*>/gi;
@@ -118,5 +119,5 @@ function resolve(baseDir: string, href: string): string {
 
 function read(zip: Record<string, Uint8Array>, path: string): string | undefined {
   const entry = zip[path] ?? zip[decodeURIComponent(path)];
-  return entry ? new TextDecoder('utf-8').decode(entry) : undefined;
+  return entry ? decodeUtf8(entry) : undefined;
 }

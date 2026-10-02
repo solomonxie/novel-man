@@ -201,8 +201,23 @@ export function describeImportError(error: unknown, t: TFunction): string {
     if (error.code === 'unsupported') return t('import.unsupported', { ext: `.${error.detail}` });
     if (error.code === 'no-text') return t('import.noText');
     if (error.code === 'rejected') return t('import.discarded');
+    // `unreadable` is every way a file can defeat the parser, and the parser's
+    // own words are the only clue there is. Swallowing them left the reader
+    // with "Import failed" and nothing to act on — which is exactly what a
+    // 3.9 MB Markdown book did, with no way to tell a memory limit from a
+    // malformed file.
+    if (error.detail) return t('import.unreadable', { detail: shorten(error.detail) });
   }
-  return t('import.failed');
+  // Nor is an unexpected failure worth hiding: what broke is usually a line
+  // from the module that broke, and a reader can at least repeat it to me.
+  const said = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  return said ? t('import.unreadable', { detail: shorten(said) }) : t('import.failed');
+}
+
+/** Enough of the cause to act on, without a stack trace in a toast. */
+function shorten(detail: string): string {
+  const line = detail.split('\n')[0].trim();
+  return line.length > 160 ? `${line.slice(0, 157)}…` : line;
 }
 
 const styles = StyleSheet.create({
