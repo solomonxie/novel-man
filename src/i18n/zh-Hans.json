@@ -107,8 +107,8 @@
     "detecting": "正在识别章节…",
     "saving": "正在保存…",
     "done": "已导入",
-    "noText": "文件里没有找到文字。如果是扫描版 PDF，页面都是图片，无法读取。",
-    "unsupported": "暂时无法读取 {{ext}} 文件。",
+    "noText": "此文件中没有找到文本。",
+    "unsupported": "手机上不支持 {{ext}} 文件。请先在电脑上转换——`make pdf FILE=…` 会连同插图一起转成 EPUB。",
     "failed": "导入失败",
     "cancel": "取消",
     "tryAnother": "换一个文件",
@@ -118,7 +118,8 @@
     "previewEmpty": "没有提取到可读的文字。扫描页面是图片，无法读取。",
     "keep": "保留",
     "discard": "丢弃",
-    "discarded": "已丢弃这次导入。"
+    "discarded": "已丢弃这次导入。",
+    "unreadable": "无法读取此文件：{{detail}}"
   },
   "book": {
     "continue": "继续阅读",
@@ -277,7 +278,6 @@
     "bilingual_off": "原文",
     "bilingual_target": "译文",
     "bilingual_both": "对照",
-    "select": "选择",
     "selectHint": "点其他句子可扩展选区",
     "esvShort": "ESV",
     "done": "完成",
@@ -292,12 +292,8 @@
     "analyzeChapter": "分析这一章",
     "prevShort": "上一章",
     "nextShort": "下一章",
-    "fileTo": "归入…",
-    "fileTitle": "把这段归入",
-    "fileSearch": "搜索",
     "newCard": "＋ 用它新建一张记忆卡",
-    "newTerm": "＋ 用它新建一个概念或术语",
-    "filed": "已归入{{name}}"
+    "newTerm": "＋ 用它新建一个概念或术语"
   },
   "settings": {
     "language": "语言",
@@ -353,7 +349,6 @@
     "removeAllKeeps": "删除前先留下的那份副本会保存在「文件」→ Novel Man → Backups，不会随其余数据一起删除。"
   },
   "more": {
-    "title": "更多",
     "utilities": "工具"
   },
   "flags": {

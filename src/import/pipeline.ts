@@ -58,6 +58,21 @@ export async function importFile(
   };
 
   report('reading');
+  /**
+   * Before the file is touched, not after.
+   *
+   * Reading it is synchronous all the way down — the filesystem module is
+   * JSI-backed, and decoding the base64 it hands back is a loop over tens of
+   * millions of characters. Nothing in there gives the thread up. So the queue
+   * would start a job, the screen would be told to move to it, and then the
+   * thread would be held for several seconds before a single frame could be
+   * drawn: the picker's own sheet sat there, frozen, until the parse was
+   * already under way.
+   *
+   * One turn here is what lets the progress page exist before the work that
+   * page is reporting on begins.
+   */
+  await yieldToUI();
   const stored = await adoptSourceFile(input.uri, input.name);
   await yieldToUI();
 

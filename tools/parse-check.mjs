@@ -10,6 +10,8 @@ const build = process.env.BUILD_DIR ?? join(here, '..', '.parse-check');
 const { docxImporter } = await import(join(build, 'import/formats/docx.js'));
 const { epubImporter } = await import(join(build, 'import/formats/epub.js'));
 const { txtImporter, markdownImporter } = await import(join(build, 'import/formats/plain.js'));
+const { decodeText, decodeUtf8 } = await import(join(build, 'import/decode.js'));
+const { base64, fromBase64 } = await import(join(build, 'import/base64.js'));
 const { normalize } = await import(join(build, 'import/normalize.js'));
 const { detectChapters } = await import(join(build, 'structure/detect.js'));
 const { detectLanguage, scriptOf, baseLanguage } = await import(join(build, 'text/language.js'));
@@ -2333,6 +2335,54 @@ console.log('markdown that states what it is');
   // the reader renders it; the importer must leave it alone.
   check('a mark is left for the reader to draw',
     parsed.blocks.some((b) => b.text.includes('==marked phrase==')), true);
+}
+
+console.log('base64, in one pass');
+{
+  const utf8 = (text) => new Uint8Array(Buffer.from(text, 'utf8'));
+  const back = (bytes) => Buffer.from(fromBase64(base64(bytes))).toString('utf8');
+  check('a round trip is exact', back(utf8('Call me Ishmael.')), 'Call me Ishmael.');
+  check('and keeps every byte of Chinese', back(utf8('自卑与超越')), '自卑与超越');
+  check('nothing is nothing', fromBase64('').length, 0);
+  // One, two and three bytes over: the three padding cases.
+  for (const text of ['a', 'ab', 'abc', 'abcd']) {
+    check(`${text.length} byte${text.length === 1 ? '' : 's'} survives padding`, back(utf8(text)), text);
+  }
+  // The pre-filter used to strip these before decoding, at the cost of
+  // building a second copy of the whole string; they are skipped in place now.
+  const padded = base64(utf8('hello'));
+  check('newlines in the middle are skipped',
+    Buffer.from(fromBase64(padded.replace(/(.{2})/g, '$1\n'))).toString('utf8'), 'hello');
+  check('and so are spaces',
+    Buffer.from(fromBase64(padded.split('').join(' '))).toString('utf8'), 'hello');
+  // Every byte value, so no code path quietly mangles the high half.
+  const all = new Uint8Array(256);
+  for (let at = 0; at < 256; at++) all[at] = at;
+  const round = fromBase64(base64(all));
+  check('all 256 byte values round trip', [round.length, [...round].every((v, at) => v === at)],
+    [256, true]);
+}
+
+console.log('text, without a TextDecoder');
+{
+  const utf8 = (text) => new Uint8Array(Buffer.from(text, 'utf8'));
+  // Hermes has none and React Native ships no polyfill, so this threw a
+  // ReferenceError for every text file the app could be handed — and in both
+  // branches, since the fallback was another TextDecoder.
+  check('plain ASCII', decodeText(utf8('Call me Ishmael.')), 'Call me Ishmael.');
+  check('Chinese is three bytes a character', decodeText(utf8('自卑与超越')), '自卑与超越');
+  check('an emoji is a surrogate pair', decodeUtf8(utf8('a🙂b')), 'a🙂b');
+  check('and so is Han above the basic plane', decodeUtf8(utf8('𠮷野家')), '𠮷野家');
+  check('a BOM is the mark, not the text',
+    decodeText(new Uint8Array([0xef, 0xbb, 0xbf, 0x68, 0x69])), 'hi');
+  check('UTF-16 with its mark',
+    decodeText(new Uint8Array(Buffer.from('﻿你好', 'utf16le'))), '你好');
+  check('every line ending becomes one', decodeText(utf8('a\r\nb\rc')), 'a\nb\nc');
+  check('nothing decodes to nothing', decodeText(new Uint8Array([])), '');
+  // The units are flushed in batches, because `String.fromCharCode(...units)`
+  // with a megabyte of arguments overflows the stack. The seam must not show.
+  const long = '漢'.repeat(20000) + 'x';
+  check('past the batch boundary', decodeUtf8(utf8(long)), long);
 }
 
 console.log('a hash that is not a heading');
