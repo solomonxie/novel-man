@@ -297,9 +297,16 @@
     "analyzeChapter": "Analyze this chapter",
     "prevShort": "Prev",
     "nextShort": "Next",
+    "addTo": "Add",
+    "addTitle": "Add this passage to",
+    "addSearch": "Search",
     "newCard": "＋ A new flash card from this",
     "newTerm": "＋ A new concept or term from this",
-    "word": "Word"
+    "added": "Added to {{name}}",
+    "word": "Word",
+    "selectBy": "Select",
+    "selectTap": "By sentence",
+    "selectDrag": "By dragging"
   },
   "settings": {
     "title": "Settings",
