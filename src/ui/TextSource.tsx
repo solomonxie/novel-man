@@ -34,40 +34,49 @@ export function TextSource({ book, onFile, onLink, onPick, onClose }: {
   const { t } = useTranslation();
   const palette = usePalette();
   const insets = useSafeAreaInsets();
-  const [found, setFound] = useState<IndexedBook[] | null>(null);
+  /** `undefined` until asked, `null` while looking, then what was found. */
+  const [found, setFound] = useState<IndexedBook[] | null | undefined>(undefined);
 
-  useEffect(() => {
-    let live = true;
-    void (async () => {
-      try {
-        // Only the lists that hand over a manuscript. Open Library gives a
-        // record and no file, and a bible builds its own book out of the
-        // download rather than filling one in — neither can answer this.
-        const sources = (await keptCatalogs())
-          .map((row) => row.source)
-          .filter((source) => source === 'gutenberg' || source === 'standardebooks');
-        /**
-         * The author first, because it is what separates one Emma from
-         * another — then the title alone when that finds nothing.
-         *
-         * Every word of the query has to appear in a row, and the two ends
-         * rarely agree on all of them: a record saying "Emma: A Novel" finds
-         * no Gutenberg row, because Gutenberg calls it "Emma" and has no word
-         * "novel" anywhere. Narrow first and widen once is what gets both the
-         * precision and the book.
-         */
-        const asked = [book.title, book.author ?? ''].filter(Boolean).join(' ');
-        let rows = await searchIndex(asked, sources, 12);
-        if (!rows.length && book.author) rows = await searchIndex(book.title, sources, 12);
-        if (live) setFound(rows);
-      } catch {
-        if (live) setFound([]);
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [book.title, book.author]);
+  /**
+   * Looked for only when asked for.
+   *
+   * This used to run the moment the sheet opened, and it is not cheap: the
+   * kept lists are 78,000 rows of Gutenberg, and a title and an author is nine
+   * words, each of which becomes a `LIKE '%word%'` that no index can serve.
+   * Three passes per source, and the whole thing again with the title alone —
+   * several million comparisons before the sheet would draw, for a book most
+   * of these lists have never heard of.
+   *
+   * The two doors above it are what anybody opens this sheet for. The lists
+   * are a convenience for the one case where a record happens to match a
+   * public edition, and a convenience should not cost seconds of staring at a
+   * spinner. So it is a row now, and the cost is paid by whoever wants it.
+   */
+  async function look() {
+    setFound(null);
+    try {
+      // Only the lists that hand over a manuscript. Open Library gives a
+      // record and no file, and a bible builds its own book out of the
+      // download rather than filling one in — neither can answer this.
+      const sources = (await keptCatalogs())
+        .map((row) => row.source)
+        .filter((source) => source === 'gutenberg' || source === 'standardebooks');
+      /**
+       * The author first, because it is what separates one Emma from another —
+       * then the title alone when that finds nothing. Every word of the query
+       * has to appear in a row, and the two ends rarely agree on all of them.
+       *
+       * Never the loose pass: this sheet is asking which book this *is*, and
+       * letters-in-order will match any long title against any other.
+       */
+      const asked = [book.title, book.author ?? ''].filter(Boolean).join(' ');
+      let rows = await searchIndex(asked, sources, 12, false);
+      if (!rows.length && book.author) rows = await searchIndex(book.title, sources, 12, false);
+      setFound(rows);
+    } catch {
+      setFound([]);
+    }
+  }
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -104,7 +113,17 @@ export function TextSource({ book, onFile, onLink, onPick, onClose }: {
               />
             </Section>
 
-            {found === null ? (
+            {found === undefined ? (
+              <Section flush>
+                <Row
+                  label={t('book.textLook')}
+                  detail={t('book.textLookWhy')}
+                  value="›"
+                  onPress={() => void look()}
+                  last
+                />
+              </Section>
+            ) : found === null ? (
               <ActivityIndicator style={{ marginTop: space.xl }} />
             ) : found.length ? (
               <Section title={t('book.textFound', { count: found.length })}>
