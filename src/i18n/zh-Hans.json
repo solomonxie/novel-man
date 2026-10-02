@@ -237,7 +237,12 @@
     "textSourceWhy": "这本书目前只是一条记录。给它一份正文，就能开读。",
     "textYours": "你手上的",
     "textFound": "本机书目中找到（{{count}}）",
-    "textNoneFound": "已保存的书目里都没有它。去搜索页获取一份书目，或者自己提供文件。"
+    "textNoneFound": "已保存的书目里都没有它。去搜索页获取一份书目，或者自己提供文件。",
+    "words": "词语",
+    "wordsEmpty": "阅读时收集的词和短语会出现在这里。",
+    "addWord": "＋ 收集一个词",
+    "searchWords": "搜索词语",
+    "wordsAll": "全部词语"
   },
   "reader": {
     "go": "前往",
@@ -293,7 +298,8 @@
     "prevShort": "上一章",
     "nextShort": "下一章",
     "newCard": "＋ 用它新建一张记忆卡",
-    "newTerm": "＋ 用它新建一个概念或术语"
+    "newTerm": "＋ 用它新建一个概念或术语",
+    "word": "词语"
   },
   "settings": {
     "language": "语言",
@@ -1188,6 +1194,28 @@
     "deleteConfirm": "删除这个术语？",
     "excerpts": "你归入这里的原文"
   },
+  "word": {
+    "eyebrow": "词语",
+    "name": "词或短语",
+    "aliasPlaceholder": "其他写法——复数、另一种字体",
+    "summaryPlaceholder": "它的意思，以及你想记住的任何内容",
+    "lookUp": "查词典",
+    "lookUpDetail": "本机词典——释义、例句、同义词",
+    "wiktionary": "维基词典",
+    "gloss": "用{{language}}解释",
+    "glossDetail": "结合原句给出一行释义。需要 API 密钥。",
+    "glossing": "正在询问…",
+    "glossFailed": "没能取得释义。",
+    "noSystemEntry": "本机词典没有收录。维基词典覆盖它们没有的语言。",
+    "said": "书中出现的位置",
+    "notSaid": "本书其他地方没有出现。",
+    "timesSaid": "次",
+    "firstSaid": "首次出现",
+    "inChapters": "章",
+    "fields": "其他信息",
+    "hint": "你收集的词语会出现在本书的记忆卡中。",
+    "deleteConfirm": "不再保留这个词？"
+  },
   "card": {
     "eyebrow": "记忆卡",
     "frontPlaceholder": "正面——你希望被问到的内容",
@@ -1201,6 +1229,34 @@
     "removeExcerpt": "把这段原文移除？",
     "deleteConfirm": "删除这张卡？卡上的原文也会一起删除；书和你的划线不受影响。",
     "manage": "原文"
+  },
+  "study": {
+    "title": "记忆卡",
+    "start": "开始练习",
+    "startDue": "练习 {{n}} 张到期卡",
+    "caughtUp": "暂无到期",
+    "lastStudied": "上次练习：{{when}}",
+    "kept": "已收集 {{n}} 条",
+    "nothingKept": "还没有从这本书收集任何内容。卡片、概念和词语都会出现在这里。",
+    "nothingDue": "暂时没有到期的卡片。按计划再来——提前练习会让间隔重复失效。",
+    "noBacks": "这里的内容还没有写下含义，无法用来检验回忆。",
+    "position": "第 {{done}} / {{of}} 张",
+    "sofar": "记住 {{right}} · 忘记 {{wrong}}",
+    "tapToTurn": "点击翻面",
+    "turn": "翻面",
+    "gotIt": "记得",
+    "missed": "忘了",
+    "open": "打开",
+    "score": "{{right}} / {{of}}",
+    "nextDue": "下一张{{when}}到期。",
+    "allCaught": "全部完成。",
+    "laterToday": "今天稍后",
+    "tomorrow": "明天",
+    "inDays": "{{n}} 天后",
+    "done": "完成",
+    "kind_card": "卡片",
+    "kind_term": "概念",
+    "kind_word": "词语"
   },
   "ol": {
     "mode_kept": "已存的分类",

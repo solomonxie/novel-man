@@ -10,7 +10,7 @@ import {
   type Entity,
 } from '../../../src/db/repo';
 import { Search } from '../../../src/ui/primitives';
-import { space, usePalette } from '../../../src/theme';
+import { radius, space, usePalette } from '../../../src/theme';
 
 /**
  * Every card for one book. A `FlatList` because a textbook somebody is actually
@@ -55,11 +55,23 @@ export default function CardsPage() {
         contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
-          cards.length > 8 ? (
-            <View style={{ marginBottom: space.md }}>
-              <Search value={query} onChange={setQuery} placeholder={t('book.searchCards')} />
-            </View>
-          ) : null
+          <>
+            {/* Ahead of the search box: the reason to open this page is more
+                often to study than to find one card. */}
+            <Pressable
+              onPress={() => router.push(`/book/${id}/study`)}
+              style={[styles.study, { borderColor: palette.accent, backgroundColor: palette.soft }]}
+            >
+              <Text style={{ color: palette.accent, fontSize: 16, fontWeight: '600' }}>
+                {t('study.start')}
+              </Text>
+            </Pressable>
+            {cards.length > 8 ? (
+              <View style={{ marginBottom: space.md }}>
+                <Search value={query} onChange={setQuery} placeholder={t('book.searchCards')} />
+              </View>
+            ) : null}
+          </>
         }
         ListEmptyComponent={
           <Text style={{ color: palette.dim, fontSize: 15 }}>
@@ -103,6 +115,13 @@ export default function CardsPage() {
 }
 
 const styles = StyleSheet.create({
+  study: {
+    alignItems: 'center',
+    paddingVertical: space.md + 2,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: space.lg,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
