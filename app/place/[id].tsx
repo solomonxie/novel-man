@@ -23,6 +23,7 @@ import {
   listPlaceVisits,
   listScenesAtPlace,
   listUnlocatedPlaces,
+  setPinIfUnset,
   parseFields,
   updateEntity,
   type Book,
@@ -44,6 +45,7 @@ import { Share } from 'react-native';
 import { imageUri, removeImage } from '../../src/storage/files';
 import { appearancesIn, namesOf, timelineFor, type Appearance } from '../../src/cast/mentions';
 import { mapUrl } from '../../src/cast/location';
+import { placeNamed } from '../../src/cast/gazetteer';
 import { kindOf, supports } from '../../src/books/kinds';
 import { AppearanceGraph, chapterLabel, type Range } from '../../src/ui/AppearanceGraph';
 import { sceneOpening } from '../../src/structure/scenes';
@@ -114,6 +116,13 @@ export default function PlacePage() {
       const owner = await getBook(found.book_id);
       setBook(owner);
       setTimeline(timelineFor(await listMentions(found.book_id), found.id));
+      // The table first, and for free. Most of what a bible or a history
+      // names is a country or a place with a known modern name, and paying a
+      // model to be told that Egypt is Egypt was the old way round.
+      if (await placeFromTable(found)) {
+        setPlace(await getEntity(found.id));
+        return;
+      }
       // Nowhere on a real place is something to fix, not something to ask the
       // reader to type: the run fills this one and every other unplaced place.
       void locateAll(owner, found, (count) => t('place.locating', { count }));
@@ -424,6 +433,25 @@ export default function PlacePage() {
       </Section>
     </ScrollView>
   );
+}
+
+/**
+ * The pin a table can answer, written without asking anybody.
+ *
+ * Only where nothing is stored, and `setPinIfUnset` enforces that in SQL as
+ * well — a pin the reader corrected by hand must survive this. A disputed
+ * identification is written as disputed, which is what lets the reader see
+ * the claim and change it.
+ */
+async function placeFromTable(place: Entity): Promise<boolean> {
+  if (place.located) return false;
+  const found = placeNamed(place.name) ?? (place.alias ? placeNamed(place.alias) : null);
+  if (!found) return false;
+  await setPinIfUnset(place.id, {
+    located: found.modern,
+    located_certainty: found.certainty === 'probable' ? 'probable' : 'certain',
+  });
+  return true;
 }
 
 async function locateAll(

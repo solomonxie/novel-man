@@ -1214,7 +1214,8 @@
     "inChapters": "chapters",
     "fields": "Anything else",
     "hint": "Words you keep show up in this book’s flash cards.",
-    "deleteConfirm": "Forget this word?"
+    "deleteConfirm": "Forget this word?",
+    "study": "Study it further"
   },
   "card": {
     "eyebrow": "Flash card",
