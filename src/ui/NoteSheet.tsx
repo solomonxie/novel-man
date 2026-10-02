@@ -65,6 +65,7 @@ export function NoteSheet({ visible, quote, note, onSave, onDelete, onClose }: {
 
   useEffect(() => {
     if (!visible) return;
+    drag.reset();
     appear.setValue(0);
     Animated.timing(appear, {
       toValue: 1,
@@ -72,7 +73,7 @@ export function NoteSheet({ visible, quote, note, onSave, onDelete, onClose }: {
       easing: Easing.out(Easing.quad),
       useNativeDriver: false,
     }).start();
-  }, [appear, visible]);
+  }, [appear, drag, visible]);
 
   // Hidden is not mounted: a Modal left in the tree keeps a sheet-sized
   // view on the page, which is the white band under everything.

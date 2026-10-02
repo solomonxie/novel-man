@@ -46,7 +46,7 @@ export function SearchBar({
       style={[
         styles.pill,
         {
-          backgroundColor: pressed ? palette.sunken : palette.surface,
+          backgroundColor: pressed ? palette.sunken : palette.raised,
           borderColor: palette.border,
         },
       ]}

@@ -50,6 +50,14 @@ const light = {
   soft: 'rgba(47,111,235,0.10)',
   /** A well inside a card — an excerpt, a quote, anything quoted rather than said. */
   sunken: '#F7F7FA',
+  /**
+   * A control that floats over the page and has to be found without being
+   * looked for — the search pill. Not `surface`: on the dark page a #1C1C1E
+   * pill on #0B0B0D is a 1.3:1 step and the thing vanishes. Light keeps white,
+   * which is already the furthest it can get from a grey page; dark goes to a
+   * grey that is plainly lighter than anything behind it.
+   */
+  raised: '#FFFFFF',
   scrim: 'rgba(0,0,0,0.35)',
   /** Text that sits on `accent` — the one color that must not follow scheme. */
   onAccent: '#FFFFFF',
@@ -73,6 +81,7 @@ const dark: typeof light = {
   border: '#2C2C2E',
   soft: 'rgba(111,160,255,0.16)',
   sunken: '#161618',
+  raised: '#33333B',
   scrim: 'rgba(0,0,0,0.6)',
   onAccent: '#0B1220',
 };
