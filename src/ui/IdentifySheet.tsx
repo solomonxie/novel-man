@@ -40,6 +40,14 @@ const PER_ROW = 3;
 /** Every cover ever printed is about this shape. */
 const COVER_RATIO = 1.5;
 
+/** The two questions the shelf can already ask about a book it holds. */
+function questions(book: Book) {
+  return {
+    isbn: book.isbn?.trim() ?? '',
+    title: book.title.trim(),
+  };
+}
+
 /**
  * Which book this is, answered by the catalogs rather than by a model. The
  * covers are the point of the grid — a cover is recognised in a way a title
@@ -75,6 +83,7 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
   const [asked, setAsked] = useState('');
   /** Whether a Google key is stored — so it stays visible once it works. */
   const [keyed, setKeyed] = useState(false);
+  const ask = questions(book);
 
   const search = useCallback(async (wanted: string) => {
     if (!wanted.trim()) return;
@@ -101,6 +110,7 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
 
   useEffect(() => {
     if (!visible) return;
+    drag.reset();
     appear.setValue(0);
     Animated.timing(appear, {
       toValue: 1,
@@ -111,13 +121,13 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
     // What the shelf already knows is the best question it can ask. The ISBN
     // where there is one, because that is the only form of this question with
     // a single right answer.
-    const opening = book.isbn?.trim() || [book.title, book.author].filter(Boolean).join(' ');
+    const opening = ask.isbn || ask.title;
     setQuery(opening);
     setFound(null);
     setFailure(null);
     setCatalogs([]);
     void search(opening);
-  }, [appear, book.author, book.isbn, book.title, search, visible]);
+  }, [appear, ask.isbn, ask.title, drag, search, visible]);
 
   if (!visible) return null;
 
@@ -177,7 +187,10 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
         />
         <Pressable style={StyleSheet.absoluteFill} onPress={() => leave(onClose)} />
 
+        {/* The whole sheet pulls down, not just its handle; the results
+            only once they are scrolled back to the top. */}
         <Animated.View
+          {...drag.list}
           style={[
             styles.sheet,
             {
@@ -232,6 +245,38 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
             />
           </View>
 
+          {/* Both ways of asking, where the shelf holds both. It opens on the
+              ISBN because that has one right answer, but an ISBN the catalogs
+              don't carry is a dead end, and the name of the book is the way
+              round it. */}
+          {ask.isbn && ask.title ? (
+            <View style={styles.ways}>
+              {([['byIsbn', ask.isbn], ['byTitle', ask.title]] as const).map(([key, form]) => {
+                const on = query.trim() === form;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => {
+                      setQuery(form);
+                      void search(form);
+                    }}
+                    style={[
+                      styles.way,
+                      {
+                        backgroundColor: on ? palette.soft : palette.bg,
+                        borderColor: on ? palette.accent : palette.border,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: on ? palette.accent : palette.dim, fontSize: 13 }}>
+                      {t(`identify.${key}`)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
           <Text style={{ color: palette.faint, fontSize: 12, marginTop: space.sm }}>
             {t('identify.what')}
           </Text>
@@ -284,6 +329,8 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
               style={{ marginTop: space.md }}
               contentContainerStyle={styles.grid}
               keyboardShouldPersistTaps="handled"
+              onScroll={drag.onScroll}
+              scrollEventThrottle={16}
             >
               {/* Ten rows, by definition — a `.map` with a ceiling. */}
               {(found ?? []).map((candidate) => (
@@ -357,6 +404,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm + 2,
     borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  ways: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
+  way: {
+    paddingVertical: space.xs + 1,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, paddingBottom: space.lg },

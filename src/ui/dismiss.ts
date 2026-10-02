@@ -36,6 +36,10 @@ const SLOP = 4;
 export function useDragDismiss(onDismiss: () => void, fall = 600) {
   const translateY = useRef(new Animated.Value(0)).current;
   const atTop = useRef(true);
+  // Read at release, not captured: callers pass a fresh closure every render,
+  // and a responder rebuilt mid-drag is one that never saw the grant.
+  const dismiss = useRef(onDismiss);
+  dismiss.current = onDismiss;
 
   const pan = useMemo(() => {
     const dragging = (allowed: () => boolean) =>
@@ -62,7 +66,7 @@ export function useDragDismiss(onDismiss: () => void, fall = 600) {
             // Left where it landed, off the bottom. Putting it back before
             // telling the caller drew the sheet in its old place for a frame,
             // which is the flash — it is reset on the way back in instead.
-            }).start(onDismiss);
+            }).start(() => dismiss.current());
             return;
           }
           Animated.spring(translateY, { toValue: 0, useNativeDriver: false, bounciness: 2 }).start();
@@ -71,9 +75,10 @@ export function useDragDismiss(onDismiss: () => void, fall = 600) {
           Animated.spring(translateY, { toValue: 0, useNativeDriver: false }).start(),
       });
     return { head: dragging(() => true), list: dragging(() => atTop.current) };
-  }, [fall, onDismiss, translateY]);
+  }, [fall, translateY]);
 
-  return {
+  // One object for the life of the sheet, so it can sit in an effect's deps.
+  return useMemo(() => ({
     translateY,
     handlers: pan.head.panHandlers,
     list: pan.list.panHandlers,
@@ -85,5 +90,5 @@ export function useDragDismiss(onDismiss: () => void, fall = 600) {
       translateY.setValue(0);
       atTop.current = true;
     },
-  };
+  }), [pan, translateY]);
 }

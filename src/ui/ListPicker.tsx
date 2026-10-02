@@ -62,6 +62,7 @@ export function ListPicker({ visible, bookId, onClose, onChanged }: {
 
   useEffect(() => {
     if (!visible) return;
+    drag.reset();
     setQuery('');
     load();
     appear.setValue(0);
@@ -71,7 +72,7 @@ export function ListPicker({ visible, bookId, onClose, onChanged }: {
       easing: Easing.out(Easing.quad),
       useNativeDriver: false,
     }).start();
-  }, [appear, load, visible]);
+  }, [appear, drag, load, visible]);
 
   if (!visible) return null;
 
