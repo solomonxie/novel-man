@@ -1260,6 +1260,16 @@
     "kind_term": "Term",
     "kind_word": "Word"
   },
+  "demo": {
+    "title": "Demo library",
+    "toggle": "Demo mode",
+    "on": "On",
+    "off": "Off",
+    "onDetail": "Showing made-up books. Your own library is untouched.",
+    "offDetail": "Switch to a sample library for screenshots and showing the app.",
+    "warning": "This is not your library. Your books are in a separate file and nothing here can reach them — switch demo mode off to get back to them.",
+    "failed": "Couldn’t switch library."
+  },
   "ol": {
     "mode_kept": "Saved categories",
     "mode_live": "All of Open Library",

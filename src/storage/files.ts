@@ -1,13 +1,14 @@
 import { Directory, File, Paths } from './fs';
 import { sha256Hex } from '../cloud/sha256';
 import { extensionOf } from './paths';
+import { folderFor } from '../dev/demo';
 
 export { extensionOf };
 
 const SOURCES = 'sources';
 
 function sourcesDir(): Directory {
-  const dir = new Directory(Paths.document, SOURCES);
+  const dir = new Directory(Paths.document, folderFor(SOURCES));
   if (!dir.exists) dir.create({ intermediates: true });
   return dir;
 }
@@ -79,7 +80,7 @@ function bytesFingerprint(bytes: Uint8Array): string {
 const IMAGES = 'images';
 
 function imagesDir(): Directory {
-  const dir = new Directory(Paths.document, IMAGES);
+  const dir = new Directory(Paths.document, folderFor(IMAGES));
   if (!dir.exists) dir.create({ intermediates: true });
   return dir;
 }
