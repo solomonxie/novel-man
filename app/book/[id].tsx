@@ -84,7 +84,7 @@ import { choiceFromIndex } from '../../src/sources/chosen';
 import type { Choice } from '../../src/sources/chosen';
 import { addFile } from '../../src/books/add';
 import { pickManuscript, pickOriginalPdf } from '../../src/import/sources/picker';
-import { linkOriginal, unlinkOriginal, wantsOriginal } from '../../src/books/original';
+import { linkOriginal, recoverOrigin, unlinkOriginal, wantsOriginal } from '../../src/books/original';
 import { subscribeToQueue, type ImportJob } from '../../src/import/queue';
 import { kindOf, shows, supports, unitOf } from '../../src/books/kinds';
 import { isSkeleton, STARS, statusOf, STATUSES } from '../../src/books/record';
@@ -177,6 +177,8 @@ export default function BookPage() {
   const [mentions, setMentions] = useState<Mention[]>([]);
   const [relations, setRelations] = useState<Relation[]>([]);
 
+  const recovered = useRef(false);
+
   const load = useCallback(() => {
     if (!id) return;
     trace('load fired');
@@ -185,6 +187,14 @@ export default function BookPage() {
       // Only while nothing is being typed: a reload mid-sentence must not
       // replace the sentence with what was last saved.
       if (found && !reviewTimer.current) setReviewDraft(found.review ?? '');
+      // Imported before the app read a converter's stamp: read it now, from
+      // the EPUB still in storage, so the original can be linked at all.
+      if (found && !recovered.current) {
+        recovered.current = true;
+        void recoverOrigin(found).then((written) => {
+          if (written) getBook(found.id).then(setBook);
+        });
+      }
     });
     timed('listChapters', listChapters(id)).then(setChapters);
     timed('characters', listEntities(id, 'character')).then(setCharacters);

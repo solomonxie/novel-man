@@ -1,7 +1,8 @@
 import { File } from '../storage/fs';
 import { fingerprintOf } from '../storage/fingerprint';
 import { adoptSourceFile } from '../storage/files';
-import { setOriginFile, type Book } from '../db/repo';
+import { setOrigin, setOriginFile, type Book } from '../db/repo';
+import { originOfEpub } from '../import/formats/epub';
 
 /**
  * Linking a book to the PDF it was converted from.
@@ -67,4 +68,29 @@ export function hasOriginal(book: Pick<Book, 'origin_path'>): boolean {
 /** Whether a book could be linked to one at all — only a converted book can. */
 export function wantsOriginal(book: Pick<Book, 'origin_fingerprint'>): boolean {
   return Boolean(book.origin_fingerprint);
+}
+
+/**
+ * The stamp a book should have had, read from the EPUB it was imported from.
+ *
+ * Books converted from a PDF before the app knew about stamps carry none, and
+ * without one there is nothing to check a picked file against — so the option
+ * to link the original is hidden, on a book that is exactly the kind that
+ * wants it. Its EPUB is still in storage and still stamped, so the answer is
+ * there to be read rather than asked for again.
+ *
+ * Returns whether anything was written, so a caller can reload only then.
+ */
+export async function recoverOrigin(book: Book): Promise<boolean> {
+  if (book.origin_fingerprint || book.source_ext !== 'epub' || !book.source_path) return false;
+  try {
+    const file = new File(book.source_path);
+    if (!file.exists) return false;
+    const origin = originOfEpub(await file.bytes());
+    if (!origin) return false;
+    await setOrigin(book.id, origin);
+    return true;
+  } catch {
+    return false;
+  }
 }
