@@ -33,6 +33,7 @@ import { homedir } from 'node:os';
 
 import { artOf, equationsIn, figuresOn, withText } from './pdf/art.mjs';
 import { buildEpub } from './pdf/epub.mjs';
+import { fingerprintOf } from './pdf/fingerprint.mjs';
 
 let getDocument;
 let createCanvas;
@@ -231,6 +232,14 @@ class Canvases {
 }
 
 const data = new Uint8Array(readFileSync(file));
+/**
+ * Taken before pdf.js is handed the bytes, because it takes them: the typed
+ * array is transferred to the worker and comes back detached, so `data.length`
+ * is zero from here on. Stamping the book afterwards recorded a file of nought
+ * bytes with the fingerprint of nothing, and the app quietly declined to
+ * believe in an origin at all.
+ */
+const identity = { bytes: data.length, fingerprint: fingerprintOf(data) };
 const doc = await getDocument({ data, CanvasFactory: Canvases }).promise;
 const canvasFactory = doc.canvasFactory;
 const pages = doc.numPages;
@@ -421,6 +430,12 @@ for (let page = first; page <= last; page++) {
   const here = marks.filter((mark) => mark.page === page);
   let nextMark = 0;
   let buffer = '';
+  /**
+   * Whether this page has already put its number on something. A page break is
+   * a point, not a property of every paragraph after it, so only the first
+   * block drawn from a page carries it.
+   */
+  let opened = false;
 
   const push = () => {
     const text = buffer.replace(/\s+/g, ' ').trim();
@@ -429,7 +444,8 @@ for (let page = first; page <= last; page++) {
     const above = current.blocks[current.blocks.length - 1];
     // The outline and the page both carry a section's name, so it arrived twice.
     if (above && above.heading && above.text === text) return;
-    current.blocks.push({ text });
+    current.blocks.push({ text, page: opened ? undefined : page });
+    opened = true;
     paragraphs += 1;
   };
 
@@ -452,7 +468,8 @@ for (let page = first; page <= last; page++) {
       const caption = all.find(
         (line) => /^(Figure|Table)\s+\d+[.\d]*/i.test(line.text) && line.y >= box[1] && line.y <= box[3]
       );
-      current.blocks.push({ image: name, alt: caption?.text ?? '' });
+      current.blocks.push({ image: name, alt: caption?.text ?? '', page: opened ? undefined : page });
+      opened = true;
       figures += 1;
     }
   };
@@ -519,7 +536,19 @@ if (!title || GENERIC.test(title)) title = named || title;
 mkdirSync(out, { recursive: true });
 const stem = title.replace(/[/\\:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || named;
 const path = join(out, `${stem}.epub`);
-const epub = buildEpub({ title, author, chapters, images });
+/**
+ * What this book was made from, so a PDF linked later can be checked against
+ * it. A page number means nothing against a different printing, and showing
+ * the wrong page confidently is worse than showing none.
+ */
+const origin = {
+  kind: 'pdf',
+  name: basename(file),
+  bytes: identity.bytes,
+  pages,
+  fingerprint: identity.fingerprint,
+};
+const epub = buildEpub({ title, author, chapters, images, origin });
 writeFileSync(path, epub);
 
 const bytes = [...images.values()].reduce((a, b) => a + b.length, 0);

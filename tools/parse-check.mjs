@@ -12,6 +12,8 @@ const { epubImporter } = await import(join(build, 'import/formats/epub.js'));
 const { txtImporter, markdownImporter } = await import(join(build, 'import/formats/plain.js'));
 const { decodeText, decodeUtf8 } = await import(join(build, 'import/decode.js'));
 const { base64, fromBase64 } = await import(join(build, 'import/base64.js'));
+const { fingerprintOf } = await import(join(build, 'storage/fingerprint.js'));
+const { pagesOf } = await import(join(build, 'structure/document.js'));
 const { normalize } = await import(join(build, 'import/normalize.js'));
 const { detectChapters } = await import(join(build, 'structure/detect.js'));
 const { detectLanguage, scriptOf, baseLanguage } = await import(join(build, 'text/language.js'));
@@ -2431,6 +2433,46 @@ console.log('markdown that states what it is');
   // the reader renders it; the importer must leave it alone.
   check('a mark is left for the reader to draw',
     parsed.blocks.some((b) => b.text.includes('==marked phrase==')), true);
+}
+
+console.log('recognising a file again');
+{
+  const of = (...bytes) => fingerprintOf(new Uint8Array(bytes));
+  // Pinned, and pinned identically in tools/pdf/fingerprint.mjs. The converter
+  // stamps a book with these numbers and the app checks a linked PDF against
+  // them, so the two drifting apart refuses a file that is in fact correct.
+  check('nothing', of(), '0:');
+  check('one byte', of(0), '1:0');
+  check('a few', of(1, 2, 3), '3:123');
+  check('base 36, so a byte is one or two characters', of(255, 0, 128), '3:7303k');
+  check('length leads, so a different size can never collide',
+    of(1, 2, 3).split(':')[0], '3');
+  // A different printing of the same book differs in both.
+  check('different bytes, different answer', of(1, 2, 3) === of(1, 2, 4), false);
+}
+
+console.log('the pages of the original');
+{
+  const doc = {
+    text: 'a'.repeat(300),
+    blocks: [
+      { start: 0, end: 50 },
+      { start: 50, end: 100, page: 12 },
+      { start: 100, end: 160 },
+      { start: 160, end: 220, page: 13 },
+      { start: 220, end: 300 },
+    ],
+  };
+  // A page is a range: the marker that opens one closes the one before it, and
+  // the last runs to the end of the book.
+  check('every marker becomes a span', pagesOf(doc),
+    [{ number: 12, start: 50, end: 160 }, { number: 13, start: 160, end: 300 }]);
+  check('a book with no markers has no pages', pagesOf({ text: 'x', blocks: [{ start: 0, end: 1 }] }), []);
+  // Numbering that goes backwards cannot be used to open a page, so it is not
+  // trusted rather than quietly producing a span of negative length.
+  check('numbering that goes backwards is refused',
+    pagesOf({ text: 'xx', blocks: [{ start: 0, end: 1, page: 9 }, { start: 1, end: 2, page: 4 }] }),
+    [{ number: 9, start: 0, end: 2 }]);
 }
 
 console.log('base64, in one pass');

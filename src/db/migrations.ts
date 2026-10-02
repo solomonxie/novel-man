@@ -889,4 +889,32 @@ export const migrations: string[] = [
    );
    DELETE FROM book_lists
      WHERE system = 0 AND LOWER(TRIM(name)) IN ('favorites', 'favourites', '收藏', '收藏夹')`,
+
+  // Where each page of the original begins, for a book converted out of one.
+  //
+  // The same shape as `verses`, and for the same reason: a reader asking "what
+  // page am I on" is asking the question a verse number answers, and both are
+  // ranges over the one manuscript rather than anything the chapters know.
+  // Only a converted book has any — a novel from Gutenberg was never paginated
+  // by anybody.
+  //
+  // The columns beside it say which file those numbers refer to. A page number
+  // is meaningless without the PDF it counts, so the identity of that PDF is
+  // recorded when the book is made and checked against whatever is linked
+  // later: a different printing has different pages, and silently opening the
+  // wrong one is worse than opening none.
+  `CREATE TABLE pages (
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     number INTEGER NOT NULL,
+     start INTEGER NOT NULL,
+     end INTEGER NOT NULL,
+     PRIMARY KEY (book_id, number)
+   );
+   CREATE INDEX pages_book ON pages(book_id, start);
+   ALTER TABLE books ADD COLUMN origin_kind TEXT;
+   ALTER TABLE books ADD COLUMN origin_name TEXT;
+   ALTER TABLE books ADD COLUMN origin_bytes INTEGER;
+   ALTER TABLE books ADD COLUMN origin_pages INTEGER;
+   ALTER TABLE books ADD COLUMN origin_fingerprint TEXT;
+   ALTER TABLE books ADD COLUMN origin_path TEXT;`,
 ];

@@ -1,6 +1,7 @@
 import { Directory, File, Paths } from './fs';
 import { sha256Hex } from '../cloud/sha256';
 import { extensionOf } from './paths';
+import { fingerprintOf } from './fingerprint';
 import { folderFor } from '../dev/demo';
 
 export { extensionOf };
@@ -21,7 +22,7 @@ function sourcesDir(): Directory {
 export async function adoptSourceFile(uri: string, originalName: string) {
   const picked = new File(uri);
   const bytes = await picked.bytes();
-  const hash = sha256Hex(bytesFingerprint(bytes));
+  const hash = sha256Hex(fingerprintOf(bytes));
   const ext = extensionOf(originalName);
   const stored = new File(sourcesDir(), ext ? `${hash}.${ext}` : hash);
   // Copied by the filesystem, not written back through JavaScript. `write`
@@ -36,7 +37,7 @@ export async function adoptSourceFile(uri: string, originalName: string) {
 
 /** The same shelf, for a file the app fetched rather than one someone picked. */
 export async function storeSourceBytes(bytes: Uint8Array, name: string) {
-  const hash = sha256Hex(bytesFingerprint(bytes));
+  const hash = sha256Hex(fingerprintOf(bytes));
   const ext = extensionOf(name);
   const stored = new File(sourcesDir(), ext ? `${hash}.${ext}` : hash);
   if (!stored.exists) stored.write(bytes);
@@ -70,12 +71,6 @@ export function deleteStored(path: string) {
 }
 
 /** Hashing megabytes of base64 is slow; sample the file instead. */
-function bytesFingerprint(bytes: Uint8Array): string {
-  const stride = Math.max(1, Math.floor(bytes.length / 4096));
-  let out = `${bytes.length}:`;
-  for (let i = 0; i < bytes.length; i += stride) out += bytes[i].toString(36);
-  return out;
-}
 
 const IMAGES = 'images';
 
