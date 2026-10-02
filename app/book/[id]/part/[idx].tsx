@@ -18,7 +18,8 @@ import {
 } from '../../../../src/db/repo';
 import { kindOf, supports } from '../../../../src/books/kinds';
 import { Action, Badge, Block, Empty, Fact, Hero, Item, Writable } from '../../../../src/ui/detail';
-import { Cover, Hint, Search, SEARCHABLE_FROM } from '../../../../src/ui/primitives';
+import { Cover } from '../../../../src/ui/Cover';
+import { Hint, Search, SEARCHABLE_FROM } from '../../../../src/ui/primitives';
 import { InlineText } from '../../../../src/ui/inline';
 import { pickImage } from '../../../../src/ui/fields';
 import { adoptImage } from '../../../../src/storage/files';

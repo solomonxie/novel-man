@@ -1,49 +1,70 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { Face } from '../db/shelves';
-import { imageUri } from '../storage/files';
+import { coverArt } from './Cover';
+import { hueFrom } from './fields';
 import { radius, space, usePalette } from '../theme';
 
 /**
- * A list, drawn the way a record sleeve is: the covers of what is in it. Four
- * of them, in a square, because that is the arrangement every music app has
- * taught everybody to read as "a collection" — and because a list is
- * recognised by what is in it long before its name is read.
+ * A list, drawn as a sleeve of its own.
  *
- * One book fills the square. Fewer than four leaves the rest empty rather than
- * repeating a cover, which would say the list holds more than it does.
+ * It used to be a collage: the four most recent covers in a two-by-two square,
+ * on the argument that a list is recognised by what is in it. In practice the
+ * four were nearly always four *generated* covers — most books in this app
+ * have no photograph — so what the square actually showed was four small
+ * coloured rectangles with four unreadable titles in them, and which list it
+ * was could only be told by reading the name underneath.
+ *
+ * So the sleeve is now one made cover rather than four, in the list's own hue,
+ * with the list's name set on it. Favourites gets a heart instead of a name:
+ * it is the one list every install has, it is never renamed, and a symbol is
+ * recognised across the shelf where a word has to be read.
+ *
+ * Nothing here queries anything. The collage needed the covers of the four
+ * most recent books in every list — one window function over `list_books` on
+ * every visit to the shelf — and a name and a count is all this needs.
  */
-export function ListAlbum({ name, detail, faces, glyph, width, onPress }: {
+export function ListAlbum({ name, detail, width, heart, onPress }: {
   name: string;
   detail: string;
-  faces: Face[];
-  /** For a list with nothing in it yet: ♥ says which one this is. */
-  glyph?: string;
   width: number;
+  /** Favourites: the one list that is a symbol rather than a name. */
+  heart?: boolean;
   onPress: () => void;
 }) {
   const palette = usePalette();
-  const shown = faces.slice(0, 4);
+  // Favourites is pinned to a red, because it is the one list whose colour
+  // means something. Everything else takes the hue of its own name, so a list
+  // keeps its sleeve for as long as it keeps its name.
+  const hue = heart ? 348 : hueFrom(name);
+  const art = coverArt(hue, width, width);
 
   return (
     <Pressable onPress={onPress} style={{ width }}>
       <View
         style={[
           styles.album,
-          { width, height: width, backgroundColor: palette.sunken, borderColor: palette.border },
+          { width, height: width, backgroundColor: art.ground, borderColor: palette.border },
         ]}
       >
-        {shown.length === 0 ? (
-          <Text style={{ color: palette.faint, fontSize: 22 }}>{glyph ?? '▢'}</Text>
+        {art.shapes}
+        {heart ? (
+          <View style={styles.middle}>
+            <Text style={{ color: '#FFFFFF', fontSize: Math.round(width * 0.34) }}>♥</Text>
+          </View>
         ) : (
-          // Quarters as halves of the box rather than halves of a number:
-          // two tiles of `floor(width / 2)` overflow a box whose hairline
-          // border has taken a fraction of a point off it, and the second one
-          // wraps onto its own line — which is a collage down the left edge.
-          <View style={styles.quarters}>
-            {shown.map((face, at) => (
-              <FaceTile key={`${face.title}-${at}`} face={face} whole={shown.length === 1} />
-            ))}
+          <View style={[styles.type, { padding: Math.max(space.sm, Math.round(width * 0.09)) }]}>
+            <Text
+              numberOfLines={3}
+              style={{
+                color: '#FFFFFF',
+                fontSize: Math.max(12, Math.min(22, Math.round(width * 0.135))),
+                lineHeight: Math.max(15, Math.round(width * 0.165)),
+                fontWeight: '700',
+                letterSpacing: -0.2,
+              }}
+            >
+              {name}
+            </Text>
           </View>
         )}
       </View>
@@ -57,34 +78,22 @@ export function ListAlbum({ name, detail, faces, glyph, width, onPress }: {
   );
 }
 
-/** One quarter of the sleeve — or the whole of it, where there is one book. */
-function FaceTile({ face, whole }: { face: Face; whole: boolean }) {
-  const palette = usePalette();
-  const box = whole ? styles.whole : styles.quarter;
-  const uri = face.cover_path ? imageUri(face.cover_path) : undefined;
-  if (uri) {
-    return <Image source={{ uri }} style={box} resizeMode="cover" />;
-  }
-  return (
-    <View style={[box, styles.blank, { backgroundColor: `hsl(${face.cover_hue}, 32%, 62%)` }]}>
-      <Text numberOfLines={2} style={[styles.blankTitle, { color: palette.onAccent }]}>
-        {face.title}
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   album: {
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
+    // The arc and the diagonal are drawn bigger than the sleeve on purpose.
     overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  middle: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quarters: { width: '100%', height: '100%', flexDirection: 'row', flexWrap: 'wrap' },
-  quarter: { width: '50%', height: '50%' },
-  whole: { width: '100%', height: '100%' },
-  blank: { alignItems: 'center', justifyContent: 'center', padding: 4 },
-  blankTitle: { fontSize: 9, fontWeight: '600', textAlign: 'center' },
+  type: { justifyContent: 'flex-end' },
 });

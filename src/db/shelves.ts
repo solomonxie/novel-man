@@ -117,37 +117,6 @@ export async function booksInList(listId: string): Promise<BookListItem[]> {
   );
 }
 
-/** Enough of a book to draw it: a cover, or what stands in for one. */
-export type Face = { title: string; cover_path: string | null; cover_hue: number };
-
-/**
- * The four most recent covers in each list, for the collage that stands for it
- * — a list is recognised the way a record sleeve is, by what is on the front.
- * One query for the whole shelf: a query per list would be one round trip per
- * row of the home page.
- */
-export async function coversByList(each = 4): Promise<Map<string, Face[]>> {
-  const database = await db();
-  const rows = await database.getAllAsync<Face & { list_id: string }>(
-    `SELECT ranked.list_id, b.title, b.cover_path, b.cover_hue
-       FROM (SELECT m.list_id, m.book_id,
-                    ROW_NUMBER() OVER (PARTITION BY m.list_id ORDER BY m.added_at DESC) AS place
-               FROM list_books m) ranked
-       JOIN books b ON b.id = ranked.book_id
-      WHERE ranked.place <= ?
-      ORDER BY ranked.list_id, ranked.place`,
-    each
-  );
-  const byList = new Map<string, Face[]>();
-  for (const row of rows) {
-    const faces = byList.get(row.list_id);
-    const face = { title: row.title, cover_path: row.cover_path, cover_hue: row.cover_hue };
-    if (faces) faces.push(face);
-    else byList.set(row.list_id, [face]);
-  }
-  return byList;
-}
-
 export async function listsHolding(bookId: string): Promise<BookList[]> {
   const database = await db();
   return database.getAllAsync<BookList>(

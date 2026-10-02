@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { BookListItem } from '../db/repo';
-import { Cover } from './primitives';
+import { Cover } from './Cover';
 import { radius, space, usePalette } from '../theme';
 
 /** Small enough for a list, big enough that the picture is the thing you read. */

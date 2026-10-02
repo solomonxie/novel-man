@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Cover } from './primitives';
+import { Cover } from './Cover';
 
 /** Far enough that it was meant, and short enough that a flick counts. */
 const DISMISS_AT = 110;
@@ -27,9 +27,11 @@ const DISMISS_AT = 110;
  * follows the finger rather than waiting for it to finish, which is what makes
  * a photo feel held rather than displayed.
  */
-export function CoverViewer({ visible, title, hue, path, onClose, actions }: {
+export function CoverViewer({ visible, title, author, hue, path, onClose, actions }: {
   visible: boolean;
   title: string;
+  /** Only a book has one. A person, a place and a term are all just a name. */
+  author?: string | null;
   hue: number;
   path?: string | null;
   onClose: () => void;
@@ -99,6 +101,7 @@ export function CoverViewer({ visible, title, hue, path, onClose, actions }: {
         >
           <Cover
             title={title}
+            author={author}
             hue={hue}
             path={path}
             width={Math.min(width - 48, Math.round((height - 160) / 1.45))}
