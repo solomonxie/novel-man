@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
   FlatList,
+  InteractionManager,
   Keyboard,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  type TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -171,7 +173,30 @@ export default function Find() {
     recentSearches().then(setRecent).catch(() => undefined);
   }, [readSources]);
 
-  useFocusEffect(load);
+  /**
+   * Nothing above happens until the page is actually on screen.
+   *
+   * Opening this page used to take a visible second, and none of it was the
+   * work: it was the work being started on the same frames the push animation
+   * needed. Four reads — the shelf, the kept lists, two keychain lookups —
+   * and a keyboard being raised, all while the screen was still sliding in.
+   * The keychain is the worst of them; it is a trip out to another process.
+   *
+   * So the transition goes first and the page fills in after it, which is
+   * also why the field is focused from here rather than with `autoFocus`:
+   * `autoFocus` raises the keyboard on mount, mid-slide.
+   */
+  const field = useRef<TextInput | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const task = InteractionManager.runAfterInteractions(() => {
+        field.current?.focus();
+        load();
+      });
+      return () => task.cancel();
+    }, [load])
+  );
 
   // A list is fetched in the queue with everything else, so the page learns it
   // finished the way the shelf does: by being told the queue went quiet.
@@ -925,7 +950,7 @@ function refused(catalogs: CatalogReport[], t: TFunction): string | undefined {
         placeholder={t('find.placeholder')}
         onSubmit={keep}
         bottom={Animated.add(lift, searchBarOffset(insets.bottom))}
-        autoFocus
+        field={field}
       />
 
       {choice ? (
