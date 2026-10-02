@@ -252,6 +252,8 @@
     "clearConfirmBoth": "正文和章节都会删除，本书重新变为一条记录。标注会保留，正文回来后会回到原位。",
     "clearGo": "删除",
     "clearFailed": "删除正文失败。",
+    "textLook": "在本机的书目中查找",
+    "textLookWhy": "搜索你保存的书目。大书目较慢，因此只在你要求时才运行。",
     "original": "原始 PDF",
     "originalWhy": "关联这本书所出自的 {{pages}} 页 PDF，即可查看原书页面。",
     "originalLinked": "已关联 {{name}}",
