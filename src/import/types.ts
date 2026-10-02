@@ -5,12 +5,44 @@ export type Block = {
   heading?: number;
   /** epub spine items and similar: a hard boundary the format already knows about. */
   boundary?: boolean;
+  /**
+   * The page of the original this block begins on, where the source said so.
+   *
+   * EPUB 3 marks these with `epub:type="pagebreak"`, and a converted PDF emits
+   * them — which is what lets the reader say `p. 84` and open the real page
+   * beside it. Most formats carry nothing of the sort and leave it unset: a
+   * Markdown file has no pages, and neither does a web page.
+   */
+  page?: number;
 };
 
 export type ParsedSource = {
   blocks: Block[];
   title?: string;
   author?: string;
+  /**
+   * What the source says it was made from, when it says anything. A converted
+   * PDF stamps the file it came out of here so the book can be matched against
+   * that PDF later and refuse a different one.
+   */
+  origin?: Origin;
+};
+
+/**
+ * Enough of a file to recognise it again without reading all of it.
+ *
+ * Not a hash: hashing 35 MB in JavaScript on a phone takes seconds, and the
+ * question being answered is only "is this the same file", not "prove it".
+ * A byte count and a page count already make a collision far-fetched, and the
+ * strided sample the app takes of every file it adopts settles it.
+ */
+export type Origin = {
+  /** `pdf`, for now the only thing that is converted rather than read. */
+  kind: string;
+  name: string;
+  bytes: number;
+  pages: number;
+  fingerprint: string;
 };
 
 /**
