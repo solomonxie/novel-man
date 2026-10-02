@@ -289,6 +289,40 @@ export async function listVerses(chapterId: string): Promise<Verse[]> {
   );
 }
 
+/**
+ * What to call a place in a bible: `John 3:16` rather than `chapter 1,043`.
+ *
+ * One indexed query per offset, which is why the caller passes only the
+ * handful it is about to draw. A whole bible is 31,000 verses and loading them
+ * to label eight lines is the kind of thing that makes a page take a second.
+ *
+ * Empty for a book with no verses, which is every book that is not scripture —
+ * so a caller can ask without knowing what it is holding.
+ */
+export async function referencesAt(
+  bookId: string,
+  offsets: number[]
+): Promise<Map<number, string>> {
+  if (!offsets.length) return new Map();
+  const database = await db();
+  const found = new Map<number, string>();
+  await Promise.all(
+    [...new Set(offsets)].map(async (offset) => {
+      const row = await database.getFirstAsync<{ number: number; title: string }>(
+        `SELECT v.number AS number, c.title AS title
+           FROM verses v JOIN chapters c ON c.id = v.chapter_id
+          WHERE v.book_id = ? AND v.start <= ? AND v.end > ?
+          LIMIT 1`,
+        bookId,
+        offset,
+        offset
+      );
+      if (row) found.set(offset, `${row.title.trim()}:${row.number}`);
+    })
+  );
+  return found;
+}
+
 export async function listChapters(bookId: string): Promise<Chapter[]> {
   const database = await db();
   return database.getAllAsync<Chapter>(
