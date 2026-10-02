@@ -1,5 +1,6 @@
 import Index from '../../app/index';
 import Find from '../../app/find';
+import Settings from '../../app/settings';
 import Job from '../../app/job/[id]';
 import SourceEbible from '../../app/source/ebible';
 import SourceEsv from '../../app/source/esv';
@@ -61,6 +62,7 @@ export const screens: Screen[] = [
   { path: '/', component: Index },
   { path: '/job/[id]', component: Job, header: true },
   { path: '/find', component: Find, header: true },
+  { path: '/settings', component: Settings, header: true },
   { path: '/source/ebible', component: SourceEbible, header: true },
   { path: '/source/esv', component: SourceEsv, header: true },
   { path: '/source/arxiv', component: SourceArxiv, header: true },
