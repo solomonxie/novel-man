@@ -87,6 +87,21 @@ const IMG = /<(?:img|image)\b[^>]*>/gi;
  * other reader ignores and this one uses to check that a PDF somebody links
  * later is the PDF the book came out of.
  */
+/**
+ * The stamp alone, from the file rather than from a parse.
+ *
+ * For a book that was imported before the app read stamps at all: its EPUB is
+ * still in storage, so what it was made from can be recovered without putting
+ * 21,000 blocks back through the importer. Only two entries are inflated.
+ */
+export function originOfEpub(bytes: Uint8Array): Origin | undefined {
+  const wanted = (name: string) =>
+    name === 'META-INF/container.xml' || name.toLowerCase().endsWith('.opf');
+  const zip = unzipSync(bytes, { filter: (file) => wanted(file.name) });
+  const rootPath = Object.keys(zip).find((name) => name.toLowerCase().endsWith('.opf'));
+  return rootPath ? originIn(decodeUtf8(zip[rootPath])) : undefined;
+}
+
 function originIn(opf: string): Origin | undefined {
   const said = (name: string) =>
     attrValue(
