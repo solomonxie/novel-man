@@ -252,6 +252,8 @@
     "clearConfirmBoth": "The words and the chapters go, and the book becomes a record again. Your highlights are kept and go back where they were when a manuscript returns.",
     "clearGo": "Remove",
     "clearFailed": "Couldn’t remove the text.",
+    "textLook": "Look in the lists on this device",
+    "textLookWhy": "Searches the catalogues you've kept. Slow on a big one, so it only runs when you ask.",
     "original": "The original PDF",
     "originalWhy": "Link the {{pages}}-page PDF this came from, to see a page as it was printed.",
     "originalLinked": "Linked to {{name}}",

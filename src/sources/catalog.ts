@@ -183,14 +183,26 @@ export async function keptIndexes(
   return rows.map((row) => ({ source: row.source, fetchedAt: row.fetched_at, count: row.count }));
 }
 
+/**
+ * `loose` is whether a near miss is worth offering.
+ *
+ * It is right for the search page, where somebody is typing from memory and
+ * `prejudce` should still find the book. It is wrong wherever the answer is a
+ * claim about *which book this is* — the letters-in-order pass will match
+ * almost any long title against any other, and a sheet asking "is this the
+ * text of your book?" then offers `The Book of the Homeless` as the manuscript
+ * of `Computer Architecture: A Quantitative Approach`. There, finding nothing
+ * is the true answer and the page already has words for it.
+ */
 export async function searchIndex(
   query: string,
   sources: string[],
-  limit = 50
+  limit = 50,
+  loose = true
 ): Promise<IndexedBook[]> {
   if (!sources.length) return [];
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (sources.length === 1) return within(sources, terms, limit);
+  if (sources.length === 1) return within(sources, terms, limit, loose);
 
   /**
    * A budget per list rather than one pool for all of them.
@@ -203,7 +215,7 @@ export async function searchIndex(
    * reads exactly the rows that list owns.
    */
   const share = Math.max(PER_SOURCE, Math.ceil(limit / sources.length));
-  const found = await Promise.all(sources.map((source) => within([source], terms, share)));
+  const found = await Promise.all(sources.map((source) => within([source], terms, share, loose)));
   return rank(found.flat(), terms, limit);
 }
 
@@ -239,7 +251,8 @@ const PER_SOURCE = 6;
 async function within(
   sources: string[],
   terms: string[],
-  limit: number
+  limit: number,
+  allowLoose: boolean
 ): Promise<IndexedBook[]> {
   if (!terms.length) return rank(await select(sources, [], limit), terms, limit);
 
@@ -250,7 +263,7 @@ async function within(
   const inside = (await select(sources, terms.map((term) => [`%${escapeLike(term)}%`]), limit))
     .filter((row) => !seen.has(keyOf(row)));
   const found = [...whole, ...inside];
-  if (found.length >= limit) return rank(found, terms, limit);
+  if (found.length >= limit || !allowLoose) return rank(found, terms, limit);
 
   for (const row of inside) seen.add(keyOf(row));
   const loose = (await select(sources, terms.map((term) => [looseLike(term)]), limit))

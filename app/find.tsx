@@ -49,7 +49,7 @@ import { HitCard, toRow, type ResultRow } from '../src/ui/HitCard';
 import { Row, Section } from '../src/ui/primitives';
 import { SearchBar, SearchGlass, SEARCH_BAR_HEIGHT, searchBarOffset } from '../src/ui/SearchBar';
 import { SourceRows } from '../src/ui/SourceRows';
-import { useKeyboardLift } from '../src/ui/keyboard';
+import { useKeyboardHeight, useKeyboardLift } from '../src/ui/keyboard';
 import { radius, space, usePalette } from '../src/theme';
 
 /**
@@ -127,6 +127,12 @@ export default function Find() {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   const lift = useKeyboardLift();
+  /**
+   * How far the keyboard comes up, as a number rather than the animated value
+   * the search pill rides: this is padding at the foot of a list, and a list
+   * that is not tall enough to scroll cannot be scrolled out from under it.
+   */
+  const keyboard = useKeyboardHeight();
 
   const [query, setQuery] = useState('');
   const [books, setBooks] = useState<BookListItem[] | null>(null);
@@ -832,8 +838,19 @@ function refused(catalogs: CatalogReport[], t: TFunction): string | undefined {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: space.lg, paddingBottom: SEARCH_BAR_HEIGHT + space.xxl }}
+          /**
+           * The keyboard's height is part of the padding, because this page
+           * opens with the field focused and the list runs full height behind
+           * the keyboard. Shorter than the screen, it was never scrollable —
+           * so everything below the fold, the recent searches included, sat
+           * under the keyboard with no way to reach it.
+           */
+          contentContainerStyle={{
+            padding: space.lg,
+            paddingBottom: SEARCH_BAR_HEIGHT + space.xxl + keyboard,
+          }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {/* What the box does, said once and plainly. This page is empty
               until somebody types, and an empty page that explains itself is
