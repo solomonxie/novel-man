@@ -20,6 +20,24 @@ export type BookList = {
 /** The one list that is always there. Its name is translated, not stored. */
 export const FAVORITES = 'favorites';
 
+/**
+ * Every name the one list has ever been shown under, in any language.
+ *
+ * It is stored as `Favorites` and *displayed* translated, which is right — but
+ * it means a list the reader created called `收藏`, or a backup restored by a
+ * name rather than by the id, becomes a second list that looks identical to
+ * the first. Two 收藏 albums on the home page, holding different books.
+ *
+ * So these names all resolve to the system list and none of them can be used
+ * to make a new one. Anything added to `lists.favorites` in a catalog belongs
+ * here too.
+ */
+const FAVORITE_NAMES = ['favorites', 'favourites', '收藏', '收藏夹'];
+
+export function isFavoritesName(name: string): boolean {
+  return FAVORITE_NAMES.includes(name.trim().toLowerCase());
+}
+
 const SHELF_ROW = `SELECT b.*,
         (SELECT COUNT(*) FROM chapters c WHERE c.book_id = b.id) AS chapter_count,
         (SELECT offset FROM reading_state r WHERE r.book_id = b.id) AS offset,
@@ -45,6 +63,11 @@ export async function getBookList(id: string): Promise<BookList | null> {
 
 /** The same list, by the name on it — what a restore has to match against. */
 export async function findListNamed(name: string): Promise<string | null> {
+  // Whatever language it was written in, it is the one that ships.
+  if (isFavoritesName(name)) {
+    await seedSystemLists();
+    return FAVORITES;
+  }
   const database = await db();
   const row = await database.getFirstAsync<{ id: string }>(
     'SELECT id FROM book_lists WHERE name = ? COLLATE NOCASE LIMIT 1',
@@ -54,6 +77,11 @@ export async function findListNamed(name: string): Promise<string | null> {
 }
 
 export async function createBookList(name: string): Promise<string> {
+  // Asked for by one of its own names, the list already exists.
+  if (isFavoritesName(name)) {
+    await seedSystemLists();
+    return FAVORITES;
+  }
   const database = await db();
   const id = newId();
   await database.runAsync(
