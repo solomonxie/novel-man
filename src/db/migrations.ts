@@ -864,4 +864,29 @@ export const migrations: string[] = [
      last_recalled INTEGER
    );
    CREATE INDEX study_due ON study(book_id, due_at);`,
+
+  // One Favourites, not one per language.
+  //
+  // The list ships under a fixed id, is stored as `Favorites` and is *shown*
+  // translated — so a reader in Chinese sees 收藏. What nothing stopped was a
+  // second list actually named 收藏 being made beside it: by hand in the list
+  // picker before it compared translated names, or by a restore matching on
+  // the name. Both then drew as 收藏 on the home page, holding different books.
+  //
+  // So every book in such a list is moved into the real one and the duplicate
+  // goes. `OR IGNORE` because a book may well be in both already, and the
+  // system row is created first in case this device has somehow never had it.
+  `INSERT OR IGNORE INTO book_lists (id, name, system, created_at)
+     VALUES ('favorites', 'Favorites', 1, 0);
+   INSERT OR IGNORE INTO list_books (list_id, book_id, added_at)
+     SELECT 'favorites', m.book_id, m.added_at
+       FROM list_books m JOIN book_lists l ON l.id = m.list_id
+      WHERE l.system = 0
+        AND LOWER(TRIM(l.name)) IN ('favorites', 'favourites', '收藏', '收藏夹');
+   DELETE FROM list_books WHERE list_id IN (
+     SELECT id FROM book_lists
+      WHERE system = 0 AND LOWER(TRIM(name)) IN ('favorites', 'favourites', '收藏', '收藏夹')
+   );
+   DELETE FROM book_lists
+     WHERE system = 0 AND LOWER(TRIM(name)) IN ('favorites', 'favourites', '收藏', '收藏夹')`,
 ];
