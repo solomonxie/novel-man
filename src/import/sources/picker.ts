@@ -34,6 +34,15 @@ export function pickBackupBundle(): Promise<PickedFile | null> {
   return pick([types.allFiles]);
 }
 
+/**
+ * The PDF a converted book came out of. Offered on its own rather than through
+ * `pickManuscript`, because the app does not read PDFs — this one is never
+ * imported, only kept beside the book so a page of it can be looked at.
+ */
+export function pickOriginalPdf(): Promise<PickedFile | null> {
+  return pick(['com.adobe.pdf']);
+}
+
 /** A library export, which is a table rather than a book: Goodreads' CSV. */
 export function pickSpreadsheet(): Promise<PickedFile | null> {
   return pick(['public.comma-separated-values-text', 'public.plain-text']);

@@ -40,7 +40,8 @@ import {
   type Mention,
   type Relation,
 } from '../../src/db/repo';
-import { Cover, PrimaryAction, Row, Section } from '../../src/ui/primitives';
+import { Cover } from '../../src/ui/Cover';
+import { PrimaryAction, Row, Section } from '../../src/ui/primitives';
 import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item, Writable } from '../../src/ui/detail';
 import { hueFrom } from '../../src/ui/fields';
 import { ExportSheet } from '../../src/ui/ExportSheet';
@@ -81,7 +82,8 @@ import { addChoice } from '../../src/books/add';
 import { choiceFromIndex } from '../../src/sources/chosen';
 import type { Choice } from '../../src/sources/chosen';
 import { addFile } from '../../src/books/add';
-import { pickManuscript } from '../../src/import/sources/picker';
+import { pickManuscript, pickOriginalPdf } from '../../src/import/sources/picker';
+import { linkOriginal, unlinkOriginal, wantsOriginal } from '../../src/books/original';
 import { subscribeToQueue, type ImportJob } from '../../src/import/queue';
 import { kindOf, shows, supports, unitOf } from '../../src/books/kinds';
 import { isSkeleton, STARS, statusOf, STATUSES } from '../../src/books/record';
@@ -113,8 +115,8 @@ export default function BookPage() {
   const [characters, setCharacters] = useState<Entity[]>([]);
   const [places, setPlaces] = useState<Entity[]>([]);
   const [terms, setTerms] = useState<Entity[]>([]);
-  const [cards, setCards] = useState<Entity[]>([]);
   const [words, setWords] = useState<Entity[]>([]);
+  const [cards, setCards] = useState<Entity[]>([]);
   /** How much of this book is waiting to be studied, for the row that offers it. */
   const [study, setStudy] = useState<StudyState | null>(null);
   const [offset, setOffset] = useState(0);
@@ -142,6 +144,7 @@ export default function BookPage() {
   const [identifyOpen, setIdentifyOpen] = useState(false);
   const [listsOpen, setListsOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [askEstimate, setAskEstimate] = useState<Estimate | null>(null);
   const [favorite, setFavorited] = useState(false);
@@ -618,7 +621,13 @@ export default function BookPage() {
         avatar={
           <View style={{ alignItems: 'center', gap: space.xs }}>
             <Pressable onPress={() => setCoverOpen(true)}>
-              <Cover title={book.title} hue={book.cover_hue} width={92} path={book.cover_path} />
+              <Cover
+                title={book.title}
+                author={book.author}
+                hue={book.cover_hue}
+                width={92}
+                path={book.cover_path}
+              />
             </Pressable>
             {/* One word, and it is always the one that applies: a cover is
                 taken off, and then a cover is added. Two links side by side
@@ -1258,6 +1267,28 @@ export default function BookPage() {
             }}
           />
         )}
+        {/* Only a book converted from something has an original to point at,
+            and only then is the reader's "see the original" worth offering. */}
+        {wantsOriginal(book) ? (
+          <Row
+            label={t('book.original')}
+            detail={
+              book.origin_path
+                ? t('book.originalLinked', { name: book.origin_name ?? '' })
+                : t('book.originalWhy', { pages: book.origin_pages ?? 0 })
+            }
+            value={book.origin_path ? t('book.originalUnlink') : '›'}
+            busy={linking}
+            onPress={
+              linking
+                ? undefined
+                : book.origin_path
+                  ? () => void unlinkOriginal(book.id).then(load)
+                  : () => void linkPdf()
+            }
+          />
+        ) : null}
+
         <Row
           label={t('book.delete')}
           detail={t('book.deleteWhere')}
@@ -1285,6 +1316,7 @@ export default function BookPage() {
       <CoverViewer
         visible={coverOpen}
         title={book.title}
+        author={book.author}
         hue={book.cover_hue}
         path={book.cover_path}
         onClose={() => setCoverOpen(false)}

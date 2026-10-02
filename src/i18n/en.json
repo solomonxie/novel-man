@@ -242,7 +242,15 @@
     "wordsEmpty": "Words and phrases you keep while reading show up here.",
     "addWord": "＋ Keep a word",
     "searchWords": "Search words",
-    "wordsAll": "All words"
+    "wordsAll": "All words",
+    "original": "The original PDF",
+    "originalWhy": "Link the {{pages}}-page PDF this came from, to see a page as it was printed.",
+    "originalLinked": "Linked to {{name}}",
+    "originalUnlink": "Unlink",
+    "originalWrong": "That isn’t the same file",
+    "originalPages": "This book was made from a PDF of {{expected}} pages; that one has {{found}}.",
+    "originalSize": "That file is a different size from the one this book was made from.",
+    "originalContents": "That file has the same size but different contents — a different printing, or an edited copy."
   },
   "reader": {
     "go": "Go",
@@ -306,7 +314,9 @@
     "word": "Word",
     "selectBy": "Select",
     "selectTap": "By sentence",
-    "selectDrag": "By dragging"
+    "selectDrag": "By dragging",
+    "originalShort": "Page",
+    "originalPage": "Page {{page}} of the original"
   },
   "settings": {
     "title": "Settings",

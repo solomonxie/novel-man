@@ -5,6 +5,8 @@ export type PlacedBlock = {
   end: number;
   heading?: number;
   boundary?: boolean;
+  /** The page of the original this block begins on, where the source said. */
+  page?: number;
   /** Which block of the input this was — empty ones are dropped, so it shifts. */
   source?: number;
 };
@@ -28,6 +30,7 @@ export function normalize(blocks: Block[]): NormalizedDocument {
       end: text.length,
       heading: block.heading,
       boundary: block.boundary,
+      page: block.page,
       source,
     });
   });

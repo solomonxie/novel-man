@@ -1,9 +1,9 @@
 import { yieldToUI } from '../async/yield';
 import { adoptSourceFile, extensionOf, writeImage } from '../storage/files';
-import { saveImportedBook } from '../db/repo';
+import { replacePages, saveImportedBook, setOrigin } from '../db/repo';
 import { applyToImport } from '../backup/pending';
 import { detectChapters } from '../structure/detect';
-import { hintsOf } from '../structure/document';
+import { hintsOf, pagesOf } from '../structure/document';
 import { countUnits } from '../text/counts';
 import { detectLanguage } from '../text/language';
 import { DEFAULT_KIND } from '../books/kinds';
@@ -139,6 +139,17 @@ export async function importFile(
     chapters: detection.chapters,
     scenes,
   });
+  /**
+   * The pages of the original, and what that original was.
+   *
+   * Only a converted book has either — an EPUB out of `tools/convert-pdf.mjs`,
+   * or a scholarly one that marks its printed pages. Everything else leaves
+   * both empty and the reader never mentions a page.
+   */
+  const pages = pagesOf(doc);
+  if (pages.length) await replacePages(bookId, pages);
+  if (parsed.origin) await setOrigin(bookId, parsed.origin);
+
   // A backup without manuscripts left this book's own work waiting for the
   // file; the file has just arrived, so it goes back on now.
   await applyToImport(bookId, stored.hash);

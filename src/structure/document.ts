@@ -115,3 +115,33 @@ export function salvageRows<T>(answer: string): T[] {
   }
   return rows;
 }
+
+/**
+ * Where each page of the original begins and ends in the manuscript.
+ *
+ * A page is a range, not a point, so the marker that opens one closes the one
+ * before it — and the last runs to the end of the text. Built the same way
+ * verses are, because the question the reader asks of both is the same: which
+ * one am I in?
+ *
+ * Pages that arrive out of order, or twice, are dropped rather than trusted. A
+ * converted book numbers them from the file it was made from, and a file whose
+ * numbering jumps backwards is one whose numbering cannot be used to open a
+ * page in it.
+ */
+export type PageSpan = { number: number; start: number; end: number };
+
+export function pagesOf(doc: NormalizedDocument): PageSpan[] {
+  const marks: { number: number; start: number }[] = [];
+  for (const block of doc.blocks) {
+    if (block.page === undefined) continue;
+    const last = marks[marks.length - 1];
+    if (last && block.page <= last.number) continue;
+    marks.push({ number: block.page, start: block.start });
+  }
+  return marks.map((mark, at) => ({
+    number: mark.number,
+    start: mark.start,
+    end: marks[at + 1]?.start ?? doc.text.length,
+  }));
+}

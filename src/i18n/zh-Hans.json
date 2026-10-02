@@ -242,7 +242,15 @@
     "wordsEmpty": "阅读时收集的词和短语会出现在这里。",
     "addWord": "＋ 收集一个词",
     "searchWords": "搜索词语",
-    "wordsAll": "全部词语"
+    "wordsAll": "全部词语",
+    "original": "原始 PDF",
+    "originalWhy": "关联这本书所出自的 {{pages}} 页 PDF，即可查看原书页面。",
+    "originalLinked": "已关联 {{name}}",
+    "originalUnlink": "取消关联",
+    "originalWrong": "不是同一个文件",
+    "originalPages": "本书由 {{expected}} 页的 PDF 生成，而该文件有 {{found}} 页。",
+    "originalSize": "该文件的大小与本书所用的文件不同。",
+    "originalContents": "该文件大小相同但内容不同——可能是另一个版本或被修改过的副本。"
   },
   "reader": {
     "go": "前往",
@@ -306,7 +314,9 @@
     "word": "词语",
     "selectBy": "选择方式",
     "selectTap": "按句子",
-    "selectDrag": "拖动选择"
+    "selectDrag": "拖动选择",
+    "originalShort": "原页",
+    "originalPage": "原书第 {{page}} 页"
   },
   "settings": {
     "title": "设置",

@@ -1,8 +1,8 @@
 import { unzipSync } from 'fflate';
-import type { Block, Importer, ParseContext } from '../types';
-import { attr, decodeEntities, firstTagText, stripTags } from '../xml';
-import { decodeUtf8 } from '../decode';
+import type { Block, Importer, Origin, ParseContext } from '../types';
+import { attr, attrValue, decodeEntities, firstTagText, stripTags } from '../xml';
 import { imageMarker } from '../../reader/images';
+import { decodeUtf8 } from '../decode';
 
 const BLOCK_END = /<\/(p|div|h[1-6]|li|blockquote|section)\s*>/gi;
 const HEADING_OPEN = /^<h([1-6])\b/i;
@@ -41,6 +41,7 @@ export const epubImporter: Importer = {
       blocks,
       title: firstTagText(opf, 'dc:title'),
       author: firstTagText(opf, 'dc:creator'),
+      origin: originIn(opf),
     };
   },
 };
@@ -79,6 +80,51 @@ function hash(value: string): string {
 
 const IMG = /<(?:img|image)\b[^>]*>/gi;
 
+/**
+ * What the book was made from, where the package file says so.
+ *
+ * Written by `tools/convert-pdf.mjs` as ordinary OPF metadata, which every
+ * other reader ignores and this one uses to check that a PDF somebody links
+ * later is the PDF the book came out of.
+ */
+function originIn(opf: string): Origin | undefined {
+  const said = (name: string) =>
+    attrValue(
+      opf.match(new RegExp(`<meta\\b[^>]*property="novel-man:${name}"[^>]*>`, 'i'))?.[0] ?? '',
+      'content'
+    ) ??
+    /** `property` is EPUB 3; `name`/`content` is what EPUB 2 would have used. */
+    attrValue(
+      opf.match(new RegExp(`<meta\\b[^>]*name="novel-man:${name}"[^>]*>`, 'i'))?.[0] ?? '',
+      'content'
+    );
+  const pages = Number(said('origin-pages'));
+  const bytes = Number(said('origin-bytes'));
+  const fingerprint = said('origin-fingerprint');
+  if (!pages || !bytes || !fingerprint) return undefined;
+  return { kind: said('origin-kind') ?? 'pdf', name: said('origin-name') ?? '', bytes, pages, fingerprint };
+}
+
+/**
+ * `<span epub:type="pagebreak" aria-label="84"/>` — the standard way an EPUB
+ * says a page of the printed book began here. Scholarly editions carry them;
+ * so does anything this repo converts out of a PDF.
+ *
+ * Read before the tags are stripped, because stripping is what would otherwise
+ * throw them away: the marker has no text of its own, and the whole of what it
+ * says is in its attributes.
+ */
+const PAGEBREAK = /<(?:span|a|div)\b[^>]*(?:epub:type|role)="[^"]*(?:pagebreak|doc-pagebreak)[^"]*"[^>]*>/gi;
+
+function pageIn(chunk: string): number | undefined {
+  for (const tag of chunk.match(PAGEBREAK) ?? []) {
+    const label = attr(tag, 'aria-label') ?? attr(tag, 'title') ?? attr(tag, 'id')?.replace(/\D+/g, '');
+    const number = Number(label);
+    if (Number.isFinite(number) && number > 0) return number;
+  }
+  return undefined;
+}
+
 function blocksFromXhtml(xhtml: string, keep: (src: string) => string | null): Block[] {
   const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(xhtml)?.[1] ?? xhtml;
   // Same lazy-quantifier trap as the docx scan: only pay for it when it applies.
@@ -101,8 +147,13 @@ function blocksFromXhtml(xhtml: string, keep: (src: string) => string | null): B
         const stored = src ? keep(src) : null;
         if (stored) figures.push({ text: imageMarker(stored, attr(tag, 'alt') ?? '') });
       }
+      const page = pageIn(chunk);
       const body: Block[] = text ? [heading ? { text, heading: Number(heading[1]) } : { text }] : [];
-      return [...figures, ...body];
+      // The marker says a page begins here, so it belongs to whatever is drawn
+      // next — the picture if there is one, otherwise the paragraph.
+      const all = [...figures, ...body];
+      if (page !== undefined && all.length) all[0] = { ...all[0], page };
+      return all;
     })
     .filter((block) => block.text.length > 0);
 }

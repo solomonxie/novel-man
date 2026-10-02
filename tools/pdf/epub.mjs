@@ -33,14 +33,22 @@ function chapterXhtml(chapter) {
   const body = chapter.blocks
     .map((block) => {
       if (block.image) {
-        return `<figure><img src="${escape(block.image)}" alt="${escape(block.alt ?? '')}"/></figure>`;
+        const at = block.page
+          ? `<span epub:type="pagebreak" role="doc-pagebreak" id="pg${block.page}" aria-label="${block.page}"/>`
+          : '';
+        return `<figure>${at}<img src="${escape(block.image)}" alt="${escape(block.alt ?? '')}"/></figure>`;
       }
       // `epub:type="pagebreak"` is the standard way to say a page of the
       // printed book began here. Every other reader ignores it; this one turns
       // it into the page number under the words and the way to the original.
-      if (block.heading) return `<h${block.heading}>${escape(block.text)}</h${block.heading}>`;
-      if (block.code) return `<pre>${escape(block.text)}</pre>`;
-      return `<p>${escape(block.text)}</p>`;
+      const mark = block.page
+        ? `<span epub:type="pagebreak" role="doc-pagebreak" id="pg${block.page}" aria-label="${block.page}"/>`
+        : '';
+      if (block.heading) {
+        return `<h${block.heading}>${mark}${escape(block.text)}</h${block.heading}>`;
+      }
+      if (block.code) return `<pre>${mark}${escape(block.text)}</pre>`;
+      return `<p>${mark}${escape(block.text)}</p>`;
     })
     .join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -54,7 +62,7 @@ ${body}
 `;
 }
 
-export function buildEpub({ title, author, chapters, images }) {
+export function buildEpub({ title, author, chapters, images, origin }) {
   const files = {};
   // Not compressed and written first, which is what the specification asks of
   // it. Nothing here reads it, but a file claiming to be an EPUB should be one.
@@ -84,6 +92,7 @@ export function buildEpub({ title, author, chapters, images }) {
     <dc:title>${escape(title)}</dc:title>
     ${author ? `<dc:creator>${escape(author)}</dc:creator>` : ''}
     <dc:language>en</dc:language>
+${origin ? originMeta(origin) : ''}
   </metadata>
   <manifest>
 ${manifest.map((line) => `    ${line}`).join('\n')}
@@ -97,3 +106,23 @@ ${spine.map((line) => `    ${line}`).join('\n')}
   return zipSync(files, { level: 6 });
 }
 
+/**
+ * What this book was made from, so the app can refuse a different file.
+ *
+ * A page number only means something against the PDF it counts, and a reader
+ * who links the wrong printing would get the wrong page shown with complete
+ * confidence. Byte count and page count already make that unlikely; the
+ * strided fingerprint is the same cheap sample the app takes of every file it
+ * adopts, and settles it without hashing 35 MB on a phone.
+ */
+function originMeta(origin) {
+  return Object.entries({
+    kind: origin.kind,
+    name: origin.name,
+    bytes: origin.bytes,
+    pages: origin.pages,
+    fingerprint: origin.fingerprint,
+  })
+    .map(([key, value]) => `    <meta property="novel-man:origin-${key}" content="${escape(String(value))}"/>`)
+    .join('\n');
+}

@@ -28,6 +28,13 @@ export type Book = {
   word_count: number;
   char_count: number;
   cover_hue: number;
+  /** The file this book was converted from, and where its copy is kept. */
+  origin_kind: string | null;
+  origin_name: string | null;
+  origin_bytes: number | null;
+  origin_pages: number | null;
+  origin_fingerprint: string | null;
+  origin_path: string | null;
   /** A few sentences on what the book is. Context for every later pass. */
   summary: string | null;
   /** The reader's own overview of it — theirs, where the summary is the book's. */
@@ -336,6 +343,14 @@ export type ImportedBook = Omit<
   Book,
   | 'id'
   | 'created_at'
+  // Written after the book exists, by whatever knew it: the converter's stamp
+  // on import, the picker's answer when a PDF is linked later.
+  | 'origin_kind'
+  | 'origin_name'
+  | 'origin_bytes'
+  | 'origin_pages'
+  | 'origin_fingerprint'
+  | 'origin_path'
   | 'year'
   | 'edition'
   | 'cover_path'
@@ -900,6 +915,144 @@ export function parseFields(raw: string): CustomField[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * Throw the words away and keep everything said about them.
+ *
+ * A manuscript is the one part of a book that can always be fetched again —
+ * the file is on a disk somewhere, the edition is on Gutenberg — and it is
+ * also by far the largest part: three and a half megabytes of text against a
+ * few kilobytes of notes. What cannot be fetched again is the reading: the
+ * highlights, the notes on them, the people and places and terms, the rating,
+ * the lists, the flash cards and what they are due. So this empties the one
+ * and touches none of the other.
+ *
+ * Annotations survive on purpose and survive *usefully*. Each one stores its
+ * quote and the words either side of it, so when the text comes back —
+ * re-imported, or fetched from a catalogue — `reanchor` puts every highlight
+ * back where it was, even if the chapters were split differently the second
+ * time. That is the whole reason those columns exist.
+ *
+ * `structure` says whether the chapters go too. Keeping them leaves a table of
+ * contents whose offsets point into an empty document, which is harmless and
+ * useful: it is the outline of a book you have read, waiting for its words.
+ * Dropping them returns the book to a bare record, which is what you want when
+ * the next file will be split differently.
+ */
+/**
+ * The pages of the original, written once when the book is made.
+ *
+ * Replaced wholesale rather than merged: they are a property of one conversion
+ * of one file, and a second conversion renumbers them from scratch.
+ */
+export async function replacePages(
+  bookId: string,
+  pages: { number: number; start: number; end: number }[]
+) {
+  const database = await db();
+  await database.runAsync('DELETE FROM pages WHERE book_id = ?', bookId);
+  if (!pages.length) return;
+  // In bites, so a 1,527-page book stays under SQLite's older ceiling of 999
+  // bound values per statement: four a row, so 200 rows is 800.
+  const CHUNK = 200;
+  for (let at = 0; at < pages.length; at += CHUNK) {
+    const batch = pages.slice(at, at + CHUNK);
+    await database.runAsync(
+      `INSERT OR REPLACE INTO pages (book_id, number, start, end) VALUES ${batch
+        .map(() => '(?, ?, ?, ?)')
+        .join(', ')}`,
+      batch.flatMap((page) => [bookId, page.number, page.start, page.end])
+    );
+  }
+}
+
+/** What the converter said this book was made from. */
+export async function setOrigin(
+  bookId: string,
+  origin: { kind: string; name: string; bytes: number; pages: number; fingerprint: string }
+) {
+  const database = await db();
+  await database.runAsync(
+    `UPDATE books SET origin_kind = ?, origin_name = ?, origin_bytes = ?,
+                      origin_pages = ?, origin_fingerprint = ?
+      WHERE id = ?`,
+    origin.kind,
+    origin.name,
+    origin.bytes,
+    origin.pages,
+    origin.fingerprint,
+    bookId
+  );
+}
+
+/** Where the linked copy of the original lives, or null to unlink it. */
+export async function setOriginFile(bookId: string, path: string | null) {
+  const database = await db();
+  await database.runAsync('UPDATE books SET origin_path = ? WHERE id = ?', path, bookId);
+}
+
+/**
+ * Which page of the original an offset falls on.
+ *
+ * One indexed row, because this is asked every time the reader scrolls past a
+ * page boundary and a book has 1,527 of them.
+ */
+export async function pageAt(bookId: string, offset: number): Promise<number | null> {
+  const database = await db();
+  const row = await database.getFirstAsync<{ number: number }>(
+    'SELECT number FROM pages WHERE book_id = ? AND start <= ? AND end > ? LIMIT 1',
+    bookId,
+    offset,
+    offset
+  );
+  return row?.number ?? null;
+}
+
+/**
+ * Every page span of a book, for the reader to hold while it scrolls.
+ *
+ * A thousand-odd rows of four small numbers is tens of kilobytes, and the
+ * alternative is a query every time the words move — which is five times a
+ * second while somebody is flicking through a chapter. Read once, searched in
+ * memory.
+ */
+export async function listPages(bookId: string): Promise<{ number: number; start: number; end: number }[]> {
+  const database = await db();
+  return database.getAllAsync('SELECT number, start, end FROM pages WHERE book_id = ? ORDER BY start', bookId);
+}
+
+/** Where a page begins, for jumping to one by number. */
+export async function pageStart(bookId: string, number: number): Promise<number | null> {
+  const database = await db();
+  const row = await database.getFirstAsync<{ start: number }>(
+    'SELECT start FROM pages WHERE book_id = ? AND number = ?',
+    bookId,
+    number
+  );
+  return row?.start ?? null;
+}
+
+export async function clearManuscript(id: string, structure: 'keep' | 'drop') {
+  const database = await db();
+  await transaction(async () => {
+    await database.runAsync(
+      `UPDATE documents SET text = '', hints = '[]' WHERE book_id = ?`,
+      id
+    );
+    // The counts are a measurement of the text, so they go with it. The two
+    // that say where the text came *from* are deliberately left: see
+    // `withoutManuscript` and the restore it was written for.
+    await database.runAsync(
+      'UPDATE books SET word_count = 0, char_count = 0 WHERE id = ?',
+      id
+    );
+    if (structure === 'drop') {
+      // Scenes are positions inside chapters, so they cannot outlive them.
+      await database.runAsync('DELETE FROM scenes WHERE book_id = ?', id);
+      await database.runAsync('DELETE FROM chapters WHERE book_id = ?', id);
+    }
+  });
 }
 
 export async function deleteBook(id: string) {

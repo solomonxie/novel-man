@@ -30,6 +30,7 @@ import {
   getProgress,
   listAnnotations,
   listChapters,
+  listPages,
   listEntities,
   listVerses,
   removeAnnotation,
@@ -44,6 +45,7 @@ import {
 } from '../../src/db/repo';
 import { annotationAt, layoutChapter } from '../../src/reader/model';
 import { documentRange, originsOf } from '../../src/reader/selection';
+import { OriginalPage } from '../../src/ui/OriginalPage';
 import { imageIn } from '../../src/reader/images';
 import { sentenceAtLine, type Line } from '../../src/reader/lines';
 import { esvChapterText } from '../../src/sources/esvBook';
@@ -134,6 +136,13 @@ export default function Reader() {
    * far end back, and a dragged range has no such thing to walk.
    */
   const [dragged, setDragged] = useState<Span | null>(null);
+  /**
+   * Where the pages of the original fall, for a book converted from one. Held
+   * whole rather than queried: the alternative is a round trip every time the
+   * words move, which is five times a second while somebody flicks.
+   */
+  const [pages, setPages] = useState<{ number: number; start: number; end: number }[]>([]);
+  const [showingOriginal, setShowingOriginal] = useState(false);
   /** The title's own menu, unfolded under the bar it belongs to. */
   const [jumpOpen, setJumpOpen] = useState(false);
   const [noteFor, setNoteFor] = useState<Span | null>(null);
@@ -437,7 +446,23 @@ export default function Reader() {
   const script = scriptOf(language);
   const lineHeight = lineHeightFor(settings, script);
 
+  /**
+   * Which page of the original the reader is on. A walk rather than a search,
+   * because the answer almost always sits at or beside the last one — reading
+   * moves forward a page at a time.
+   */
+  const onPage = useMemo(() => {
+    if (!pages.length) return null;
+    const found = pages.find((page) => offset >= page.start && offset < page.end);
+    return found?.number ?? null;
+  }, [pages, offset]);
+
   const { message: toast, flash } = useFlash();
+
+  useEffect(() => {
+    if (!id) return;
+    listPages(id).then(setPages).catch(() => undefined);
+  }, [id]);
 
   const refreshAnnotations = useCallback(async () => {
     if (id) setAnnotations(await listAnnotations(id));
@@ -1224,6 +1249,25 @@ export default function Reader() {
             <Text style={{ color: palette.text, fontSize: 19, lineHeight: 23 }}>Aa</Text>
             <Text style={[styles.barLabel, { color: palette.dim }]}>{t('reader.textSettings')}</Text>
           </Pressable>
+          {/* The page of the original, where the book came from one and the
+              reader has linked it. Greyed until then rather than hidden: it
+              is the only place that says the original can be linked at all,
+              and a book converted from a PDF is exactly the book somebody
+              will want it for. */}
+          {onPage !== null ? (
+            <Pressable
+              onPress={() => book.origin_path && setShowingOriginal(true)}
+              disabled={!book.origin_path}
+              style={[styles.barItem, { opacity: book.origin_path ? 1 : 0.35 }]}
+            >
+              <Text style={{ color: palette.text, fontSize: 15, lineHeight: 23 }}>
+                {onPage}
+              </Text>
+              <Text style={[styles.barLabel, { color: palette.dim }]}>
+                {t('reader.originalShort')}
+              </Text>
+            </Pressable>
+          ) : null}
           {/* This chapter's own page: its brief, who is in it, its notes and
               everything that can be made of it — and the way to the book, now
               that no menu holds one. */}
@@ -1322,6 +1366,14 @@ export default function Reader() {
         onPick={addInto}
         onClose={() => setAddingTo(null)}
       />
+
+      {showingOriginal && book.origin_path && onPage !== null ? (
+        <OriginalPage
+          file={book.origin_path}
+          page={onPage}
+          onClose={() => setShowingOriginal(false)}
+        />
+      ) : null}
 
       <ReadingSettingsSheet
         visible={settingsOpen}
