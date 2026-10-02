@@ -29,7 +29,7 @@ export function ReadingSettingsSheet({ visible, settings, targets, ready, target
 }) {
   const { t } = useTranslation();
   /** One menu unfolds at a time, under the control it belongs to. */
-  const [open, setOpen] = useState<'spacing' | 'font' | 'language' | null>(null);
+  const [open, setOpen] = useState<'spacing' | 'font' | 'language' | 'select' | null>(null);
   const palette = readingThemes[settings.theme];
   const ink = palette.text;
 
@@ -153,6 +153,15 @@ export function ReadingSettingsSheet({ visible, settings, targets, ready, target
               palette={palette}
               onPress={() => setOpen(open === 'font' ? null : 'font')}
             />
+            {/* How a passage is chosen. A dropdown rather than a switch so it
+                sits in the same row as the rest and says which it is. */}
+            <Dropdown
+              name={t('reader.selectBy')}
+              value={settings.freeSelect ? t('reader.selectDrag') : t('reader.selectTap')}
+              open={open === 'select'}
+              palette={palette}
+              onPress={() => setOpen(open === 'select' ? null : 'select')}
+            />
             {/* A language is named, never called "the translation": which one
                 it is is the whole question when a book has two. */}
             {hasTargets ? (
@@ -195,6 +204,25 @@ export function ReadingSettingsSheet({ visible, settings, targets, ready, target
                     label: t('reader.serif'),
                     active: !!settings.serif,
                     onPress: () => onChange({ ...settings, serif: true }),
+                  },
+                ]}
+                onPicked={() => setOpen(null)}
+              />
+              <Menu
+                shown={open === 'select'}
+                palette={palette}
+                options={[
+                  {
+                    id: 'tap',
+                    label: t('reader.selectTap'),
+                    active: !settings.freeSelect,
+                    onPress: () => onChange({ ...settings, freeSelect: false }),
+                  },
+                  {
+                    id: 'drag',
+                    label: t('reader.selectDrag'),
+                    active: !!settings.freeSelect,
+                    onPress: () => onChange({ ...settings, freeSelect: true }),
                   },
                 ]}
                 onPicked={() => setOpen(null)}

@@ -19,6 +19,7 @@ const { partsOf, salvageRows, meaningfulName } = await import(join(build, 'struc
 const { languageFrom, needsRelabel } = await import(join(build, 'books/language.js'));
 const { normalizeLanguage, labelFor } = await import(join(build, 'translate/languages.js'));
 const { layoutChapter, annotationAt } = await import(join(build, 'reader/model.js'));
+const { originsOf, documentRange } = await import(join(build, 'reader/selection.js'));
 const { imageIn, imageMarker } = await import(join(build, 'reader/images.js'));
 const { sentenceAtLine } = await import(join(build, 'reader/lines.js'));
 const { runsIn, codeBlockIn } = await import(join(build, 'reader/rich.js'));
@@ -2502,6 +2503,45 @@ console.log('markdown with no front matter at all');
   );
   check('a horizontal rule is not front matter', parsed.title, undefined);
   check('and the prose either side of it survives', parsed.blocks.length, 3);
+}
+
+console.log('what the reader selected, in the book');
+{
+  // A paragraph as drawn: a verse number that is in no document, then two
+  // sentences with a space between them in the manuscript that is drawn by
+  // neither run.
+  const text = 'He went down.  She did not.';
+  const spans = [{ start: 100, end: 113 }, { start: 115, end: 127 }];
+  const shownOf = (span) => text.slice(span.start - 100, span.end - 100);
+  const origins = originsOf(3, spans, shownOf);
+
+  check('the runs are laid out after the prefix', origins,
+    [{ shownStart: 3, shownEnd: 16, docStart: 100 },
+     { shownStart: 16, shownEnd: 28, docStart: 115 }]);
+
+  // The whole first sentence. Resolved against the run it ends *in*, or a
+  // selection of one sentence would reach a character into the next.
+  check('one whole sentence', documentRange(origins, 3, 16), { start: 100, end: 113 });
+  check('a word inside it', documentRange(origins, 6, 10), { start: 103, end: 107 });
+  // Across the gap: the manuscript's two characters between the sentences are
+  // inside the range even though nothing drew them, which is right — they are
+  // between the words that were selected.
+  check('across both sentences', documentRange(origins, 3, 28), { start: 100, end: 127 });
+  check('inside the second', documentRange(origins, 20, 23), { start: 119, end: 122 });
+
+  // A tap is a caret, and a caret selects nothing. Without this every tap on
+  // the page would open the selection menu over no words.
+  check('an empty selection is not a selection', documentRange(origins, 8, 8), null);
+  check('nor is a backwards one', documentRange(origins, 12, 6), null);
+  // Dragging from before the first word is how a reader selects a whole
+  // paragraph, and the verse number is what their finger lands on.
+  check('a selection starting on the verse number still counts',
+    documentRange(origins, 0, 16), { start: 100, end: 113 });
+  check('and one past the end stops at the end',
+    documentRange(origins, 20, 99), { start: 119, end: 127 });
+  check('a selection of only the verse number is nothing',
+    documentRange(origins, 0, 2), null);
+  check('and nothing drawn selects nothing', documentRange([], 0, 5), null);
 }
 
 console.log('which model a key runs on');

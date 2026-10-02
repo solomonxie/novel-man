@@ -7,11 +7,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   useWindowDimensions,
   type GestureResponderEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type TextInputSelectionChangeEventData,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from '../../src/navigation/router';
@@ -22,6 +24,7 @@ import {
   addAnnotation,
   addExcerpt,
   createEntity,
+  findEntityNamed,
   getBook,
   getDocumentText,
   getProgress,
@@ -40,6 +43,7 @@ import {
   type Verse,
 } from '../../src/db/repo';
 import { annotationAt, layoutChapter } from '../../src/reader/model';
+import { documentRange, originsOf } from '../../src/reader/selection';
 import { imageIn } from '../../src/reader/images';
 import { sentenceAtLine, type Line } from '../../src/reader/lines';
 import { esvChapterText } from '../../src/sources/esvBook';
@@ -62,7 +66,6 @@ import {
   type ReadingSettings,
 } from '../../src/reader/settings';
 import { ReadingSettingsSheet } from '../../src/ui/ReadingSettingsSheet';
-import { Scrubber } from '../../src/ui/Scrubber';
 import { labelFor } from '../../src/translate/languages';
 import { SentenceMenu } from '../../src/ui/SentenceMenu';
 import { NoteSheet } from '../../src/ui/NoteSheet';
@@ -124,18 +127,25 @@ export default function Reader() {
    * kept selecting a line when it was meant to be turning the page.
    */
   const [selection, setSelection] = useState<{ anchor: Span; focus: Span; y: number } | null>(null);
+  /**
+   * A range the reader dragged, which is any range at all and so cannot be
+   * described as a pair of sentences. Held beside `selection` rather than
+   * inside it: the tap model's anchor-and-focus is what lets a tap walk the
+   * far end back, and a dragged range has no such thing to walk.
+   */
+  const [dragged, setDragged] = useState<Span | null>(null);
   /** The title's own menu, unfolded under the bar it belongs to. */
   const [jumpOpen, setJumpOpen] = useState(false);
   const [noteFor, setNoteFor] = useState<Span | null>(null);
   const [shareFor, setShareFor] = useState<Span | null>(null);
   /**
-   * What a passage can be filed against: the book's own terms and, for a
+   * What a passage can be added to: the book's own terms and, for a
    * textbook, its flash cards. Read once with the book — the sheet has to open
    * on a tap, and a query at that moment is a sheet that opens empty and fills
    * in.
    */
   const [filable, setFilable] = useState<Entity[]>([]);
-  const [filingFor, setFilingFor] = useState<Span | null>(null);
+  const [addingTo, setAddingTo] = useState<Span | null>(null);
   const [offset, setOffset] = useState(0);
   const [targets, setTargets] = useState<string[]>([]);
   /** Of those, the ones this chapter has actually been translated into. */
@@ -151,15 +161,12 @@ export default function Reader() {
    * Long-press still works, but it misses on the white between sentences and
    * on a short word. The button is the way in that never misses.
    */
-  const [selecting, setSelecting] = useState(false);
 
   /** Where each paragraph's lines ended up, so a tap that missed the words
    *  can still be answered by the line it landed on. */
   const linesOf = useRef(new Map<number, Line[]>());
   const scrollRef = useRef<ScrollView>(null);
   const viewport = useRef({ content: 0, layout: 0 });
-  /** The same two numbers the scrubber is drawn from, where a render sees them. */
-  const [measured, setMeasured] = useState({ content: 0, layout: 0 });
   /** Driven by the scroll itself, so the thumb keeps up without JavaScript. */
   const scrollY = useRef(new Animated.Value(0)).current;
   const pendingScroll = useRef<number | null>(null);
@@ -442,7 +449,7 @@ export default function Reader() {
    * line it landed on; outside it, it is still just a tap on the page.
    */
   function pressParagraph(paragraph: { start: number; sentences: Span[] }, event: GestureResponderEvent) {
-    if (!selecting && !selection) {
+    if (!selection) {
       setChrome(!chromeShown.current);
       return;
     }
@@ -489,7 +496,7 @@ export default function Reader() {
   /** One way out, so the mode and the selection never disagree. */
   function endSelection() {
     setSelection(null);
-    setSelecting(false);
+    setDragged(null);
   }
 
   /**
@@ -497,11 +504,18 @@ export default function Reader() {
    * far end itself takes it back rather than doing nothing — the selection
    * gives up that sentence and ends at the one before it, so a tap too far is
    * undone by the same tap that made it.
+   *
+   * Forwards only. A tap *above* the anchor used to drag the selection
+   * backwards over it, which is how a careful quote became the wrong quote
+   * with one misplaced thumb: the passage you were building vanished and a
+   * different one appeared behind you. A tap before the range now does
+   * nothing at all, which is what a miss should cost.
    */
   function extendSelect(span: Span, event: GestureResponderEvent) {
     const y = event.nativeEvent.pageY;
     setSelection((current) => {
       if (!current) return current;
+      if (span.end <= current.anchor.start) return current;
       if (span.start !== current.focus.start) return { ...current, focus: span, y };
       const back = stepBack(current.anchor, current.focus);
       // Nothing left to give back: the one sentence was the whole selection,
@@ -522,16 +536,26 @@ export default function Reader() {
     return spans[at + (at > anchorAt ? -1 : 1)] ?? null;
   }
 
-  const range: Span | null = selection
-    ? {
-        start: Math.min(selection.anchor.start, selection.focus.start),
-        end: Math.max(selection.anchor.end, selection.focus.end),
-      }
-    : null;
+  const range: Span | null =
+    dragged ??
+    (selection
+      ? {
+          start: Math.min(selection.anchor.start, selection.focus.start),
+          end: Math.max(selection.anchor.end, selection.focus.end),
+        }
+      : null);
 
   const selected = range ? annotationAt(marks, range) : undefined;
   /** Somewhere for a passage to go: this kind of book has terms, or cards, or both. */
-  const canFile = supports(book?.kind, 'terms') || supports(book?.kind, 'cards');
+  const canAdd = supports(book?.kind, 'terms') || supports(book?.kind, 'cards');
+  /**
+   * Short enough to be a word rather than a passage. Measured in characters
+   * and not in words, because the languages this is read in do not all put
+   * spaces between them: `天龙八部` is four characters and no spaces, and a
+   * line of English prose is sixty characters and nine.
+   */
+  const canKeepWord =
+    supports(book?.kind, 'words') && range !== null && Boolean(wordIn(source.slice(range.start, range.end)));
 
   async function onCopy() {
     if (!range) return;
@@ -548,7 +572,7 @@ export default function Reader() {
   }
 
   /**
-   * The passage, filed against the thing it is about — a term it explains, or a
+   * The passage, added to the thing it is about — a term it explains, or a
    * flash card it is the evidence for. A highlight marks the sentence; this
    * says what the sentence is for, and turns up on that thing's own page.
    *
@@ -556,10 +580,10 @@ export default function Reader() {
    * offset inside the chapter rather than the book, which is why the chapter
    * travels with it and is what the link back uses.
    */
-  async function fileInto(choice: string) {
-    const span = filingFor;
+  async function addInto(choice: string) {
+    const span = addingTo;
     if (!span || !id) return;
-    setFilingFor(null);
+    setAddingTo(null);
     const quote = source.slice(span.start, span.end).replace(/\s+/g, ' ').trim();
     const chapterIdx =
       chapters.find((entry) => span.start >= entry.start && span.start < entry.end)?.idx ?? index;
@@ -576,7 +600,33 @@ export default function Reader() {
         router.push(`/${kind}/${entityId}`);
         return;
       }
-      flash(t('reader.filed', { name: filable.find((one) => one.id === choice)?.name ?? '' }));
+      flash(t('reader.added', { name: filable.find((one) => one.id === choice)?.name ?? '' }));
+    } catch (error) {
+      flash(String(error));
+    }
+  }
+
+  /**
+   * Keeping the selection as a word.
+   *
+   * The same word selected twice is the one entry, so an existing row is
+   * opened rather than a second one written — a reader who marks a word in
+   * chapter two and again in chapter forty means the one word, and two rows
+   * would split its appearances and its notes between them.
+   *
+   * Punctuation comes off the ends. A selection almost always catches the
+   * comma after the word or the quote mark before it, and `觥筹交错，` is not
+   * a word the dictionary has heard of.
+   */
+  async function keepWord() {
+    if (!range || !id) return;
+    const wanted = wordIn(source.slice(range.start, range.end));
+    if (!wanted) return;
+    try {
+      const already = await findEntityNamed(id, 'word', wanted);
+      const wordId = already?.id ?? (await createEntity(id, 'word', wanted));
+      endSelection();
+      router.push(`/word/${wordId}`);
     } catch (error) {
       flash(String(error));
     }
@@ -711,7 +761,7 @@ export default function Reader() {
 
   // The selection bar replaces the reading controls rather than stacking on
   // top of them: both at once is two rows of buttons over the same thumb.
-  const chromeOpacity = selection ? 0 : chrome;
+  const chromeOpacity = range ? 0 : chrome;
 
   const bodyStyle = {
     color: palette.text,
@@ -750,8 +800,6 @@ export default function Reader() {
         onLongPress={(event) => beginSelect(span, event)}
         onPress={(event) => {
           if (selection) return extendSelect(span, event);
-          // In select mode a tap is the anchor the long-press would have been.
-          if (selecting) return beginSelect(span, event);
           setChrome(!chromeShown.current);
         }}
         style={{
@@ -807,7 +855,7 @@ export default function Reader() {
         <View style={{ width: TOUCH }} />
       </Animated.View>
 
-      {jumpOpen && !selection ? (
+      {jumpOpen && !range ? (
         <JumpWheel
           chapters={chapters}
           index={index}
@@ -826,13 +874,25 @@ export default function Reader() {
         onLayout={(event) => {
           const height = event.nativeEvent.layout.height;
           viewport.current.layout = height;
-          setMeasured((was) => (was.layout === height ? was : { ...was, layout: height }));
         }}
       >
         <Animated.ScrollView
           ref={scrollRef}
-          // Ours is drawn instead: iOS will not let a finger near its own.
-          showsVerticalScrollIndicator={false}
+          /**
+           * The system's own, after an attempt at a better one.
+           *
+           * The argument for drawing our own was that iOS would not let a
+           * finger near the indicator. That has not been true for years: press
+           * and hold it and it becomes a scrubber, which is the whole feature
+           * the handle existed to provide — and the system's knows how to fade
+           * itself, size itself to the content and flash on the way in without
+           * any of it being written here.
+           *
+           * `white` on a night page: the default indicator is black, and black
+           * on #121212 is a scroll bar nobody can see.
+           */
+          showsVerticalScrollIndicator
+          indicatorStyle={settings.theme === 'night' ? 'white' : 'black'}
           contentContainerStyle={{
             paddingHorizontal: settings.margin,
             paddingTop: TOUCH + space.lg,
@@ -846,11 +906,6 @@ export default function Reader() {
               const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
               scrolledY.current = contentOffset.y;
               viewport.current = { content: contentSize.height, layout: layoutMeasurement.height };
-              setMeasured((was) =>
-                was.content === contentSize.height && was.layout === layoutMeasurement.height
-                  ? was
-                  : { content: contentSize.height, layout: layoutMeasurement.height }
-              );
               if (remote) return;
               const ratio = contentOffset.y / Math.max(1, contentSize.height - layoutMeasurement.height);
               const at = chapter.start + Math.round(Math.min(1, Math.max(0, ratio)) * (chapter.end - chapter.start));
@@ -861,7 +916,6 @@ export default function Reader() {
           scrollEventThrottle={200}
           onContentSizeChange={(_, contentHeight) => {
             viewport.current.content = contentHeight;
-            setMeasured((was) => (was.content === contentHeight ? was : { ...was, content: contentHeight }));
             // The spinner's height is not the chapter's: landing on a verse
             // has to wait for the words, or it lands at the top of nothing.
             if (!text) return;
@@ -971,6 +1025,65 @@ export default function Reader() {
                     </View>
                   );
                 }
+                /**
+                 * Dragged selection, where the page is showing the book's own
+                 * words. Not on a translated paragraph: what is drawn there is
+                 * not what is in the file, so an offset into the glass is an
+                 * offset into nothing.
+                 *
+                 * A read-only `TextInput` rather than a `Text`, because a
+                 * `Text` will not tell JavaScript what was selected — iOS
+                 * draws the handles and the menu and reports none of it. A
+                 * `TextInput` reports `onSelectionChange`, keeps its nested
+                 * `Text` children (so the bold, the code spans and the
+                 * highlight colours all survive), and with `editable={false}`
+                 * never raises the keyboard.
+                 */
+                const free = settings.freeSelect && !inTarget;
+                if (free) {
+                  const prefix = numberAt.has(paragraph.start)
+                    ? `${numberAt.get(paragraph.start)}  `.length
+                    : 0;
+                  return (
+                    <View key={paragraph.start} style={{ marginBottom: lineHeight * 0.6 }}>
+                      <TextInput
+                        editable={false}
+                        multiline
+                        scrollEnabled={false}
+                        // The page scrolls; this must not try to.
+                        textAlignVertical="top"
+                        style={[bodyStyle, styles.freeText]}
+                        onSelectionChange={(event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
+                          const { start, end } = event.nativeEvent.selection;
+                          const origins = originsOf(prefix, paragraph.sentences, (span: Span) =>
+                            source.slice(span.start, span.end)
+                          );
+                          const found = documentRange(origins, start, end);
+                          // A caret is not a selection — see `documentRange`.
+                          // Clearing on one is what makes a tap on the page
+                          // put the menu away again.
+                          setSelection(null);
+                          setDragged(found);
+                        }}
+                      >
+                        {numberAt.has(paragraph.start) ? (
+                          <Text
+                            style={{
+                              color: palette.dim,
+                              fontSize: Math.round(settings.fontSize * 0.62),
+                              lineHeight,
+                            }}
+                          >
+                            {numberAt.get(paragraph.start)}
+                            {'  '}
+                          </Text>
+                        ) : null}
+                        {paragraph.sentences.map((span) => renderSentence(span, false))}
+                      </TextInput>
+                    </View>
+                  );
+                }
+
                 return (
                 <Pressable
                   key={paragraph.start}
@@ -1076,24 +1189,9 @@ export default function Reader() {
           onPress={() => pageBy(1)}
         />
 
-        {/* Last, so it is on top: the right margin's page-forward zone covers
-            the same strip of glass, and whichever is drawn later wins the
-            touch. Only the handle itself takes one — the rest of the strip
-            still turns the page. */}
-        <Scrubber
-          scrollY={scrollY}
-          content={measured.content}
-          layout={measured.layout}
-          ink={palette.text}
-          accent={palette.accent}
-          surface={palette.bg}
-          tint={palette.tint}
-          offsetOf={whereScrolled}
-          onScrollTo={scrollPageTo}
-        />
       </View>
 
-      {selection ? null : (
+      {range ? null : (
       <Animated.View
         style={[
           styles.footer,
@@ -1104,7 +1202,7 @@ export default function Reader() {
             paddingBottom: Math.max(insets.bottom, space.md),
           },
         ]}
-        pointerEvents={selection ? 'none' : 'box-none'}
+        pointerEvents={range ? 'none' : 'box-none'}
       >
         <View style={styles.controls}>
           {/* Turning a chapter lives on the bar after all. It was at the end of
@@ -1136,7 +1234,7 @@ export default function Reader() {
             >
               <Text
                 style={{
-                  color: selecting ? palette.accent : palette.text,
+                  color: palette.text,
                   fontSize: 19,
                   lineHeight: 23,
                 }}
@@ -1160,7 +1258,7 @@ export default function Reader() {
       </Animated.View>
       )}
 
-      {selection && (
+      {range && (
         <SentenceMenu
           dark={settings.theme === 'night'}
           dismissLabel={t('reader.done')}
@@ -1176,37 +1274,38 @@ export default function Reader() {
               // note is a change of mind about the note, not about the words.
               onPress: () => setNoteFor(range!),
             },
-            ...(canFile
+            ...(canKeepWord
               ? [
                   {
-                    key: 'file',
-                    label: t('reader.fileTo'),
-                    // The selection stays while the sheet is open, the way it
-                    // does for a note: backing out is a change of mind about
-                    // where it goes, not about the words.
-                    onPress: () => setFilingFor(range!),
+                    key: 'word',
+                    // Short selections only. The option is for a word, a
+                    // phrase or a turn of speech; offered over two paragraphs
+                    // it is a promise the word page cannot keep.
+                    label: t('reader.word'),
+                    onPress: () => void keepWord(),
                   },
                 ]
               : []),
-            {
-              key: 'select',
-              // Keeps what is chosen and lets a tap add the next sentence, so
-              // a quote that runs over three of them is three taps rather
-              // than a drag along a handle.
-              label: t('reader.select'),
-              onPress: () => {
-                setSelecting(true);
-                flash(t('reader.selectHint'));
-              },
-            },
+            ...(canAdd
+              ? [
+                  {
+                    key: 'add',
+                    label: t('reader.addTo'),
+                    // The selection stays while the sheet is open, the way it
+                    // does for a note: backing out is a change of mind about
+                    // where it goes, not about the words.
+                    onPress: () => setAddingTo(range!),
+                  },
+                ]
+              : []),
           ]}
         />
       )}
 
       <PickerSheet
-        visible={filingFor !== null}
-        title={t('reader.fileTitle')}
-        searchPlaceholder={t('reader.fileSearch')}
+        visible={addingTo !== null}
+        title={t('reader.addTitle')}
+        searchPlaceholder={t('reader.addSearch')}
         options={[
           ...(supports(book?.kind, 'cards')
             ? [{ id: `${NEW}card`, label: t('reader.newCard') }]
@@ -1220,8 +1319,8 @@ export default function Reader() {
             detail: t(one.kind === 'card' ? 'card.eyebrow' : 'term.eyebrow'),
           })),
         ]}
-        onPick={fileInto}
-        onClose={() => setFilingFor(null)}
+        onPick={addInto}
+        onClose={() => setAddingTo(null)}
       />
 
       <ReadingSettingsSheet
@@ -1348,6 +1447,9 @@ const styles = StyleSheet.create({
    * the text that read as a bar that had not quite gone.
    */
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: space.sm },
+  /** A `TextInput` brings padding and a minimum height of its own; a
+      paragraph of a book wants neither. */
+  freeText: { padding: 0, margin: 0 },
   /** Three equal columns: the outer two fall under either thumb. */
   controls: {
     flexDirection: 'row',
@@ -1355,3 +1457,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.sm,
   },
 });
+
+/** How long a thing can be and still be a word, a phrase or an expression. */
+const LONGEST_WORD = 48;
+
+/**
+ * The word inside a selection, or nothing if the selection is a passage.
+ *
+ * Quotation marks, brackets and the comma that ends the clause come off both
+ * ends; what is inside is left alone, because a hyphen, an apostrophe and a
+ * full stop are all parts of words — `well-meaning`, `don't`, `std::vector`.
+ */
+function wordIn(selected: string): string {
+  const once = selected.replace(/\s+/g, ' ').trim();
+  const trimmed = once
+    .replace(/^[\s"'“”‘’（(「『【\[—–-]+/u, '')
+    .replace(/[\s"'“”‘’）)」』】\].,;:!?。，、；：！？…—–]+$/u, '')
+    .trim();
+  if (!trimmed || trimmed.length > LONGEST_WORD) return '';
+  // A sentence is not a phrase, however short. A full stop in the middle of
+  // what was selected is the clearest sign one was.
+  if (/[.。!！?？;；]\s*\S/u.test(trimmed)) return '';
+  return trimmed;
+}

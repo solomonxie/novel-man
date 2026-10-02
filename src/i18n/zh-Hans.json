@@ -297,9 +297,16 @@
     "analyzeChapter": "分析这一章",
     "prevShort": "上一章",
     "nextShort": "下一章",
+    "addTo": "添加",
+    "addTitle": "把这段添加到",
+    "addSearch": "搜索",
     "newCard": "＋ 用它新建一张记忆卡",
     "newTerm": "＋ 用它新建一个概念或术语",
-    "word": "词语"
+    "added": "已添加到{{name}}",
+    "word": "词语",
+    "selectBy": "选择方式",
+    "selectTap": "按句子",
+    "selectDrag": "拖动选择"
   },
   "settings": {
     "title": "设置",
