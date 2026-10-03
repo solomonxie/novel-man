@@ -105,14 +105,12 @@ Fallback, Xcode GUI: open `ios/NovelMan.xcworkspace` → destination **Any iOS D
 ## Screenshots
 
 Apple requires one set: **iPhone 6.9" Display**, exactly `1320 × 2868` (or `1290 × 2796`).
-App Store Connect scales it down for every smaller phone. The 6.5" slot (`1284 × 2778`) is
-optional and generated anyway, for the older listing layout.
+App Store Connect scales it down for every smaller phone.
 
 Capture on the paired iPhone 14 (`1170 × 2532`) and let the script do the rest — the
 aspect ratios differ by 0.4%, which is invisible.
 
-What sits in `docs/release/screenshots/` now is the two README shots upscaled from a
-~600 px capture. They prove the pipeline, not the listing — recapture before you upload.
+Captured 2026-10-03 (simulator, demo library, JPEG q80): English in `docs/release/screenshots/`, 简体中文 in `docs/release/screenshots/zh-Hans/` — shelf, reader, book, structure, concepts, flash cards, notes, sources, settings. Upload the zh-Hans set to the 简体中文 localization.
 
 1. `npm run ios` — a Release build, so no dev overlay. Load a book you are happy to show;
    a Gutenberg classic is safest, nothing unpublished and nothing personal in the notes.
@@ -134,7 +132,7 @@ What sits in `docs/release/screenshots/` now is the two README shots upscaled fr
 npm run screenshots ~/Desktop/shots
 ```
 
-Outputs overwrite `docs/release/screenshots/{6.9,6.5}/`, named after the files you fed in —
+Outputs overwrite `docs/release/screenshots/`, named after the files you fed in —
 so name them `01-shelf.png`, `02-reader.png` … and the upload order sorts itself.
 Drag the `6.9` folder's files into the 6.9" slot.
 
@@ -166,10 +164,10 @@ App Preview video: skip for 1.0.
 | App Review → Attachment | none |
 | Version Release | **Manually release this version** |
 
-Promotional Text (155/170):
+Promotional Text (no price wording, Guideline 2.3.7):
 
 ```
-A book reader that accepts any format. Import a manuscript and get back its chapters, scenes and cast — on the device, with no account and no subscription.
+A book reader that accepts any format. Import a manuscript and get back its chapters, scenes and cast — on the device, with no account and no server.
 ```
 
 Description:
@@ -342,7 +340,7 @@ The app ships `zh-Hans`. App Store Connect → App Information → language drop
 | Subtitle | `读小说，理结构，建角色卡` |
 | Privacy Policy URL | same |
 | Keywords | `小说,手稿,阅读器,离线,批注,翻译,剧本,epub,古登堡,书架,圣经,写作` |
-| Screenshots | reuse the English set (App Store Connect falls back automatically) |
+| Screenshots | upload `docs/release/screenshots/zh-Hans/*.jpg` |
 
 Promotional Text:
 
