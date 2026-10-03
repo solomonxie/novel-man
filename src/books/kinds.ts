@@ -1,3 +1,4 @@
+import { isChinaStore } from '../store/storefront';
 /**
  * What a book *is* decides what the app offers for it. A tutorial has no cast,
  * scripture has no scenes to storyboard, and offering either is worse than not
@@ -173,7 +174,9 @@ export const bookKinds: BookKind[] = [
 export const DEFAULT_KIND = bookKinds[0].id;
 
 /** The order the groups are offered in, and what is under each. */
-export const kindGroups: KindGroup[] = ['fiction', 'nonfiction', 'scripture'];
+export const kindGroups: KindGroup[] = isChinaStore()
+  ? ['fiction', 'nonfiction']
+  : ['fiction', 'nonfiction', 'scripture'];
 
 export function kindsIn(group: KindGroup): BookKind[] {
   return bookKinds.filter((kind) => kind.group === group);
