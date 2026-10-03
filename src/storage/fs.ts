@@ -80,6 +80,16 @@ export class File extends Entry {
     else RNFSTurbo.writeFile(this.path, base64(contents), 'base64');
   }
 
+  /** Megabytes of base64 in one call hold the JS thread for seconds; this hands it back between slices. */
+  async writeInSlices(contents: Uint8Array, yieldToUI: () => Promise<void>): Promise<void> {
+    const SLICE = 3 * 256 * 1024;
+    RNFSTurbo.writeFile(this.path, '', 'utf8');
+    for (let at = 0; at < contents.length; at += SLICE) {
+      RNFSTurbo.appendFile(this.path, base64(contents.subarray(at, at + SLICE)), 'base64');
+      await yieldToUI();
+    }
+  }
+
   textSync(): string {
     return RNFSTurbo.readFile(this.path, 'utf8');
   }

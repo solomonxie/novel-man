@@ -13,7 +13,20 @@ export function subscribeToChanges(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
+let muted = 0;
+
+/** Writes a backup makes about itself — the upload ledger, the attempt log — are not changes to the library. */
+export async function unnoticed<T>(work: () => Promise<T>): Promise<T> {
+  muted++;
+  try {
+    return await work();
+  } finally {
+    muted--;
+  }
+}
+
 export function noticeChange() {
+  if (muted) return;
   for (const listener of listeners) listener();
   void bump();
 }
