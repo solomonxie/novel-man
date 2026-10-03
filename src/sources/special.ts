@@ -1,3 +1,5 @@
+import { isChinaStore } from '../store/storefront';
+
 /**
  * The one edition whose words are fetched a chapter at a time rather than
  * kept. Its name and its key live here, with the rest of what this app knows
@@ -41,6 +43,7 @@ export const specialEditions: SpecialEdition[] = [
 ];
 
 export function searchSpecial(query: string): SpecialEdition[] {
+  if (isChinaStore()) return [];
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (!terms.length) return [];
   return specialEditions.filter((edition) => {
@@ -95,6 +98,7 @@ export const licensedAbbreviations: string[] = licensedEditions.flatMap((edition
 
 /** The one the reader named, if they named one. */
 export function searchLicensed(query: string): LicensedEdition | null {
+  if (isChinaStore()) return null;
   const asked = query.trim().toLowerCase();
   if (!asked) return null;
   const terms = asked.split(/\s+/).filter(Boolean);
