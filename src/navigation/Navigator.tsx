@@ -13,6 +13,8 @@ import { watchForChanges } from '../backup/icloud';
 import { watchForLocalBackup } from '../backup/local';
 import { palettes, usePalette, useScheme, type Palette, type Scheme } from '../theme';
 import { loadDemoMode } from '../dev/demo';
+import { openScreen, prepareScreenshots } from '../dev/screenshot';
+import { loadStorefront } from '../store/loadStorefront';
 import { navigationRef } from './router';
 import { screens } from './screens';
 
@@ -25,19 +27,25 @@ const Stack = createNativeStackNavigator();
  * app against the wrong library for even one query is how a demo would write
  * into the real one.
  */
-export default function App() {
+export default function App({ screen }: { screen?: string }) {
   const [library, setLibrary] = useState(false);
 
   useEffect(() => {
-    // Both before the first screen: which library, and which language.
-    Promise.all([loadDemoMode(), loadUiLanguage()]).then(() => setLibrary(true));
-  }, []);
+    // The storefront first and alone: `loadUiLanguage` falls back to a
+    // China-aware default when nothing is stored, and every kind/source list
+    // filtered by store reads `isChinaStore()` the moment it is next called —
+    // both need the real answer in place before anything else runs.
+    loadStorefront()
+      .then(() => Promise.all([loadDemoMode(), loadUiLanguage()]))
+      .then(() => (screen ? prepareScreenshots() : undefined))
+      .then(() => setLibrary(true));
+  }, [screen]);
 
   // The splash screen is what is on screen here, so there is nothing to draw.
-  return library ? <Shell /> : null;
+  return library ? <Shell screen={screen} /> : null;
 }
 
-function Shell() {
+function Shell({ screen }: { screen?: string }) {
   // "Open in Novel Man" can arrive before any screen has mounted.
   useEffect(listenForIncoming, []);
   useEffect(() => {
@@ -45,6 +53,9 @@ function Shell() {
   }, []);
   useEffect(watchForChanges, []);
   useEffect(watchForLocalBackup, []);
+  useEffect(() => {
+    if (screen) setTimeout(() => void openScreen(screen), 800);
+  }, [screen]);
 
   const scheme = useScheme();
   const palette = usePalette();

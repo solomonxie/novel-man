@@ -14,6 +14,7 @@
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		F11748502D0722820044C1DA /* ChineseVariant.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748512D0722820044C1DA /* ChineseVariant.m */; };
 		F11748602D0722820044C1DB /* Dictionary.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748612D0722820044C1DB /* Dictionary.m */; };
+		F11748702D0722820044C1DC /* Storefront.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748712D0722820044C1DD /* Storefront.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +31,7 @@
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = NovelMan/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748512D0722820044C1DA /* ChineseVariant.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = ChineseVariant.m; path = NovelMan/ChineseVariant.m; sourceTree = "<group>"; };
 		F11748612D0722820044C1DB /* Dictionary.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Dictionary.m; path = NovelMan/Dictionary.m; sourceTree = "<group>"; };
+		F11748712D0722820044C1DD /* Storefront.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Storefront.m; path = NovelMan/Storefront.m; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* NovelMan-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "NovelMan-Bridging-Header.h"; path = "NovelMan/NovelMan-Bridging-Header.h"; sourceTree = "<group>"; };
 		F55E3B88E60879C6C1010125 /* Pods-NovelMan.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NovelMan.debug.xcconfig"; path = "Target Support Files/Pods-NovelMan/Pods-NovelMan.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -52,6 +54,7 @@
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
 				F11748512D0722820044C1DA /* ChineseVariant.m */,
 				F11748612D0722820044C1DB /* Dictionary.m */,
+				F11748712D0722820044C1DD /* Storefront.m */,
 				F11748442D0722820044C1D9 /* NovelMan-Bridging-Header.h */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
@@ -288,6 +291,7 @@
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
 				F11748502D0722820044C1DA /* ChineseVariant.m in Sources */,
 				F11748602D0722820044C1DB /* Dictionary.m in Sources */,
+				F11748702D0722820044C1DC /* Storefront.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

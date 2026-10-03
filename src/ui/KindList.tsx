@@ -28,7 +28,7 @@ export function KindList({ selectedId, onPick, topRule = true }: {
         topRule && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: palette.border },
       ]}
     >
-      {kindGroups.map((group) => (
+      {kindGroups().map((group) => (
         <View key={group}>
           <Text style={[styles.group, { color: palette.dim }]}>
             {t(`kind.group_${group}`).toUpperCase()}

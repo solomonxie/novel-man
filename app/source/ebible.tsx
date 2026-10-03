@@ -7,7 +7,7 @@ import { readCatalog, type Translation } from '../../src/sources/ebible';
 import { choose } from '../../src/sources/chosen';
 import { Row, Search, SEARCHABLE_FROM } from '../../src/ui/primitives';
 import { SourceRows } from '../../src/ui/SourceRows';
-import { publicSources } from '../../src/sources/registry';
+import { allSources } from '../../src/sources/registry';
 import { space, usePalette } from '../../src/theme';
 
 /**
@@ -15,7 +15,7 @@ import { space, usePalette } from '../../src/theme';
  * answer and there is nothing to search. The licence is on the row because it
  * is the reason the row exists.
  */
-const EBIBLE = publicSources.find((source) => source.id === 'ebible')!;
+const EBIBLE = allSources.find((source) => source.id === 'ebible')!;
 
 export default function Translations() {
   const { t } = useTranslation();

@@ -55,13 +55,18 @@ export function setUiLanguage(lang: UiLanguage | 'system') {
  * The stored choice, applied before the first screen draws. Awaited at launch
  * beside the library flag — a language that arrives a frame late is a visible
  * flash of the wrong one.
+ *
+ * Call after the storefront has resolved: `init`, above, ran at import time,
+ * before any `await` in the app has had a turn, so its default was computed
+ * without knowing yet whether this is the China build. Nobody has chosen a
+ * language is reapplied here, now that `isChinaStore()` can answer for real.
  */
 export async function loadUiLanguage(): Promise<void> {
   try {
     const stored = await AsyncStorage.getItem(KEY);
-    if (stored && (SUPPORTED as readonly string[]).includes(stored)) {
-      await i18n.changeLanguage(stored);
-    }
+    await i18n.changeLanguage(
+      stored && (SUPPORTED as readonly string[]).includes(stored) ? stored : defaultLanguage()
+    );
   } catch {
     // The default is already applied; a preference that cannot be read is one
     // the reader can set again.
