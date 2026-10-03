@@ -37,6 +37,7 @@ import { choiceFromIndex, takeChoice, type Choice } from '../src/sources/chosen'
 import { ESV_TITLE, searchLicensed, searchSpecial } from '../src/sources/special';
 import { forgetSearches, recentSearches, remember } from '../src/search/history';
 
+import { isChinaStore } from '../src/store/storefront';
 import { esvKey } from '../src/sources/esvKey';
 import { standardEbooksEmail } from '../src/sources/standardEbooksEmail';
 import {
@@ -285,7 +286,7 @@ export default function Find() {
 
     // The one edition that is its own catalog. It has no list to fetch; what
     // it has instead is a key, and without one it answers nothing.
-    made.push({
+    if (!isChinaStore()) made.push({
       id: 'esv',
       label: ESV_TITLE,
       detail: t('add.esvWhy'),

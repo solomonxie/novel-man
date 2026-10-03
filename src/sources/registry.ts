@@ -1,4 +1,5 @@
 import { DEFAULT_KIND, type BookSource } from '../books/kinds';
+import { isChinaStore } from '../store/storefront';
 
 /**
  * The sources books come from, as data. A source is a name, the page that
@@ -33,7 +34,7 @@ export type PublicSource = {
   credential?: boolean;
 };
 
-export const publicSources: PublicSource[] = [
+const allSources: PublicSource[] = [
   { id: 'ebible', find: '/source/ebible', host: 'ebible.org', indexed: true },
   // Not a publisher and not a list: a place other people's editions happen to
   // be kept. It has no door of its own — a reader pastes the link they found
@@ -69,6 +70,11 @@ export const publicSources: PublicSource[] = [
  * general catalogs answer `novel`, which is most of what they carry and what
  * this app is, and it is one tap to change on the book's own page.
  */
+/** Scripture is not offered on the China store: no bible catalog, and no ESV. */
+export const publicSources = allSources.filter(
+  (source) => !(isChinaStore() && (source.id === 'ebible' || source.id === 'repo'))
+);
+
 export function kindFromSource(source: string): string {
   if (source === 'ebible' || source === 'repo' || source === 'esv') return 'scripture';
   if (source === 'arxiv') return 'paper';
