@@ -336,8 +336,8 @@ The app ships `zh-Hans`. App Store Connect → App Information → language drop
 
 | Field | Value |
 |---|---|
-| Name | `Novel Man 小说管家` |
-| Subtitle | `读小说，理结构，建角色卡` |
+| Name | `Novel Man 书籍管家` |
+| Subtitle | `读书，理结构，建角色卡` |
 | Privacy Policy URL | same |
 | Keywords | `小说,手稿,阅读器,离线,批注,翻译,剧本,epub,古登堡,书架,圣经,写作` |
 | Screenshots | upload `docs/release/screenshots/zh-Hans/*.jpg` |
@@ -345,7 +345,7 @@ The app ships `zh-Hans`. App Store Connect → App Information → language drop
 Promotional Text:
 
 ```
-一个阅读器，也是一本故事圣经。导入小说，拿回它的章节、人物和地点——完全离线，无需账号，手稿从不离开手机。
+一个阅读器，也是一本故事圣经。导入一本书，拿回它的章节、人物和地点——完全离线，无需账号，手稿从不离开手机。
 ```
 
 Description:

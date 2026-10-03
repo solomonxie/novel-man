@@ -7,9 +7,10 @@ import { drive, type DriveFile, type DriveStatus } from '../../modules/icloud';
 import { contentHash } from '../ai/cache';
 import { lastUploadedAnywhere, lastUploadHash, recordUpload } from '../db/jobs';
 import { hasBooks, listBookIds } from '../db/repo';
+import { yieldToUI } from '../async/yield';
 import { buildBundle, fingerprint, openBundle } from './bundle';
 import { bundleName, isBundleName, type BundleAbout } from './format';
-import { backedUpAt, libraryToken, markBackedUp, subscribeToChanges } from './changes';
+import { backedUpAt, libraryToken, markBackedUp, subscribeToChanges, unnoticed } from './changes';
 import { restoreBundle, type RestoreReport } from './restore';
 import { recordAttempt } from './attempts';
 import { timed, trace } from '../dev/trace';
@@ -142,7 +143,7 @@ export async function backUp(): Promise<boolean> {
   // recording, not a quiet nothing: it is the state someone needs told about.
   const state = await timed('driveStatus', refreshDriveStatus());
   if (state !== 'available') {
-    await recordAttempt('icloud', { ok: false, error: `iCloud is ${state}` });
+    await unnoticed(() => recordAttempt('icloud', { ok: false, error: `iCloud is ${state}` }));
     return false;
   }
   running = true;
@@ -157,7 +158,9 @@ export async function backUp(): Promise<boolean> {
       trace('unchanged — nothing uploaded');
       // Up to date is up to date, however it got that way.
       await markBackedUp(LEDGER, token);
-      await recordAttempt('icloud', { ok: true, bytes: body.length, name, ...counts(bundle) });
+      await unnoticed(() =>
+        recordAttempt('icloud', { ok: true, bytes: body.length, name, ...counts(bundle) })
+      );
       return false;
     }
 
@@ -165,16 +168,18 @@ export async function backUp(): Promise<boolean> {
     if (staged.exists) staged.delete();
     staged.create();
     at = performance.now();
-    staged.write(body);
+    await staged.writeInSlices(body, yieldToUI);
     trace(`staged.write ${Math.round(performance.now() - at)}ms`);
     try {
       await timed('drive.copyIn', drive.copyIn(nativePath(staged), name));
     } finally {
       staged.delete();
     }
-    await timed('recordUpload', recordUpload(LEDGER, name, hash));
+    await unnoticed(() => timed('recordUpload', recordUpload(LEDGER, name, hash)));
     await markBackedUp(LEDGER, token);
-    await recordAttempt('icloud', { ok: true, bytes: body.length, name, ...counts(bundle) });
+    await unnoticed(() =>
+      recordAttempt('icloud', { ok: true, bytes: body.length, name, ...counts(bundle) })
+    );
     await timed('prune', prune());
     return true;
   } catch (problem) {
@@ -182,7 +187,7 @@ export async function backUp(): Promise<boolean> {
     // someone who is reading — that part was always right; throwing the reason
     // away with the interruption was not, and is what made three weeks of
     // failure look exactly like three weeks of nothing to do.
-    await recordAttempt('icloud', { ok: false, error: problem });
+    await unnoticed(() => recordAttempt('icloud', { ok: false, error: problem }));
     return false;
   } finally {
     running = false;
@@ -263,7 +268,7 @@ export async function backUpIfAuto(): Promise<void> {
  * novel is thousands of writes, and typing a note is one every keystroke, so
  * the backup runs once the writing has stopped rather than once per row.
  */
-const QUIET = 8000;
+const QUIET = 30000;
 let pending: ReturnType<typeof setTimeout> | null = null;
 
 function schedule() {
