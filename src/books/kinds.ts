@@ -173,10 +173,10 @@ export const bookKinds: BookKind[] = [
 /** A book that arrived through the share sheet was never asked, and novel is the app. */
 export const DEFAULT_KIND = bookKinds[0].id;
 
-/** The order the groups are offered in, and what is under each. */
-export const kindGroups: KindGroup[] = isChinaStore()
-  ? ['fiction', 'nonfiction']
-  : ['fiction', 'nonfiction', 'scripture'];
+/** The order the groups are offered in, and what is under each. Read fresh each call: the storefront resolves asynchronously, after this module has already loaded. */
+export function kindGroups(): KindGroup[] {
+  return isChinaStore() ? ['fiction', 'nonfiction'] : ['fiction', 'nonfiction', 'scripture'];
+}
 
 export function kindsIn(group: KindGroup): BookKind[] {
   return bookKinds.filter((kind) => kind.group === group);

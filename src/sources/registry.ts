@@ -34,7 +34,8 @@ export type PublicSource = {
   credential?: boolean;
 };
 
-const allSources: PublicSource[] = [
+/** Every source, unfiltered — for a lookup by id where storefront filtering does not apply, such as a page's own metadata. */
+export const allSources: PublicSource[] = [
   { id: 'ebible', find: '/source/ebible', host: 'ebible.org', indexed: true },
   // Not a publisher and not a list: a place other people's editions happen to
   // be kept. It has no door of its own — a reader pastes the link they found
@@ -70,10 +71,17 @@ const allSources: PublicSource[] = [
  * general catalogs answer `novel`, which is most of what they carry and what
  * this app is, and it is one tap to change on the book's own page.
  */
-/** Scripture is not offered on the China store: no bible catalog, and no ESV. */
-export const publicSources = allSources.filter(
-  (source) => !(isChinaStore() && (source.id === 'ebible' || source.id === 'repo'))
-);
+/**
+ * Scripture is not offered on the China store: no bible catalog, and no ESV.
+ * A function, not a list — the storefront resolves after this module has
+ * already loaded, so a list computed once at import time would always answer
+ * for whichever storefront was cached first.
+ */
+export function publicSources(): PublicSource[] {
+  return allSources.filter(
+    (source) => !(isChinaStore() && (source.id === 'ebible' || source.id === 'repo'))
+  );
+}
 
 export function kindFromSource(source: string): string {
   if (source === 'ebible' || source === 'repo' || source === 'esv') return 'scripture';
@@ -82,7 +90,7 @@ export function kindFromSource(source: string): string {
 }
 
 export function sourcesFor(sources: BookSource[]): PublicSource[] {
-  return publicSources.filter((source) => sources.includes(source.id));
+  return publicSources().filter((source) => sources.includes(source.id));
 }
 
 /**
@@ -90,5 +98,5 @@ export function sourcesFor(sources: BookSource[]): PublicSource[] {
  * restore, which has no screen and so no `t`.
  */
 export function labelOfCatalog(source: string): string {
-  return publicSources.find((entry) => entry.id === source)?.host ?? source;
+  return allSources.find((entry) => entry.id === source)?.host ?? source;
 }

@@ -240,7 +240,7 @@ export default function Find() {
     const made: SourceCard[] = [];
     const dated = (at: number) => new Date(at).toLocaleDateString(i18n.language);
 
-    for (const source of publicSources) {
+    for (const source of publicSources()) {
       if (source.indexed) {
         const state = keptBy.get(source.id);
         const stale = state ? Date.now() - state.fetchedAt > STALE_DAYS * 86400000 : false;
@@ -299,7 +299,7 @@ export default function Find() {
 
   const online = useMemo(
     () =>
-      publicSources.flatMap((source) =>
+      publicSources().flatMap((source) =>
         source.remote && source.find ? [{ id: source.id, page: source.find }] : []
       ),
     []
