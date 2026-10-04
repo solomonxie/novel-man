@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -45,7 +45,7 @@ import {
   type Verse,
 } from '../../src/db/repo';
 import { annotationAt, layoutChapter } from '../../src/reader/model';
-import { documentRange, originsOf } from '../../src/reader/selection';
+import { blockOrigins, documentRange } from '../../src/reader/selection';
 import { OriginalPage } from '../../src/ui/OriginalPage';
 import { imageIn } from '../../src/reader/images';
 import { sentenceAtLine, type Line } from '../../src/reader/lines';
@@ -103,6 +103,9 @@ function verseMarks(text: string, style: TextStyle): React.ReactNode {
     )
   );
 }
+
+/** Drawn between two paragraphs sharing one selectable block. */
+const PARAGRAPH_BREAK = '\n\n';
 
 /** Idle time before the bars go. Short, because touching a bar restarts it. */
 const CHROME_IDLE_MS = 1000;
@@ -228,6 +231,19 @@ export default function Reader() {
    * page's own press never hears it; a short touch that did not move is a tap.
    */
   const tapStart = useRef<{ x: number; y: number; at: number; busy: boolean } | null>(null);
+
+  /**
+   * A drag reports every character the handle crosses, and each report used
+   * to re-render the whole chapter. Only where the finger settles is kept.
+   */
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settleDragged = (found: Span | null) => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => {
+      setSelection(null);
+      setDragged((was) => (was?.start === found?.start && was?.end === found?.end ? was : found));
+    }, 150);
+  };
 
   useEffect(() => {
     setChrome(true);
@@ -846,7 +862,9 @@ export default function Reader() {
 
   function renderSentence(span: Span, useTarget: boolean) {
     const marked = annotationAt(marks, span);
-    const active = range !== null && span.start >= range.start && span.end <= range.end;
+    // A dragged range is drawn by the system; tinting it as well would change
+    // the text under the handles while they move.
+    const active = !dragged && range !== null && span.start >= range.start && span.end <= range.end;
     const flashing = flashAt !== null && flashAt >= span.start && flashAt < span.end;
     /**
      * A chapter is translated or it is not — that decision is made once, for
@@ -892,6 +910,107 @@ export default function Reader() {
         {/* A full stop in Chinese is already a space wide; one more is a hole. */}
         {endsTight(shown) ? '' : ' '}
       </Text>
+    );
+  }
+
+  const inTargetPage = showing && settings.bilingual === 'target';
+
+  /**
+   * Dragged selection, where the page is showing the book's own words. Not on
+   * a translated page: what is drawn there is not what is in the file, so an
+   * offset into the glass is an offset into nothing.
+   *
+   * A read-only `TextInput` rather than a `Text`, because a `Text` will not
+   * tell JavaScript what was selected. Consecutive paragraphs share one, so a
+   * selection can run on into the next paragraph; a picture or a code block
+   * ends the block, being drawn by something else.
+   */
+  const pieces: ({ kind: 'block'; paragraphs: typeof paragraphs } | { kind: 'one'; paragraph: (typeof paragraphs)[number] })[] = [];
+  for (const paragraph of paragraphs) {
+    const body = source.slice(paragraph.start, paragraph.sentences.at(-1)?.end ?? paragraph.start);
+    const plain = settings.freeSelect && !inTargetPage && !imageIn(body) && !codeBlockIn(body);
+    const last = pieces[pieces.length - 1];
+    if (!plain) pieces.push({ kind: 'one', paragraph });
+    else if (last?.kind === 'block') last.paragraphs.push(paragraph);
+    else pieces.push({ kind: 'block', paragraphs: [paragraph] });
+  }
+
+  /** The text a sentence is drawn as, which is what selection offsets count. */
+  const drawnOf = (span: Span) => {
+    const shown = source.slice(span.start, span.end);
+    return runsIn(shown).map((run) => run.text).join('') + (endsTight(shown) ? '' : ' ');
+  };
+
+  function renderFreeBlock(group: typeof paragraphs) {
+    const parts = group.map((paragraph) => ({
+      prefix: numberAt.has(paragraph.start) ? `${numberAt.get(paragraph.start)}  `.length : 0,
+      spans: paragraph.sentences,
+    }));
+    return (
+      <View
+        key={group[0].start}
+        style={{ marginBottom: lineHeight * 0.6 }}
+        onTouchStart={(event) => {
+          tapStart.current = {
+            x: event.nativeEvent.pageX,
+            y: event.nativeEvent.pageY,
+            at: Date.now(),
+            busy: !!dragged || !!selection,
+          };
+        }}
+        onTouchEnd={(event) => {
+          const start = tapStart.current;
+          tapStart.current = null;
+          if (!start || start.busy || Date.now() - start.at > 300) return;
+          const moved = Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y);
+          if (moved < 8) setChrome(!chromeShown.current);
+        }}
+        onTouchCancel={() => {
+          tapStart.current = null;
+        }}
+      >
+        <TextInput
+          editable={false}
+          multiline
+          scrollEnabled={false}
+          // The page scrolls; this must not try to.
+          textAlignVertical="top"
+          // The page's own bar does what the system menu would, and two menus
+          // over one selection was a flicker between them.
+          contextMenuHidden
+          style={[bodyStyle, styles.freeText]}
+          onSelectionChange={(event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
+            const { start, end } = event.nativeEvent.selection;
+            // A caret is not a selection — see `documentRange`. Clearing on one
+            // is what makes a tap on the page put the menu away again.
+            settleDragged(documentRange(blockOrigins(parts, PARAGRAPH_BREAK.length, drawnOf), start, end));
+          }}
+        >
+          {group.map((paragraph, at) => (
+            <Fragment key={paragraph.start}>
+              {at > 0 ? (
+                <Text style={{ fontSize: Math.round(settings.fontSize * 0.5), lineHeight: Math.round(lineHeight * 0.6) }}>
+                  {PARAGRAPH_BREAK}
+                </Text>
+              ) : null}
+              {numberAt.has(paragraph.start) ? (
+                <Text
+                  style={{
+                    color: palette.accent,
+                    fontWeight: '600',
+                    fontSize: Math.round(settings.fontSize * 0.62),
+                    lineHeight,
+                  }}
+                >
+                  {numberAt.get(paragraph.start)}
+                  {'  '}
+                </Text>
+              ) : null}
+              {paragraph.sentences.map((span) => renderSentence(span, false))}
+            </Fragment>
+          ))}
+        </TextInput>
+      </View>
     );
   }
 
@@ -1083,7 +1202,9 @@ export default function Reader() {
             ) : paragraphs.length === 0 ? (
               <Text style={{ color: palette.dim, marginTop: space.xxl }}>{t('reader.empty')}</Text>
             ) : (
-              paragraphs.map((paragraph) => {
+              pieces.map((piece) => {
+                if (piece.kind === 'block') return renderFreeBlock(piece.paragraphs);
+                const paragraph = piece.paragraph;
                 const body = source.slice(
                   paragraph.start,
                   paragraph.sentences.at(-1)?.end ?? paragraph.start
@@ -1131,86 +1252,6 @@ export default function Reader() {
                         ink={palette.text}
                         formula={formula}
                       />
-                    </View>
-                  );
-                }
-                /**
-                 * Dragged selection, where the page is showing the book's own
-                 * words. Not on a translated paragraph: what is drawn there is
-                 * not what is in the file, so an offset into the glass is an
-                 * offset into nothing.
-                 *
-                 * A read-only `TextInput` rather than a `Text`, because a
-                 * `Text` will not tell JavaScript what was selected — iOS
-                 * draws the handles and the menu and reports none of it. A
-                 * `TextInput` reports `onSelectionChange`, keeps its nested
-                 * `Text` children (so the bold, the code spans and the
-                 * highlight colours all survive), and with `editable={false}`
-                 * never raises the keyboard.
-                 */
-                const free = settings.freeSelect && !inTarget;
-                if (free) {
-                  const prefix = numberAt.has(paragraph.start)
-                    ? `${numberAt.get(paragraph.start)}  `.length
-                    : 0;
-                  return (
-                    <View
-                      key={paragraph.start}
-                      style={{ marginBottom: lineHeight * 0.6 }}
-                      onTouchStart={(event) => {
-                        tapStart.current = {
-                          x: event.nativeEvent.pageX,
-                          y: event.nativeEvent.pageY,
-                          at: Date.now(),
-                          busy: !!dragged || !!selection,
-                        };
-                      }}
-                      onTouchEnd={(event) => {
-                        const start = tapStart.current;
-                        tapStart.current = null;
-                        if (!start || start.busy || Date.now() - start.at > 300) return;
-                        const moved = Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y);
-                        if (moved < 8) setChrome(!chromeShown.current);
-                      }}
-                      onTouchCancel={() => {
-                        tapStart.current = null;
-                      }}
-                    >
-                      <TextInput
-                        editable={false}
-                        multiline
-                        scrollEnabled={false}
-                        // The page scrolls; this must not try to.
-                        textAlignVertical="top"
-                        style={[bodyStyle, styles.freeText]}
-                        onSelectionChange={(event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
-                          const { start, end } = event.nativeEvent.selection;
-                          const origins = originsOf(prefix, paragraph.sentences, (span: Span) =>
-                            source.slice(span.start, span.end)
-                          );
-                          const found = documentRange(origins, start, end);
-                          // A caret is not a selection — see `documentRange`.
-                          // Clearing on one is what makes a tap on the page
-                          // put the menu away again.
-                          setSelection(null);
-                          setDragged(found);
-                        }}
-                      >
-                        {numberAt.has(paragraph.start) ? (
-                          <Text
-                            style={{
-                              color: palette.accent,
-                              fontWeight: '600',
-                              fontSize: Math.round(settings.fontSize * 0.62),
-                              lineHeight,
-                            }}
-                          >
-                            {numberAt.get(paragraph.start)}
-                            {'  '}
-                          </Text>
-                        ) : null}
-                        {paragraph.sentences.map((span) => renderSentence(span, false))}
-                      </TextInput>
                     </View>
                   );
                 }
