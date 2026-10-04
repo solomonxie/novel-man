@@ -104,12 +104,8 @@ function verseMarks(text: string, style: TextStyle): React.ReactNode {
   );
 }
 
-/**
- * Long enough to decide and reach. At under three seconds the bar was gone
- * before a thumb had crossed the screen, which turns every use of it into two
- * taps: one to bring it back, one to press what you wanted.
- */
-const CHROME_IDLE_MS = 10000;
+/** Idle time before the bars go. Short, because touching a bar restarts it. */
+const CHROME_IDLE_MS = 1000;
 /** Apple and Android both put the floor at 44pt / 48dp. */
 const TOUCH = 44;
 
@@ -213,6 +209,25 @@ export default function Reader() {
     },
     [chrome]
   );
+
+  /** Any touch on a bar restarts its clock, so a short one never hides mid-reach. */
+  const keepChrome = useCallback(() => {
+    if (chromeShown.current) setChrome(true);
+  }, [setChrome]);
+
+  /** Fully faded bars leave the screen too, or their buttons still catch taps. */
+  const chromeOffscreen = (direction: 1 | -1) =>
+    chrome.interpolate({ inputRange: [0, 0.01, 1], outputRange: [400 * direction, 0, 0] });
+
+  const [topY, setTopY] = useState(0);
+  const [barLayout, setBarLayout] = useState({ y: 0, height: 0 });
+  const [pageTop, setPageTop] = useState(0);
+
+  /**
+   * A tap on a free-select paragraph. Its `TextInput` takes the touch, so the
+   * page's own press never hears it; a short touch that did not move is a tap.
+   */
+  const tapStart = useRef<{ x: number; y: number; at: number; busy: boolean } | null>(null);
 
   useEffect(() => {
     setChrome(true);
@@ -882,10 +897,23 @@ export default function Reader() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
-      <View style={[styles.top, { paddingTop: insets.top }]} pointerEvents="box-none">
-      <Animated.View
-        style={[styles.bar, { opacity: chrome, backgroundColor: palette.bg }]}
+      <View
+        style={[styles.top, { paddingTop: insets.top }]}
         pointerEvents="box-none"
+        onLayout={(event) => setTopY(event.nativeEvent.layout.y)}
+      >
+      <Animated.View
+        style={[
+          styles.bar,
+          {
+            opacity: chrome,
+            transform: [{ translateY: chromeOffscreen(-1) }],
+            backgroundColor: palette.bg,
+          },
+        ]}
+        pointerEvents="box-none"
+        onTouchStart={keepChrome}
+        onLayout={(event) => setBarLayout(event.nativeEvent.layout)}
       >
         {/* The way out of every other page, drawn the same way here: the
             accent chevron at the header's own size, not a grey hint of one. */}
@@ -924,8 +952,9 @@ export default function Reader() {
       <View
         style={{ flex: 1 }}
         onLayout={(event) => {
-          const height = event.nativeEvent.layout.height;
+          const { height, y } = event.nativeEvent.layout;
           viewport.current.layout = height;
+          setPageTop(y);
         }}
       >
         <Animated.ScrollView
@@ -947,7 +976,9 @@ export default function Reader() {
           indicatorStyle={settings.theme === 'night' ? 'white' : 'black'}
           contentContainerStyle={{
             paddingHorizontal: settings.margin,
-            paddingTop: TOUCH + space.lg,
+            // Measured, not assumed: the bar's height and the safe area both
+            // vary, and a guess put the first line under the bar.
+            paddingTop: Math.max(TOUCH, topY + barLayout.y + barLayout.height - pageTop) + space.md,
             paddingBottom: space.xxl * 3,
           }}
           // The thumb follows natively at every frame; the listener still only
@@ -1123,7 +1154,28 @@ export default function Reader() {
                     ? `${numberAt.get(paragraph.start)}  `.length
                     : 0;
                   return (
-                    <View key={paragraph.start} style={{ marginBottom: lineHeight * 0.6 }}>
+                    <View
+                      key={paragraph.start}
+                      style={{ marginBottom: lineHeight * 0.6 }}
+                      onTouchStart={(event) => {
+                        tapStart.current = {
+                          x: event.nativeEvent.pageX,
+                          y: event.nativeEvent.pageY,
+                          at: Date.now(),
+                          busy: !!dragged || !!selection,
+                        };
+                      }}
+                      onTouchEnd={(event) => {
+                        const start = tapStart.current;
+                        tapStart.current = null;
+                        if (!start || start.busy || Date.now() - start.at > 300) return;
+                        const moved = Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y);
+                        if (moved < 8) setChrome(!chromeShown.current);
+                      }}
+                      onTouchCancel={() => {
+                        tapStart.current = null;
+                      }}
+                    >
                       <TextInput
                         editable={false}
                         multiline
@@ -1277,12 +1329,14 @@ export default function Reader() {
           styles.footer,
           {
             opacity: chromeOpacity,
+            transform: [{ translateY: chromeOffscreen(1) }],
             backgroundColor: palette.bg,
             // Clear of the home indicator, the way the selection bar is.
             paddingBottom: Math.max(insets.bottom, space.md),
           },
         ]}
         pointerEvents={range ? 'none' : 'box-none'}
+        onTouchStart={keepChrome}
       >
         <View style={styles.controls}>
           {/* Turning a chapter lives on the bar after all. It was at the end of
