@@ -39,6 +39,27 @@ export function originsOf(prefix: number, spans: Span[], shownOf: (span: Span) =
 }
 
 /**
+ * Several paragraphs drawn as one block, so a selection can run from one into
+ * the next. Each paragraph brings its own prefix; `separator` is what is drawn
+ * between two of them and is in no document either.
+ */
+export function blockOrigins(
+  paragraphs: { prefix: number; spans: Span[] }[],
+  separator: number,
+  shownOf: (span: Span) => string
+): Origin[] {
+  const origins: Origin[] = [];
+  let shown = 0;
+  paragraphs.forEach((paragraph, at) => {
+    if (at > 0) shown += separator;
+    const own = originsOf(shown + paragraph.prefix, paragraph.spans, shownOf);
+    origins.push(...own);
+    shown = own.length ? own[own.length - 1].shownEnd : shown + paragraph.prefix;
+  });
+  return origins;
+}
+
+/**
  * Which run a drawn offset is in, and how far into it.
  *
  * Clamped to the ends rather than refused. A selection dragged from before the
@@ -50,7 +71,10 @@ function locate(origins: Origin[], shown: number): number {
   const last = origins[origins.length - 1];
   if (shown <= first.shownStart) return first.docStart;
   for (const origin of origins) {
-    if (shown >= origin.shownStart && shown <= origin.shownEnd) {
+    // Between runs drawn from different paragraphs — a separator, the next
+    // verse number — belongs to the words that follow.
+    if (shown < origin.shownStart) return origin.docStart;
+    if (shown <= origin.shownEnd) {
       return origin.docStart + (shown - origin.shownStart);
     }
   }

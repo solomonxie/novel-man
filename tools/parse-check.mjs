@@ -21,7 +21,7 @@ const { partsOf, salvageRows, meaningfulName } = await import(join(build, 'struc
 const { languageFrom, needsRelabel } = await import(join(build, 'books/language.js'));
 const { normalizeLanguage, labelFor } = await import(join(build, 'translate/languages.js'));
 const { layoutChapter, annotationAt } = await import(join(build, 'reader/model.js'));
-const { originsOf, documentRange } = await import(join(build, 'reader/selection.js'));
+const { originsOf, blockOrigins, documentRange } = await import(join(build, 'reader/selection.js'));
 const { imageIn, imageMarker } = await import(join(build, 'reader/images.js'));
 const { sentenceAtLine } = await import(join(build, 'reader/lines.js'));
 const { runsIn, codeBlockIn } = await import(join(build, 'reader/rich.js'));
@@ -2584,6 +2584,21 @@ console.log('what the reader selected, in the book');
   check('a selection of only the verse number is nothing',
     documentRange(origins, 0, 2), null);
   check('and nothing drawn selects nothing', documentRange([], 0, 5), null);
+
+  // Two paragraphs in one block: "12  " before the second, two characters of
+  // break between them. Neither is in the document.
+  const block = blockOrigins(
+    [{ prefix: 0, spans: [spans[0]] }, { prefix: 4, spans: [spans[1]] }],
+    2,
+    shownOf
+  );
+  check('a block lays the second paragraph after the break and its number', block,
+    [{ shownStart: 0, shownEnd: 13, docStart: 100 },
+     { shownStart: 19, shownEnd: 31, docStart: 115 }]);
+  check('a selection runs from one paragraph into the next',
+    documentRange(block, 3, 25), { start: 103, end: 121 });
+  check('starting in the break begins at the next paragraph',
+    documentRange(block, 14, 25), { start: 115, end: 121 });
 }
 
 console.log('which model a key runs on');
