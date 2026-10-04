@@ -761,9 +761,7 @@ export default function BookPage() {
                       : t('book.start')
                   }
                   tone="loud"
-                  onPress={() =>
-                    router.push(current ? `/chapter/${current.id}` : `/reader/${book.id}`)
-                  }
+                  onPress={() => router.push(`/reader/${book.id}`)}
                 />
               </View>
             )}
