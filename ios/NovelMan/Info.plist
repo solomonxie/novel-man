@@ -45,7 +45,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>novelman</string>
-				<string>com.example.novelman</string>
+				<string>$(APP_BUNDLE_ID)</string>
 			</array>
 		</dict>
 	</array>
@@ -68,7 +68,7 @@
 	<string>Novel Man opens your photo library so you can pick a book cover or a character portrait. Nothing is uploaded.</string>
 	<key>NSUbiquitousContainers</key>
 	<dict>
-		<key>iCloud.com.example.novelman</key>
+		<key>iCloud.APP_BUNDLE_ID</key>
 		<dict>
 			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
 			<true/>
