@@ -14,6 +14,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type TextInputSelectionChangeEventData,
+  type TextStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from '../../src/navigation/router';
@@ -83,6 +84,25 @@ import {
 } from '../../src/db/translation';
 import { endsTight, placeTranslation } from '../../src/translate/layout';
 import { ensureUnitsCurrent } from '../../src/translate/repair';
+
+/**
+ * `[12]` as a fetched edition prints a verse number, drawn as a small number
+ * instead. Same length as the brackets it replaces, so every offset into the
+ * text — a selection, a highlight — still lands where it did.
+ */
+function verseMarks(text: string, style: TextStyle): React.ReactNode {
+  const parts = text.split(/\[(\d+)\]/);
+  if (parts.length === 1) return text;
+  return parts.map((part, at) =>
+    at % 2 ? (
+      <Text key={at} style={style}>
+        {`\u200B${part}\u2009`}
+      </Text>
+    ) : (
+      part
+    )
+  );
+}
 
 /**
  * Long enough to decide and reach. At under three seconds the bar was gone
@@ -795,6 +815,13 @@ export default function Reader() {
     fontFamily: settings.serif ? (script === 'cjk' ? 'Songti SC' : 'Georgia') : undefined,
   };
 
+  const versed = supports(book?.kind, 'verses');
+  const verseStyle: TextStyle = {
+    color: palette.accent,
+    fontWeight: '600',
+    fontSize: Math.round(settings.fontSize * 0.62),
+  };
+
   /** What this chapter is called, or the only thing left to call it by. */
   const heading = chapter.title.trim() || `${index + 1}`;
 
@@ -844,7 +871,7 @@ export default function Reader() {
               fontSize: run.code ? settings.fontSize * 0.92 : undefined,
             }}
           >
-            {run.text}
+            {versed ? verseMarks(run.text, verseStyle) : run.text}
           </Text>
         ))}
         {/* A full stop in Chinese is already a space wide; one more is a hole. */}
@@ -967,18 +994,44 @@ export default function Reader() {
                 book has always answered by setting the title and then
                 leaving a gap. */}
             {paragraphs.length > 0 ? (
-              <Text
-                style={{
-                  color: palette.text,
-                  fontFamily: bodyStyle.fontFamily,
-                  fontSize: Math.round(settings.fontSize * 1.7),
-                  lineHeight: Math.round(settings.fontSize * 2.1),
-                  fontWeight: '600',
-                  marginBottom: lineHeight * 1.4,
-                }}
-              >
-                {heading}
-              </Text>
+              <View style={{ marginBottom: lineHeight * 1.4 }}>
+                {/* The number a title would otherwise swallow: a printed book
+                    sets "Chapter Twelve" above a title worth having, in a
+                    size that says it is the lesser of the two facts. */}
+                {chapter.title.trim() ? (
+                  <Text
+                    style={{
+                      color: palette.accent,
+                      fontSize: 12,
+                      fontWeight: '700',
+                      letterSpacing: 1.5,
+                      marginBottom: space.xs,
+                    }}
+                  >
+                    {t('chapter.number', { index: index + 1 }).toUpperCase()}
+                  </Text>
+                ) : null}
+                <Text
+                  style={{
+                    color: palette.text,
+                    fontFamily: bodyStyle.fontFamily,
+                    fontSize: Math.round(settings.fontSize * 1.7),
+                    lineHeight: Math.round(settings.fontSize * 2.1),
+                    fontWeight: '600',
+                  }}
+                >
+                  {heading}
+                </Text>
+                <View
+                  style={{
+                    width: 32,
+                    height: 2,
+                    borderRadius: 1,
+                    backgroundColor: palette.accent,
+                    marginTop: space.md,
+                  }}
+                />
+              </View>
             ) : null}
             {/* A chapter nobody has translated yet, while the page is set to
                 a language: it is shown in its own words, and says so rather
@@ -1094,7 +1147,8 @@ export default function Reader() {
                         {numberAt.has(paragraph.start) ? (
                           <Text
                             style={{
-                              color: palette.dim,
+                              color: palette.accent,
+                              fontWeight: '600',
                               fontSize: Math.round(settings.fontSize * 0.62),
                               lineHeight,
                             }}
@@ -1129,13 +1183,14 @@ export default function Reader() {
                       )
                     }
                   >
-                    {/* Raised, small and dim: a number to find a verse by, not
-                        a word in the sentence it opens — so it is set off by
-                        more than the space between two words. */}
+                    {/* Raised, small and in the accent: a number to find a
+                        verse by, not a word in the sentence it opens — so it
+                        is set off by more than the space between two words. */}
                     {numberAt.has(paragraph.start) ? (
                       <Text
                         style={{
-                          color: palette.dim,
+                          color: palette.accent,
+                          fontWeight: '600',
                           fontSize: Math.round(settings.fontSize * 0.62),
                           lineHeight,
                         }}
