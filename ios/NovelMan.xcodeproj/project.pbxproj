@@ -325,7 +325,6 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.novelman;
 				PRODUCT_NAME = NovelMan;
 				SWIFT_OBJC_BRIDGING_HEADER = "NovelMan/NovelMan-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -358,7 +357,6 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.novelman;
 				PRODUCT_NAME = NovelMan;
 				STRIP_INSTALLED_PRODUCT = YES;
 				STRIP_STYLE = "non-global";

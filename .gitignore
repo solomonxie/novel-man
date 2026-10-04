@@ -12,7 +12,7 @@ android/
 .DS_Store
 .parse-check/
 
-# Apple Team ID, kept out of a public repo
+# Apple Team ID and bundle id, kept out of a public repo
 ios/Local.xcconfig
 
 # Scraped shelves and the cookie that reads a private one — personal, not code
