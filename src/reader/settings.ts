@@ -33,7 +33,7 @@ export const defaultSettings: ReadingSettings = {
   fontSize: 18,
   spacing: 'normal',
   margin: 24,
-  serif: false,
+  serif: true,
   bilingual: 'off',
   highlight: highlightColors[0],
   freeSelect: true,
@@ -52,9 +52,11 @@ export const defaultSettings: ReadingSettings = {
  * Only the named field is dropped, never the whole object: the theme, the
  * margin and the type size are the reader's own and are not up for revision.
  */
-const DEFAULTS_VERSION = 2;
+const DEFAULTS_VERSION = 3;
 const RETIRED_AT: Partial<Record<number, (keyof ReadingSettings)[]>> = {
   2: ['freeSelect'],
+  // A page set in the system font read as a text file rather than a book.
+  3: ['serif'],
 };
 
 export const FONT_RANGE = { min: 13, max: 28, step: 1 };
