@@ -46,10 +46,15 @@ export async function buildBundle(
     const record = await readBookRecord(id);
     if (!record) continue;
     const read = performance.now();
-    books.push(withAssets(record, assets));
+    books.push(await withAssets(record, assets));
     trace(
       `book ${id} read ${Math.round(read - each)}ms assets ${Math.round(performance.now() - read)}ms`
     );
+    // Every book here is a synchronous file read — `await readBookRecord` is a
+    // microtask, not a yield, so without this the whole loop runs as one
+    // block: 139 books, most of them free, one of them 2.5s for its images,
+    // and nothing in between gets a turn to answer a tap.
+    await yieldToUI();
   }
   trace(`records ${Math.round(performance.now() - at)}ms for ${books.length} books`);
 
@@ -286,7 +291,10 @@ export function readAbout(bytes: Uint8Array): BundleAbout | null {
   }
 }
 
-function withAssets(record: BookRecord, assets: Record<string, Uint8Array>): BundledBook {
+async function withAssets(
+  record: BookRecord,
+  assets: Record<string, Uint8Array>
+): Promise<BundledBook> {
   const bundled: BundledBook = { ...record, assets: { portraits: {} } };
   // The file the book was made from, so a restore can put it back rather than
   // ask for it. Without this a restored book reads fine and still counts as
@@ -310,13 +318,18 @@ function withAssets(record: BookRecord, assets: Record<string, Uint8Array>): Bun
   // at a file by name, so the bytes go under that same name and the rows
   // resolve on the other side without being rewritten.
   const pictures: string[] = [];
-  for (const row of (record.carried?.images ?? []) as { path?: unknown }[]) {
-    const name = imageName(typeof row.path === 'string' ? row.path : '');
+  const rows = (record.carried?.images ?? []) as { path?: unknown }[];
+  for (let i = 0; i < rows.length; i++) {
+    const name = imageName(typeof rows[i].path === 'string' ? (rows[i].path as string) : '');
     if (!name || assets[`assets/${name}`]) continue;
     const bytes = readImage(name);
     if (!bytes) continue;
     assets[`assets/${name}`] = bytes;
     pictures.push(`assets/${name}`);
+    // A book with dozens of drawn illustrations is the whole loop below by
+    // itself — one of 139 on a real shelf took 2.5s of this, alone, with the
+    // per-book yield outside doing nothing to help it.
+    if (i % 4 === 3) await yieldToUI();
   }
   if (pictures.length) bundled.assets.pictures = pictures;
   return bundled;
