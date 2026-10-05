@@ -25,15 +25,14 @@ export function referenceOf(chapterTitle: string, touched: Verse[]): string {
  * The reference, then the passage with every verse numbered — clipped to what
  * was selected, so half a verse quotes as half a verse under its own number.
  *
- * No stop after the reference. "Hebrews 3:1-3." is a sentence that has ended,
- * and what follows it is the verse it was announcing; the bracketed number is
- * already the break, and the period only ever read as a typo in the quote.
+ * The reference and edition sit on a line of their own above the verses.
  */
 export function quoteWithVerses(
   text: string,
   span: Span,
   verses: Verse[],
-  chapterTitle: string
+  chapterTitle: string,
+  edition?: string
 ): string | null {
   const touched = versesIn(verses, span);
   if (!touched.length) return null;
@@ -45,5 +44,20 @@ export function quoteWithVerses(
     })
     .filter((line) => line.length > `[] `.length)
     .join(' ');
-  return `${referenceOf(chapterTitle, touched)} ${body}`;
+  const label = edition ? ` (${edition})` : '';
+  return `${referenceOf(chapterTitle, touched)}${label}\n${body}`;
+}
+
+/**
+ * A fetched chapter carries its numbers inline as "[2] ". Reading them back
+ * gives the same verse list a stored bible has, with each verse's text
+ * starting after its own marker.
+ */
+export function versesFromMarkers(text: string): Verse[] {
+  const marks = [...text.matchAll(/\[(\d+)\]\s*/g)];
+  return marks.map((mark, at) => ({
+    number: Number(mark[1]),
+    start: mark.index! + mark[0].length,
+    end: marks[at + 1]?.index ?? text.length,
+  }));
 }

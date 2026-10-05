@@ -56,7 +56,7 @@ import { EsvError } from '../../src/sources/esv';
 import { codeBlockIn, runsIn } from '../../src/reader/rich';
 import { ReaderImage } from '../../src/ui/ReaderImage';
 import { supports } from '../../src/books/kinds';
-import { quoteWithVerses } from '../../src/scripture/reference';
+import { quoteWithVerses, versesFromMarkers } from '../../src/scripture/reference';
 import { fingerprint, repairAll } from '../../src/reader/anchor';
 import type { Span } from '../../src/text/segment';
 import { scriptOf } from '../../src/text/language';
@@ -635,13 +635,11 @@ export default function Reader() {
 
   async function onCopy() {
     if (!range) return;
-    // "Hebrews 3:1-10 [1] … [2] …" — a bible quoted without its reference is
-    // a quote nobody can look up.
-    const cited = verses.length ? quoteWithVerses(text, range, verses, chapter.title) : null;
     const plain = source.slice(range.start, range.end);
-    // A fetched edition is quoted the way its licence asks: with the reference
-    // and the edition, so what was copied can always be looked up again.
-    const attributed = remote ? `${plain}\n\n— ${chapter.title} (${t('reader.esvShort')})` : plain;
+    const marked = remote ? versesFromMarkers(source) : verses;
+    const edition = remote ? t('reader.esvShort') : book?.title;
+    const cited = marked.length ? quoteWithVerses(source, range, marked, chapter.title, edition) : null;
+    const attributed = `${plain}\n\n--- ${book?.title ?? chapter.title}`;
     await Clipboard.setString(cited ?? attributed);
     endSelection();
     flash(t('reader.copied'));
