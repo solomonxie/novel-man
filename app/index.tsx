@@ -19,7 +19,8 @@ import { listBooks, type BookListItem } from '../src/db/repo';
 import { reviewedBooks, shelfOf, type ReadingStatus } from '../src/books/record';
 import { subscribeToQueue, type ImportJob } from '../src/import/queue';
 import { supportedExtensions } from '../src/import/registry';
-import { Row, Section } from '../src/ui/primitives';
+import { PrimaryAction, Row, Section } from '../src/ui/primitives';
+import { addSampleBook } from '../src/sample/sample';
 import { BookTile } from '../src/ui/BookTile';
 import { ReviewCard } from '../src/ui/ReviewCard';
 import { hueFrom } from '../src/ui/fields';
@@ -78,6 +79,19 @@ export default function Home() {
     timed('listBookLists', listBookLists()).then(setLists).catch(() => undefined);
     timed('listTags', listTags()).then(setTags).catch(() => undefined);
   }, []);
+
+  const [sampling, setSampling] = useState(false);
+  async function trySample() {
+    if (sampling) return;
+    setSampling(true);
+    try {
+      router.push(await addSampleBook());
+    } catch (problem) {
+      Alert.alert(t('shelf.sampleFailed'), String(problem));
+    } finally {
+      setSampling(false);
+    }
+  }
 
   useFocusEffect(refresh);
 
@@ -253,6 +267,14 @@ export default function Home() {
                     <Text style={{ color: palette.dim, marginTop: space.xs }}>{t('shelf.emptyHint')}</Text>
                     <Text style={{ color: palette.faint, marginTop: space.xs, fontSize: 12 }}>
                       {supportedExtensions.map((extension) => `.${extension}`).join('  ')}
+                    </Text>
+                    <PrimaryAction
+                      label={t('shelf.trySample')}
+                      onPress={() => void trySample()}
+                      style={{ marginTop: space.lg }}
+                    />
+                    <Text style={{ color: palette.dim, marginTop: space.xs, fontSize: 13 }}>
+                      {t('shelf.trySampleHint')}
                     </Text>
                   </View>
                 </>
