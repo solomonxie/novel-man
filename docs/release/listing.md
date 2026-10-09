@@ -46,7 +46,7 @@ developer.apple.com → Certificates, Identifiers & Profiles:
 | Field | Value |
 |---|---|
 | Platforms | iOS |
-| Name | `Novel Man: Powerful book app` |
+| Name | `Novel Man: Story Bible` |
 | Primary Language | English (U.S.) |
 | Bundle ID | `com.example.novelman` (dropdown) |
 | SKU | `novelman-ios` |
@@ -93,7 +93,7 @@ Fallback, Xcode GUI: open `ios/NovelMan.xcworkspace` → destination **Any iOS D
 
 - Typical: 24–48 h. Status: Waiting for Review → In Review → Pending Developer Release.
 - Rejection → **Resolution Center**: reply there, or fix and re-run `npm run release:ios` (the build number is a fresh timestamp), attach the new build, resubmit. `MARKETING_VERSION` does not need bumping for a rejected version.
-- Likely questions, all answered in the review notes: the AI features (optional, your own key), the downloadable books (public domain / redistributable), iCloud (optional).
+- 1.0 was rejected once under 4.3 / 4.2.6 (spam, read as a generic reader). The reply and what changed: [review-reply.md](review-reply.md). Keep the listing about the story bible, not reading.
 
 ## 13. Release
 
@@ -110,36 +110,33 @@ App Store Connect scales it down for every smaller phone.
 Capture on the paired iPhone 14 (`1170 × 2532`) and let the script do the rest — the
 aspect ratios differ by 0.4%, which is invisible.
 
-Captured 2026-10-03 (simulator, demo library, JPEG q80): English in `docs/release/screenshots/`, 简体中文 in `docs/release/screenshots/zh-Hans/` — shelf, reader, book, structure, concepts, flash cards, notes, sources, settings. Upload the zh-Hans set to the 简体中文 localization.
+The 2026-10-03 set (simulator, demo library) led with the shelf and the reader, which is how 1.0 got read as a generic reader (4.3). **Retake it on the phone, story-bible screens first.** English in `docs/release/screenshots/`, 简体中文 in `docs/release/screenshots/zh-Hans/`.
 
-1. `npm run ios` — a Release build, so no dev overlay. Load a book you are happy to show;
-   a Gutenberg classic is safest, nothing unpublished and nothing personal in the notes.
+1. `npm run ios` — a Release build, so no dev overlay. On an empty shelf, **Try a sample** (Pride and Prejudice), so every screen below has real content.
 2. Status bar: full battery, Wi-Fi, no notification banners. Side button + Volume Up per shot.
-3. Shots, in upload order (3 minimum, 10 maximum — the first two are what people actually see):
-   1. **Shelf** — the one page: search, what you are reading, the library below it
-   2. **Reader** — a chapter open, one sentence tapped, the action row showing
-   3. **Book page** — cover, chapters, scenes, notes and cast for one book
-   4. **Structure** — detected chapters with a rename/merge/split in reach
-   5. **Cast** — a character profile with portrait, aliases and mention timeline
-   6. **Graph** — the relation graph, filtered to a chapter range
-   7. **Translation** — bilingual view with a glossary term pinned
-   8. **Notes** — annotations across the book, searchable
-   9. **Sources** — Add → Project Gutenberg or Open Library mid-search
-   10. **Settings** — iCloud switch and the "stays on the device" copy
-4. AirDrop to the Mac, e.g. `~/Desktop/shots/`, then:
+3. Shots, in upload order (the first two are what people actually see), caption in brackets:
+   1. **Cast** — Elizabeth Bennet's profile: aliases, fields, mention timeline  [Every character, profiled from the text]
+   2. **Graph** — relation graph filtered to a chapter range  [Who is tied to whom, chapter by chapter]
+   3. **Continuity** — the flags list  [Catch the eye colour that changed in chapter 20]
+   4. **Structure** — detected chapters, merge/split in reach  [Chapters and scenes found for you]
+   5. **Places** — a place profile  [Places, with the chapters they appear in]
+   6. **Translation** — bilingual view, glossary term pinned  [Translation that keeps your names]
+   7. **Script** — the screenplay export sheet  [Adapt it: .fountain and .fdx]
+   8. **Book page** — the whole book on one page
+   9. **Reader** — one sentence tapped, the note row showing  [Read and annotate the draft]
+4. AirDrop to the Mac, e.g. `~/Desktop/shots/`, named `01-cast.png`, `02-graph.png` …, and a
+   `captions.txt` beside them (one line per shot, in order; zh-Hans set gets its own). Then:
 
 ```
 npm run screenshots ~/Desktop/shots
 ```
 
-Outputs overwrite `docs/release/screenshots/`, named after the files you fed in —
-so name them `01-shelf.png`, `02-reader.png` … and the upload order sorts itself.
-Drag the `6.9` folder's files into the 6.9" slot.
+Each shot lands at 1320 × 2868 with its caption above it, in `docs/release/screenshots/`.
+Drag them into the 6.9" slot.
 
 App Preview video: skip for 1.0.
 
 ---
-
 ## App Store Connect pages
 
 ### `iOS App → 1.0 Prepare for Submission`
@@ -167,98 +164,94 @@ App Preview video: skip for 1.0.
 Promotional Text (no price wording, Guideline 2.3.7):
 
 ```
-A book reader that accepts any format. Import a manuscript and get back its chapters, scenes and cast — on the device, with no account and no server.
+Turn your manuscript into a story bible: every character, place and relationship, found in the text and kept in step with each new draft.
 ```
 
 Description:
 
 ```
-Novel Man turns a manuscript into a book you can read properly — and into the structure underneath it: chapters, scenes, a cast, places, terminology. All of it on your iPhone.
+Novel Man reads your manuscript and builds its story bible for you: who is in it, where they appear, how they are connected, and what changed between chapter 3 and chapter 20.
 
-No account. No subscription. No server holding your book.
+For novelists, editors, translators and anyone adapting a book. Everything stays on your iPhone. No account, no server.
 
-IMPORT FROM WHEREVER IT ALREADY IS
-• .txt, .md, .docx, .epub and .pdf, through Files — which brings iCloud Drive, Google Drive, Dropbox and OneDrive with it
-• "Open in…" from another app, or a pasted link; a Google Doc arrives as .docx
-• A PDF shows you the text it extracted before it becomes a book
+THE CAST, FROM THE TEXT
+• A profile for every character and place: portrait, aliases, a summary, and fields you define yourself, such as house, species or rank
+• Per-chapter mention timelines, counted on the device. See where a character drops out for ten chapters
+• A relationship graph you can filter to a range of chapters: who is tied to whom at that point in the story
 
-READ IT
-• A real reading experience: four page themes, font size, margins, a scrubber over the whole book, chrome that fades while you read
-• Tap one sentence to copy, highlight, note, bookmark or share it — no drag handles
-• Annotations anchor to their own words, so they survive a re-import or a re-split
-• Notes on a chapter or on the book, all searchable from the shelf
-• Five stars, your own review, and where it stands: want to read, reading, read
+CONTINUITY
+• Flags like "grey eyes in ch.3, green in ch.20", raised for you to review and never applied behind your back
 
-STRUCTURE, DETECTED THEN CORRECTED
-• Chapters and scenes found by heuristics — heading styles, "Chapter 12", "第十二章", "* * *", the epub spine
-• Rename, merge, split and reorder; your corrections survive every re-run
+STRUCTURE THAT SURVIVES REVISION
+• Chapters and scenes detected from heading styles, "Chapter 12", "第十二章", "* * *" and the epub spine
+• Rename, merge, split and reorder. Your corrections survive every re-import of a new draft
 
-CHARACTERS AND PLACES
-• Profiles with a portrait, aliases, a summary, and fields you define yourself — house, species, cultivation level, whatever the genre needs
-• Per-chapter mention timelines, counted on the device
-• A relation graph you can filter to a range of chapters
-• Continuity flags — "grey eyes in ch.3, green in ch.20" — raised for review, never applied behind your back
+TRANSLATION THAT KEEPS YOUR NAMES
+• A glossary the translation must follow, so a name is the same in chapter 1 and chapter 80
+• Fix a sentence and the fix is kept and reused
 
-BOOKS BY NAME, NOT BY FILE
-• Project Gutenberg and Standard Ebooks for books in the public domain
-• arXiv for papers; Open Library for 40 million records; your Goodreads export for the shelf you already have
-• A bible from eBible.org — pick the translation and the canon, and John 3:16 or 约 3:16 becomes a lookup
-• Or just a title: a book you read on paper gets chapters, notes and a cast like any other
+ADAPT IT
+• Export the book as a screenplay, .fountain or .fdx
+• Export the cast as a character bible
+• Export the manuscript as .txt, .md, .docx, .epub, .html or .pdf
 
-EXPORT
-• .txt, .md, .docx, .epub, .html and .pdf
-• Annotations as .md or .csv, the cast as a character bible, a translation alone or bilingual
-• Screenplay as .fountain or .fdx
-• Every format states what it drops before you pick it
+BRING THE MANUSCRIPT
+• .docx, .epub, .txt, .md and .pdf from Files, iCloud Drive, Google Drive, Dropbox or OneDrive, or a pasted link
+• Or try it on a public-domain classic from Project Gutenberg
+
+READ AND ANNOTATE THE DRAFT
+• Tap a sentence to highlight it, note it or bookmark it. Notes stay with their words through every re-import
 
 BACKUP
-• A plain .zip you can open anywhere — to iCloud Drive, to a file you keep, or to a cloud bucket you own
-• Restore never overwrites: it creates something new and tells you what it could not place
+• A plain .zip to iCloud Drive, a file, or a storage bucket you own. Restoring never overwrites anything
 
 OPTIONAL AI
-Bring your own API key from OpenAI, Anthropic, Google, Mistral, Groq, DeepSeek or xAI. Translation with a glossary the model must obey, character analysis, chapter summaries. The key stays in the device keychain, usage shows up in your provider's dashboard, every run states its cost before it spends, and all of it is off until you turn it on. Skip it and the app still imports, reads, structures and exports.
+Bring your own API key from the provider you choose. It is used for character analysis, continuity checks, summaries and glossary-bound translation. The key stays in the device keychain, and every run shows its cost before it spends anything. Without a key the app still imports, structures, profiles by hand, reads and exports.
 
-English and 简体中文. Free, with no upsell, no ads and no analytics.
+English and 简体中文.
 ```
 
-Keywords (98/100 — "novel" and "book" are omitted, the name already indexes them):
+Keywords (≤100; "novel", "story" and "bible" are already in the name):
 
 ```
-epub,manuscript,reader,offline,annotate,translate,writer,editor,gutenberg,screenplay,library,bible
+writer,novelist,character,worldbuilding,continuity,manuscript,outline,plot,screenplay,fountain
 ```
 
 App Review Notes:
 
 ```
-No account or login is needed — the app opens straight into an empty shelf, and Add → Project Gutenberg will download a public-domain book in a few seconds if you want something to try it on.
+Novel Man turns a novel manuscript into a story bible: character and place profiles, a relationship graph, continuity flags, chapter structure and screenplay export. No account is needed.
 
-Optional features a reviewer may want to skip:
-- AI (Settings → AI keys): requires the reviewer's own API key from a provider such as OpenAI or Anthropic. Every AI feature — translation, character analysis, summaries — is off until a key is added, and the rest of the app works without one.
-- iCloud (Settings): optional; the app is fully functional with local storage only.
-- Cloud bucket backup (Settings): optional, and uses S3-compatible credentials the user supplies.
+To see it in about a minute, without an AI key:
+1. On the empty shelf, tap "Try a sample". Pride and Prejudice downloads from Project Gutenberg (public domain), together with a prepared analysis.
+2. Open the book and tap Characters, then Elizabeth Bennet. You'll see her profile and per-chapter mention timeline, counted on the device.
+3. Back on the book, open the relationship graph and narrow the chapter range. The ties change with the story.
+4. Open Continuity for the flagged inconsistencies.
+5. Open Chapters and merge or split one. Corrections survive re-import.
+6. Export, then Screenplay (.fountain).
 
-Third-party content: the app searches and downloads from Project Gutenberg, Standard Ebooks, arXiv, Open Library and eBible.org. Everything it fetches is public domain or explicitly redistributable — eBible.org editions are filtered to the ones its catalog marks redistributable, which is why licence-restricted translations such as NIV and NASB are absent. Each source states its own terms in the app before anything is fetched. No content is bundled with the app.
+Optional, and safe to skip: AI analysis and translation (needs the reviewer's own API key; off until one is added), iCloud backup, and backup to the user's own storage bucket.
 
-All manuscripts and notes are stored in a local SQLite database and local files on the device. We operate no server and receive no user data.
+Third-party content: books come only from the user's own files or, on request, from public-domain catalogues (Project Gutenberg, Standard Ebooks, Open Library). Each states its terms in the app before anything is fetched. The only bundled content is the sample's prepared analysis.
+
+All data is stored on the device. We run no server and receive no user data.
 ```
-
-What's New: not shown for a first version. From 1.1 on, write it here.
 
 ### `General → App Information`
 
 | Field | Value |
 |---|---|
-| Name | `Novel Man: Powerful book app` (28/30) |
-| Subtitle | `Read, annotate, adapt novels` (28/30) |
-| Category — Primary | Books |
-| Category — Secondary | Productivity |
+| Name | `Novel Man: Story Bible` (22/30) |
+| Subtitle | `Characters, plot & continuity` (29/30) |
+| Category — Primary | Productivity |
+| Category — Secondary | Books |
 | Content Rights | **Yes**, it contains, shows, or accesses third-party content — you have the rights: everything fetched is public domain or marked redistributable by its source |
 | Age Rating | **Edit** → answers below → result **4+** |
 | License Agreement | Apple standard EULA (default) |
 | Privacy Policy URL | `https://github.com/solomonxie/novel-man/blob/master/docs/release/privacy-policy.md` |
 
-If `Novel Man: Powerful book app` is taken, in order of preference:
-`Novel Man — Reader & Bible` (26), `Novel Man: Manuscript Reader` (28), `Novel Man Story Bible` (21).
+If `Novel Man: Story Bible` is taken, in order of preference:
+`Novel Man: Story Bible Maker` (28), `Novel Man — Cast & Continuity` (29). Never "reader" or "book app": that is the saturated category 1.0 was rejected into.
 The name is what gets indexed; the subtitle can absorb whatever the name loses.
 
 Age rating questionnaire — every answer:
@@ -334,137 +327,62 @@ Only if it is: **Manage** → **None of the algorithms mentioned above**.
 The app ships `zh-Hans`. App Store Connect → App Information → language dropdown (top right) →
 **Add Chinese (Simplified)**, then switch to it on the `1.0` page.
 
+One record, one binary: the China storefront shows this localization too, so it names no AI vendor and no scripture (the app decides those per storefront at runtime, `src/store/loadStorefront.ts`).
+
 | Field | Value |
 |---|---|
-| Name | `Novel Man 书籍管家` |
-| Subtitle | `读书，理结构，建角色卡` |
+| Name | `Novel Man 小说设定集` |
+| Subtitle | `人物档案、关系图、前后一致检查` |
 | Privacy Policy URL | same |
-| Keywords | `小说,手稿,阅读器,离线,批注,翻译,剧本,epub,古登堡,书架,圣经,写作` |
+| Keywords | `写作,小说,作者,网文,人物,设定,世界观,大纲,手稿,剧本,关系图,伏笔,编辑,翻译` |
 | Screenshots | upload `docs/release/screenshots/zh-Hans/*.jpg` |
 
 Promotional Text:
 
 ```
-一个阅读器，也是一本故事圣经。导入一本书，拿回它的章节、人物和地点——完全离线，无需账号，手稿从不离开手机。
+把你的手稿变成一份设定集：书里的人物、地点和人物关系，都从正文里整理出来，改稿之后也跟得上。
 ```
 
 Description:
 
 ```
-Novel Man 把一份手稿变成一本能好好读的书，也变成它底下的结构：章节、场景、人物、地点、术语。全部留在你的 iPhone 上。
+Novel Man 读你的手稿，替你把设定集整理出来：书里有谁，在哪几章出现，彼此什么关系，第 3 章和第 20 章哪里对不上。
 
-无需账号。没有订阅。没有服务器保管你的书。
+写小说的、做编辑的、做翻译的、改编剧本的，都用得上。所有东西都在你的手机上，不用注册，没有服务器。
 
-从它原本就在的地方导入
-• .txt、.md、.docx、.epub 和 .pdf，通过“文件”导入——iCloud 云盘、Google Drive、Dropbox、OneDrive 一并带上
-• 从别的 App “用其他应用打开”，或粘贴一个链接；Google 文档会以 .docx 进来
-• PDF 会先让你看清它提取出的文字，再决定要不要成书
+【人物，从正文里来】
+每个人物、每个地点一份档案：头像、别名、简介。字段可以自己加，门派、种族、境界，看这本书需要什么。
+每个人物在每一章出现几次，手机本地就能算出来。谁连着十章没露面，一眼就看到。
+人物关系图可以只看某几章，看到故事那个阶段谁和谁有关系。
 
-读它
-• 真正的阅读体验：四套页面主题、字号、页边距、贯穿全书的进度条，读起来界面自己淡出
-• 点一句话就能复制、高亮、写注、加书签或分享——不用拖动手柄
-• 批注锚定在它自己的那几个字上，重新导入或重新分章都不会丢
-• 针对某一章或整本书写笔记，都能从书架上搜到
-• 五星评分、你自己的书评，以及状态：想读、在读、读过
+【前后一致】
+“第 3 章是灰眼睛，第 20 章成了绿眼睛”这样的地方会提醒你。改不改，你说了算，它不会动你的稿子。
 
-结构：先检测，再修正
-• 用启发式规则找出章节与场景——标题样式、“Chapter 12”、“第十二章”、“* * *”、epub 书脊
-• 改名、合并、拆分、重排；你的修正在每次重新检测后依然保留
+【章节，改稿也不乱】
+按标题样式、“第十二章”“Chapter 12”“* * *”、epub 目录，自动分出章节和场景。
+改名、合并、拆开、调顺序都可以。下一稿重新导入时，你改过的地方都还在。
 
-人物与地点
-• 档案含头像、别名、简介，以及你自己定义的字段——家族、种族、修为，看这本书需要什么
-• 逐章提及时间线，在本机统计
-• 关系图谱，可按章节范围筛选
-• 连续性提示——“第 3 章灰眼睛，第 20 章绿眼睛”——只提出来供你判断，绝不自作主张改动
+【翻译，译名不走样】
+先定好术语表，机器翻译必须照着它译，同一个名字从第 1 章到第 80 章都不会变。
+你改过的句子会留下来，后面遇到类似的句子还会参考。
 
-按书名找书，而不是找文件
-• Project Gutenberg 与 Standard Ebooks 提供公版书
-• arXiv 找论文；Open Library 有四千万条书目；Goodreads 导出文件可把你现成的书架搬过来
-• 从 eBible.org 下载圣经——选译本与正典，然后 John 3:16 或“约 3:16”就是一次查询
-• 或者只给一个书名：一本你在纸上读的书，一样能有章节、笔记和人物
+【改编】
+整本书可以导成剧本，fountain 或 fdx 格式。
+人物档案可以导成一份人物设定集。
+原稿可以导成 txt、md、docx、epub、html、pdf。
 
-导出
-• .txt、.md、.docx、.epub、.html 和 .pdf
-• 批注导出为 .md 或 .csv，人物导出为角色圣经，译文可单独或双语导出
-• 剧本导出为 .fountain 或 .fdx
-• 每种格式都会先说明它会丢掉什么，你再决定
+【把稿子放进来】
+docx、epub、txt、md、pdf，从“文件”里选就行，iCloud 云盘和各家网盘里的都可以，也可以粘贴一个链接。
+手上没有稿子，可以先用 Project Gutenberg 上的公版名著试一试。
 
-备份
-• 一个到哪儿都能打开的普通 .zip——存到 iCloud 云盘、存成你自己保管的文件，或存进你自己的云存储桶
-• 恢复从不覆盖：它新建一份，并告诉你哪些没能对上
-
-可选 AI
-使用你自己的 OpenAI、Anthropic、Google、Mistral、Groq、DeepSeek 或 xAI 密钥。带术语表的翻译（模型必须遵守它）、人物分析、章节摘要。密钥存在设备钥匙串里，用量显示在服务商后台，每次运行前都会说明它要花多少，而且不加密钥就完全不启用。不用它，导入、阅读、结构和导出照样能用。
-
-English 与简体中文。免费，无内购推销，无广告，无统计分析。
-```
-
-### China storefront (`make ios STORE=china`)
-
-No bible catalog, no ESV, no scripture kind, only filed AI vendors. Use these for that listing.
-
-| Field | Value |
-|---|---|
-| Name | `Novel Man 书籍管家` |
-| Subtitle | `导入、阅读、批注，整理你的书` |
-| Keywords | `阅读器,电子书,epub,pdf,笔记,批注,划线,书架,小说,人物,写作,手稿,翻译,离线,书单` |
-
-Promotional Text:
-
-```
-手里的 epub、PDF、Word 文档，导进来就是一本好读的书。自动分章，随手记笔记，还能给人物建档案。一切都在手机本地完成，不用注册账号。
-```
-
-Description:
-
-```
-Novel Man 书籍管家，是一间装进手机的书房。
-
-你手里的书，可能是一本 epub，一份 PDF，一个 Word 文档，或者一篇写了一半的稿子。丢进来，它就变成一本能安安静静读下去的书：章节分好了，笔记随手记，书里的人物和地点，也能一个个整理成档案。
-
-不用注册，不用登录，没有服务器替你保管书。书和笔记只在你自己的手机上。
-
-【怎么把书放进来】
-从“文件”里选就行，支持 txt、md、docx、epub、pdf。iCloud 云盘和各家网盘里的文件都能直接选。
-在别的 App 里点“用其他应用打开”，或者粘贴一个链接，也行。
-PDF 导入前会先让你看一眼提取出来的文字，确认没问题再成书。
-
-【读起来舒服】
-四套页面配色，字号和页边距随你调。读的时候界面自动隐去，底部一条进度条，知道自己读到哪了。
-轻点一句话，就能复制、划线、写想法、加书签或分享，不用拖选区。
-划线和笔记跟着原文走，哪怕重新导入、重新分章，也不会丢。
-笔记可以记在某一章，也可以记在整本书上，在书架搜一下就能找到。
-读完打个分，写几句，标上想读、在读、读过。
-
-【章节自动分好】
-看标题样式，看“第十二章”“Chapter 12”“* * *”，看 epub 的目录，自动把章节和场景分出来。
-分错了，可以改名、合并、拆开、调顺序。再识别一次的时候，你改过的地方不会被覆盖。
-
-【书里的人】
-每个人物一份档案：头像、别名、简介。字段可以自己加——门派、种族、境界，看这本书需要什么。
-每一章里谁出现了几次，手机本地算，不用联网。
-人物关系图，可以只看某几章。
-前后对不上的地方会提醒你：“第 3 章灰眼睛，第 20 章绿眼睛”。改不改，你说了算。
-
-【找书】
-Project Gutenberg、Standard Ebooks 上的公版书，直接搜，直接下。
-arXiv 的论文、Open Library 的书目都能查，Goodreads 导出的书架也能搬过来。
-纸质书也可以在这里建一本，一样记笔记、建人物档案。
-
-【导出】
-txt、md、docx、epub、html、pdf 都行。
-笔记导成 md 或 csv，人物档案导成一份设定集，译文可以单独导，也可以双语对照。
-剧本可以导成 fountain 或 fdx。
-每种格式会丢掉什么，选之前都写清楚。
+【边读边批注】
+轻点一句话，就能划线、写批注、加书签。重新导入以后，批注还在原来那句话上。
 
 【备份】
-备份就是一个普通的 zip，在哪都打得开。放 iCloud 云盘、存成文件，或者传到你自己的对象存储。
-恢复不会覆盖现有的东西，而是另存一份。哪些没对上，会告诉你。
+备份就是一个普通的 zip，可以存到 iCloud 云盘、存成文件，或者传到你自己的存储桶。恢复时不会覆盖现有的内容。
 
 【AI，想用再开】
-需要你自己的 DeepSeek、通义千问、Kimi 或智谱密钥。能做的事：带术语表的翻译（译名照你定的来）、人物分析、章节总结。
-密钥只存在手机钥匙串里。用了多少，去服务商后台看；每次跑之前，也会先告诉你大概花多少。
-不开，就一次都不会调用。不用 AI，导入、阅读、分章、导出照样好用。
+用你自己选的服务商的密钥。可以做人物分析、一致性检查、章节总结，还有按术语表的翻译。密钥只存在手机钥匙串里，每次运行前会先告诉你大概要花多少钱。不填密钥，导入、分章、手动建档、阅读和导出都照常能用。
 
-简体中文和 English 都支持。免费，没有内购，没有广告，不做数据统计。
+简体中文和 English 都支持。
 ```
