@@ -1,5 +1,5 @@
 import { DEFAULT_KIND, type BookSource } from '../books/kinds';
-import { isChinaStore } from '../store/storefront';
+import { offers, type Extra } from '../store/scope';
 
 /**
  * The sources books come from, as data. A source is a name, the page that
@@ -71,6 +71,13 @@ export const allSources: PublicSource[] = [
  * general catalogs answer `novel`, which is most of what they carry and what
  * this app is, and it is one tap to change on the book's own page.
  */
+const EXTRA_OF: Partial<Record<PublicSource['id'], Extra>> = {
+  ebible: 'scripture',
+  repo: 'scripture',
+  arxiv: 'papers',
+  goodreads: 'goodreads',
+};
+
 /**
  * Scripture is not offered on the China store: no bible catalog, and no ESV.
  * A function, not a list — the storefront resolves after this module has
@@ -78,9 +85,10 @@ export const allSources: PublicSource[] = [
  * for whichever storefront was cached first.
  */
 export function publicSources(): PublicSource[] {
-  return allSources.filter(
-    (source) => !(isChinaStore() && (source.id === 'ebible' || source.id === 'repo'))
-  );
+  return allSources.filter((source) => {
+    const extra = EXTRA_OF[source.id];
+    return !extra || offers(extra);
+  });
 }
 
 export function kindFromSource(source: string): string {

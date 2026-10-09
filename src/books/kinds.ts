@@ -1,4 +1,4 @@
-import { isChinaStore } from '../store/storefront';
+import { offers } from '../store/scope';
 /**
  * What a book *is* decides what the app offers for it. A tutorial has no cast,
  * scripture has no scenes to storyboard, and offering either is worse than not
@@ -175,11 +175,11 @@ export const DEFAULT_KIND = bookKinds[0].id;
 
 /** The order the groups are offered in, and what is under each. Read fresh each call: the storefront resolves asynchronously, after this module has already loaded. */
 export function kindGroups(): KindGroup[] {
-  return isChinaStore() ? ['fiction', 'nonfiction'] : ['fiction', 'nonfiction', 'scripture'];
+  return offers('scripture') ? ['fiction', 'nonfiction', 'scripture'] : ['fiction', 'nonfiction'];
 }
 
 export function kindsIn(group: KindGroup): BookKind[] {
-  return bookKinds.filter((kind) => kind.group === group);
+  return bookKinds.filter((kind) => kind.group === group && (kind.id !== 'paper' || offers('papers')));
 }
 
 export function kindOf(kind: string | null | undefined): BookKind {
@@ -188,6 +188,7 @@ export function kindOf(kind: string | null | undefined): BookKind {
 
 
 export function supports(kind: string | null | undefined, feature: BookFeature): boolean {
+  if ((feature === 'words' || feature === 'cards') && !offers('drills')) return false;
   return kindOf(kind).features.includes(feature);
 }
 
@@ -197,6 +198,7 @@ export function unitOf(kind: string | null | undefined): 'chapter' | 'section' {
 }
 
 export function shows(kind: string | null | undefined, section: BookSection): boolean {
+  if ((section === 'words' || section === 'cards') && !offers('drills')) return false;
   return kindOf(kind).sections.includes(section);
 }
 
