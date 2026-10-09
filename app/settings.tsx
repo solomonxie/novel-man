@@ -15,6 +15,7 @@ import { appearances, setAppearance, useAppearance, type Appearance } from '../s
 import { openWorkQueue, useWorkFeed } from '../src/ui/WorkQueue';
 import { PickerSheet } from '../src/ui/PickerSheet';
 import { Row, Section } from '../src/ui/primitives';
+import { offers } from '../src/store/scope';
 import { space, usePalette } from '../src/theme';
 
 const LANGUAGE_LABELS: Record<UiLanguage, string> = { en: 'English', 'zh-Hans': '简体中文' };
@@ -101,12 +102,14 @@ export default function SettingsPage() {
             value={flagged > 0 ? t('flags.count', { count: flagged }) : t('flags.clear')}
             onPress={() => router.push('/flagged')}
           />
-          <Row
-            label={t('source.goodreads')}
-            detail={t('source.goodreadsDetail')}
-            value="›"
-            onPress={() => router.push('/source/goodreads')}
-          />
+          {offers('goodreads') ? (
+            <Row
+              label={t('source.goodreads')}
+              detail={t('source.goodreadsDetail')}
+              value="›"
+              onPress={() => router.push('/source/goodreads')}
+            />
+          ) : null}
           <Row
             label={t('source.csv')}
             detail={t('source.csvDetail')}

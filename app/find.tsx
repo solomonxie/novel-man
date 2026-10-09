@@ -37,7 +37,7 @@ import { choiceFromIndex, takeChoice, type Choice } from '../src/sources/chosen'
 import { ESV_TITLE, searchLicensed, searchSpecial } from '../src/sources/special';
 import { forgetSearches, recentSearches, remember } from '../src/search/history';
 
-import { isChinaStore } from '../src/store/storefront';
+import { offers } from '../src/store/scope';
 import { esvKey } from '../src/sources/esvKey';
 import { standardEbooksEmail } from '../src/sources/standardEbooksEmail';
 import {
@@ -286,7 +286,7 @@ export default function Find() {
 
     // The one edition that is its own catalog. It has no list to fetch; what
     // it has instead is a key, and without one it answers nothing.
-    if (!isChinaStore()) made.push({
+    if (offers('scripture')) made.push({
       id: 'esv',
       label: ESV_TITLE,
       detail: t('add.esvWhy'),
@@ -329,7 +329,7 @@ export default function Find() {
     return ranked.sort((a, b) => a.rank - b.rank).map((entry) => entry.book);
   }, [books, query]);
 
-  const specials = useMemo(() => searchSpecial(query), [query]);
+  const specials = useMemo(() => (offers('scripture') ? searchSpecial(query) : []), [query]);
 
   /**
    * A kept list either records what a book is or hands over its words, and
@@ -353,7 +353,7 @@ export default function Find() {
     [hits]
   );
   /** Named, and not ours to give — see `licensedEditions`. */
-  const licensed = useMemo(() => searchLicensed(query), [query]);
+  const licensed = useMemo(() => (offers('scripture') ? searchLicensed(query) : null), [query]);
   /**
    * Not one catalog answered — no signal, or every door refusing at once.
    *
