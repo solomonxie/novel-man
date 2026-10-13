@@ -38,6 +38,16 @@
                ReferencedContainer = "container:NovelMan.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "1DFC7E26472EFF546A25691F"
+               BuildableName = "NovelManUITests.xctest"
+               BlueprintName = "NovelManUITests"
+               ReferencedContainer = "container:NovelMan.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
