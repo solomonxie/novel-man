@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Image,
   Pressable,
@@ -24,7 +25,7 @@ import { radius, space, usePalette } from '../theme';
 export function Toast({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <View style={styles.toast} pointerEvents="none">
+    <View style={styles.toast} pointerEvents="none" accessible accessibilityRole="alert" accessibilityLabel={message}>
       <Text style={{ color: '#FFFFFF', fontSize: 13 }}>{message}</Text>
     </View>
   );
@@ -37,6 +38,7 @@ export function useFlash(ms = 1200) {
   const flash = useCallback(
     (next: string) => {
       setMessage(next);
+      AccessibilityInfo.announceForAccessibility(next);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setMessage(null), ms);
     },

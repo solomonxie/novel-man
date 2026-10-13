@@ -10,29 +10,46 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		31EAD8A6465155C799B44FBF /* libPods-NovelMan.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F7046A55B7D0B52CC800346 /* libPods-NovelMan.a */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
+		4AA59815BF31DE3DDFEBF71E /* TextOffset.m in Sources */ = {isa = PBXBuildFile; fileRef = A30D5BA0C884B4F875C62FB5 /* TextOffset.m */; };
 		678F3815DD8607A4FC538889 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E555369B6D20C021B921C273 /* PrivacyInfo.xcprivacy */; };
+		A882F7F4E4CBE3E13246BE5E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A64D400D16922CF83CE82B5 /* Foundation.framework */; };
+		A90949233B49D23EB3995A2B /* SelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4205B2604961F1122A2BCC4 /* SelectionTests.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		F11748502D0722820044C1DA /* ChineseVariant.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748512D0722820044C1DA /* ChineseVariant.m */; };
 		F11748602D0722820044C1DB /* Dictionary.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748612D0722820044C1DB /* Dictionary.m */; };
 		F11748702D0722820044C1DC /* Storefront.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748712D0722820044C1DD /* Storefront.m */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		9EDBF4F0BE7F62AC034D768C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 13B07F861A680F5B00A75B9A;
+			remoteInfo = NovelMan;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		13B07F961A680F5B00A75B9A /* NovelMan.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NovelMan.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = NovelMan/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = NovelMan/Info.plist; sourceTree = "<group>"; };
+		2A64D400D16922CF83CE82B5 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		3F7046A55B7D0B52CC800346 /* libPods-NovelMan.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-NovelMan.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30D5BA0C884B4F875C62FB5 /* TextOffset.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = TextOffset.m; path = NovelMan/TextOffset.m; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = NovelMan/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BBC7F5B6EBD2354118AE2530 /* Pods-NovelMan.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NovelMan.release.xcconfig"; path = "Target Support Files/Pods-NovelMan/Pods-NovelMan.release.xcconfig"; sourceTree = "<group>"; };
+		CE8EC298BADE9ECDCCED7837 /* NovelManUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NovelManUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DEB0C0F160000000000000D1 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		DEB0C0F160000000000000D2 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		E4205B2604961F1122A2BCC4 /* SelectionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SelectionTests.swift; sourceTree = "<group>"; };
 		E555369B6D20C021B921C273 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = NovelMan/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = NovelMan/AppDelegate.swift; sourceTree = "<group>"; };
+		F11748442D0722820044C1D9 /* NovelMan-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "NovelMan-Bridging-Header.h"; path = "NovelMan/NovelMan-Bridging-Header.h"; sourceTree = "<group>"; };
 		F11748512D0722820044C1DA /* ChineseVariant.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = ChineseVariant.m; path = NovelMan/ChineseVariant.m; sourceTree = "<group>"; };
 		F11748612D0722820044C1DB /* Dictionary.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Dictionary.m; path = NovelMan/Dictionary.m; sourceTree = "<group>"; };
 		F11748712D0722820044C1DD /* Storefront.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Storefront.m; path = NovelMan/Storefront.m; sourceTree = "<group>"; };
-		F11748442D0722820044C1D9 /* NovelMan-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "NovelMan-Bridging-Header.h"; path = "NovelMan/NovelMan-Bridging-Header.h"; sourceTree = "<group>"; };
 		F55E3B88E60879C6C1010125 /* Pods-NovelMan.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NovelMan.debug.xcconfig"; path = "Target Support Files/Pods-NovelMan/Pods-NovelMan.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -42,6 +59,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				31EAD8A6465155C799B44FBF /* libPods-NovelMan.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3533428D29BCD8DD853F4A6C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A882F7F4E4CBE3E13246BE5E /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -60,6 +85,7 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				E555369B6D20C021B921C273 /* PrivacyInfo.xcprivacy */,
+				A30D5BA0C884B4F875C62FB5 /* TextOffset.m */,
 			);
 			name = NovelMan;
 			sourceTree = "<group>";
@@ -69,6 +95,7 @@
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				3F7046A55B7D0B52CC800346 /* libPods-NovelMan.a */,
+				673808DD78D3E68A1764D9AC /* iOS */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -82,6 +109,14 @@
 			name = "Recovered References";
 			sourceTree = "<group>";
 		};
+		673808DD78D3E68A1764D9AC /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				2A64D400D16922CF83CE82B5 /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
 		69A7E1FD95189761B3A1D7EB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
@@ -89,6 +124,15 @@
 				BBC7F5B6EBD2354118AE2530 /* Pods-NovelMan.release.xcconfig */,
 			);
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		81C29C9C82D9EE2E1B204727 /* NovelManUITests */ = {
+			isa = PBXGroup;
+			children = (
+				E4205B2604961F1122A2BCC4 /* SelectionTests.swift */,
+			);
+			name = NovelManUITests;
+			path = NovelManUITests;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -107,6 +151,7 @@
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				69A7E1FD95189761B3A1D7EB /* Pods */,
 				57D4F0D83063B1E500C9289A /* Recovered References */,
+				81C29C9C82D9EE2E1B204727 /* NovelManUITests */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -117,6 +162,7 @@
 			isa = PBXGroup;
 			children = (
 				13B07F961A680F5B00A75B9A /* NovelMan.app */,
+				CE8EC298BADE9ECDCCED7837 /* NovelManUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -145,6 +191,24 @@
 			productReference = 13B07F961A680F5B00A75B9A /* NovelMan.app */;
 			productType = "com.apple.product-type.application";
 		};
+		1DFC7E26472EFF546A25691F /* NovelManUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5FB7DACB189A1D5F8666D9E8 /* Build configuration list for PBXNativeTarget "NovelManUITests" */;
+			buildPhases = (
+				A1C19CB2AD0E0E1DF4F91BC1 /* Sources */,
+				3533428D29BCD8DD853F4A6C /* Frameworks */,
+				2964E54FB67AD538DCBF87D7 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B8A09C359AD0E5D467C9F918 /* PBXTargetDependency */,
+			);
+			name = NovelManUITests;
+			productName = NovelManUITests;
+			productReference = CE8EC298BADE9ECDCCED7837 /* NovelManUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -172,6 +236,7 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* NovelMan */,
+				1DFC7E26472EFF546A25691F /* NovelManUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -184,6 +249,13 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				678F3815DD8607A4FC538889 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2964E54FB67AD538DCBF87D7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -292,10 +364,28 @@
 				F11748502D0722820044C1DA /* ChineseVariant.m in Sources */,
 				F11748602D0722820044C1DB /* Dictionary.m in Sources */,
 				F11748702D0722820044C1DC /* Storefront.m in Sources */,
+				4AA59815BF31DE3DDFEBF71E /* TextOffset.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1C19CB2AD0E0E1DF4F91BC1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A90949233B49D23EB3995A2B /* SelectionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B8A09C359AD0E5D467C9F918 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = NovelMan;
+			target = 13B07F861A680F5B00A75B9A /* NovelMan */;
+			targetProxy = 9EDBF4F0BE7F62AC034D768C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
@@ -503,6 +593,39 @@
 			};
 			name = Release;
 		};
+		B0AD92E647B16F50C8D355E0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.novelman.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = NovelMan;
+			};
+			name = Debug;
+		};
+		B522F0C98FB7740B9575942D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.novelman.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = NovelMan;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -511,6 +634,15 @@
 			buildConfigurations = (
 				13B07F941A680F5B00A75B9A /* Debug */,
 				13B07F951A680F5B00A75B9A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5FB7DACB189A1D5F8666D9E8 /* Build configuration list for PBXNativeTarget "NovelManUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B522F0C98FB7740B9575942D /* Release */,
+				B0AD92E647B16F50C8D355E0 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

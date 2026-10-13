@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  NativeModules,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -106,6 +107,10 @@ function verseMarks(text: string, style: TextStyle): React.ReactNode {
 
 /** Drawn between two paragraphs sharing one selectable block. */
 const PARAGRAPH_BREAK = '\n\n';
+
+const { TextOffset } = NativeModules as {
+  TextOffset?: { at(x: number, y: number): Promise<number | null> };
+};
 
 /** Idle time before the bars go. Short, because touching a bar restarts it. */
 const CHROME_IDLE_MS = 1000;
@@ -237,6 +242,7 @@ export default function Reader() {
    * to re-render the whole chapter. Only where the finger settles is kept.
    */
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const freeInputs = useRef(new Set<TextInput>());
   const settleDragged = (found: Span | null) => {
     if (settleTimer.current) clearTimeout(settleTimer.current);
     settleTimer.current = setTimeout(() => {
@@ -508,7 +514,7 @@ export default function Reader() {
     return found?.number ?? null;
   }, [pages, offset]);
 
-  const { message: toast, flash } = useFlash();
+  const { message: toast, flash } = useFlash(2000);
 
   useEffect(() => {
     if (!id) return;
@@ -570,7 +576,26 @@ export default function Reader() {
   }
 
   /** One way out, so the mode and the selection never disagree. */
+  /**
+   * The highlight a tap landed in, whole, so it can be recoloured or removed
+   * without dragging out its exact ends.
+   */
+  async function markUnder(x: number, y: number, parts: { prefix: number; spans: Span[] }[]): Promise<Span | null> {
+    const drawn = await TextOffset?.at(x, y);
+    if (drawn == null) return null;
+    const at = documentRange(blockOrigins(parts, PARAGRAPH_BREAK.length, drawnOf), drawn, drawn + 1);
+    const mark = at && marks.find((entry) => entry.start <= at.start && at.start < entry.end);
+    return mark ? { start: mark.start, end: mark.end } : null;
+  }
+
   function endSelection() {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    // A dragged range lives in the TextInput too; left there, it settles
+    // straight back into `dragged` and the bar returns.
+    for (const input of freeInputs.current) {
+      input.setSelection(0, 0);
+      input.blur();
+    }
     setSelection(null);
     setDragged(null);
   }
@@ -742,6 +767,12 @@ export default function Reader() {
     }
     await refreshAnnotations();
     setNoteFor(null);
+    endSelection();
+  }
+
+  async function removeMark(markId: string) {
+    await removeAnnotation(markId);
+    await refreshAnnotations();
     endSelection();
   }
 
@@ -960,14 +991,25 @@ export default function Reader() {
           const start = tapStart.current;
           tapStart.current = null;
           if (!start || start.busy || Date.now() - start.at > 300) return;
-          const moved = Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y);
-          if (moved < 8) setChrome(!chromeShown.current);
+          const { pageX, pageY } = event.nativeEvent;
+          if (Math.hypot(pageX - start.x, pageY - start.y) >= 8) return;
+          void markUnder(pageX, pageY, parts).then((mark) => {
+            if (mark) setDragged(mark);
+            else setChrome(!chromeShown.current);
+          });
         }}
         onTouchCancel={() => {
           tapStart.current = null;
         }}
       >
         <TextInput
+          ref={(input) => {
+            if (!input) return;
+            freeInputs.current.add(input);
+            return () => {
+              freeInputs.current.delete(input);
+            };
+          }}
           editable={false}
           multiline
           scrollEnabled={false}
@@ -1459,6 +1501,16 @@ export default function Reader() {
           onDismiss={endSelection}
           actions={[
             { key: 'copy', label: t('reader.copy'), onPress: onCopy },
+            ...(selected
+              ? [
+                  {
+                    key: 'remove',
+                    label: t('reader.unhighlight'),
+                    // A note is the reader's own writing, so that one asks first.
+                    onPress: () => (selected.note ? confirmRemoveMark(range!) : void removeMark(selected.id)),
+                  },
+                ]
+              : []),
             {
               key: 'note',
               label: t('reader.note'),
