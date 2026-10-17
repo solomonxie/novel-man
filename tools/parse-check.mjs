@@ -15,7 +15,7 @@ const { base64, fromBase64 } = await import(join(build, 'import/base64.js'));
 const { fingerprintOf } = await import(join(build, 'storage/fingerprint.js'));
 const { pagesOf } = await import(join(build, 'structure/document.js'));
 const { normalize } = await import(join(build, 'import/normalize.js'));
-const { detectChapters } = await import(join(build, 'structure/detect.js'));
+const { detectChapters, withoutCaption } = await import(join(build, 'structure/detect.js'));
 const { detectLanguage, scriptOf, baseLanguage } = await import(join(build, 'text/language.js'));
 const { partsOf, salvageRows, meaningfulName } = await import(join(build, 'structure/document.js'));
 const { languageFrom, needsRelabel } = await import(join(build, 'books/language.js'));
@@ -167,6 +167,14 @@ console.log('docx');
                   { start: sentences[3].start, end: sentences[3].end, id: 'exact' }],
                  sentences[3]).id, 'exact');
   console.log(`  (${ms}ms)`);
+}
+
+console.log('illustrated headings');
+{
+  check('a plate caption before the label is dropped', withoutCaption('He rode a black horse. CHAPTER III.'), 'CHAPTER III.');
+  check('a quoted caption too', withoutCaption('“The obsequious civility.” CHAPTER LX.'), 'CHAPTER LX.');
+  check('a plain heading is kept', withoutCaption('Chapter I.'), 'Chapter I.');
+  check('a title that merely mentions a chapter is kept', withoutCaption('The Book of Days'), 'The Book of Days');
 }
 
 console.log('epub');

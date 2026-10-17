@@ -42,7 +42,14 @@ function fromHeadings(doc: NormalizedDocument): Start[] {
   const chapterLevel = Math.min(...levels);
   return doc.blocks
     .filter((block) => block.heading === chapterLevel)
-    .map((block) => ({ block, title: titleOf(doc, block) }));
+    .map((block) => ({ block, title: withoutCaption(titleOf(doc, block)) }));
+}
+
+/** An illustrated edition puts the plate's caption in the heading: "He rode a black horse. CHAPTER III." */
+const TRAILING_LABEL = /[.!?”"’]\s+((?:chapter|book|part)\s+(?:[0-9]+|[ivxlcdm]+)\.?)$/i;
+
+export function withoutCaption(title: string): string {
+  return TRAILING_LABEL.exec(title)?.[1] ?? title;
 }
 
 function fromPatterns(doc: NormalizedDocument, language: string): Start[] {
