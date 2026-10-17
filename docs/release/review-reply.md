@@ -1,6 +1,6 @@
 # Reply to App Review — 4.3 Spam / 4.2.6
 
-Rejection of 1.0 (2026-10), Guidelines 4.3(a), 4.3(b), 4.2.6. Sent in **Resolution Center** with the resubmission of the new build.
+Rejection of 1.0 (2026-10), Guidelines 4.3(a), 4.3(b), 4.2.6. Sent in **Resolution Center** with the resubmission of the new build, as two messages split before answer 3: a message is capped at 4,000 characters.
 
 ```
 Hello, and thank you for the review.
@@ -20,7 +20,7 @@ Novel Man reads the manuscript itself (.docx, .epub, .txt, .md or .pdf) and buil
 - It draws a relationship graph that can be filtered to a range of chapters, showing who is tied to whom at that point in the story.
 - It raises continuity flags ("grey eyes in chapter 3, green in chapter 20") for the author to review. It never changes the text.
 - It translates with a glossary the machine translation must follow, so a character's name is the same in chapter 1 and chapter 80. Corrections are kept and reused.
-- It exports the manuscript as a screenplay (.fountain or .fdx) for adaptation, and exports the cast as a character bible.
+- It exports the cast as a character bible and, with the user's own AI key, converts the manuscript into a screenplay (.fountain or .fdx) for adaptation.
 Reading and annotating are there because you check a manuscript by reading it, but the app is about the structure underneath the text.
 
 2. Intended users

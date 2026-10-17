@@ -33,5 +33,5 @@ Sign-in required: **off** (no account in the app).
 ## Per build: What to Test
 
 ```
-Tap Try a sample on the empty shelf. Open Characters, a profile and the relation graph; narrow the chapter range. Merge two chapters. Read a chapter, tap a sentence and add a note. Export to .epub and to .fountain. Report anything slow, wrong or confusing with a screenshot via TestFlight.
+Tap Try a sample on the empty shelf and wait a few seconds. Open Elizabeth Bennet under People, then All people: the continuity flags and the relationship graph; narrow the chapter range. Open Pemberley under Places. Tap the chapters count and merge two chapters. Read a chapter, tap a sentence and add a note. Report anything slow, wrong or confusing with a screenshot via TestFlight.
 ```
