@@ -27,7 +27,9 @@ const Stack = createNativeStackNavigator();
  * app against the wrong library for even one query is how a demo would write
  * into the real one.
  */
-export default function App({ screen }: { screen?: string }) {
+type ShotProps = { screen?: string; seed?: string; lang?: string };
+
+export default function App({ screen, seed, lang }: ShotProps) {
   const [library, setLibrary] = useState(false);
 
   useEffect(() => {
@@ -37,7 +39,7 @@ export default function App({ screen }: { screen?: string }) {
     // both need the real answer in place before anything else runs.
     loadStorefront()
       .then(() => Promise.all([loadDemoMode(), loadUiLanguage()]))
-      .then(() => (screen ? prepareScreenshots() : undefined))
+      .then(() => (screen ? prepareScreenshots(seed, lang) : undefined))
       .then(() => setLibrary(true));
   }, [screen]);
 

@@ -107,32 +107,20 @@ Fallback, Xcode GUI: open `ios/NovelMan.xcworkspace` → destination **Any iOS D
 Apple requires one set: **iPhone 6.9" Display**, exactly `1320 × 2868` (or `1290 × 2796`).
 App Store Connect scales it down for every smaller phone.
 
-Capture on the paired iPhone 14 (`1170 × 2532`) and let the script do the rest — the
-aspect ratios differ by 0.4%, which is invisible.
-
-The 2026-10-03 set (simulator, demo library) led with the shelf and the reader, which is how 1.0 got read as a generic reader (4.3). **Retake it on the phone, story-bible screens first.** English in `docs/release/screenshots/`, 简体中文 in `docs/release/screenshots/zh-Hans/`.
-
-1. `npm run ios` — a Release build, so no dev overlay. On an empty shelf, **Try a sample** (Pride and Prejudice), so every screen below has real content.
-2. Status bar: full battery, Wi-Fi, no notification banners. Side button + Volume Up per shot.
-3. Shots, in upload order (the first two are what people actually see), caption in brackets:
-   1. **Cast** — Elizabeth Bennet's profile: aliases, fields, mention timeline  [Every character, profiled from the text]
-   2. **Graph** — relation graph filtered to a chapter range  [Who is tied to whom, chapter by chapter]
-   3. **Continuity** — the flags list  [Catch the eye colour that changed in chapter 20]
-   4. **Structure** — detected chapters, merge/split in reach  [Chapters and scenes found for you]
-   5. **Places** — a place profile  [Places, with the chapters they appear in]
-   6. **Translation** — bilingual view, glossary term pinned  [Translation that keeps your names]
-   7. **Script** — the screenplay export sheet  [Adapt it: .fountain and .fdx]
-   8. **Book page** — the whole book on one page
-   9. **Reader** — one sentence tapped, the note row showing  [Read and annotate the draft]
-4. AirDrop to the Mac, e.g. `~/Desktop/shots/`, named `01-cast.png`, `02-graph.png` …, and a
-   `captions.txt` beside them (one line per shot, in order; zh-Hans set gets its own). Then:
+Captured by `ios/NovelManUITests/ScreenshotTests.swift` on an iPhone Pro Max simulator (native 1320 × 2868), never the phone. A SCREENSHOTS build opens each route on the sample book (Pride and Prejudice with its prepared analysis) in the demo library, English then 简体中文, and ends back on the real library.
 
 ```
-npm run screenshots ~/Desktop/shots
+xcrun simctl status_bar <udid> override --time 9:41 --batteryState charged --batteryLevel 100
+xcodebuild test -workspace ios/NovelMan.xcworkspace -scheme NovelMan -configuration Release \
+  -destination id=<udid> -only-testing:NovelManUITests/ScreenshotTests -resultBundlePath /tmp/shots.xcresult \
+  'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) SCREENSHOTS'
+xcrun xcresulttool export attachments --path /tmp/shots.xcresult --output-path /tmp/shots
 ```
 
-Each shot lands at 1320 × 2868 with its caption above it, in `docs/release/screenshots/`.
-Drag them into the 6.9" slot.
+Sort into `en/` and `zh/` as `01-cast.png` …, add a `captions.txt` to each (one line per shot), then
+`npm run screenshots /tmp/shots/en` and `scripts/store-screenshots.sh /tmp/shots/zh docs/release/screenshots/zh-Hans`.
+
+Order: cast profile, relationship graph, continuity, structure, place, book. No screenplay shot: conversion needs an AI key.
 
 App Preview video: skip for 1.0.
 
@@ -191,7 +179,7 @@ TRANSLATION THAT KEEPS YOUR NAMES
 • Fix a sentence and the fix is kept and reused
 
 ADAPT IT
-• Export the book as a screenplay, .fountain or .fdx
+• Turn the book into a screenplay, .fountain or .fdx, with your AI key
 • Export the cast as a character bible
 • Export the manuscript as .txt, .md, .docx, .epub, .html or .pdf
 
@@ -206,7 +194,7 @@ BACKUP
 • A plain .zip to iCloud Drive, a file, or a storage bucket you own. Restoring never overwrites anything
 
 OPTIONAL AI
-Bring your own API key from the provider you choose. It is used for character analysis, continuity checks, summaries and glossary-bound translation. The key stays in the device keychain, and every run shows its cost before it spends anything. Without a key the app still imports, structures, profiles by hand, reads and exports.
+Bring your own API key from the provider you choose. It is used for character analysis, continuity checks, summaries, glossary-bound translation and screenplay conversion. The key stays in the device keychain, and every run shows its cost before it spends anything. Without a key the app still imports, structures, profiles by hand, reads and exports.
 
 English and 简体中文.
 ```
@@ -223,14 +211,13 @@ App Review Notes:
 Novel Man turns a novel manuscript into a story bible: character and place profiles, a relationship graph, continuity flags, chapter structure and screenplay export. No account is needed.
 
 To see it in about a minute, without an AI key:
-1. On the empty shelf, tap "Try a sample". Pride and Prejudice downloads from Project Gutenberg (public domain), together with a prepared analysis.
-2. Open the book and tap Characters, then Elizabeth Bennet. You'll see her profile and per-chapter mention timeline, counted on the device.
-3. Back on the book, open the relationship graph and narrow the chapter range. The ties change with the story.
-4. Open Continuity for the flagged inconsistencies.
-5. Open Chapters and merge or split one. Corrections survive re-import.
-6. Export, then Screenplay (.fountain).
+1. On the empty shelf, tap "Try a sample". Pride and Prejudice downloads from Project Gutenberg (public domain), together with a prepared analysis. Wait a few seconds for it to finish.
+2. Open the book. Under People, tap Elizabeth Bennet: her profile, aliases and the chapters she appears in, counted on the device. Export on her profile writes a character bible.
+3. Back on the book, tap All people. The Continuity section lists the flagged inconsistencies; "Open the graph" shows the relationship graph. Drag the chapter range to see the ties at that point in the story.
+4. Back on the book, under Places, tap Pemberley: the chapters it appears in.
+5. On the book, tap the chapters count to open Structure. Merge or split a chapter; corrections survive a re-import of a later draft.
 
-Optional, and safe to skip: AI analysis and translation (needs the reviewer's own API key; off until one is added), iCloud backup, and backup to the user's own storage bucket.
+Optional, and safe to skip: AI analysis, translation and screenplay conversion (need the reviewer's own API key; off until one is added), iCloud backup, and backup to the user's own storage bucket.
 
 Third-party content: books come only from the user's own files or, on request, from public-domain catalogues (Project Gutenberg, Standard Ebooks, Open Library). Each states its terms in the app before anything is fetched. The only bundled content is the sample's prepared analysis.
 
@@ -367,7 +354,7 @@ Novel Man 读你的手稿，替你把设定集整理出来：书里有谁，在�
 你改过的句子会留下来，后面遇到类似的句子还会参考。
 
 【改编】
-整本书可以导成剧本，fountain 或 fdx 格式。
+填好 AI 密钥，整本书可以改写成剧本，fountain 或 fdx 格式。
 人物档案可以导成一份人物设定集。
 原稿可以导成 txt、md、docx、epub、html、pdf。
 
@@ -382,7 +369,7 @@ docx、epub、txt、md、pdf，从“文件”里选就行，iCloud 云盘和各
 备份就是一个普通的 zip，可以存到 iCloud 云盘、存成文件，或者传到你自己的存储桶。恢复时不会覆盖现有的内容。
 
 【AI，想用再开】
-用你自己选的服务商的密钥。可以做人物分析、一致性检查、章节总结，还有按术语表的翻译。密钥只存在手机钥匙串里，每次运行前会先告诉你大概要花多少钱。不填密钥，导入、分章、手动建档、阅读和导出都照常能用。
+用你自己选的服务商的密钥。可以做人物分析、一致性检查、章节总结、按术语表的翻译，还有改编剧本。密钥只存在手机钥匙串里，每次运行前会先告诉你大概要花多少钱。不填密钥，导入、分章、手动建档、阅读和导出都照常能用。
 
 简体中文和 English 都支持。
 ```

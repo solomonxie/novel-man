@@ -14,6 +14,7 @@
 		678F3815DD8607A4FC538889 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E555369B6D20C021B921C273 /* PrivacyInfo.xcprivacy */; };
 		A882F7F4E4CBE3E13246BE5E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A64D400D16922CF83CE82B5 /* Foundation.framework */; };
 		A90949233B49D23EB3995A2B /* SelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4205B2604961F1122A2BCC4 /* SelectionTests.swift */; };
+		A90949233B49D23EB3995A2C /* ScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4205B2604961F1122A2BCC5 /* ScreenshotTests.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		F11748502D0722820044C1DA /* ChineseVariant.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748512D0722820044C1DA /* ChineseVariant.m */; };
 		F11748602D0722820044C1DB /* Dictionary.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748612D0722820044C1DB /* Dictionary.m */; };
@@ -43,6 +44,7 @@
 		DEB0C0F160000000000000D1 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		DEB0C0F160000000000000D2 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		E4205B2604961F1122A2BCC4 /* SelectionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SelectionTests.swift; sourceTree = "<group>"; };
+		E4205B2604961F1122A2BCC5 /* ScreenshotTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScreenshotTests.swift; sourceTree = "<group>"; };
 		E555369B6D20C021B921C273 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = NovelMan/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = NovelMan/AppDelegate.swift; sourceTree = "<group>"; };
@@ -129,6 +131,7 @@
 		81C29C9C82D9EE2E1B204727 /* NovelManUITests */ = {
 			isa = PBXGroup;
 			children = (
+				E4205B2604961F1122A2BCC5 /* ScreenshotTests.swift */,
 				E4205B2604961F1122A2BCC4 /* SelectionTests.swift */,
 			);
 			name = NovelManUITests;
@@ -372,6 +375,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A90949233B49D23EB3995A2C /* ScreenshotTests.swift in Sources */,
 				A90949233B49D23EB3995A2B /* SelectionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

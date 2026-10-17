@@ -64,7 +64,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
   private func screenshotProps() -> [AnyHashable: Any]? {
     #if SCREENSHOTS
-    return UserDefaults.standard.string(forKey: "screen").map { ["screen": $0] }
+    let defaults = UserDefaults.standard
+    guard let screen = defaults.string(forKey: "screen") else { return nil }
+    var props: [AnyHashable: Any] = ["screen": screen]
+    for key in ["seed", "lang"] { props[key] = defaults.string(forKey: key) }
+    return props
     #else
     return nil
     #endif
