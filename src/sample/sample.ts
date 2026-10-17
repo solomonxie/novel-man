@@ -4,6 +4,7 @@ import { kindFromSource } from '../sources/registry';
 import { enqueueGutenberg, subscribeToQueue } from '../import/queue';
 import {
   addFlags,
+  addObservation,
   findOrCreateEntity,
   getDocumentText,
   listChapters,
@@ -28,7 +29,7 @@ import {
  * The text comes from Gutenberg like any other; what a cast pass would have
  * found is applied once the import lands, and the counts are the device's own.
  */
-export async function addSampleBook(): Promise<string> {
+export async function addSampleBook(onAnalysed?: (bookId: string) => void): Promise<string> {
   const kind = kindFromSource('gutenberg');
   const id = await keepByHand({ title: SAMPLE_GUTENBERG.title, author: 'Jane Austen', kind });
   const job = enqueueGutenberg(SAMPLE_GUTENBERG, kind, id);
@@ -40,7 +41,8 @@ export async function addSampleBook(): Promise<string> {
     }
     if (mine.status !== 'done' || !mine.bookId) return;
     stop();
-    void applySampleAnalysis(mine.bookId);
+    const bookId = mine.bookId;
+    void applySampleAnalysis(bookId).then(() => onAnalysed?.(bookId));
   });
   return `/book/${id}`;
 }
@@ -79,6 +81,12 @@ export async function applySampleAnalysis(bookId: string) {
   for (const mention of mentions) {
     if (!seenIn.has(mention.entity_id)) seenIn.set(mention.entity_id, new Set());
     seenIn.get(mention.entity_id)!.add(mention.chapter_idx);
+  }
+  // A place's chapters are the ones a pass would have recorded it in.
+  for (const place of places) {
+    for (const chapter_idx of seenIn.get(place.id) ?? []) {
+      await addObservation({ book_id: bookId, entity_id: place.id, chapter_idx, appearance: null, voice: null, note: null });
+    }
   }
   const shared = (a: string, b: string) =>
     [...(seenIn.get(a) ?? [])].filter((idx) => seenIn.get(b)?.has(idx)).sort((x, y) => x - y);
