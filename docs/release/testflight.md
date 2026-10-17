@@ -7,37 +7,28 @@ App Store Connect → TestFlight → External Testing → **+** group → add th
 Beta App Description (≤4000):
 
 ```
-Novel Man turns a novel manuscript into a story bible: characters, places, relationships, structure and continuity. Import .txt, .md, .docx, .epub or .pdf from Files, "Open in…" or a link; read with sentence-tap highlights, notes and bookmarks; let it detect chapters and scenes, and build character and place profiles, mention timelines, a relation graph and continuity flags.
+Novel Man turns a novel manuscript into a story bible: characters, places, relationships, chapter structure and continuity, found in the text and kept in step with each new draft.
 
-No account. The shelf starts empty: Add → Project Gutenberg downloads a public-domain book in seconds, or turn on Settings → Demo library → Demo mode for a made-up sample library (your own library untouched).
+No account. On the empty shelf, "Try a sample" downloads Pride and Prejudice from Project Gutenberg with a prepared analysis, so the cast, graph and continuity screens have content without an AI key. Or import your own .docx, .epub, .txt, .md or .pdf.
 
 What's in this beta:
-• Import and reader
-• Chapter / scene detection with rename, merge, split
-• Characters, places, timelines, relation graph, continuity flags
-• Search public sources: Project Gutenberg, Standard Ebooks, Open Library
-• Export to many formats including screenplay (.fountain / .fdx)
-• Backup to iCloud, a file or your own S3 bucket
-• Optional AI translation and analysis with your own API key
-• English and 中文
+• Character and place profiles with per-chapter mention timelines
+• A relationship graph filtered by chapter range
+• Continuity flags
+• Chapter and scene detection with rename, merge and split that survive re-import
+• Glossary-bound translation and screenplay export (.fountain / .fdx)
+• Read and annotate the draft: highlights, notes, bookmarks
+• Backup to iCloud, a file or your own storage bucket
+• Optional AI analysis with your own API key
+• English and 简体中文
 ```
 
-Feedback Email: `you@example.com`
-
-## Contact Information
-
-| Field | Value |
-|---|---|
-| First Name | TODO |
-| Last Name | TODO |
-| Phone number | TODO — yours, with country code (`+1 …`) |
-| Email | `you@example.com` |
+Feedback Email, contact: same as the App Review contact in App Store Connect (not kept in this public repo).
+Privacy Policy URL: as in [listing.md](listing.md).
 
 ## Sign-In Information
 
-Sign-in required: **off** (no account in the app). Leave User Name / Password blank.
-
-Review Notes: paste the App Review Notes block from [listing.md](listing.md) if present.
+Sign-in required: **off** (no account in the app).
 
 ## Per build: What to Test
 

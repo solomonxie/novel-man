@@ -1,8 +1,6 @@
 # Reply to App Review — 4.3 Spam / 4.2.6
 
-Rejection of 1.0 (2026-10), Guidelines 4.3(a), 4.3(b), 4.2.6. Paste into **Resolution Center** when the new build is attached and resubmitted. Write it in your own voice before sending; edit anything below that isn't accurate.
-
-Confirm before sending: Q5–7 assume Novel Man is the only app on the account. If a separate China record was ever created, remove it from sale first and say so in Q7.
+Rejection of 1.0 (2026-10), Guidelines 4.3(a), 4.3(b), 4.2.6. Sent in **Resolution Center** with the resubmission of the new build.
 
 ```
 Hello, and thank you for the review.
@@ -45,16 +43,15 @@ There was no external TestFlight group before the first submission. The develope
 - Search scanned 78,000 catalogue rows before the user had typed anything, which made the page slow to open. It now waits for a query.
 - Moving through a long book with the scroll bar was hard to see and use. The scroll bar was redrawn.
 - On iPadOS 27 the app crashed at launch in compatibility mode. It now uses the scene lifecycle.
-[Add here any external TestFlight feedback gathered before resubmitting.]
 
 5. Standalone or part of a suite
-Standalone. It is the only app on this developer account.
+Standalone. The other apps on this developer account are unrelated products in other categories: a podcast player, a budgeting app, a photo vault, a photo editor, a world clock, a workout tracker, an anatomy viewer, a life planner, a family tree, a TV and film tracker, a VPN tool, a cloud console, and two simulators (system design and electronics). None of them reads, structures or analyses books or manuscripts. Novel Man is the only writing or book app on the account.
 
 6. Could it be an in-app purchase or addition to another app on the account?
-No. There is no other app on this developer account.
+No. No other app on the account works with long-form text. Manuscript import, chapter detection, character and place profiles, the relationship graph, continuity flags, glossary-bound translation and screenplay export would have no natural home in any of them.
 
 7. Shared code, frameworks or assets with other apps on the account
-None. There are no other apps on the account. The one binary serves every storefront. In mainland China it offers only AI providers that are filed there and no scripture content, decided at runtime from the StoreKit storefront. There is no second app or variant.
+No. Novel Man is its own codebase. Apart from standard open-source frameworks (React Native, Hermes, SQLite), no source file, module, asset or design is shared with another app on the account. Small generic helpers, such as a hash routine for signing storage requests, were written separately for each app that needs one. The one binary serves every storefront: in mainland China it offers only AI providers that are filed there and no scripture content, decided at runtime from the StoreKit storefront. There is no second app or variant.
 
 8. Shared codebase, SDK or content library with third-party apps
 No. The app is written from scratch for this product. It uses only standard open-source frameworks (React Native, Hermes, SQLite through op-sqlite) and no app template, white-label kit or app-generation service. Book text comes only from the user's own files or, when the user searches for it, from public-domain catalogues such as Project Gutenberg. Nothing is bundled except a small prepared analysis for the sample book.
