@@ -529,7 +529,8 @@
     "deleteSelectedConfirm": "删除这 {{count}} 条标注？书中的文字不受影响。",
     "inBook": "在书中",
     "emptyRecord": "还没有笔记。点 ＋ 写一条关于这本书的。",
-    "aboutTheBook": "关于这本书"
+    "aboutTheBook": "关于这本书",
+    "onVersion": "写于 {{version}} {{reading}}"
   },
   "structure": {
     "deleteWhere": "本章的文字会并入相邻的一章，并入哪一章？",
@@ -946,7 +947,13 @@
     "terms": "术语",
     "noTerms": "本章没有识别到术语。",
     "note": "写一条笔记",
-    "noNotes": "这一章还没有笔记。"
+    "noNotes": "这一章还没有笔记。",
+    "versions": "版本",
+    "versionDetail": "{{date}} · {{count}} 字符",
+    "reading": "正在读",
+    "switchTitle": "改读版本 {{n}}？",
+    "switchBody": "此后这一章按这个版本显示。你现在读的版本会保留，上面的笔记也会保留。",
+    "switch": "切换"
   },
   "part": {
     "read": "从这里开始读 →",
@@ -1436,5 +1443,37 @@
   "language": {
     "fixedTitle": "已更正 {{count}} 本书的语言",
     "fixedWhat": "这些书的书目信息是用拉丁拼音返回的，所以被标成了英文——而所有 AI 结果都会按这个语言回答。现在它们的语言是对的了。\n\n{{titles}}"
+  },
+  "merge": {
+    "title": "合并副本",
+    "gone": "这次合并已不在等待中：已经作答，或导入已停止。",
+    "from": "来自 {{file}}",
+    "tally": "{{same}} 章未变 · {{added}} 章新增 · {{changed}} 章有改动 · {{kept}} 章仅你有",
+    "safe": "你的内容一样都不会删除。有改动的章节会把两种文字都保留为版本；你选择读哪一个，之后也能在章节页切换。",
+    "allMine": "全部保留我的",
+    "allTheirs": "全部用新的",
+    "unchanged": "{{count}} 章未变",
+    "added": "新章节 · {{count}} 字符",
+    "kept": "仅你有 · 保留",
+    "changed": "有改动 · 你的 {{mine}}，新的 {{theirs}} 字符 · 请选择",
+    "usingMine": "读你的 · 新的保留为版本",
+    "usingTheirs": "读新的 · 你的保留为版本",
+    "mine": "我的",
+    "theirs": "新的",
+    "showDiff": "显示差异",
+    "hideDiff": "隐藏差异",
+    "sameParagraphs": "… {{count}} 段未变 …",
+    "moreChanges": "… 还有 {{count}} 处",
+    "cancel": "取消",
+    "apply": "合并",
+    "left": "还有 {{count}} 章待选",
+    "sameTitle": "书架上已有这本书",
+    "sameBody": "这个文件看起来是《{{title}}》{{author}}。作为一本新书加入，还是合并进那本？",
+    "asNew": "新书",
+    "intoExisting": "合并",
+    "waiting": "有些章节和书架上的版本不同。",
+    "review": "查看改动",
+    "anotherCopy": "合并另一个副本…",
+    "anotherCopyWhy": "这本书的另一个文件，逐章对齐。新章节会加入；有改动的章节两种文字都保留。"
   }
 }

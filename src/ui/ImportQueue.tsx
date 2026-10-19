@@ -12,7 +12,8 @@ import { useTranslation } from 'react-i18next';
 import { useSheetMount } from './sheet';
 import type { TFunction } from 'i18next';
 
-import { answerPreview, clearFinished, retryJob, type ImportJob } from '../import/queue';
+import { answerPreview, answerSame, clearFinished, retryJob, type ImportJob } from '../import/queue';
+import { router } from '../navigation/router';
 import { ImportError } from '../import/pipeline';
 import { StandardEbooksError } from '../sources/standardEbooks';
 import { RepoError } from '../sources/repoBible';
@@ -162,6 +163,50 @@ export function JobRow({ job }: { job: ImportJob }) {
 export function JobPreview({ job }: { job: ImportJob }) {
   const { t } = useTranslation();
   const palette = usePalette();
+  if (job.same) {
+    return (
+      <View style={[styles.preview, { borderColor: palette.border, backgroundColor: palette.surface }]}>
+        <Text style={{ color: palette.text, fontSize: 14, fontWeight: '600' }}>
+          {t('merge.sameTitle')}
+        </Text>
+        <Text style={{ color: palette.dim, fontSize: 13, marginTop: 2 }}>
+          {t('merge.sameBody', {
+            title: job.same.title,
+            author: job.same.author ? ` · ${job.same.author}` : '',
+          })}
+        </Text>
+        <View style={styles.previewActions}>
+          <Pressable onPress={() => answerSame(job.id, null)} hitSlop={8}>
+            <Text style={{ color: palette.danger, fontSize: 15 }}>{t('import.discard')}</Text>
+          </Pressable>
+          <Pressable onPress={() => answerSame(job.id, 'new')} hitSlop={8}>
+            <Text style={{ color: palette.accent, fontSize: 15 }}>{t('merge.asNew')}</Text>
+          </Pressable>
+          <Pressable onPress={() => answerSame(job.id, 'merge')} hitSlop={8}>
+            <Text style={{ color: palette.accent, fontSize: 15, fontWeight: '600' }}>
+              {t('merge.intoExisting')}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+  if (job.merging) {
+    return (
+      <View style={[styles.preview, { borderColor: palette.border, backgroundColor: palette.surface }]}>
+        <Text style={{ color: palette.text, fontSize: 14, fontWeight: '600' }}>
+          {t('merge.waiting')}
+        </Text>
+        <View style={styles.previewActions}>
+          <Pressable onPress={() => router.push(`/merge/${job.id}`)} hitSlop={8}>
+            <Text style={{ color: palette.accent, fontSize: 15, fontWeight: '600' }}>
+              {t('merge.review')}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
   if (!job.preview) return null;
   return (
     <View style={[styles.preview, { borderColor: palette.border, backgroundColor: palette.surface }]}>

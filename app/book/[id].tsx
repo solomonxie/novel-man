@@ -1275,6 +1275,15 @@ export default function BookPage() {
               onPress={openOutline}
             />
           </>
+        ) : !book.text_source ? (
+          // Another copy of a book that already has words: lined up against
+          // these chapter by chapter, never written over them.
+          <Row
+            label={t('merge.anotherCopy')}
+            detail={t('merge.anotherCopyWhy')}
+            value="›"
+            onPress={() => void attachFile()}
+          />
         ) : null}
         <Row
           label={t('book.kindRow')}

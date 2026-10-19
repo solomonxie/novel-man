@@ -11,6 +11,7 @@ android/
 *.log
 .DS_Store
 .parse-check/
+.merge-check/
 
 # Apple Team ID and bundle id, kept out of a public repo
 ios/Local.xcconfig

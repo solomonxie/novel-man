@@ -72,6 +72,8 @@ export type Chapter = {
   /** The level above, for kinds that have one: a bible's book, a novel's 卷. */
   part_idx: number | null;
   part_title: string | null;
+  /** Which of its kept wordings it reads as now. Null until it has more than one. */
+  version: string | null;
 };
 
 /**
@@ -131,6 +133,8 @@ export type Annotation = {
   suffix: string;
   /** A note about the book rather than about a sentence in it: nothing quoted. */
   standalone: number;
+  /** The wording of its chapter it was written on, once that chapter has more than one. */
+  version: string | null;
   created_at: number;
 };
 
@@ -663,6 +667,7 @@ export type ChapterInsert = {
   /** The level above: a bible's book, a novel's 卷. Null for books without one. */
   part_idx?: number | null;
   part_title?: string | null;
+  version?: string | null;
 };
 
 async function insertChapters(
@@ -677,12 +682,13 @@ async function insertChapters(
     const rows = slice.map((chapter, offset) => {
       values.push(ids[from + offset], bookId, from + offset, chapter.title, chapter.start,
         chapter.end, chapter.confident ? 1 : 0, chapter.userEdited ? 1 : 0, chapter.brief ?? null,
-        chapter.part_idx ?? null, chapter.part_title ?? null, chapter.recap ?? null);
-      return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        chapter.part_idx ?? null, chapter.part_title ?? null, chapter.recap ?? null,
+        chapter.version ?? null);
+      return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
     });
     await database.runAsync(
       `INSERT INTO chapters (id, book_id, idx, title, start, end, confident, user_edited, brief,
-                             part_idx, part_title, recap)
+                             part_idx, part_title, recap, version)
        VALUES ${rows.join(', ')}`,
       values
     );
@@ -1326,10 +1332,18 @@ export async function addAnnotation(input: {
 }) {
   const database = await db();
   const id = newId();
+  const version = input.chapterId
+    ? await database.getFirstAsync<{ version: string | null }>(
+        'SELECT version FROM chapters WHERE id = ?', input.chapterId)
+    : input.standalone
+      ? null
+      : await database.getFirstAsync<{ version: string | null }>(
+          'SELECT version FROM chapters WHERE book_id = ? AND start <= ? AND end > ? LIMIT 1',
+          input.bookId, input.start, input.start);
   await database.runAsync(
     `INSERT INTO annotations (id, book_id, chapter_id, kind, color, start, end, quote, note,
-                             prefix, suffix, standalone, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                             prefix, suffix, standalone, version, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.bookId,
     input.chapterId ?? null,
@@ -1342,6 +1356,7 @@ export async function addAnnotation(input: {
     input.prefix,
     input.suffix,
     input.standalone ? 1 : 0,
+    version?.version ?? null,
     Date.now()
   );
   return id;
@@ -1636,12 +1651,15 @@ export async function setSceneBreaks(
 export async function replaceChapters(bookId: string, drafts: ChapterInsert[]) {
   const database = await db();
   await transaction(async () => {
+    const before = await database.getAllAsync<{ id: string; start: number; version: string | null }>(
+      'SELECT id, start, version FROM chapters WHERE book_id = ?', bookId);
     await database.runAsync('DELETE FROM scenes WHERE book_id = ?', bookId);
     await database.runAsync('DELETE FROM chapters WHERE book_id = ?', bookId);
     // Restructuring changes where chapters begin, so the old scene offsets are
     // meaningless — and nothing takes their place, because scenes are marked or
     // analyzed, never inferred from the text.
     await insertChapters(database, bookId, drafts);
+    await rehomeVersions(database, bookId, before);
     // A translated sentence knows where in the manuscript it is; which chapter
     // that is was written down beside it, and restructuring renumbers the
     // chapters underneath it. Left alone, a split three chapters back moves
@@ -1652,8 +1670,35 @@ export async function replaceChapters(bookId: string, drafts: ChapterInsert[]) {
   });
 }
 
+/**
+ * Kept wordings follow the chapter that now holds where theirs began. A chapter
+ * that starts where it did still reads as the version it did.
+ */
+async function rehomeVersions(
+  database: Database,
+  bookId: string,
+  before: { id: string; start: number; version: string | null }[]
+) {
+  for (const old of before) {
+    await database.runAsync(
+      `UPDATE OR IGNORE chapter_versions SET chapter_id = COALESCE((
+         SELECT c.id FROM chapters c
+          WHERE c.book_id = ? AND c.start <= ? AND c.end > ? LIMIT 1
+       ), chapter_id)
+       WHERE chapter_id = ?`,
+      bookId, old.start, old.start, old.id
+    );
+    if (old.version) {
+      await database.runAsync(
+        'UPDATE chapters SET version = ? WHERE book_id = ? AND start = ? AND version IS NULL',
+        old.version, bookId, old.start
+      );
+    }
+  }
+}
+
 /** Sentences find their chapter again by the offsets they never lost. */
-async function reindexByOffset(database: Database, bookId: string) {
+export async function reindexByOffset(database: Database, bookId: string) {
   await database.runAsync(
     `UPDATE translation_units SET chapter_idx = (
        SELECT c.idx FROM chapters c
@@ -1730,6 +1775,9 @@ export const CARRIED_TABLES = [
   // cannot be made again from the book itself — a chapter can be re-analysed,
   // a translation re-run, but nobody can recover the Sunday they finished it.
   'reading_events',
+  // Every wording a chapter has been held in. The one being read is in the
+  // manuscript too; the others exist nowhere else.
+  'chapter_versions',
 ] as const;
 
 export type CarriedRows = Record<string, Record<string, unknown>[]>;
@@ -1902,6 +1950,7 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
         userEdited: !!chapter.user_edited,
         brief: chapter.brief,
         recap: chapter.recap,
+        version: chapter.version ?? null,
       }))
     );
     record.chapters.forEach((chapter, index) => {
@@ -1916,8 +1965,8 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
     for (const annotation of record.annotations) {
       await database.runAsync(
         `INSERT INTO annotations (id, book_id, chapter_id, kind, color, start, end, quote, note,
-                                  prefix, suffix, standalone, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                  prefix, suffix, standalone, version, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         // Which chapter the mark is in, through the same remap every other
         // reference gets. Dropped here until now, and only a fetched edition
         // ever felt it: a bible's chapters each start at offset zero, so a
@@ -1926,7 +1975,7 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
         annotation.chapter_id ? chapterMap.get(annotation.chapter_id) ?? null : null,
         annotation.kind, annotation.color, annotation.start, annotation.end,
         annotation.quote, annotation.note, annotation.prefix ?? '', annotation.suffix ?? '',
-        annotation.standalone ?? 0, annotation.created_at
+        annotation.standalone ?? 0, annotation.version ?? null, annotation.created_at
       );
     }
     for (const entity of record.entities) {
@@ -2010,6 +2059,7 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
         userEdited: !!chapter.user_edited,
         brief: chapter.brief,
         recap: chapter.recap,
+        version: chapter.version ?? null,
       }))
     );
     record.chapters.forEach((chapter, index) => {
@@ -2024,11 +2074,11 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
     for (const annotation of record.annotations) {
       await database.runAsync(
         `INSERT INTO annotations (id, book_id, kind, color, start, end, quote, note, prefix, suffix,
-                                  standalone, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                  standalone, version, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         newId(), bookId, annotation.kind, annotation.color, annotation.start, annotation.end,
         annotation.quote, annotation.note, annotation.prefix ?? '', annotation.suffix ?? '',
-        annotation.standalone ?? 0, annotation.created_at
+        annotation.standalone ?? 0, annotation.version ?? null, annotation.created_at
       );
     }
     for (const entity of record.entities) {

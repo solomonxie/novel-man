@@ -21,7 +21,15 @@ import {
 import { standardEbooksEmail } from '../sources/standardEbooksEmail';
 import { fetchManuscript, FetchError } from './sources/url';
 import { saveDownload } from './sources/downloads';
-import { ImportError, importFile, type ImportPreview, type ImportProgress } from './pipeline';
+import {
+  ImportError,
+  importFile,
+  type MergeAnswer,
+  type MergeProposal,
+  type ImportPreview,
+  type ImportProgress,
+  type SameBook,
+} from './pipeline';
 
 export type JobStatus = 'pending' | 'running' | 'awaiting' | 'done' | 'failed';
 
@@ -36,6 +44,10 @@ export type ImportJob = {
   /** What a job that produced no book has to show for itself: rows kept. */
   kept?: number;
   preview?: ImportPreview;
+  /** Waiting to hear whether this file is another copy of a book on the shelf. */
+  same?: SameBook;
+  /** Waiting on the reader to go through the chapters that differ. */
+  merging?: boolean;
   error?: unknown;
 };
 
@@ -47,7 +59,7 @@ type Listener = (jobs: ImportJob[]) => void;
  * is only who produces the book at the end of it.
  */
 export type QueuedSource =
-  | { via: 'file'; uri: string; name: string; kind?: string; into?: string }
+  | { via: 'file'; uri: string; name: string; kind?: string; into?: string; match?: boolean }
   | { via: 'ebible'; translation: Translation; apocrypha: boolean }
   | { via: 'repo'; edition: RepoEdition }
   | { via: 'gutenberg'; book: GutenbergBook; kind?: string; into?: string }
@@ -61,7 +73,8 @@ export type CatalogSource = 'ebible' | 'gutenberg' | 'standardebooks';
 
 const jobs: ImportJob[] = [];
 const sources = new Map<string, QueuedSource>();
-const gates = new Map<string, (accepted: boolean) => void>();
+const gates = new Map<string, (answer: never) => void>();
+const proposals = new Map<string, MergeProposal>();
 const listeners = new Set<Listener>();
 let running = false;
 
@@ -85,10 +98,28 @@ export function activeCount(): number {
  * behind their back, and the answer is one tap away in the visible strip.
  */
 export function answerPreview(id: string, accepted: boolean) {
-  const gate = gates.get(id);
+  answer(id, accepted);
+}
+
+/** Another copy of a book already here: a book of its own, or folded into that one. */
+export function answerSame(id: string, choice: 'new' | 'merge' | null) {
+  answer(id, choice);
+}
+
+/** What the merge page holds while the reader goes through it. */
+export function proposalFor(id: string): MergeProposal | null {
+  return proposals.get(id) ?? null;
+}
+
+export function answerMerge(id: string, choice: MergeAnswer | null) {
+  answer(id, choice);
+}
+
+function answer(id: string, value: unknown) {
+  const gate = gates.get(id) as ((value: unknown) => void) | undefined;
   if (!gate) return;
   gates.delete(id);
-  gate(accepted);
+  gate(value);
 }
 
 /**
@@ -101,6 +132,8 @@ export function enqueueImport(input: {
   name: string;
   kind?: string;
   into?: string;
+  /** From the search page: ask whether it is a copy of a book already here. */
+  match?: boolean;
 }): string {
   return enqueue({ ...input, via: 'file' }, input.name);
 }
@@ -200,7 +233,10 @@ async function drain() {
       } catch (error) {
         job.status = 'failed';
         job.error = error;
+        job.same = undefined;
+        job.merging = undefined;
         gates.delete(job.id);
+        proposals.delete(job.id);
       }
       publish();
     }
@@ -338,7 +374,23 @@ async function runJob(job: ImportJob, source: QueuedSource): Promise<Produced> {
 type Produced = { bookId?: string; chapters?: number; kept?: number };
 
 /** Every path ends here: a file on disk, the preview gate, the same stages. */
-function importFrom(file: { uri: string; name: string; kind?: string; into?: string }, job: ImportJob) {
+function importFrom(
+  file: { uri: string; name: string; kind?: string; into?: string; match?: boolean },
+  job: ImportJob
+) {
+  /** The job stops and waits; whoever answers lets it go on. */
+  const wait = <T,>(before: () => void, after: () => void) =>
+    new Promise<T>((resolve) => {
+      job.status = 'awaiting';
+      before();
+      publish();
+      gates.set(job.id, ((value: T) => {
+        job.status = 'running';
+        after();
+        publish();
+        resolve(value);
+      }) as (answer: never) => void);
+    });
   return importFile(
     file,
     (progress) => {
@@ -351,13 +403,31 @@ function importFrom(file: { uri: string; name: string; kind?: string; into?: str
         job.status = 'awaiting';
         job.preview = preview;
         publish();
-        gates.set(job.id, (accepted) => {
+        gates.set(job.id, ((accepted: boolean) => {
           job.status = 'running';
           job.preview = undefined;
           publish();
           resolve(accepted);
-        });
-      })
+        }) as (answer: never) => void);
+      }),
+    {
+      same: (book) =>
+        wait<'new' | 'merge' | null>(
+          () => (job.same = book),
+          () => (job.same = undefined)
+        ),
+      merge: (proposal) =>
+        wait<MergeAnswer | null>(
+          () => {
+            job.merging = true;
+            proposals.set(job.id, proposal);
+          },
+          () => {
+            job.merging = undefined;
+            proposals.delete(job.id);
+          }
+        ),
+    }
   );
 }
 

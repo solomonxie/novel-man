@@ -32,6 +32,11 @@ export default function JobPage() {
     if (job?.status === 'done' && job.bookId) router.replace(`/book/${job.bookId}`);
   }, [job?.status, job?.bookId]);
 
+  // Two copies of one book are gone through on a page of their own.
+  useEffect(() => {
+    if (job?.merging) router.push(`/merge/${job.id}`);
+  }, [job?.merging, job?.id]);
+
   if (!job) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.bg }}>

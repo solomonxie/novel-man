@@ -13,7 +13,8 @@
     "check:i18n": "node tools/check-i18n.mjs",
     "check:hooks": "node tools/check-hooks.mjs",
     "check:runtime": "node tools/check-runtime.mjs",
-    "check": "npm run typecheck && npm run check:parse && npm run check:i18n && npm run check:hooks && npm run check:runtime"
+    "check:merge": "tsc --ignoreConfig src/db/versions.ts --outDir .merge-check --module commonjs --target es2022 --skipLibCheck --esModuleInterop && node --no-warnings tools/check-merge.cjs .merge-check",
+    "check": "npm run typecheck && npm run check:parse && npm run check:i18n && npm run check:hooks && npm run check:runtime && npm run check:merge"
   },
   "dependencies": {
     "@op-engineering/op-sqlite": "^18.2.4",

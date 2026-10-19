@@ -1,6 +1,8 @@
 import { yieldToUI } from '../async/yield';
 import { adoptSourceFile, extensionOf, writeImage } from '../storage/files';
-import { replacePages, saveImportedBook, setOrigin } from '../db/repo';
+import { findBookNamed, getBook, replacePages, saveImportedBook, setOrigin } from '../db/repo';
+import { bookWithSource, chapterBodies, hintsIn, mergeInto, type Decision, type Incoming } from '../db/versions';
+import { alignChapters, type Step } from '../structure/merge';
 import { applyToImport } from '../backup/pending';
 import { detectChapters } from '../structure/detect';
 import { hintsOf, pagesOf } from '../structure/document';
@@ -34,6 +36,28 @@ export type ImportPreview = {
 
 export type ImportResult = { bookId: string; chapters: number; confident: boolean };
 
+/** The book on the shelf a file looks like a copy of. */
+export type SameBook = { id: string; title: string; author: string | null };
+
+/** Both copies, lined up, for the reader to decide between. */
+export type MergeProposal = {
+  bookId: string;
+  title: string;
+  fileName: string;
+  base: { id: string; title: string; text: string }[];
+  incoming: Incoming[];
+  steps: Step[];
+};
+
+/** Per step: which wording a changed chapter reads as, and which new ones to leave out. */
+export type MergeAnswer = { decisions: Record<number, Decision>; skipped: number[] };
+
+/** Questions only the reader can answer, asked while the job waits. Null backs out. */
+export type ImportAsk = {
+  same?: (book: SameBook) => Promise<'new' | 'merge' | null>;
+  merge?: (proposal: MergeProposal) => Promise<MergeAnswer | null>;
+};
+
 /** Rough share of total time per stage, measured on a 3.4MB / 509-chapter docx. */
 const WEIGHTS: Record<ImportStage, [number, number]> = {
   reading: [0, 0.12],
@@ -44,9 +68,10 @@ const WEIGHTS: Record<ImportStage, [number, number]> = {
 
 export async function importFile(
   /** `into` lands the words on a book already on the shelf — see `saveImportedBook`. */
-  input: { uri: string; name: string; kind?: string; into?: string },
+  input: { uri: string; name: string; kind?: string; into?: string; match?: boolean },
   onProgress?: (progress: ImportProgress) => void,
-  confirm?: (preview: ImportPreview) => Promise<boolean>
+  confirm?: (preview: ImportPreview) => Promise<boolean>,
+  ask?: ImportAsk
 ): Promise<ImportResult> {
   const extension = extensionOf(input.name);
   const importer = importerFor(extension);
@@ -118,11 +143,63 @@ export async function importFile(
     if (!accepted) throw new ImportError('rejected', input.name);
   }
 
+  const title = parsed.title?.trim() || input.name.replace(/\.[^.]+$/, '');
+  let into = input.into;
+  // Picked from the search page, where it is not yet anybody's: if the shelf
+  // already has this book, the reader says whether this is another copy of it.
+  if (!into && input.match && ask?.same) {
+    const found = (await findBookNamed(title, parsed.author)) ?? (await bookWithSource(stored.hash));
+    // A fetched edition has no manuscript of its own to fold a file into.
+    if (found && !(await getBook(found.id))?.text_source) {
+      const answer = await ask.same({ id: found.id, title: found.title, author: found.author });
+      if (!answer) throw new ImportError('rejected', input.name);
+      if (answer === 'merge') into = found.id;
+    }
+  }
+
+  // A book that already has words is never overwritten: the file is lined up
+  // against it and folded in, chapter by chapter, keeping every wording.
+  const target = into ? await getBook(into) : null;
+  if (into && target && !target.text_source && target.char_count > 0 && ask?.merge) {
+    const base = await chapterBodies(into);
+    if (base.length) {
+      const docHints = hintsOf(doc);
+      const incoming: Incoming[] = detection.chapters.map((chapter) => ({
+        title: chapter.title,
+        text: doc.text.slice(chapter.start, chapter.end).trimEnd(),
+        hints: hintsIn(docHints, chapter.start, chapter.end),
+      }));
+      const steps = alignChapters(base, incoming);
+      await yieldToUI();
+      const answer = await ask.merge({
+        bookId: into,
+        title: target.title,
+        fileName: input.name,
+        base: base.map((body) => ({ id: body.chapter.id, title: body.title, text: body.text })),
+        incoming,
+        steps,
+      });
+      if (!answer) throw new ImportError('rejected', input.name);
+      report('saving');
+      await mergeInto(
+        into,
+        steps,
+        incoming,
+        (index) => answer.decisions[index] ?? 'mine',
+        (index) => !answer.skipped.includes(index),
+        input.name
+      );
+      report('saving', 1);
+      const added = steps.filter((step, index) => step.kind === 'added' && !answer.skipped.includes(index));
+      return { bookId: into, chapters: base.length + added.length, confident: true };
+    }
+  }
+
   report('saving');
   const bookId = await saveImportedBook({
-    into: input.into,
+    into,
     book: {
-      title: parsed.title?.trim() || input.name.replace(/\.[^.]+$/, ''),
+      title,
       author: parsed.author?.trim() || null,
       language,
       kind: input.kind ?? DEFAULT_KIND,

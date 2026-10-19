@@ -18,6 +18,7 @@ import {
 } from '../../../src/db/repo';
 import { quoteAsMarkdown, shareQuoteText, type Quote } from '../../../src/share/quote';
 import { NoteSheet } from '../../../src/ui/NoteSheet';
+import { listVersions, versionLabel, type ChapterVersion } from '../../../src/db/versions';
 import { Toast, useFlash } from '../../../src/ui/primitives';
 import { isSkeleton } from '../../../src/books/record';
 import { radius, space, usePalette } from '../../../src/theme';
@@ -31,6 +32,7 @@ export default function Notes() {
   const [annotations, setAnnotations] = useState<Annotation[] | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [book, setBook] = useState<Book | null>(null);
+  const [versions, setVersions] = useState<ChapterVersion[]>([]);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   /**
@@ -50,6 +52,7 @@ export default function Notes() {
     listAnnotations(id).then(setAnnotations);
     listChapters(id).then(setChapters);
     getBook(id).then(setBook);
+    listVersions(id).then(setVersions);
   }, [id]);
 
   useFocusEffect(load);
@@ -289,6 +292,16 @@ export default function Notes() {
                           />
                           <Text style={{ flex: 1, color: palette.dim, fontSize: 15 }}>{entry.quote}</Text>
                         </View>
+                      ) : null}
+                      {/* Which wording of the chapter it was written on, once
+                          there is more than one to tell apart. */}
+                      {chapter && versionLabel(versions, chapter.id, entry.version) ? (
+                        <Text style={{ color: palette.faint, fontSize: 12 }}>
+                          {t('notes.onVersion', {
+                            version: versionLabel(versions, chapter.id, entry.version),
+                            reading: entry.version === chapter.version ? t('chapter.reading') : '',
+                          }).trim()}
+                        </Text>
                       ) : null}
                     </View>
                   </View>

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 import { supports } from '../../src/books/kinds';
@@ -36,6 +36,7 @@ import { stoppedWithoutKey } from '../../src/ai/guard';
 import { sceneOpening } from '../../src/structure/scenes';
 import { formatUsd, type Estimate } from '../../src/ai/cost';
 import { getBook, getDocumentText, listChapters } from '../../src/db/repo';
+import { listVersions, switchVersion, versionLabel, type ChapterVersion } from '../../src/db/versions';
 import { EditableLine } from '../../src/ui/EditableLine';
 import { Action, Badge, Block, Chip, ChipRow, Empty, Fact, Hero, Item, Writable } from '../../src/ui/detail';
 import { Prose } from '../../src/ui/Prose';
@@ -68,6 +69,8 @@ export default function ChapterPage() {
   /** Notes made in this chapter, and the sheet that writes another one. */
   const [notes, setNotes] = useState<Annotation[]>([]);
   const [writing, setWriting] = useState(false);
+  /** Every wording this book's chapters have been kept in. */
+  const [versions, setVersions] = useState<ChapterVersion[]>([]);
   const [queued, setQueued] = useState(false);
   /** The languages this book is being translated into, and what is left here. */
   const [targets, setTargets] = useState<{ target: string; pending: number }[]>([]);
@@ -91,6 +94,7 @@ export default function ChapterPage() {
       // has nothing to split. Offering an empty section for either says the
       // analysis failed, when it was never asked.
       setScened(supports(book?.kind, 'scenes') && !(book && isSkeleton(book)));
+      setVersions(await listVersions(found.book_id));
       setNotes(
         (await listAnnotations(found.book_id)).filter((note) =>
           note.chapter_id
@@ -146,6 +150,7 @@ export default function ChapterPage() {
   // A chapter of a book with no words: nothing to open, but everything to write
   // about — which is the whole point of a record having chapters at all.
   const skeleton = book ? isSkeleton(book) : false;
+  const own = versions.filter((version) => version.chapter_id === chapter.id);
 
   const read = (at?: number) =>
     router.push(
@@ -252,6 +257,38 @@ export default function ChapterPage() {
         />
       </Hero>
 
+      {own.length > 1 ? (
+        <Block title={t('chapter.versions')} count={own.length}>
+          {own.map((version, index) => {
+            const reading = version.hash === chapter.version;
+            return (
+              <Item
+                key={version.hash}
+                badge={<Badge n={`v${index + 1}`} tone={reading ? undefined : 'quiet'} />}
+                title={version.source_name || version.title || t('structure.untitled')}
+                detail={t('chapter.versionDetail', {
+                  date: new Date(version.created_at).toLocaleDateString(),
+                  count: version.chars,
+                })}
+                meta={reading ? t('chapter.reading') : undefined}
+                onPress={
+                  reading
+                    ? undefined
+                    : () =>
+                        Alert.alert(t('chapter.switchTitle', { n: index + 1 }), t('chapter.switchBody'), [
+                          { text: t('import.cancel'), style: 'cancel' },
+                          {
+                            text: t('chapter.switch'),
+                            onPress: () => void switchVersion(chapter.id, version.hash).then(load),
+                          },
+                        ])
+                }
+              />
+            );
+          })}
+        </Block>
+      ) : null}
+
       {scened ? (
       <Block title={t('chapter.scenes')} count={scenes.length || undefined}>
         {scenes.length === 0 ? (
@@ -316,6 +353,7 @@ export default function ChapterPage() {
                 key={note.id}
                 title={note.note?.trim() || note.quote}
                 detail={note.note?.trim() ? note.quote || undefined : undefined}
+                meta={versionLabel(versions, chapter.id, note.version) ?? undefined}
                 onPress={() => router.push(`/book/${chapter.book_id}/notes`)}
               />
             ))

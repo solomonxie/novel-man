@@ -2,6 +2,7 @@ import Index from '../../app/index';
 import Find from '../../app/find';
 import Settings from '../../app/settings';
 import Job from '../../app/job/[id]';
+import Merge from '../../app/merge/[id]';
 import SourceEbible from '../../app/source/ebible';
 import SourceEsv from '../../app/source/esv';
 import SourceArxiv from '../../app/source/arxiv';
@@ -61,6 +62,7 @@ export type Screen = {
 export const screens: Screen[] = [
   { path: '/', component: Index },
   { path: '/job/[id]', component: Job, header: true },
+  { path: '/merge/[id]', component: Merge, header: true },
   { path: '/find', component: Find, header: true },
   { path: '/settings', component: Settings, header: true },
   { path: '/source/ebible', component: SourceEbible, header: true },

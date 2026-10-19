@@ -917,4 +917,24 @@ export const migrations: string[] = [
    ALTER TABLE books ADD COLUMN origin_pages INTEGER;
    ALTER TABLE books ADD COLUMN origin_fingerprint TEXT;
    ALTER TABLE books ADD COLUMN origin_path TEXT;`,
+
+  // A chapter can be held in more than one wording — an earlier draft, another
+  // edition's text — and a note remembers which one it was written on. The
+  // manuscript stays the one text everything addresses; this keeps the others.
+  // No foreign key on chapter_id: re-splitting rewrites the chapters, and the
+  // versions are re-homed rather than dropped with them.
+  `ALTER TABLE chapters ADD COLUMN version TEXT;
+   ALTER TABLE annotations ADD COLUMN version TEXT;
+   CREATE TABLE chapter_versions (
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     chapter_id TEXT NOT NULL,
+     hash TEXT NOT NULL,
+     title TEXT NOT NULL,
+     text TEXT NOT NULL,
+     hints TEXT NOT NULL DEFAULT '[]',
+     source_name TEXT,
+     created_at INTEGER NOT NULL,
+     PRIMARY KEY (chapter_id, hash)
+   );
+   CREATE INDEX chapter_versions_book ON chapter_versions(book_id);`,
 ];

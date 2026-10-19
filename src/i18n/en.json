@@ -529,7 +529,8 @@
     "deleteSelectedConfirm": "Delete {{count}} items? The text in the book isn’t affected.",
     "inBook": "In book",
     "emptyRecord": "No notes yet. Tap ＋ to write one about this book.",
-    "aboutTheBook": "About the book"
+    "aboutTheBook": "About the book",
+    "onVersion": "Written on {{version}} {{reading}}"
   },
   "structure": {
     "deleteWhere": "Its text will be merged into a neighboring chapter. Which one?",
@@ -946,7 +947,13 @@
     "terms": "Terms",
     "noTerms": "No terms recognized in this chapter.",
     "note": "Write a note",
-    "noNotes": "No notes on this chapter yet."
+    "noNotes": "No notes on this chapter yet.",
+    "versions": "Versions",
+    "versionDetail": "{{date}} · {{count}} characters",
+    "reading": "Reading",
+    "switchTitle": "Read version {{n}}?",
+    "switchBody": "The chapter reads as this wording from now on. The one you are reading now is kept, and so are your notes on it.",
+    "switch": "Switch"
   },
   "part": {
     "read": "Read from here →",
@@ -1436,5 +1443,37 @@
   "language": {
     "fixedTitle": "Language corrected on {{count}} books",
     "fixedWhat": "A catalog answered these in romanised Latin, so they were filed as English — and English is what every AI pass was told to answer in. They now say what they are written in.\n\n{{titles}}"
+  },
+  "merge": {
+    "title": "Merge copies",
+    "gone": "This merge is no longer waiting. It was answered or the import stopped.",
+    "from": "From {{file}}",
+    "tally": "{{same}} unchanged · {{added}} new · {{changed}} changed · {{kept}} only in yours",
+    "safe": "Nothing of yours is removed. A changed chapter keeps both wordings as versions; you choose which one you read, and can switch later from the chapter page.",
+    "allMine": "Keep all mine",
+    "allTheirs": "Use all incoming",
+    "unchanged": "{{count}} unchanged",
+    "added": "New chapter · {{count}} characters",
+    "kept": "Only in yours · kept",
+    "changed": "Changed · yours {{mine}}, incoming {{theirs}} characters · choose one",
+    "usingMine": "Reading yours · incoming kept as a version",
+    "usingTheirs": "Reading incoming · yours kept as a version",
+    "mine": "Mine",
+    "theirs": "Incoming",
+    "showDiff": "Show differences",
+    "hideDiff": "Hide differences",
+    "sameParagraphs": "… {{count}} unchanged paragraphs …",
+    "moreChanges": "… and {{count}} more",
+    "cancel": "Cancel",
+    "apply": "Merge",
+    "left": "{{count}} left to choose",
+    "sameTitle": "Already on your shelf",
+    "sameBody": "This file looks like {{title}}{{author}}. Add it as a book of its own, or merge it into that one?",
+    "asNew": "New book",
+    "intoExisting": "Merge",
+    "waiting": "Some chapters differ from the copy on your shelf.",
+    "review": "Review changes",
+    "anotherCopy": "Merge another copy…",
+    "anotherCopyWhy": "A file of this book, lined up chapter by chapter. New chapters go in; changed ones keep both wordings."
   }
 }
