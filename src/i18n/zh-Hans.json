@@ -96,7 +96,8 @@
     "shelf_read": "读完",
     "noneHere": "这个书架上还没有书。",
     "inTerms": "在概念与记忆卡中（{{count}}）",
-    "sectionReviews": "书评"
+    "sectionReviews": "书评",
+    "bookSources": "书源"
   },
   "reviews": {
     "title": "书评",
@@ -1112,7 +1113,9 @@
     "catalogQuiet": "{{catalogs}} 没有应答，所以这只是一半的书目站。",
     "catalogsQuiet": "没有书目服务响应，以下是本机已保存的清单。",
     "textFrom": "来自 {{source}} 的正文 · {{count}}",
-    "lookingUp": "正在查询已出版的书…"
+    "lookingUp": "正在查询已出版的书…",
+    "fromFile": "从文本文件添加",
+    "fromFileWhy": "“文件”中的手稿：TXT、Markdown、EPUB、DOCX。如果是你已有的书，可以选择合并进去。"
   },
   "kind": {
     "novel": "小说",

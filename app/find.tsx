@@ -5,8 +5,6 @@ import {
   FlatList,
   InteractionManager,
   Keyboard,
-  Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,27 +29,19 @@ import { googleBooksKey } from '../src/sources/googleBooksKey';
 import { rememberSeen, seenCandidate, SEEN } from '../src/sources/seen';
 import { NO_RESULTS, rankBook, searchLibrary, type LibraryResults } from '../src/search/library';
 import { oneAtATime } from '../src/search/oneAtATime';
-import { keptCatalogs, searchIndex, type IndexedBook } from '../src/sources/catalog';
-import { publicSources, type PublicSource } from '../src/sources/registry';
+import { searchIndex, type IndexedBook } from '../src/sources/catalog';
+import { publicSources } from '../src/sources/registry';
 import { choiceFromIndex, takeChoice, type Choice } from '../src/sources/chosen';
-import { ESV_TITLE, searchLicensed, searchSpecial } from '../src/sources/special';
+import { searchLicensed, searchSpecial } from '../src/sources/special';
 import { forgetSearches, recentSearches, remember } from '../src/search/history';
 
 import { offers } from '../src/store/scope';
-import { esvKey } from '../src/sources/esvKey';
-import { standardEbooksEmail } from '../src/sources/standardEbooksEmail';
-import {
-  activeCount,
-  enqueueCatalogs,
-  subscribeToQueue,
-  type CatalogSource,
-} from '../src/import/queue';
 import { ConfirmAdd } from '../src/ui/AddSheets';
 import { BookLine } from '../src/ui/BookLine';
 import { HitCard, toRow, type ResultRow } from '../src/ui/HitCard';
 import { Row, Section } from '../src/ui/primitives';
 import { SearchBar, SearchGlass, SEARCH_BAR_HEIGHT, searchBarOffset } from '../src/ui/SearchBar';
-import { SourceRows } from '../src/ui/SourceRows';
+import { useSourceBoard } from '../src/ui/BookSources';
 import { useKeyboardHeight, useKeyboardLift } from '../src/ui/keyboard';
 import { radius, space, usePalette } from '../src/theme';
 
@@ -71,9 +61,8 @@ import { radius, space, usePalette } from '../src/theme';
  * the honest answer to "why did my search find nothing", and it is the only
  * thing a search box can usefully say before it has been typed into.
  *
- * Nothing here takes a file or a link. A book arrives as a record first —
- * found in a catalog or typed from memory — and gets its words afterwards,
- * from its own page, where there is already a book for them to belong to.
+ * Nothing here takes a file. That is on the shelf, above Settings: a
+ * manuscript already on the phone needs no search.
  */
 
 type Line =
@@ -102,9 +91,6 @@ const SETTLE = 140;
  */
 const REACH = 450;
 
-/** Past this, a kept list has had time to fall behind what the source publishes. */
-const STALE_DAYS = 90;
-
 /** What a section of hits is titled, in the order somebody means them. */
 const SECTIONS: { id: string; title: string }[] = [
   { id: 'chapters', title: 'shelf.inChapters' },
@@ -114,19 +100,8 @@ const SECTIONS: { id: string; title: string }[] = [
   { id: 'text', title: 'shelf.inTheText' },
 ];
 
-/** A source as the board shows it: one line, one tap, one thing it does. */
-type SourceCard = {
-  id: string;
-  label: string;
-  detail: string;
-  value: string;
-  /** Ready to answer a search right now, or still waiting for something. */
-  ready: boolean;
-  onPress: () => void;
-};
-
 export default function Find() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   const lift = useKeyboardLift();
@@ -141,28 +116,16 @@ export default function Find() {
   const [books, setBooks] = useState<BookListItem[] | null>(null);
   const [results, setResults] = useState<LibraryResults>(NO_RESULTS);
   const [hits, setHits] = useState<IndexedBook[]>([]);
-  const [kept, setKept] = useState<{ source: string; fetchedAt: number; count: number }[]>([]);
-  const [emailed, setEmailed] = useState(false);
-  const [keyed, setKeyed] = useState(false);
   const [choice, setChoice] = useState<Choice | null>(null);
   /** What the catalogs say the book *is*, as opposed to where to get it. */
   const [named, setNamed] = useState<Candidate[]>([]);
   const [catalogs, setCatalogs] = useState<CatalogReport[]>([]);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
-  /** Queued for an update, until the queue says otherwise. */
-  const [updating, setUpdating] = useState<string[]>([]);
-  /** The one source that wants a credential before its list is worth fetching. */
-  const [settingUp, setSettingUp] = useState<PublicSource | null>(null);
-  /** What has been looked for before, and which shelf of sources is open. */
+  /** What has been looked for before. */
   const [recent, setRecent] = useState<string[]>([]);
-  const [opened, setOpened] = useState<'available' | 'waiting' | null>(null);
 
-  const readSources = useCallback(() => {
-    keptCatalogs().then(setKept).catch(() => undefined);
-    standardEbooksEmail().then((email) => setEmailed(Boolean(email))).catch(() => undefined);
-    esvKey().then((key) => setKeyed(Boolean(key))).catch(() => undefined);
-  }, []);
+  const { kept, readSources, update, waiting, sheet } = useSourceBoard();
 
   const load = useCallback(() => {
     listBooks().then(setBooks).catch(() => setBooks([]));
@@ -199,104 +162,6 @@ export default function Find() {
     }, [load])
   );
 
-  // A list is fetched in the queue with everything else, so the page learns it
-  // finished the way the shelf does: by being told the queue went quiet.
-  useEffect(
-    () =>
-      subscribeToQueue(() => {
-        if (activeCount() > 0) return;
-        setUpdating((was) => (was.length ? [] : was));
-        readSources();
-      }),
-    [readSources]
-  );
-
-  const keptBy = useMemo(() => {
-    const byId = new Map<string, { fetchedAt: number; count: number }>();
-    // Open Library keeps a list per category — `openlibrary:fiction` and a
-    // dozen siblings — and to the board they are one source with one total.
-    for (const row of kept) {
-      if (row.source === SEEN) continue;
-      const base = row.source.split(':')[0];
-      const found = byId.get(base);
-      byId.set(base, {
-        fetchedAt: Math.max(found?.fetchedAt ?? 0, row.fetchedAt),
-        count: (found?.count ?? 0) + row.count,
-      });
-    }
-    return byId;
-  }, [kept]);
-
-  const held = useMemo(
-    () =>
-      kept
-        .filter((row) => row.source !== SEEN)
-        .reduce((total, row) => total + row.count, 0),
-    [kept]
-  );
-
-  /** Everything a search could reach, each as the one row that says where it stands. */
-  const cards = useMemo<SourceCard[]>(() => {
-    const made: SourceCard[] = [];
-    const dated = (at: number) => new Date(at).toLocaleDateString(i18n.language);
-
-    for (const source of publicSources()) {
-      if (source.indexed) {
-        const state = keptBy.get(source.id);
-        const stale = state ? Date.now() - state.fetchedAt > STALE_DAYS * 86400000 : false;
-        const locked = Boolean(source.credential) && !emailed;
-        const running = updating.includes(source.id);
-        made.push({
-          id: source.id,
-          label: t(`source.${source.id}`),
-          detail: locked
-            ? t('add.seWhy')
-            : state
-              ? t('add.indexAsOf', { count: state.count, date: dated(state.fetchedAt) })
-              : t('add.indexMissing'),
-          value: running
-            ? t('add.updating')
-            : locked
-              ? t('find.setUp')
-              : state
-                ? t('add.update')
-                : t('add.getList'),
-          ready: Boolean(state) && !stale && !locked,
-          onPress: () =>
-            running
-              ? undefined
-              : locked
-                ? setSettingUp(source)
-                : update(source.id as CatalogSource),
-        });
-        continue;
-      }
-      if (source.remote && source.find) {
-        const page = source.find;
-        made.push({
-          id: source.id,
-          label: t(`source.${source.id}`),
-          detail: t(`source.${source.id}Detail`),
-          value: t('find.onlineOnly'),
-          ready: true,
-          onPress: () => router.push(page),
-        });
-      }
-    }
-
-    // The one edition that is its own catalog. It has no list to fetch; what
-    // it has instead is a key, and without one it answers nothing.
-    if (offers('scripture')) made.push({
-      id: 'esv',
-      label: ESV_TITLE,
-      detail: t('add.esvWhy'),
-      value: keyed ? t('find.ready') : t('find.setUp'),
-      ready: keyed,
-      onPress: () => router.push('/source/esv'),
-    });
-    return made;
-  }, [keptBy, emailed, keyed, updating, t, i18n.language]);
-
   const online = useMemo(
     () =>
       publicSources().flatMap((source) =>
@@ -304,17 +169,6 @@ export default function Find() {
       ),
     []
   );
-
-  // Memoised, both of them: `waiting` is a dependency of the result list, and
-  // a fresh array every render would rebuild every row on the page on every
-  // keystroke.
-  const available = useMemo(() => cards.filter((card) => card.ready), [cards]);
-  const waiting = useMemo(() => cards.filter((card) => !card.ready), [cards]);
-
-  function update(source: CatalogSource) {
-    enqueueCatalogs([source], () => t(`source.${source}`));
-    setUpdating((was) => [...was, source]);
-  }
 
   // The shelf is in memory, so it answers the keystroke itself — and in the
   // order asked for: the book named, then the one by that author.
@@ -783,19 +637,6 @@ function refused(catalogs: CatalogReport[], t: TFunction): string | undefined {
   });
 }
 
-/** The rows inside a folded group; the group owns the card around them. */
-  function rows(cards: SourceCard[]) {
-    return cards.map((card) => (
-      <Row
-        key={card.id}
-        label={card.label}
-        detail={card.detail}
-        value={card.value}
-        onPress={card.onPress}
-      />
-    ));
-  }
-
   return (
     <View style={{ flex: 1, backgroundColor: palette.bg }}>
       <Stack.Screen options={{ title: typed ? t('find.title') : '', headerBackTitle: ' ' }} />
@@ -893,33 +734,6 @@ function refused(catalogs: CatalogReport[], t: TFunction): string | undefined {
             </View>
           </View>
 
-          {/* Folded. These are the plumbing behind the box, and most openings
-              of this page want nothing to do with them — but the count on the
-              row is the answer to "why did my search find nothing", so it is
-              said without having to be opened for. */}
-          <Section flush>
-            <Row
-              label={t('find.availableSources')}
-              detail={held ? t('find.sourcesHeld', { count: held }) : t('find.sourcesNone')}
-              value={`${available.length}  ${opened === 'available' ? '⌃' : '⌄'}`}
-              onPress={() => setOpened(opened === 'available' ? null : 'available')}
-              last={opened !== 'available' && waiting.length === 0}
-            />
-            {opened === 'available' ? rows(available) : null}
-            {waiting.length ? (
-              <>
-                <Row
-                  label={t('find.toUpdateSources')}
-                  detail={t('find.toUpdateWhy')}
-                  value={`${waiting.length}  ${opened === 'waiting' ? '⌃' : '⌄'}`}
-                  onPress={() => setOpened(opened === 'waiting' ? null : 'waiting')}
-                  last={opened !== 'waiting'}
-                />
-                {opened === 'waiting' ? rows(waiting) : null}
-              </>
-            ) : null}
-          </Section>
-
           {recent.length ? (
             <Section
               title={t('find.recent')}
@@ -963,33 +777,6 @@ function refused(catalogs: CatalogReport[], t: TFunction): string | undefined {
         />
       ) : null}
 
-      {/* A credential is the one thing a source can want that a queued job
-          cannot supply, so it is asked for here and nowhere else. */}
-      {settingUp ? (
-        <Modal visible transparent animationType="fade" onRequestClose={() => setSettingUp(null)}>
-          <Pressable
-            style={[styles.scrim, { backgroundColor: palette.scrim }]}
-            onPress={() => setSettingUp(null)}
-          >
-            <Pressable
-              onPress={(event) => event.stopPropagation()}
-              style={[
-                styles.sheet,
-                {
-                  backgroundColor: palette.bg,
-                  borderColor: palette.border,
-                  paddingBottom: Math.max(insets.bottom, space.md) + space.lg,
-                },
-              ]}
-            >
-              <View style={[styles.grabber, { backgroundColor: palette.faint }]} />
-              <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
-                <SourceRows source={settingUp} onUpdated={readSources} />
-              </ScrollView>
-            </Pressable>
-          </Pressable>
-        </Modal>
-      ) : null}
     </View>
   );
 }
@@ -1017,21 +804,4 @@ const styles = StyleSheet.create({
     marginBottom: space.xs,
   },
   note: { padding: space.md, marginTop: space.lg },
-  scrim: { flex: 1, justifyContent: 'flex-end' },
-  sheet: {
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: space.lg,
-    paddingTop: space.sm,
-    maxHeight: '85%',
-  },
-  grabber: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: space.sm,
-    opacity: 0.5,
-  },
 });

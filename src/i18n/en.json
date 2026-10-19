@@ -96,7 +96,8 @@
     "shelf_read": "Finished",
     "noneHere": "Nothing on this shelf yet.",
     "inTerms": "In concepts & cards ({{count}})",
-    "sectionReviews": "Reviews"
+    "sectionReviews": "Reviews",
+    "bookSources": "Book sources"
   },
   "reviews": {
     "title": "Reviews",
@@ -1112,7 +1113,9 @@
     "catalogQuiet": "{{catalogs}} didn’t answer, so this is only half the catalogues.",
     "catalogsQuiet": "No catalogue answered, so these are the lists kept on this device.",
     "textFrom": "Text from {{source}} · {{count}}",
-    "lookingUp": "Looking up published books…"
+    "lookingUp": "Looking up published books…",
+    "fromFile": "Add from a text file",
+    "fromFileWhy": "A manuscript in Files: TXT, Markdown, EPUB, DOCX. If it is a book you already have, you choose to merge it in."
   },
   "kind": {
     "novel": "Novel",

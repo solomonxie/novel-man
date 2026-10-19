@@ -17,7 +17,9 @@ import type { TFunction } from 'i18next';
 
 import { listBooks, type BookListItem } from '../src/db/repo';
 import { reviewedBooks, shelfOf, type ReadingStatus } from '../src/books/record';
-import { subscribeToQueue, type ImportJob } from '../src/import/queue';
+import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
+import { pickManuscript } from '../src/import/sources/picker';
+import { BookSources } from '../src/ui/BookSources';
 import { supportedExtensions } from '../src/import/registry';
 import { PrimaryAction, Row, Section } from '../src/ui/primitives';
 import { addSampleBook } from '../src/sample/sample';
@@ -78,6 +80,16 @@ export default function Home() {
     timed('listBookLists', listBookLists()).then(setLists).catch(() => undefined);
     timed('listTags', listTags()).then(setTags).catch(() => undefined);
   }, []);
+
+  /** From Files, matched against the shelf once it has been read. */
+  async function fromFile() {
+    try {
+      const picked = await pickManuscript();
+      if (picked) router.push(`/job/${enqueueImport({ ...picked, match: true })}`);
+    } catch (problem) {
+      Alert.alert(t('import.failed'), String(problem));
+    }
+  }
 
   const [sampling, setSampling] = useState(false);
   async function trySample() {
@@ -381,6 +393,10 @@ export default function Home() {
                   settings are opened rarely and deliberately, so they belong
                   at the end of the page you were already scrolling, not in
                   the corner of the one thing you open the app to look at. */}
+              {/* Where books come from: the catalogs this device keeps, and a
+                  file already on the phone. A file of a book already here is
+                  offered as a merge rather than written over it. */}
+              <BookSources onFile={() => void fromFile()} />
               <Section>
                 <Row
                   label={t('settings.title')}
