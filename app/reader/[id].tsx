@@ -310,6 +310,7 @@ export default function Reader() {
         ? -1
         : loadedChapters.findIndex((c) => target >= c.start && target < c.end);
       setIndex(requested ?? (holding >= 0 ? holding : resumed >= 0 ? resumed : 0));
+      pendingScroll.current = 0;
 
       if (target !== null) {
         const landing = loadedChapters[requested ?? (holding >= 0 ? holding : 0)];
@@ -850,6 +851,9 @@ export default function Reader() {
   }
 
   const scrolledY = useRef(0);
+  /** A touch in a margin, kept until it proves to be a tap rather than a scroll. */
+  const marginTouch = useRef<{ x: number; y: number; at: number; from: number } | null>(null);
+  const coasting = useRef(false);
   const whereScrolled = useCallback(() => scrolledY.current, []);
   const scrollPageTo = useCallback((y: number) => {
     scrollRef.current?.scrollTo({ y, animated: false });
@@ -1156,15 +1160,51 @@ export default function Reader() {
             },
           })}
           scrollEventThrottle={200}
+          // The margins turn the page on a tap, read from the scroll view's
+          // own touches. As overlays they took every drag that began there,
+          // and a drag down the left one ended as a tap — a page back.
+          onTouchStart={(event) => {
+            const { pageX, pageY } = event.nativeEvent;
+            const inMargin = pageX < settings.margin || pageX > width - settings.margin;
+            // A touch that stops a coasting page is a stop, not a tap.
+            marginTouch.current = inMargin && !coasting.current
+              ? { x: pageX, y: pageY, at: Date.now(), from: scrolledY.current }
+              : null;
+          }}
+          onTouchEnd={(event) => {
+            const start = marginTouch.current;
+            marginTouch.current = null;
+            if (!start || Date.now() - start.at > 300) return;
+            const { pageX, pageY } = event.nativeEvent;
+            if (Math.hypot(pageX - start.x, pageY - start.y) >= 8) return;
+            if (Math.abs(scrolledY.current - start.from) > 2) return;
+            pageBy(start.x < settings.margin ? -1 : 1);
+          }}
+          onTouchCancel={() => {
+            marginTouch.current = null;
+          }}
+          onScrollBeginDrag={() => {
+            marginTouch.current = null;
+          }}
+          onMomentumScrollBegin={() => {
+            coasting.current = true;
+          }}
+          onMomentumScrollEnd={() => {
+            coasting.current = false;
+          }}
           onContentSizeChange={(_, contentHeight) => {
             viewport.current.content = contentHeight;
             // The spinner's height is not the chapter's: landing on a verse
             // has to wait for the words, or it lands at the top of nothing.
             if (!text) return;
             const within = pendingScroll.current;
+            // Only a jump that was asked for moves the page. A height that
+            // changed under the reader — a mark drawn, a picture arrived — is
+            // not a reason to send them back to the top.
+            if (within === null) return;
             pendingScroll.current = null;
             const max = Math.max(0, contentHeight - viewport.current.layout);
-            scrollRef.current?.scrollTo({ y: within ? within * max : 0, animated: false });
+            scrollRef.current?.scrollTo({ y: within * max, animated: false });
           }}
         >
           {/* A selection ends when you say so. The gaps between paragraphs are
@@ -1392,15 +1432,6 @@ export default function Reader() {
           ) : null}
         </Animated.ScrollView>
 
-        {/* The margin is the tap zone: it never sits over a word. */}
-        <Pressable
-          style={[styles.zone, { left: 0, width: settings.margin }]}
-          onPress={() => pageBy(-1)}
-        />
-        <Pressable
-          style={[styles.zone, { right: 0, width: settings.margin }]}
-          onPress={() => pageBy(1)}
-        />
 
       </View>
 
@@ -1678,7 +1709,6 @@ const styles = StyleSheet.create({
    *  glyphs reads as the one that is switched off. */
   arrow: { fontSize: 23, lineHeight: 23, fontWeight: '600' },
   barLabel: { fontSize: 11, marginTop: 1 },
-  zone: { position: 'absolute', top: 0, bottom: 0 },
   /** Set well below the last line: a button touching the text is a button hit
    *  by the scroll that was meant to read the end of it. */
   ends: { marginTop: space.xxl * 2, gap: space.md },
