@@ -26,7 +26,6 @@ import { ReviewCard } from '../src/ui/ReviewCard';
 import { hueFrom } from '../src/ui/fields';
 import { Chip, ChipRow } from '../src/ui/detail';
 import { listBookLists, listTags, type BookList } from '../src/db/shelves';
-import { ListAlbum } from '../src/ui/ListAlbum';
 import { QueueSheet, QueueStrip } from '../src/ui/ImportQueue';
 import { SearchBar, SEARCH_BAR_HEIGHT, searchBarOffset } from '../src/ui/SearchBar';
 import { resumeWorkOnLaunch } from '../src/work/queue';
@@ -312,29 +311,25 @@ export default function Home() {
             </View>
 
             {/* What the reader grouped for themselves, under the shelf that
-                holds everything. Lists are chosen and tags are said, and both
-                are read sideways like the shelf is. */}
+                holds everything. */}
             <View style={{ marginTop: space.xl }}>
               <SectionHead title={t('shelf.sectionLists')} />
-              {/* Read sideways like the shelf above it, and drawn like a
-                  record sleeve, with its own made cover. */}
-              <FlatList
-                horizontal
-                data={lists}
-                keyExtractor={(list) => list.id}
-                renderItem={({ item }) => (
-                  <ListAlbum
-                    name={item.system ? t('lists.favorites') : item.name}
-                    detail={t('lists.count', { count: item.books })}
-                    heart={!!item.system}
-                    width={tileWidth}
-                    onPress={() => router.push(`/list/${item.id}`)}
-                  />
-                )}
-                showsHorizontalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.shelfRow}
-              />
+              {/* Names, not sleeves: a list is found by what it is called,
+                  and a made cover only repeated that in colour. A handful
+                  at most, so a plain map rather than a list view. */}
+              <View style={{ paddingHorizontal: space.lg }}>
+                <Section flush>
+                  {lists.map((list, index) => (
+                    <Row
+                      key={list.id}
+                      label={list.system ? `♥  ${t('lists.favorites')}` : list.name}
+                      value={`${t('lists.count', { count: list.books })}  ›`}
+                      onPress={() => router.push(`/list/${list.id}`)}
+                      last={index === lists.length - 1}
+                    />
+                  ))}
+                </Section>
+              </View>
             </View>
 
             {/* What the reader made of what they read, which is the one thing
