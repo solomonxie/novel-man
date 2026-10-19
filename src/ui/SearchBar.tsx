@@ -28,6 +28,7 @@ export function SearchBar({
   onSubmit,
   autoFocus,
   field,
+  lift,
 }: {
   /** What is in it. Absent on the shelf, where it is a button drawn as a field. */
   value?: string;
@@ -44,6 +45,8 @@ export function SearchBar({
    * itself than have it come up while the screen is still sliding in.
    */
   field?: RefObject<TextInput | null>;
+  /** The keyboard's height as a native-driven value; the pill rides it as a transform. */
+  lift?: Animated.Value;
 }) {
   const palette = usePalette();
   const typing = Boolean(onChange);
@@ -89,7 +92,14 @@ export function SearchBar({
   return (
     // `box-none` so the strip either side of the pill is not a dead band: a
     // tap that misses it lands on the shelf underneath, where it was aimed.
-    <Animated.View style={[styles.floating, { bottom }]} pointerEvents="box-none">
+    <Animated.View
+      style={[
+        styles.floating,
+        { bottom },
+        lift ? { transform: [{ translateY: Animated.multiply(lift, -1) }] } : null,
+      ]}
+      pointerEvents="box-none"
+    >
       {onPress ? (
         <Pressable onPress={onPress}>{({ pressed }) => pill(pressed)}</Pressable>
       ) : (

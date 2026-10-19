@@ -104,13 +104,13 @@ export default function Find() {
   const { t } = useTranslation();
   const palette = usePalette();
   const insets = useSafeAreaInsets();
-  const lift = useKeyboardLift();
+  const lift = useKeyboardLift({ native: true });
   /**
    * How far the keyboard comes up, as a number rather than the animated value
    * the search pill rides: this is padding at the foot of a list, and a list
    * that is not tall enough to scroll cannot be scrolled out from under it.
    */
-  const keyboard = useKeyboardHeight();
+  const keyboard = useKeyboardHeight({ settled: true });
 
   const [query, setQuery] = useState('');
   const [books, setBooks] = useState<BookListItem[] | null>(null);
@@ -146,16 +146,14 @@ export default function Find() {
    * and a keyboard being raised, all while the screen was still sliding in.
    * The keychain is the worst of them; it is a trip out to another process.
    *
-   * So the transition goes first and the page fills in after it, which is
-   * also why the field is focused from here rather than with `autoFocus`:
-   * `autoFocus` raises the keyboard on mount, mid-slide.
+   * So the reads wait for the page. The keyboard does not: there is no slide
+   * any more, and the field raises it itself — see `autoFocus` below.
    */
   const field = useRef<TextInput | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       const task = InteractionManager.runAfterInteractions(() => {
-        field.current?.focus();
         load();
       });
       return () => task.cancel();
@@ -764,8 +762,13 @@ function refused(catalogs: CatalogReport[], t: TFunction): string | undefined {
         onChange={setQuery}
         placeholder={t('find.placeholder')}
         onSubmit={keep}
-        bottom={Animated.add(lift, searchBarOffset(insets.bottom))}
+        bottom={searchBarOffset(insets.bottom)}
+        lift={lift}
         field={field}
+        // The field raises its own keyboard once it is in the window. A
+        // focus() from here landed a frame early, and iOS built a keyboard,
+        // threw it away and built another: half a second, every time.
+        autoFocus
       />
 
       {choice ? (

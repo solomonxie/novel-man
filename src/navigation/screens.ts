@@ -51,7 +51,7 @@ export type Screen = {
   component: React.ComponentType;
   /** Only the shelf and the reader draw their own; the rest get a bar. */
   header?: boolean;
-  animation?: 'fade';
+  animation?: 'fade' | 'none';
 };
 
 /**
@@ -63,7 +63,10 @@ export const screens: Screen[] = [
   { path: '/', component: Index },
   { path: '/job/[id]', component: Job, header: true },
   { path: '/merge/[id]', component: Merge, header: true },
-  { path: '/find', component: Find, header: true },
+  // No slide: the pill on the shelf becomes this page, and iOS holds the
+  // keyboard back until a push has finished — 350ms of slide before the
+  // keyboard even starts. Measured: the page's own work is done in 10ms.
+  { path: '/find', component: Find, header: true, animation: 'none' },
   { path: '/settings', component: Settings, header: true },
   { path: '/source/ebible', component: SourceEbible, header: true },
   { path: '/source/esv', component: SourceEsv, header: true },

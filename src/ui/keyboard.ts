@@ -11,10 +11,17 @@ import { Animated, Easing, Keyboard, Platform } from 'react-native';
  * keyboard by padding instead, which needs a plain number — layout cannot be
  * driven natively alongside a transform on the same value.
  */
-export function useKeyboardHeight(): number {
+export function useKeyboardHeight({ settled = false }: {
+  /**
+   * After the keyboard has arrived rather than as it starts. A re-render of a
+   * whole page mid-slide is what makes the slide stutter; padding at the foot
+   * of a list is not something anybody watches arrive.
+   */
+  settled?: boolean;
+} = {}): number {
   const [height, setHeight] = useState(0);
   useEffect(() => {
-    const early = Platform.OS === 'ios';
+    const early = Platform.OS === 'ios' && !settled;
     const show = Keyboard.addListener(early ? 'keyboardWillShow' : 'keyboardDidShow', (event) =>
       setHeight(event.endCoordinates.height)
     );
@@ -25,7 +32,7 @@ export function useKeyboardHeight(): number {
       show.remove();
       hide.remove();
     };
-  }, []);
+  }, [settled]);
   return height;
 }
 
@@ -44,7 +51,10 @@ export function useKeyboardHeight(): number {
  * Android has no "will": the keyboard is already there by the time anything
  * is said about it, so the lift follows rather than accompanies.
  */
-export function useKeyboardLift(): Animated.Value {
+export function useKeyboardLift({ native = false }: {
+  /** For a transform: the lift runs on the UI thread, with nothing laid out per frame. */
+  native?: boolean;
+} = {}): Animated.Value {
   const lift = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -55,7 +65,7 @@ export function useKeyboardLift(): Animated.Value {
         toValue: event.endCoordinates.height,
         duration: event.duration || 220,
         easing: ease,
-        useNativeDriver: false,
+        useNativeDriver: native,
       }).start();
     });
     const hide = Keyboard.addListener(early ? 'keyboardWillHide' : 'keyboardDidHide', (event) => {
@@ -63,14 +73,14 @@ export function useKeyboardLift(): Animated.Value {
         toValue: 0,
         duration: event?.duration || 200,
         easing: ease,
-        useNativeDriver: false,
+        useNativeDriver: native,
       }).start();
     });
     return () => {
       show.remove();
       hide.remove();
     };
-  }, [lift]);
+  }, [lift, native]);
 
   return lift;
 }
