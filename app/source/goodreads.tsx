@@ -2,9 +2,9 @@ import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Keyboard,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -21,9 +21,13 @@ import {
   savedShelves,
   type SavedShelf,
 } from '../../src/sources/goodreadsProfiles';
-import { keepShelved, type KeptCount } from '../../src/books/save';
+import { keepShelved, planShelved, type KeptCount } from '../../src/books/save';
 import { pickSpreadsheet } from '../../src/import/sources/picker';
-import { File } from '../../src/storage/fs';
+import { readText } from '../../src/storage/text';
+import { shelfBooks, type Planned } from '../../src/books/imports';
+import { recordRun } from '../../src/books/importRuns';
+import type { BookListItem } from '../../src/db/repo';
+import { LastImport, OntoSheet, PlanRow, planCounts } from '../../src/ui/ImportPlan';
 import { DEFAULT_KIND } from '../../src/books/kinds';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { radius, space, usePalette } from '../../src/theme';
@@ -42,13 +46,22 @@ export default function ImportFromGoodreads() {
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const { t, i18n } = useTranslation();
   const palette = usePalette();
-  const [books, setBooks] = useState<Shelved[] | null>(null);
+  const [plan, setPlan] = useState<Planned<Shelved>[] | null>(null);
+  const [shelf, setShelf] = useState<BookListItem[]>([]);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [recorded, setRecorded] = useState(0);
+  const books = plan?.map((entry) => entry.item) ?? null;
+
+  async function show(found: Shelved[]) {
+    setPlan(await planShelved(found));
+    setShelf(await shelfBooks());
+  }
   const [from, setFrom] = useState<string>('');
   const [feed, setFeed] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedShelf[]>([]);
-  const page = useRef<ScrollView>(null);
+  const page = useRef<FlatList<Planned<Shelved>>>(null);
   /** Where the count lands, so reading a shelf can put it in front of you. */
   const foundY = useRef(0);
 
@@ -59,7 +72,7 @@ export default function ImportFromGoodreads() {
    */
   function reveal() {
     requestAnimationFrame(() =>
-      page.current?.scrollTo({ y: Math.max(0, foundY.current - space.lg), animated: true })
+      page.current?.scrollToOffset({ offset: Math.max(0, foundY.current - space.lg), animated: true })
     );
   }
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -72,13 +85,13 @@ export default function ImportFromGoodreads() {
       const picked = await pickSpreadsheet();
       if (!picked) return;
       setBusy(true);
-      const csv = await new File(picked.uri).text();
+      const csv = await readText(picked.uri);
       const found = booksFromExport(csv);
       if (!found.length) {
         setError(t('gr.notAnExport'));
         return;
       }
-      setBooks(found);
+      await show(found);
       setFrom(picked.name);
       setKept(null);
       reveal();
@@ -112,7 +125,7 @@ export default function ImportFromGoodreads() {
         setError(t('gr.emptyFeed'));
         return;
       }
-      setBooks(found);
+      await show(found);
       setFrom(owner ?? t('gr.fromFeed'));
       setKept(null);
       // Remembered once it has actually answered, and by number rather than by
@@ -135,13 +148,15 @@ export default function ImportFromGoodreads() {
   }
 
   async function bringOver() {
-    if (!books) return;
+    if (!plan) return;
     setBusy(true);
     setError(null);
     try {
-      const count = await keepShelved(books, kind ?? DEFAULT_KIND, (done, total) =>
+      const count = await keepShelved(plan, kind ?? DEFAULT_KIND, (done, total) =>
         setProgress({ done, total })
       );
+      await recordRun({ source: 'goodreads', from, created: count.created, notes: [], was: count.was });
+      setRecorded((was) => was + 1);
       setKept(count);
     } catch (problem) {
       setError(String(problem));
@@ -155,18 +170,12 @@ export default function ImportFromGoodreads() {
   const reviewed = books?.filter((book) => book.review).length ?? 0;
   const read = books?.filter((book) => book.status === 'read').length ?? 0;
   const wanted = books?.filter((book) => book.status === 'wishlist').length ?? 0;
+  const counts = planCounts(plan ?? []);
 
-  return (
-    <ScrollView
-      ref={page}
-      style={{ backgroundColor: palette.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
-      keyboardShouldPersistTaps="handled"
-      automaticallyAdjustKeyboardInsets
-    >
-      <Stack.Screen options={{ title: t('source.goodreads'), headerBackTitle: ' ' }} />
-
+  const header = (
+    <View>
       <Hint>{t('gr.noApi')}</Hint>
+      <LastImport source="goodreads" refresh={recorded} />
 
       {/* The link first. It is the one people already have — copied out of the
           address bar of the profile they are looking at — and it can be read
@@ -279,9 +288,10 @@ export default function ImportFromGoodreads() {
             >
               {progress
                 ? t('gr.bringingOver', { done: progress.done, total: progress.total })
-                : t('gr.bringOver', { count: books.length })}
+                : t('gr.bringOver', { count: books.length - counts.skipped })}
             </Text>
           </Pressable>
+          <Hint>{t('importPlan.summary', counts)}</Hint>
           <Hint>{t('gr.whatHappens')}</Hint>
         </>
       ) : null}
@@ -303,7 +313,44 @@ export default function ImportFromGoodreads() {
           </Pressable>
         </>
       ) : null}
-    </ScrollView>
+      {plan ? (
+        <Text style={[styles.heading, { color: palette.dim }]}>
+          {kept ? t('importPlan.where') : t('importPlan.tapToChange')}
+        </Text>
+      ) : null}
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: palette.bg }}>
+      <Stack.Screen options={{ title: t('source.goodreads'), headerBackTitle: ' ' }} />
+      <FlatList
+        ref={page}
+        data={plan ?? []}
+        keyExtractor={(_, index) => `${index}`}
+        ListHeaderComponent={header}
+        contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        renderItem={({ item, index }) => (
+          <PlanRow
+            entry={item}
+            title={item.item.author ? `${item.item.title} · ${item.item.author}` : item.item.title}
+            onPress={() => (kept || busy ? undefined : setEditing(index))}
+          />
+        )}
+      />
+      <OntoSheet
+        shelf={shelf}
+        entry={editing !== null && plan ? plan[editing] : null}
+        title={editing !== null && plan ? plan[editing].item.title : ''}
+        onChange={(onto, skip) => {
+          setPlan((was) => was && was.map((entry, at) => (at === editing ? { ...entry, onto, skip } : entry)));
+          setEditing(null);
+        }}
+        onClose={() => setEditing(null)}
+      />
+    </View>
   );
 }
 
@@ -327,4 +374,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
   },
+  heading: { marginTop: space.xl, marginBottom: space.sm, fontSize: 13, textTransform: 'uppercase' },
 });

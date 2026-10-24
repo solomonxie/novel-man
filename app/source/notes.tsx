@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { notedBooksFrom } from '../../src/sources/notesFile';
 import { keepNotes, planNotes, type KeptNotes, type NotesPlan } from '../../src/books/notes';
-import { pickNotesFile } from '../../src/import/sources/picker';
+import { pickNotesFile, type PickedFile } from '../../src/import/sources/picker';
+import { shelfBooks } from '../../src/books/imports';
+import { recordRun } from '../../src/books/importRuns';
+import type { BookListItem } from '../../src/db/repo';
+import { LastImport, OntoSheet, PlanRow, planCounts } from '../../src/ui/ImportPlan';
 import { File } from '../../src/storage/fs';
 import { DEFAULT_KIND } from '../../src/books/kinds';
 import { Hint, Row, Section } from '../../src/ui/primitives';
@@ -17,7 +21,7 @@ import { radius, space, usePalette } from '../../src/theme';
  * notes on a book they never read.
  */
 export default function ImportNotes() {
-  const { kind } = useLocalSearchParams<{ kind?: string }>();
+  const { kind, uri, name } = useLocalSearchParams<{ kind?: string; uri?: string; name?: string }>();
   const { t } = useTranslation();
   const palette = usePalette();
   const [plan, setPlan] = useState<NotesPlan | null>(null);
@@ -26,12 +30,29 @@ export default function ImportNotes() {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [kept, setKept] = useState<KeptNotes | null>(null);
+  const [shelf, setShelf] = useState<BookListItem[]>([]);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [recorded, setRecorded] = useState(0);
+
+  // Opened from another app: the file is already chosen.
+  useEffect(() => {
+    if (uri) void readFrom({ uri, name: name ?? '' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uri]);
 
   async function readFile() {
     setError(null);
     try {
       const picked = await pickNotesFile();
-      if (!picked) return;
+      if (picked) await readFrom(picked);
+    } catch (problem) {
+      setError(String(problem));
+    }
+  }
+
+  async function readFrom(picked: PickedFile) {
+    setError(null);
+    try {
       setFrom(picked.name);
       setPlan(null);
       setKept(null);
@@ -42,6 +63,7 @@ export default function ImportNotes() {
         return;
       }
       setPlan(await planNotes(books));
+      setShelf(await shelfBooks());
     } catch (problem) {
       setError(String(problem));
     } finally {
@@ -54,7 +76,10 @@ export default function ImportNotes() {
     setBusy(true);
     setError(null);
     try {
-      setKept(await keepNotes(plan, kind ?? DEFAULT_KIND, (done, total) => setProgress({ done, total })));
+      const done = await keepNotes(plan, kind ?? DEFAULT_KIND, (at, total) => setProgress({ done: at, total }));
+      await recordRun({ source: 'notes', from, created: done.made, notes: done.notes, was: [] });
+      setRecorded((was) => was + 1);
+      setKept(done);
     } catch (problem) {
       setError(String(problem));
     } finally {
@@ -63,12 +88,13 @@ export default function ImportNotes() {
     }
   }
 
-  const notes = plan?.reduce((sum, entry) => sum + entry.book.notes.length, 0) ?? 0;
-  const matched = plan?.filter((entry) => entry.onto).length ?? 0;
+  const notes = plan?.reduce((sum, entry) => sum + (entry.skip ? 0 : entry.item.notes.length), 0) ?? 0;
+  const counts = planCounts(plan ?? []);
 
   const header = (
     <View>
       <Hint>{t('notesImport.why')}</Hint>
+      <LastImport source="notes" refresh={recorded} />
       <Pressable onPress={busy ? undefined : readFile} style={styles.link}>
         {busy && !progress ? (
           <ActivityIndicator />
@@ -99,7 +125,7 @@ export default function ImportNotes() {
             </Text>
           </Pressable>
           <Hint>
-            {t('notesImport.summary', { books: plan.length, matched, created: plan.length - matched })}
+            {t('notesImport.summary', { books: plan.length, ...counts })}
           </Hint>
         </>
       ) : null}
@@ -119,7 +145,9 @@ export default function ImportNotes() {
         </>
       ) : null}
       {plan ? (
-        <Text style={[styles.heading, { color: palette.dim }]}>{t('notesImport.where')}</Text>
+        <Text style={[styles.heading, { color: palette.dim }]}>
+          {kept ? t('notesImport.where') : t('importPlan.tapToChange')}
+        </Text>
       ) : null}
     </View>
   );
@@ -132,16 +160,24 @@ export default function ImportNotes() {
         keyExtractor={(_, index) => `${index}`}
         ListHeaderComponent={header}
         contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
-        renderItem={({ item }) => (
-          <View style={[styles.item, { borderColor: palette.border }]}>
-            <Text style={{ color: palette.text, fontSize: 16 }}>{item.book.title}</Text>
-            <Text style={{ color: item.onto ? palette.dim : palette.accent, fontSize: 13, marginTop: 2 }}>
-              {item.onto
-                ? t('notesImport.onto', { title: item.onto.title, count: item.book.notes.length })
-                : t('notesImport.asNew', { count: item.book.notes.length })}
-            </Text>
-          </View>
+        renderItem={({ item, index }) => (
+          <PlanRow
+            entry={item}
+            title={item.item.title}
+            count={item.item.notes.length}
+            onPress={() => (kept || busy ? undefined : setEditing(index))}
+          />
         )}
+      />
+      <OntoSheet
+        shelf={shelf}
+        entry={editing !== null && plan ? plan[editing] : null}
+        title={editing !== null && plan ? plan[editing].item.title : ''}
+        onChange={(onto, skip) => {
+          setPlan((was) => was && was.map((entry, at) => (at === editing ? { ...entry, onto, skip } : entry)));
+          setEditing(null);
+        }}
+        onClose={() => setEditing(null)}
       />
     </View>
   );
@@ -156,5 +192,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   heading: { marginTop: space.xl, marginBottom: space.sm, fontSize: 13, textTransform: 'uppercase' },
-  item: { paddingVertical: space.md, borderBottomWidth: StyleSheet.hairlineWidth },
 });

@@ -77,7 +77,32 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   // "Open in Novel Man", and the novelman:// scheme.
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
     for context in URLContexts {
-      _ = RCTLinkingManager.application(.shared, open: context.url, options: [:])
+      _ = RCTLinkingManager.application(.shared, open: readable(context), options: [:])
+    }
+  }
+
+  /**
+   A file opened in place lives in another app's folder and is readable only
+   while its security scope is held, so it is copied somewhere ours first.
+   */
+  private func readable(_ context: UIOpenURLContext) -> URL {
+    let url = context.url
+    guard url.isFileURL, context.options.openInPlace else { return url }
+    let scoped = url.startAccessingSecurityScopedResource()
+    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "Opened/\(UUID().uuidString)", isDirectory: true)
+    let copy = folder.appendingPathComponent(url.lastPathComponent)
+    do {
+      try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+      var failure: NSError?
+      var copied = false
+      NSFileCoordinator().coordinate(readingItemAt: url, options: .withoutChanges, error: &failure) { at in
+        copied = (try? FileManager.default.copyItem(at: at, to: copy)) != nil
+      }
+      return copied ? copy : url
+    } catch {
+      return url
     }
   }
 
@@ -95,8 +120,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   private func launchOptions(
     from options: UIScene.ConnectionOptions
   ) -> [UIApplication.LaunchOptionsKey: Any] {
-    if let url = options.urlContexts.first?.url {
-      return [.url: url]
+    if let context = options.urlContexts.first {
+      return [.url: readable(context)]
     }
     if let activity = options.userActivities.first {
       let dictionary: [AnyHashable: Any] = [

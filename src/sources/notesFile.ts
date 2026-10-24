@@ -52,61 +52,7 @@ export function notedBooksFrom(json: string): NotedBook[] {
   return found;
 }
 
-/**
- * A title with what editions and shops wrap around it taken off: 《》, a
- * trailing (精) or [美], full-width letters, punctuation and case.
- */
-export function titleKey(title: string): string {
-  let plain = title.normalize('NFKC').toLowerCase();
-  const quoted = /《([^》]+)》/.exec(plain);
-  if (quoted) plain = quoted[1];
-  plain = plain.replace(/[(\[【][^)\]】]*[)\]】]\s*$/u, '');
-  return plain.replace(/[^\p{L}\p{N}]+/gu, '');
-}
-
-/**
- * The same title with its subtitle dropped: 中的精神: 吴清源自传 is 中的精神.
- * Not where the subtitle names a volume — 三体: 黑暗森林. II is not 三体.
- */
-function mainTitleKey(title: string): string {
-  const [main, ...rest] = title.normalize('NFKC').toLowerCase().split(/[:：]|\s[-—]\s/);
-  if (/\d|\b[ivx]+\b|[上中下卷册部]/u.test(rest.join(' '))) return titleKey(title);
-  return titleKey(main);
-}
-
-export type ShelfBook = { id: string; title: string; author: string | null };
-
-/**
- * Which book on the shelf these notes belong to, or null for a new one. The
- * id wins; then the whole title; then a title missing only its subtitle on
- * one side. Where the shelf holds the same title twice, the first one listed
- * gets the notes rather than neither.
- */
-export function shelfMatch(book: Pick<NotedBook, 'title' | 'libraryId'>, shelf: ShelfBook[]): ShelfBook | null {
-  if (book.libraryId) {
-    const byId = shelf.find((entry) => entry.id === book.libraryId);
-    if (byId) return byId;
-  }
-  const key = titleKey(book.title);
-  if (!key) return null;
-  const whole = shelf.find((entry) => titleKey(entry.title) === key);
-  if (whole) return whole;
-  const main = mainTitleKey(book.title);
-  return (
-    shelf.find((entry) => {
-      const theirs = titleKey(entry.title);
-      const theirMain = mainTitleKey(entry.title);
-      return (theirMain === key && theirMain !== theirs) || (main === theirs && main !== key);
-    }) ?? null
-  );
-}
-
-/** The book's own chapter of that name, if it has one. */
-export function chapterNamed<T extends { title: string }>(name: string, chapters: T[]): T | null {
-  const key = titleKey(name);
-  if (!key) return null;
-  return chapters.find((chapter) => titleKey(chapter.title) === key) ?? null;
-}
+export { chapterNamed, shelfMatch, titleKey, type ShelfBook } from './sameBook';
 
 export const noteKey = (quote: string, note: string | null) =>
   `${quote.replace(/\s+/g, '')}\u0000${(note ?? '').replace(/\s+/g, '')}`;

@@ -1,3 +1,70 @@
+/**
+ * A book's heavy parts: its text and what is made from it in bulk. A daily
+ * backup leaves these to the weekly copy unless they changed since.
+ */
+export const HEAVY_BOOK_TABLES = [
+  'documents',
+  'chapters',
+  'chapter_versions',
+  'translation_units',
+  'translation_memory',
+  'verses',
+  'images',
+  'mentions',
+] as const;
+
+/** Everything else that belongs to one book and travels in its record. */
+export const LIGHT_BOOK_TABLES = [
+  'annotations',
+  'book_tags',
+  'list_books',
+  'entities',
+  'scenes',
+  'excerpts',
+  'continuity_flags',
+  'observations',
+  'part_details',
+  'part_names',
+  'relations',
+  'scene_tags',
+  'script_elements',
+  'terms',
+  'reading_events',
+] as const;
+
+const NOW_MS = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+
+function mark(book: string, heavy: boolean): string {
+  return `INSERT OR IGNORE INTO book_changes (book_id) VALUES (${book});
+     UPDATE book_changes SET changed_at = ${NOW_MS}${heavy ? `, content_at = ${NOW_MS}` : ''}
+      WHERE book_id = ${book};`;
+}
+
+function changeTriggers(): string {
+  const triggers: string[] = [];
+  const tables = [
+    ...HEAVY_BOOK_TABLES.map((table) => [table, true] as const),
+    ...LIGHT_BOOK_TABLES.map((table) => [table, false] as const),
+  ];
+  for (const [table, heavy] of tables) {
+    for (const [event, row] of [['INSERT', 'NEW'], ['UPDATE', 'NEW'], ['DELETE', 'OLD']] as const) {
+      triggers.push(
+        `CREATE TRIGGER IF NOT EXISTS changed_${table}_${event.toLowerCase()} AFTER ${event} ON ${table}
+         BEGIN ${mark(`${row}.book_id`, heavy)} END;`
+      );
+    }
+  }
+  triggers.push(
+    `CREATE TRIGGER IF NOT EXISTS changed_books_insert AFTER INSERT ON books
+     BEGIN ${mark('NEW.id', true)} END;`,
+    `CREATE TRIGGER IF NOT EXISTS changed_books_update AFTER UPDATE ON books
+     BEGIN ${mark('NEW.id', false)} END;`,
+    `CREATE TRIGGER IF NOT EXISTS changed_books_source AFTER UPDATE OF source_hash, source_path ON books
+     BEGIN ${mark('NEW.id', true)} END;`
+  );
+  return triggers.join('\n   ');
+}
+
 export const migrations: string[] = [
   `CREATE TABLE books (
      id TEXT PRIMARY KEY NOT NULL,
@@ -940,4 +1007,13 @@ export const migrations: string[] = [
   // Where in the book a note was made, in words, for a book with no chapter
   // to point at: notes brought over from elsewhere onto a record.
   `ALTER TABLE annotations ADD COLUMN place TEXT;`,
+  // Which books changed, and when — so a daily backup carries only those, and
+  // only their light parts unless the heavy ones moved too. Written by
+  // triggers, so no write path has to remember it.
+  `CREATE TABLE IF NOT EXISTS book_changes (
+     book_id TEXT PRIMARY KEY NOT NULL,
+     changed_at INTEGER NOT NULL DEFAULT 0,
+     content_at INTEGER NOT NULL DEFAULT 0
+   );
+   ${changeTriggers()}`,
 ];

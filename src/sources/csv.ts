@@ -19,12 +19,14 @@ export function parseCsv(source: string): Record<string, string>[] {
  */
 export function forEachCsvRow(
   source: string,
-  onRow: (row: Record<string, string>) => void
+  onRow: (row: Record<string, string>) => void,
+  /** What a header is called here, where a file may name it otherwise. */
+  rename: (name: string) => string = (name) => name
 ): void {
   let header: string[] | null = null;
   eachRow(source.replace(/^﻿/, ''), (cells) => {
     if (!header) {
-      header = cells;
+      header = cells.map(rename);
       return;
     }
     const row: Record<string, string> = {};

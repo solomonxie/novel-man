@@ -46,6 +46,12 @@ const EXPORT_SHELVES: Record<string, ReadingStatus> = {
   '读过': 'read',
   '在读': 'reading',
   '想读': 'wishlist',
+  reading: 'reading',
+  finished: 'read',
+  'want to read': 'wishlist',
+  'want-to-read': 'wishlist',
+  '已读': 'read',
+  '正在读': 'reading',
 };
 
 /**
@@ -126,7 +132,7 @@ function isbnFrom(...values: (string | undefined)[]): string {
  * and a row missing the two that matter — a title and an id — is dropped
  * rather than guessed at.
  */
-export function booksFromExport(csv: string): Shelved[] {
+export function booksFromExport(csv: string, rename?: (name: string) => string): Shelved[] {
   const found: Shelved[] = [];
   forEachCsvRow(csv, (row) => {
     const { title, series } = titleAndSeries(row['Title'] ?? '');
@@ -148,7 +154,7 @@ export function booksFromExport(csv: string): Shelved[] {
       added: dateFrom(row['Date Added']),
       shelves,
     });
-  });
+  }, rename);
   return found;
 }
 

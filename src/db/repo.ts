@@ -591,30 +591,6 @@ export async function saveRecordBook(input: RecordedBook): Promise<string> {
   return id;
 }
 
-/**
- * The same book, already on the shelf. An imported library is mostly books the
- * reader has been adding for years, and adding a second row for one of them is
- * worse than skipping it: the notes go to one and the rating to the other.
- *
- * The title has to match, case and outer space aside, and the author has to
- * either match or be missing here. Deliberately strict: two books with the
- * same title are common, and merging the wrong pair puts somebody's review on
- * a book they never read — a duplicate is the cheaper mistake.
- */
-export async function findBookNamed(title: string, author?: string | null): Promise<Book | null> {
-  const database = await db();
-  const row = await database.getFirstAsync<Book>(
-    `SELECT * FROM books
-      WHERE LOWER(TRIM(title)) = ?
-        AND (? = '' OR author IS NULL OR LOWER(TRIM(author)) = ?)
-      LIMIT 1`,
-    title.trim().toLowerCase(),
-    (author ?? '').trim().toLowerCase(),
-    (author ?? '').trim().toLowerCase()
-  );
-  return row ?? null;
-}
-
 /** Already here under the id the catalog knows it by. */
 export async function findRecordFrom(sourceName: string, sourceHash: string): Promise<Book | null> {
   const database = await db();
@@ -2514,5 +2490,55 @@ export async function storedFileReferences(): Promise<{ hashes: Set<string>; pat
   return {
     hashes: new Set(rows.map((row) => row.source_hash).filter(Boolean)),
     paths: rows.map((row) => `${row.source_path}\n${row.origin_path ?? ''}`).join('\n'),
+  };
+}
+
+/** Books written to since a moment, and whether their heavy parts were. See `book_changes`. */
+export async function booksChangedSince(at: number): Promise<{ id: string; heavy: boolean }[]> {
+  const database = await db();
+  const rows = await database.getAllAsync<{ book_id: string; content_at: number }>(
+    `SELECT c.book_id, c.content_at FROM book_changes c JOIN books b ON b.id = c.book_id
+      WHERE c.changed_at > ?`,
+    at
+  );
+  return rows.map((row) => ({ id: row.book_id, heavy: row.content_at > at }));
+}
+
+export async function readingOffsets(): Promise<Record<string, number>> {
+  const database = await db();
+  const rows = await database.getAllAsync<{ book_id: string; offset: number }>(
+    'SELECT book_id, offset FROM reading_state'
+  );
+  return Object.fromEntries(rows.map((row) => [row.book_id, row.offset]));
+}
+
+/** What a whole-library backup would count, without reading the library. */
+export async function libraryCounts(): Promise<{
+  books: number;
+  chapters: number;
+  notes: number;
+  people: number;
+  places: number;
+  terms: number;
+  words: number;
+}> {
+  const database = await db();
+  const row = await database.getFirstAsync<Record<string, number>>(
+    `SELECT (SELECT COUNT(*) FROM books) AS books,
+            (SELECT COUNT(*) FROM chapters) AS chapters,
+            (SELECT COUNT(*) FROM annotations WHERE kind = 'note') AS notes,
+            (SELECT COUNT(*) FROM entities WHERE kind = 'character') AS people,
+            (SELECT COUNT(*) FROM entities WHERE kind = 'place') AS places,
+            (SELECT COUNT(*) FROM entities WHERE kind = 'term') AS terms,
+            (SELECT COALESCE(SUM(word_count), 0) FROM books) AS words`
+  );
+  return {
+    books: row?.books ?? 0,
+    chapters: row?.chapters ?? 0,
+    notes: row?.notes ?? 0,
+    people: row?.people ?? 0,
+    places: row?.places ?? 0,
+    terms: row?.terms ?? 0,
+    words: row?.words ?? 0,
   };
 }

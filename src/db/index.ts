@@ -58,6 +58,23 @@ export function db(): Promise<Database> {
   return handle;
 }
 
+/**
+ * Split on `;`, except inside a trigger, whose body is statements of its own
+ * and ends at its `END`.
+ */
+export function statementsOf(sql: string): string[] {
+  const out: string[] = [];
+  let pending = '';
+  for (const piece of sql.split(';')) {
+    pending = pending ? `${pending};${piece}` : piece;
+    if (/^\s*CREATE\s+TRIGGER\b/i.test(pending) && !/\bEND\s*$/i.test(pending)) continue;
+    if (pending.trim()) out.push(pending);
+    pending = '';
+  }
+  if (pending.trim()) out.push(pending);
+  return out;
+}
+
 async function open() {
   // The same file expo-sqlite kept, wherever `ownPath` finds its folder now.
   // Opening anywhere else would silently start an empty library — which is
@@ -66,9 +83,7 @@ async function open() {
   const database: Database = {
     async execAsync(sql) {
       // Migrations arrive as several statements at once; the driver takes one.
-      for (const statement of sql.split(';')) {
-        if (statement.trim()) await driver.execute(statement);
-      }
+      for (const statement of statementsOf(sql)) await driver.execute(statement);
     },
     async runAsync(sql, ...params) {
       const { rowsAffected } = await driver.execute(sql, bind(params));
@@ -111,7 +126,7 @@ async function open() {
  * throws — a schema that half-applied is worth stopping for.
  */
 async function apply(database: Database, sql: string) {
-  for (const statement of sql.split(';')) {
+  for (const statement of statementsOf(sql)) {
     if (!statement.trim()) continue;
     try {
       await database.execAsync(statement);

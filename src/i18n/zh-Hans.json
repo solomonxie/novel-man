@@ -64,7 +64,9 @@
     "keyStays": "保存在本机钥匙串里。不会进入备份，也只会发给 Google。",
     "keyWhere": "获取方式：Google Cloud 控制台 → 启用 Books API → 凭据 → 创建 API 密钥。",
     "keyForget": "忘记这个密钥",
-    "chineseIsbn": "这是中国的 ISBN（978-7-…）。两个书目都查过了，都没有这个版本——Open Library 只收录了国内出版物的一小部分。最稳的办法是直接搜中文书名。"
+    "chineseIsbn": "这是中国的 ISBN（978-7-…）。两个书目都查过了，都没有这个版本——Open Library 只收录了国内出版物的一小部分。最稳的办法是直接搜中文书名。",
+    "catalog_apple": "Apple 图书",
+    "catalog_douban": "豆瓣"
   },
   "shelf": {
     "title": "书架",
@@ -629,6 +631,7 @@
     "failed": "无法完成",
     "notABundle": "这不是 Novel Man 的备份文件。",
     "tooNew": "该备份来自更新的版本（v{{version}}），请先升级应用。",
+    "missingBase": "这份每日备份需要它所依据的每周备份（{{name}}），但那份已经不在了。",
     "aboutUnknown": "这是旧版本写的备份，没有记录里面有什么。恢复仍然可用。",
     "aboutEmpty": "里面是空的。",
     "repaired": "已把 {{count}} 张丢失的封面补回书架上原有的书。"
@@ -644,7 +647,8 @@
     "onPhone": "在这台手机上 · {{count}} · {{size}}",
     "onPhoneHint": "「文件」→「我的 iPhone」→ Novel Man → Backups。点一份可以发到别处。它们能救回一次误操作，救不回丢失或被抹掉的手机。",
     "noneYet": "这里还没有副本。",
-    "kind_daily": "整个书库，每天一份",
+    "kind_daily": "每天一份，只含自每周整份以来的改动",
+    "kind_weekly": "整个书库，每周一份",
     "kind_database": "数据库本身，整份拷贝",
     "kind_guard": "在某次大批改写之前留下的",
     "kind_pre-deletion": "在清空全部数据之前留下的",
@@ -1376,7 +1380,7 @@
     "choose": "选择笔记文件",
     "notNotes": "这个文件里没有找到笔记。",
     "add": "加入 {{count}} 条笔记",
-    "summary": "共 {{books}} 本：{{matched}} 本已在书架上，{{created}} 本将新建。",
+    "summary": "共 {{books}} 本：{{matched}} 本已在书架上，{{created}} 本将新建，{{skipped}} 本不导入。",
     "where": "每本书的笔记加到哪里",
     "onto": "{{count}} 条 → {{title}}",
     "asNew": "{{count}} 条 → 新建这本书",
@@ -1385,7 +1389,7 @@
     "newBooks": "新建的书"
   },
   "csv": {
-    "why": "任何平台的书单，只要是 CSV。Goodreads 自己的导出文件可以直接读；其他文件也一样，只要表头带着下面这些列。",
+    "why": "任何平台的书单，只要是 CSV。Goodreads 自己的导出文件可以直接读；其他文件也一样，只要表头带着下面这些列，或它们的常用叫法（书名、作者、评分……中英文都行）。GBK 或 UTF-16 编码的文件也能读。",
     "chooseCsv": "选择 CSV 文件",
     "chooseAnother": "换一个文件",
     "chosen": "{{name}}",
@@ -1493,5 +1497,24 @@
     "review": "查看改动",
     "anotherCopy": "合并另一个副本…",
     "anotherCopyWhy": "这本书的另一个文件，逐章对齐。新章节会加入；有改动的章节两种文字都保留。"
+  },
+  "importPlan": {
+    "skipped": "不导入",
+    "onto": "{{title}}",
+    "asNew": "新书",
+    "notes": "{{count}} 条笔记",
+    "asNewOption": "作为新书添加",
+    "skipOption": "不导入这本",
+    "search": "搜索书架",
+    "tapToChange": "每本的去向 — 点一下可以修改",
+    "where": "每本的去向",
+    "summary": "{{matched}} 本加到已有的书上，{{created}} 本新建，{{skipped}} 本不导入。",
+    "undoTitle": "撤销这次导入？",
+    "undoWhat": "新加的 {{books}} 本书移到「最近删除」，{{notes}} 条笔记删除，{{changed}} 本书恢复导入前的评分、书评和状态。",
+    "undo": "撤销",
+    "undoFailed": "无法撤销",
+    "lastTitle": "上次导入",
+    "lastUnnamed": "未命名文件",
+    "lastWhat": "{{date}} · 新增 {{books}} 本 · {{notes}} 条笔记 · 修改 {{changed}} 本"
   }
 }

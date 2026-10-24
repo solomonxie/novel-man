@@ -13,12 +13,15 @@ import {
   BUNDLE_FORMAT,
   BUNDLE_VERSION,
   BundleError,
+  CHANGES_VERSION,
   bundleName,
   validate,
   type BundleAbout,
   type BundledBook,
+  type Changes,
   type Snapshot,
 } from './format';
+import { HEAVY_CARRIED } from './chain';
 
 
 const SNAPSHOT = 'snapshot.json';
@@ -33,16 +36,23 @@ const SNAPSHOT = 'snapshot.json';
  * travel nowhere.
  */
 export async function buildBundle(
-  bookIds?: string[]
+  bookIds?: string[],
+  daily?: { light: Set<string>; changes: Changes; about: BundleAbout }
 ): Promise<ExportFile & { about: BundleAbout }> {
   const ids = bookIds ?? (await listBookIds());
   const assets: Record<string, Uint8Array> = {};
   const books: BundledBook[] = [];
 
   for (const id of ids) {
-    const record = await readBookRecord(id);
+    const light = daily?.light.has(id) ?? false;
+    const record = await readBookRecord(id, { text: !light });
     if (!record) continue;
-    books.push(await withAssets(record, assets));
+    if (light) {
+      for (const table of HEAVY_CARRIED) delete record.carried?.[table];
+      books.push({ ...(await withAssets(record, assets, { light })), fromBase: true });
+    } else {
+      books.push(await withAssets(record, assets));
+    }
     // Every book here is a synchronous file read — `await readBookRecord` is a
     // microtask, not a yield, so without this the whole loop runs as one
     // block: 139 books, most of them free, one of them 2.5s for its images,
@@ -52,7 +62,8 @@ export async function buildBundle(
 
   const snapshot: Snapshot = {
     format: BUNDLE_FORMAT,
-    version: BUNDLE_VERSION,
+    version: daily ? CHANGES_VERSION : BUNDLE_VERSION,
+    ...(daily ? { changes: daily.changes } : {}),
     createdAt: Date.now(),
     app: 'novel-man',
     books,
@@ -65,11 +76,13 @@ export async function buildBundle(
   };
 
   const json = JSON.stringify(snapshot);
-  const about = aboutOf(books, snapshot.createdAt);
+  // A daily copy is a part of the library, so its counts are the library's,
+  // taken by the caller; and its readable files are left to the weekly one.
+  const about = daily ? { ...daily.about, createdAt: snapshot.createdAt } : aboutOf(books, snapshot.createdAt);
   const entries: Entry[] = [
     { path: ABOUT, bytes: strToU8(JSON.stringify(about)) },
     { path: SNAPSHOT, bytes: strToU8(json) },
-    ...(await readableEntries(books)),
+    ...(daily ? [] : await readableEntries(books)),
   ];
   let assetBytes = 0;
   for (const [path, bytes] of Object.entries(assets)) {
@@ -278,13 +291,14 @@ export function readAbout(bytes: Uint8Array): BundleAbout | null {
 
 async function withAssets(
   record: BookRecord,
-  assets: Record<string, Uint8Array>
+  assets: Record<string, Uint8Array>,
+  { light = false }: { light?: boolean } = {}
 ): Promise<BundledBook> {
   const bundled: BundledBook = { ...record, assets: { portraits: {} } };
   // The file the book was made from, so a restore can put it back rather than
   // ask for it. Without this a restored book reads fine and still counts as
   // "missing its file" to everything that wants the original bytes.
-  const source = sourceBytes(record);
+  const source = light ? null : sourceBytes(record);
   if (source) {
     const path = `sources/${record.book.source_hash}.${record.book.source_ext || 'bin'}`;
     assets[path] = source;
@@ -299,6 +313,7 @@ async function withAssets(
     const path = stash(entity.portrait_path, assets, `portrait-${entity.id}`);
     if (path) bundled.assets.portraits[entity.id] = path;
   }
+  if (light) return bundled;
   // Everything else that was drawn. Their rows travel with the book and point
   // at a file by name, so the bytes go under that same name and the rows
   // resolve on the other side without being rewritten.
@@ -372,8 +387,10 @@ export function openBundle(bytes: Uint8Array): OpenedBundle {
     throw new BundleError('unreadable', String(error));
   }
   const assets: Record<string, Uint8Array> = {};
+  // `sources/` too: the book's own file was written into every bundle and
+  // then dropped here, so no restore ever put one back.
   for (const [path, content] of Object.entries(entries)) {
-    if (path.startsWith('assets/')) assets[path] = content;
+    if (path.startsWith('assets/') || path.startsWith('sources/')) assets[path] = content;
   }
   return { snapshot: validate(parsed), assets, bytes };
 }

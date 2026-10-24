@@ -39,7 +39,25 @@ export type Snapshot = {
    * without text and wait for the file. Nothing writes it any more.
    */
   contentOmitted?: boolean;
+  /**
+   * Set on a daily copy that holds only what changed since a weekly one. Such
+   * a bundle is restored together with that weekly copy — see `chain.ts`.
+   */
+  changes?: Changes;
 };
+
+export type Changes = {
+  /** The weekly copy's file name, in the same folder. */
+  base: string;
+  baseCreatedAt: number;
+  /** Every book on the shelf that day, changed or not: what is gone is gone. */
+  present: string[];
+  /** Reading position of every book, which moves daily and weighs nothing. */
+  offsets: Record<string, number>;
+};
+
+/** A daily copy is a newer shape than an older build can restore on its own. */
+export const CHANGES_VERSION = 4;
 
 /**
  * The one page of a backup anybody reads before restoring it: how much is in
@@ -70,10 +88,15 @@ export type BundledBook = BookRecord & {
     /** Drawn images, under the names their rows already point at. */
     pictures?: string[];
   };
+  /** Text, chapters and the heavy rows unchanged: they are in the weekly copy. */
+  fromBase?: boolean;
 };
 
 export class BundleError extends Error {
-  constructor(public code: 'not-a-bundle' | 'too-new' | 'unreadable', public detail?: string) {
+  constructor(
+    public code: 'not-a-bundle' | 'too-new' | 'unreadable' | 'missing-base',
+    public detail?: string
+  ) {
     super(code);
   }
 }
@@ -82,7 +105,7 @@ export function validate(snapshot: unknown): Snapshot {
   const candidate = snapshot as Snapshot;
   if (!candidate || candidate.format !== BUNDLE_FORMAT) throw new BundleError('not-a-bundle');
   // A newer bundle may carry fields this build would silently drop on restore.
-  if (candidate.version > BUNDLE_VERSION) throw new BundleError('too-new', String(candidate.version));
+  if (candidate.version > CHANGES_VERSION) throw new BundleError('too-new', String(candidate.version));
   if (!Array.isArray(candidate.books)) throw new BundleError('unreadable');
   return candidate;
 }

@@ -21,7 +21,7 @@ import { score } from './matching';
 export type Candidate = {
   /** Unique within its source, and what the list is keyed by. */
   id: string;
-  source: 'openlibrary' | 'google';
+  source: CatalogId;
   title: string;
   author: string | null;
   year: string | null;
@@ -56,6 +56,20 @@ const GOOGLE = 'https://www.googleapis.com/books/v1/volumes';
  * the API. Atom rather than JSON, which is the only cost.
  */
 const GOOGLE_FEED = 'https://books.google.com/books/feeds/volumes';
+/** Apple's public store search: keyless, and a large cover for nearly every row. */
+const APPLE = 'https://itunes.apple.com/search';
+/**
+ * Douban's own search-as-you-type answer. Not a published API — the one it had
+ * was retired — but it is what its search box asks, keyless, and it knows the
+ * Chinese editions every other catalog here is weakest on.
+ */
+const DOUBAN = 'https://book.douban.com/j/subject_suggest';
+const DOUBAN_REFERER = 'https://book.douban.com/';
+
+/** Douban's image host refuses a request that does not come from its own pages. */
+export function coverHeaders(url: string): Record<string, string> | undefined {
+  return /\.doubanio\.com\//.test(url) ? { Referer: DOUBAN_REFERER } : undefined;
+}
 
 /**
  * The digits and nothing else. An ISBN is printed with hyphens, read aloud
@@ -291,6 +305,68 @@ export function candidatesFromGoogleFeed(xml: string): Candidate[] {
   return found;
 }
 
+/** Apple's 100px artwork address names its own size; any other is a rewrite. */
+export function appleCover(url: string, px: number): string {
+  return url.replace(/\/\d+x\d+bb\./, `/${px}x${px}bb.`);
+}
+
+export function candidatesFromApple(payload: unknown): Candidate[] {
+  const results = (payload as { results?: unknown[] })?.results;
+  if (!Array.isArray(results)) return [];
+  const found: Candidate[] = [];
+  for (const raw of results) {
+    const item = raw as Record<string, unknown>;
+    const title = text(item.trackName);
+    const id = item.trackId;
+    if (!title || (typeof id !== 'number' && typeof id !== 'string')) continue;
+    const art = text(item.artworkUrl100) ?? text(item.artworkUrl60);
+    const summary = text(item.description);
+    found.push({
+      id: `ap:${id}`,
+      source: 'apple',
+      title,
+      author: text(item.artistName),
+      year: yearOf(item.releaseDate),
+      isbn: null,
+      language: null,
+      thumb: art ? appleCover(art, 300) : null,
+      cover: art ? appleCover(art, 1000) : null,
+      summary: summary ? decodeEntities(stripTags(summary.replace(/<br\s*\/?>/gi, '\n'))).trim() : null,
+      edition: null,
+      subjects: strings(item.genres).filter((genre) => genre !== 'Books'),
+    });
+  }
+  return found;
+}
+
+export function candidatesFromDouban(payload: unknown): Candidate[] {
+  if (!Array.isArray(payload)) return [];
+  const found: Candidate[] = [];
+  for (const raw of payload) {
+    const item = raw as Record<string, unknown>;
+    const title = text(item.title);
+    const id = text(item.id);
+    if (!title || !id || (item.type && item.type !== 'b')) continue;
+    // `s` is the 70px list size; `m` and `l` sit beside it under the same name.
+    const pic = text(item.pic);
+    found.push({
+      id: `db:${id}`,
+      source: 'douban',
+      title,
+      author: text(item.author_name),
+      year: yearOf(item.year),
+      isbn: null,
+      language: 'zh',
+      thumb: pic ? pic.replace('/view/subject/s/', '/view/subject/m/') : null,
+      cover: pic ? pic.replace('/view/subject/s/', '/view/subject/l/') : null,
+      summary: null,
+      edition: null,
+      subjects: [],
+    });
+  }
+  return found;
+}
+
 export function candidatesFromGoogle(payload: unknown): Candidate[] {
   const items = (payload as { items?: unknown[] })?.items;
   if (!Array.isArray(items)) return [];
@@ -364,10 +440,28 @@ function preferred(held: Candidate, next: Candidate): Candidate {
   return { ...next, thumb: next.thumb ?? held.thumb, cover: next.cover ?? held.cover };
 }
 
-export function mergeCandidates(lists: Candidate[][], limit = 10, asked = ''): Candidate[] {
+/** A store search answers something for every query; a row naming none of the words is noise. */
+const SEARCHED: Candidate['source'][] = ['apple', 'douban'];
+
+function namesAny(candidate: Candidate, terms: string[]): boolean {
+  const said = `${candidate.title} ${candidate.author ?? ''}`.toLowerCase();
+  return terms.some((term) => said.includes(term));
+}
+
+/** Title and author as a catalog-blind key: the same book, whichever printing. */
+const workKey = (candidate: Candidate) =>
+  `${candidate.title.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')}|${(candidate.author ?? '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '')}`;
+
+export function mergeCandidates(lists: Candidate[][], limit = 20, asked = ''): Candidate[] {
   const at = new Map<string, number>();
   const kept: Candidate[] = [];
+  const terms = asked.toLowerCase().split(/\s+/).filter(Boolean);
+  const isbnAsked = isIsbn(asked);
   for (const candidate of lists.flat()) {
+    if (terms.length && !isbnAsked && SEARCHED.includes(candidate.source) && !namesAny(candidate, terms)) continue;
     // Same ISBN is the same printing whichever catalog said it; failing that,
     // the same title by the same author in the same year is the same book.
     const key = candidate.isbn
@@ -381,7 +475,16 @@ export function mergeCandidates(lists: Candidate[][], limit = 10, asked = ''): C
     at.set(key, kept.length);
     kept.push(candidate);
   }
-  const terms = asked.toLowerCase().split(/\s+/).filter(Boolean);
+  // A row without a picture borrows one from another catalog's row for the
+  // same title by the same author: the cover is what this list is chosen by.
+  const pictured = new Map<string, Candidate>();
+  for (const candidate of kept) {
+    if (candidate.thumb && !pictured.has(workKey(candidate))) pictured.set(workKey(candidate), candidate);
+  }
+  for (let index = 0; index < kept.length; index++) {
+    const donor = !kept[index].thumb ? pictured.get(workKey(kept[index])) : undefined;
+    if (donor) kept[index] = { ...kept[index], thumb: donor.thumb, cover: donor.cover };
+  }
   // Two catalogs that disagree about the ISBN do not collide above, so the
   // romanised row survives as a row of its own — and a cover would float it
   // to the top. On a Chinese ISBN the script settles it before the cover does.
@@ -498,7 +601,7 @@ export function openLibraryQuery(asked: string): string {
 /** Neither catalog could be reached, which is not the same as neither knowing. */
 export class CatalogsUnreachable extends Error {}
 
-export type CatalogId = 'openlibrary' | 'google';
+export type CatalogId = 'openlibrary' | 'google' | 'apple' | 'douban';
 
 /**
  * What a catalog did, and not only what it returned.
@@ -567,7 +670,7 @@ async function ask(
 export async function findBook(
   query: string,
   {
-    limit = 10,
+    limit = 20,
     googleKey,
     onPartial,
     signal,
@@ -614,6 +717,24 @@ export async function findBook(
         await xml(`${GOOGLE_FEED}?q=${encodeURIComponent(terms)}&max-results=${limit}`, signal)
       )
     ),
+    // Store searches take words, not numbers. Apple's mainland store sells
+    // almost no books, so a Chinese title is asked of Taiwan's.
+    isbn
+      ? null
+      : ask('apple', async () =>
+          candidatesFromApple(
+            await json(
+              `${APPLE}?term=${encodeURIComponent(asked)}&media=ebook&limit=${limit}` +
+                `&country=${inHan(asked) ? 'tw' : 'us'}`,
+              signal
+            )
+          )
+        ),
+    isbn || !inHan(asked)
+      ? null
+      : ask('douban', async () =>
+          candidatesFromDouban(await json(`${DOUBAN}?q=${encodeURIComponent(asked)}`, signal))
+        ),
   ];
 
   /**
@@ -654,7 +775,7 @@ function assemble(
   keyed: boolean,
   final: boolean
 ): Lookup {
-  const [openLibrary, api, feed] = landed;
+  const [openLibrary, api, feed, apple, douban] = landed;
   // One row for Google however many of its doors were tried: to a reader it is
   // one catalog, and "the newer half of Google is rate limited" is not a
   // sentence anybody can act on.
@@ -676,14 +797,23 @@ function assemble(
   // Reporting that as "nothing found" sends someone looking for a book that is
   // there. Only once everything has had its turn: until then it is a search
   // still running, which is a different thing entirely.
-  if (final && !ol.answered && !google.answered) throw new CatalogsUnreachable();
+  const stores = [apple, douban].filter((answer): answer is Answer => Boolean(answer));
+  if (final && !ol.answered && !google.answered && !stores.some((answer) => answer.report.answered)) {
+    throw new CatalogsUnreachable();
+  }
   return {
     candidates: mergeCandidates(
-      [openLibrary?.candidates ?? [], api?.candidates ?? [], feed?.candidates ?? []],
+      [
+        openLibrary?.candidates ?? [],
+        api?.candidates ?? [],
+        feed?.candidates ?? [],
+        douban?.candidates ?? [],
+        apple?.candidates ?? [],
+      ],
       limit,
       asked
     ),
-    catalogs: [ol, google],
+    catalogs: [ol, google, ...stores.map((answer) => answer.report)],
   };
 }
 

@@ -1,6 +1,8 @@
 import { yieldToUI } from '../async/yield';
 import { adoptSourceFile, extensionOf, writeImage } from '../storage/files';
-import { findBookNamed, getBook, replacePages, saveImportedBook, setOrigin } from '../db/repo';
+import { getBook, replacePages, saveImportedBook, setOrigin } from '../db/repo';
+import { shelfBooks } from '../books/imports';
+import { shelfMatch } from '../sources/sameBook';
 import { bookWithSource, chapterBodies, hintsIn, mergeInto, type Decision, type Incoming } from '../db/versions';
 import { alignChapters, type Step } from '../structure/merge';
 import { applyToImport } from '../backup/pending';
@@ -148,7 +150,8 @@ export async function importFile(
   // Picked from the search page, where it is not yet anybody's: if the shelf
   // already has this book, the reader says whether this is another copy of it.
   if (!into && input.match && ask?.same) {
-    const found = (await findBookNamed(title, parsed.author)) ?? (await bookWithSource(stored.hash));
+    const found =
+      shelfMatch({ title, author: parsed.author }, await shelfBooks()) ?? (await bookWithSource(stored.hash));
     // A fetched edition has no manuscript of its own to fold a file into.
     if (found && !(await getBook(found.id))?.text_source) {
       const answer = await ask.same({ id: found.id, title: found.title, author: found.author });

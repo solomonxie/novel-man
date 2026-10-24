@@ -64,7 +64,9 @@
     "keyStays": "Kept in this phone’s keychain. Never in a backup, and sent to nobody but Google.",
     "keyWhere": "Get one: Google Cloud console → enable the Books API → Credentials → Create API key.",
     "keyForget": "Forget this key",
-    "chineseIsbn": "This is a Chinese ISBN (978-7-…). Both catalogs were asked and neither holds this printing — Open Library has a fraction of what China publishes. The surest way is the title in Chinese."
+    "chineseIsbn": "This is a Chinese ISBN (978-7-…). Both catalogs were asked and neither holds this printing — Open Library has a fraction of what China publishes. The surest way is the title in Chinese.",
+    "catalog_apple": "Apple Books",
+    "catalog_douban": "Douban"
   },
   "shelf": {
     "title": "Shelf",
@@ -629,6 +631,7 @@
     "failed": "Couldn’t complete that",
     "notABundle": "That isn’t a Novel Man backup.",
     "tooNew": "This backup was made by a newer version (v{{version}}). Update the app first.",
+    "missingBase": "This daily copy needs the weekly one it was taken against ({{name}}), which is no longer here.",
     "aboutUnknown": "Written by an older version, which didn’t record what was in it. Restoring still works.",
     "aboutEmpty": "Nothing in it.",
     "repaired": "Put {{count}} missing covers back on books already on your shelf."
@@ -644,7 +647,8 @@
     "onPhone": "On this phone · {{count}} · {{size}}",
     "onPhoneHint": "Files → On My iPhone → Novel Man → Backups. Tap one to send it somewhere else. These survive a mistake, not a lost or wiped phone.",
     "noneYet": "No copies here yet.",
-    "kind_daily": "The whole library, once a day",
+    "kind_daily": "Changes since the weekly copy, once a day",
+    "kind_weekly": "The whole library, once a week",
     "kind_database": "The database itself, copied whole",
     "kind_guard": "Taken before something rewrote a lot at once",
     "kind_pre-deletion": "Taken before everything was removed",
@@ -1376,7 +1380,7 @@
     "choose": "Choose a notes file",
     "notNotes": "No notes found in that file.",
     "add": "Add {{count}} notes",
-    "summary": "{{books}} books: {{matched}} already on your shelf, {{created}} to be added.",
+    "summary": "{{books}} books: {{matched}} already on your shelf, {{created}} to be added, {{skipped}} left out.",
     "where": "Where each book’s notes go",
     "onto": "{{count}} notes → {{title}}",
     "asNew": "{{count}} notes → new book",
@@ -1385,7 +1389,7 @@
     "newBooks": "Books added"
   },
   "csv": {
-    "why": "A library from anywhere, as a CSV. Goodreads’ own export is read as it stands; any other file works too, as long as its header row carries the columns below.",
+    "why": "A library from anywhere, as a CSV. Goodreads’ own export is read as it stands; any other file works too, as long as its header row carries the columns below — or their everyday names, in English or Chinese (书名, 作者, 评分…). Files saved as GBK or UTF-16 read too.",
     "chooseCsv": "Choose a CSV file",
     "chooseAnother": "Choose a different file",
     "chosen": "{{name}}",
@@ -1493,5 +1497,24 @@
     "review": "Review changes",
     "anotherCopy": "Merge another copy…",
     "anotherCopyWhy": "A file of this book, lined up chapter by chapter. New chapters go in; changed ones keep both wordings."
+  },
+  "importPlan": {
+    "skipped": "left out",
+    "onto": "{{title}}",
+    "asNew": "new book",
+    "notes": "{{count}} notes",
+    "asNewOption": "Add as a new book",
+    "skipOption": "Leave it out",
+    "search": "Search your shelf",
+    "tapToChange": "Where each goes — tap one to change it",
+    "where": "Where each went",
+    "summary": "{{matched}} onto books already here, {{created}} new, {{skipped}} left out.",
+    "undoTitle": "Undo this import?",
+    "undoWhat": "The {{books}} books it added move to Recently Deleted, its {{notes}} notes are removed, and {{changed}} books get back the rating, review and status they had before.",
+    "undo": "Undo",
+    "undoFailed": "Could not undo",
+    "lastTitle": "Last import",
+    "lastUnnamed": "Unnamed file",
+    "lastWhat": "{{date}} · {{books}} books added · {{notes}} notes · {{changed}} changed"
   }
 }

@@ -3,6 +3,15 @@ import { extensionOf } from '../../storage/files';
 import { supportedExtensions } from '../registry';
 import { enqueueImport } from '../queue';
 import { fetchManuscript } from './url';
+import { router } from '../../navigation/router';
+
+/** A file that is not a book goes to the page that reads its kind. */
+const PAGES: Record<string, string> = {
+  csv: '/source/csv',
+  json: '/source/notes',
+  zip: '/settings/copies',
+  nmbak: '/settings/copies',
+};
 
 /**
  * "Open in Novel Man" from any other app arrives as a URL, not as an event of
@@ -13,6 +22,11 @@ import { fetchManuscript } from './url';
 export function handleIncoming(url: string): boolean {
   if (/^(file|content):/i.test(url)) {
     const name = decodeURIComponent(url.split(/[?#]/)[0].split('/').pop() ?? '');
+    const page = PAGES[extensionOf(name)];
+    if (page) {
+      router.pushWhenReady({ pathname: page, params: { uri: url, name } });
+      return true;
+    }
     if (!supportedExtensions.includes(extensionOf(name))) return false;
     enqueueImport({ uri: url, name });
     return true;

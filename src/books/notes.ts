@@ -1,23 +1,29 @@
-import { addAnnotation, listAnnotations, listBooks, listChapters, saveRecordBook } from '../db/repo';
-import { chapterNamed, noteKey, shelfMatch, type NotedBook, type ShelfBook } from '../sources/notesFile';
+import { addAnnotation, listAnnotations, listChapters, saveRecordBook } from '../db/repo';
+import { chapterNamed, noteKey, shelfMatch, type NotedBook } from '../sources/notesFile';
+import { shelfBooks, type Planned } from './imports';
 import { hueFrom } from '../ui/fields';
 import { yieldToUI } from '../async/yield';
 import { languageOfRecord } from './save';
 
 export const NOTES_FILE = 'a notes file';
 
-export type NotesPlan = { book: NotedBook; onto: ShelfBook | null }[];
+export type NotesPlan = Planned<NotedBook>[];
 
 /** Where each book's notes will go, for the reader to see before anything is written. */
 export async function planNotes(books: NotedBook[]): Promise<NotesPlan> {
-  const shelf = (await listBooks())
-    .slice()
-    .sort((a, b) => a.created_at - b.created_at)
-    .map(({ id, title, author }) => ({ id, title, author }));
-  return books.map((book) => ({ book, onto: shelfMatch(book, shelf) }));
+  const shelf = await shelfBooks();
+  return books.map((item) => ({ item, onto: shelfMatch(item, shelf), skip: false }));
 }
 
-export type KeptNotes = { books: number; created: number; added: number; already: number };
+export type KeptNotes = {
+  books: number;
+  created: number;
+  added: number;
+  already: number;
+  /** For taking it back: the books made and the notes written. */
+  made: string[];
+  notes: string[];
+};
 
 /**
  * Every note as its own entry about the book: the quote, and what was said of
@@ -28,9 +34,13 @@ export async function keepNotes(
   kind: string,
   onProgress?: (done: number, total: number) => void
 ): Promise<KeptNotes> {
-  const count: KeptNotes = { books: 0, created: 0, added: 0, already: 0 };
+  const count: KeptNotes = { books: 0, created: 0, added: 0, already: 0, made: [], notes: [] };
   for (let at = 0; at < plan.length; at++) {
-    const { book, onto } = plan[at];
+    const { item: book, onto, skip } = plan[at];
+    if (skip) {
+      onProgress?.(at + 1, plan.length);
+      continue;
+    }
     let bookId = onto?.id;
     if (!bookId) {
       bookId = await saveRecordBook({
@@ -43,6 +53,7 @@ export async function keepNotes(
         status: book.status,
       });
       count.created += 1;
+      count.made.push(bookId);
     }
     const kept = new Set((await listAnnotations(bookId)).map((entry) => noteKey(entry.quote, entry.note)));
     const chapters = onto ? await listChapters(bookId) : [];
@@ -56,7 +67,7 @@ export async function keepNotes(
       // Under the book's own chapter where it has one by that name; otherwise
       // the name is kept, so the notes still fall into chapters.
       const chapter = note.chapter ? chapterNamed(note.chapter, chapters) : null;
-      await addAnnotation({
+      const id = await addAnnotation({
         bookId,
         chapterId: chapter?.id ?? null,
         place: chapter ? null : note.chapter || null,
@@ -70,6 +81,7 @@ export async function keepNotes(
         suffix: '',
         standalone: true,
       });
+      count.notes.push(id);
       count.added += 1;
     }
     count.books += 1;

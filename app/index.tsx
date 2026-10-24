@@ -22,7 +22,7 @@ import { listBooks, storedFileReferences, type BookListItem } from '../src/db/re
 import { demoMode } from '../src/dev/demo';
 import { reviewedBooks, shelfOf, type ReadingStatus } from '../src/books/record';
 import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
-import { pickManuscript } from '../src/import/sources/picker';
+import { pickManuscripts } from '../src/import/sources/picker';
 import { BookSources } from '../src/ui/BookSources';
 import { supportedExtensions } from '../src/import/registry';
 import { PrimaryAction, Row, Section } from '../src/ui/primitives';
@@ -49,7 +49,7 @@ import { space, usePalette } from '../src/theme';
 const REVIEWS_SHOWN = 3;
 
 /** The order the shelves are read in, which is not the order they are declared in. */
-const SHELVES: ReadingStatus[] = ['reading', 'wishlist', 'read'];
+const SHELVES: ReadingStatus[] = ['wishlist', 'reading', 'read'];
 
 /** Three across and a sliver of a fourth — the sliver is what says it scrolls. */
 const PER_SCREEN = 3.2;
@@ -86,8 +86,11 @@ export default function Home() {
   /** From Files, matched against the shelf once it has been read. */
   async function fromFile() {
     try {
-      const picked = await pickManuscript();
-      if (picked) router.push(`/job/${enqueueImport({ ...picked, match: true })}`);
+      const [first, ...rest] = await pickManuscripts();
+      if (!first) return;
+      const job = enqueueImport({ ...first, match: true });
+      for (const picked of rest) enqueueImport({ ...picked, match: true });
+      router.push(`/job/${job}`);
     } catch (problem) {
       Alert.alert(t('import.failed'), String(problem));
     }

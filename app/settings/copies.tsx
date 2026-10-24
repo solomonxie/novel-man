@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
-import { router, Stack, useFocusEffect } from '../../src/navigation/router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { buildBundle, buildPlainCopy, openBundle, type OpenedBundle } from '../../src/backup/bundle';
@@ -11,6 +11,7 @@ import { trashCount } from '../../src/backup/trash';
 import { listConnections } from '../../src/cloud/connections';
 import type { Connection } from '../../src/cloud/providers';
 import { restoreBundle, type RestoreReport } from '../../src/backup/restore';
+import { openWithBase } from '../../src/backup/local';
 import { BundleError, isBundleName } from '../../src/backup/format';
 import { RestoreReportView } from '../../src/settings/RestoreReport';
 import { pickBackupBundle } from '../../src/import/sources/picker';
@@ -35,6 +36,7 @@ const ALL = 'all';
 
 export default function YourCopies() {
   const { t } = useTranslation();
+  const handed = useLocalSearchParams<{ uri?: string; name?: string }>();
   const palette = usePalette();
   const [local, setLocal] = useState<LocalCopy[]>([]);
   const [kept, setKept] = useState<LocalCopy[]>([]);
@@ -94,9 +96,20 @@ export default function YourCopies() {
   function restoreFromFile() {
     void guard(async () => {
       const picked = await pickBackupBundle();
-      if (!picked) return;
+      if (picked) restoreFrom(picked);
+    });
+  }
+
+  // Opened from another app: the file is already chosen.
+  useEffect(() => {
+    if (handed.uri) restoreFrom({ uri: handed.uri, name: handed.name ?? '' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handed.uri]);
+
+  function restoreFrom(picked: { uri: string; name: string }) {
+    void guard(async () => {
       if (!isBundleName(picked.name)) throw new BundleError('not-a-bundle');
-      const opened = openBundle(new File(picked.uri).bytesSync());
+      const opened = openWithBase(openBundle(new File(picked.uri).bytesSync()));
       if (opened.snapshot.books.length <= 1) {
         confirmRestore(opened);
         return;
@@ -282,6 +295,7 @@ export default function YourCopies() {
 
 function describe(error: unknown, t: ReturnType<typeof useTranslation>['t']): string {
   if (error instanceof BundleError) {
+    if (error.code === 'missing-base') return t('backup.missingBase', { name: error.detail });
     return error.code === 'too-new'
       ? t('backup.tooNew', { version: error.detail })
       : t('backup.notABundle');

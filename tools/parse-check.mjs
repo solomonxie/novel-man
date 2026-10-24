@@ -74,6 +74,9 @@ const {
   looksLikeImage,
   candidatesFromOpenLibrary,
   candidatesFromGoogle,
+  candidatesFromApple,
+  candidatesFromDouban,
+  coverHeaders,
   mergeCandidates,
   openLibraryQuery,
 } = await import(join(build, 'sources/identify.js'));
@@ -93,6 +96,7 @@ const {
   pageUrl,
 } = await import(join(build, 'sources/goodreads.js'));
 const { COLUMNS, booksFromCsv } = await import(join(build, 'sources/shelfCsv.js'));
+const { withBase } = await import(join(build, 'backup/chain.js'));
 const { notedBooksFrom, shelfMatch, titleKey, noteKey, chapterNamed } = await import(join(build, 'sources/notesFile.js'));
 const { libraryCsv } = await import(join(build, 'export/formats/library.js'));
 const { stripTags } = await import(join(build, 'import/xml.js'));
@@ -1215,6 +1219,31 @@ console.log('one book, looked up in the catalogs');
   check('and one without sinks', merged[merged.length - 1].thumb, null);
   check('ten is the most anybody looks at', mergeCandidates([ol, google], 1).length, 1);
 
+  const [apple] = candidatesFromApple({ results: [{
+    trackId: 395534643, trackName: 'Pride and Prejudice', artistName: 'Jane Austen',
+    releaseDate: '1813-01-28T08:00:00Z', genres: ['Classics', 'Books'],
+    artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/P/x.jpg/100x100bb.jpg',
+    description: 'A <i>classic</i>.<br />Second line',
+  }] });
+  check('an Apple row keeps a large cover', apple.cover, 'https://is1-ssl.mzstatic.com/image/thumb/P/x.jpg/1000x1000bb.jpg');
+  check('and a smaller one for the grid', apple.thumb.endsWith('/300x300bb.jpg'), true);
+  check('its description loses the markup', apple.summary, 'A classic.\nSecond line');
+  check('and "Books" is not a subject', apple.subjects, ['Classics']);
+  const [douban] = candidatesFromDouban([
+    { title: '三体', pic: 'https://img3.doubanio.com/view/subject/s/public/s2768378.jpg', author_name: '刘慈欣', year: '2008', type: 'b', id: '2567698' },
+    { title: '某人', type: 'p', id: '1' },
+  ]);
+  check('a Douban row asks the large cover', douban.cover, 'https://img3.doubanio.com/view/subject/l/public/s2768378.jpg');
+  check('and is a book', candidatesFromDouban([{ title: 'x', id: '1', type: 'p' }]).length, 0);
+  check('its images are fetched as from its pages', coverHeaders(douban.cover)?.Referer, 'https://book.douban.com/');
+  check('nobody else is', coverHeaders(apple.cover), undefined);
+  const noise = { ...apple, id: 'ap:2', title: '紅樓夢', author: '曹雪芹' };
+  check('a store row naming none of the words is dropped',
+    mergeCandidates([[douban], [noise]], 20, '三体').map((c) => c.id), ['db:2567698']);
+  const bare = { ...apple, id: 'ol:1', source: 'openlibrary', thumb: null, cover: null };
+  check('a coverless row borrows the same book\'s cover',
+    mergeCandidates([[bare], [{ ...apple, year: '2003', isbn: '1' }]], 20, 'pride').find((c) => c.id === 'ol:1').thumb, apple.thumb);
+
   // Open Library romanises much of what China publishes, and it is asked
   // first, so "Pei gen sui bi ji" was beating 培根随笔集 for the same ISBN —
   // and a romanised title is not the book's name: unsearchable, wrong on the
@@ -1841,7 +1870,11 @@ console.log('\na library as a csv');
   check('an unrated book is unrated, not nought', books[1].stars, null);
   check('the page promises only the columns a book cannot do without',
     COLUMNS.filter((column) => column.required).map((column) => column.name),
-    ['Title', 'Book Id']);
+    ['Title']);
+  const renamed = booksFromCsv('书名,作者,评分,状态\n《三体》,刘慈欣,5,读过\n');
+  check('a header in its everyday names is read', [renamed[0]?.author, renamed[0]?.stars, renamed[0]?.status],
+    ['刘慈欣', 5, 'read']);
+  check('and so is one in another case', booksFromCsv('TITLE,Author Name\nEmma,Austen\n')[0]?.author, 'Austen');
 }
 
 // The one file in a backup a person can read without this app, and the one a
@@ -2658,6 +2691,18 @@ console.log('\nnotes from a file onto the shelf');
   check('a different volume is not the series', onto('三体Ⅲ：死神永生'), null);
   check('nor its first book', onto('三体'), null);
   check('a title key', titleKey(' 《动物庄园》 '), '动物庄园');
+  const authored = [
+    { id: 'p', title: 'Selected Poems', author: 'W. H. Auden' },
+    { id: 'q', title: '乌合之众', author: '[法] 古斯塔夫·勒庞' },
+  ];
+  check('the same title by someone else is another book',
+    shelfMatch({ title: 'Selected Poems', author: 'Emily Dickinson' }, authored), null);
+  check('the same author written surname first is not',
+    shelfMatch({ title: 'Selected Poems', author: 'Auden, W. H.' }, authored)?.id, 'p');
+  check('a nationality is not part of the name',
+    shelfMatch({ title: '乌合之众', author: '古斯塔夫·勒庞' }, authored)?.id, 'q');
+  check('nor is a name in another script a different author',
+    shelfMatch({ title: '乌合之众', author: 'Gustave Le Bon' }, authored)?.id, 'q');
   const file = JSON.stringify({ format: 'novel-man-notes', version: 1, books: [
     { title: '动物庄园', author: '奥威尔', notes: [{ quote: ' 所有动物生而平等 ', note: '' }, { quote: '', note: '' }] },
     { title: '', notes: [{ quote: 'x' }] },
@@ -2672,6 +2717,57 @@ console.log('\nnotes from a file onto the shelf');
   check('another format', notedBooksFrom('{"books": []}'), []);
   check('not JSON', notedBooksFrom('Title,Author'), []);
   check('same note however it wraps', noteKey('a b\nc', null), noteKey('abc', ''));
+}
+
+console.log('\na daily copy with its weekly one');
+{
+  const book = (id, extra = {}) => ({
+    book: { id, title: id }, text: `${id} text`, hints: [], chapters: [{ id: `${id}-c1` }],
+    scenes: [], annotations: [], entities: [], offset: 0, carried: {},
+    assets: { portraits: {} }, ...extra,
+  });
+  const bytes = (n) => new Uint8Array([n]);
+  const base = {
+    snapshot: { format: 'novel-man-bundle', version: 3, createdAt: 1, app: 'novel-man', books: [
+      book('kept', { offset: 5 }),
+      book('noted', {
+        carried: { translation_units: [{ id: 't' }], terms: [{ id: 'old' }] },
+        assets: { portraits: {}, source: 'sources/noted.epub', pictures: ['assets/p.png'] },
+      }),
+      book('rewritten'),
+      book('gone'),
+    ] },
+    assets: { 'sources/noted.epub': bytes(1), 'assets/p.png': bytes(2) },
+    bytes: bytes(0),
+  };
+  const daily = {
+    snapshot: {
+      format: 'novel-man-bundle', version: 4, createdAt: 2, app: 'novel-man',
+      changes: { base: 'w.zip', baseCreatedAt: 1, present: ['kept', 'noted', 'rewritten', 'new'],
+                 offsets: { kept: 42 } },
+      books: [
+        book('noted', { text: '', chapters: [], fromBase: true, annotations: [{ id: 'a' }],
+                        carried: { terms: [{ id: 'new' }] } }),
+        book('rewritten', { text: 'new words' }),
+        book('new'),
+      ],
+    },
+    assets: {},
+    bytes: bytes(9),
+  };
+  const merged = withBase(daily, base);
+  const by = Object.fromEntries(merged.snapshot.books.map((held) => [held.book.id, held]));
+  check('every book present that day, and only those', Object.keys(by), ['kept', 'noted', 'rewritten', 'new']);
+  check('an unchanged book is the weekly one, at the day\'s place', [by.kept.text, by.kept.offset], ['kept text', 42]);
+  check('a light book keeps its new notes', by.noted.annotations, [{ id: 'a' }]);
+  check('and takes its text and chapters from the weekly', [by.noted.text, by.noted.chapters], ['noted text', [{ id: 'noted-c1' }]]);
+  check('heavy rows from the weekly, light ones from the day', by.noted.carried,
+    { terms: [{ id: 'new' }], translation_units: [{ id: 't' }] });
+  check('and its files', [by.noted.assets.source, Object.keys(merged.assets).sort()],
+    ['sources/noted.epub', ['assets/p.png', 'sources/noted.epub']]);
+  check('no longer marked as partial', [by.noted.fromBase, merged.snapshot.changes], [undefined, undefined]);
+  check('a rewritten book is the day\'s', by.rewritten.text, 'new words');
+  check('a full copy opens as itself', withBase(base, daily), base);
 }
 
 console.log(failures ? `\n${failures} failing` : '\nall passing');

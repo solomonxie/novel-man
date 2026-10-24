@@ -45,6 +45,16 @@ export const router = {
   back() {
     if (navigationRef.isReady() && navigationRef.canGoBack()) navigationRef.goBack();
   },
+  /** For a link that can arrive before the first screen has. */
+  pushWhenReady(target: Target) {
+    if (navigationRef.isReady()) return router.push(target);
+    const timer = setInterval(() => {
+      if (!navigationRef.isReady()) return;
+      clearInterval(timer);
+      router.push(target);
+    }, 100);
+    setTimeout(() => clearInterval(timer), 15000);
+  },
 };
 
 export function useLocalSearchParams<T extends Record<string, string | undefined>>(): T {

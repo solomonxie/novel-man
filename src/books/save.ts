@@ -2,8 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   addStandaloneNote,
-  findBookNamed,
   findRecordFrom,
+  getBook,
   languageEvidence,
   rateBook,
   saveRecordBook,
@@ -11,7 +11,7 @@ import {
   type Book,
 } from '../db/repo';
 import { coverUrl, type Work } from '../sources/openLibrary';
-import { isPlaceholderCover, looksLikeImage } from '../sources/identify';
+import { coverHeaders, isPlaceholderCover, looksLikeImage } from '../sources/identify';
 import type { Shelved } from '../sources/goodreads';
 import { writeImage } from '../storage/files';
 import { hueFrom } from '../ui/fields';
@@ -19,6 +19,8 @@ import { yieldToUI } from '../async/yield';
 import { detectLanguage } from '../text/language';
 import { languageFrom, needsRelabel } from './language';
 import { addEvent } from '../db/timeline';
+import { shelfMatch } from '../sources/sameBook';
+import { shelfBooks, type Planned, type Was } from './imports';
 
 /**
  * Putting a book on the shelf that the app has no copy of. Three things
@@ -67,7 +69,7 @@ export function keepByHand(input: {
  */
 export async function keepCoverFrom(url: string, key: string): Promise<string | null> {
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: coverHeaders(url) });
     if (!response.ok) return null;
     const bytes = new Uint8Array(await response.arrayBuffer());
     // Open Library answers a missing cover with a 1×1 rather than a 404, and
@@ -95,7 +97,24 @@ export async function alreadyKept(
   author?: string | null
 ): Promise<Book | null> {
   const byId = id ? await findRecordFrom(source, id) : null;
-  return byId ?? (await findBookNamed(title, author));
+  if (byId) return byId;
+  const named = shelfMatch({ title, author }, await shelfBooks());
+  return named ? getBook(named.id) : null;
+}
+
+/**
+ * Where each row of a shelf export will go, before anything is written: onto
+ * the book this site's id already names, else the book of that name.
+ */
+export async function planShelved(books: Shelved[], from: string = GOODREADS): Promise<Planned<Shelved>[]> {
+  const shelf = await shelfBooks();
+  return books.map((item) => ({
+    item,
+    onto:
+      (item.id && shelf.find((entry) => entry.source_name === from && entry.source_hash === item.id)) ||
+      shelfMatch({ title: item.title, author: item.author }, shelf),
+    skip: false,
+  }));
 }
 
 export async function keepWork(work: Work, kind: string): Promise<string> {
@@ -125,23 +144,42 @@ export type KeptCount = { added: number; filled: number; untouched: number };
  * It runs in the foreground with a count, because 900 books is a wait somebody
  * is watching, and it yields between them so the wait is not a frozen screen.
  */
+export type KeptShelf = KeptCount & { created: string[]; was: Was[] };
+
 export async function keepShelved(
-  books: Shelved[],
+  plan: Planned<Shelved>[],
   kind: string,
   onProgress?: (done: number, total: number) => void,
   /** Whose shelf it was. The ids are that site's numbering, so a re-import
       matches against the site it came from rather than across all of them. */
   from: string = GOODREADS
-): Promise<KeptCount> {
-  const count: KeptCount = { added: 0, filled: 0, untouched: 0 };
-  for (let at = 0; at < books.length; at++) {
-    const book = books[at];
-    const existing = await alreadyKept(from, book.id, book.title, book.author);
+): Promise<KeptShelf> {
+  const count: KeptShelf = { added: 0, filled: 0, untouched: 0, created: [], was: [] };
+  // A file that lists one book twice makes it once.
+  const made: { id: string; title: string; author: string | null }[] = [];
+  for (let at = 0; at < plan.length; at++) {
+    const { item: book, onto, skip } = plan[at];
+    if (skip) {
+      count.untouched += 1;
+      onProgress?.(at + 1, plan.length);
+      continue;
+    }
+    const target = onto ?? shelfMatch({ title: book.title, author: book.author }, made);
+    const existing = target ? await getBook(target.id) : null;
     if (existing) {
+      const before: Was = {
+        id: existing.id,
+        stars: existing.stars,
+        review: existing.review,
+        status: existing.status,
+        year: existing.year,
+      };
       const changed = await fill(existing, book);
       await remember(existing.id, book);
-      if (changed) count.filled += 1;
-      else count.untouched += 1;
+      if (changed) {
+        count.filled += 1;
+        if (!count.created.includes(existing.id)) count.was.push(before);
+      } else count.untouched += 1;
     } else {
       const id = await saveRecordBook({
         title: book.title,
@@ -163,10 +201,12 @@ export async function keepShelved(
       // in: a second sync must not write the same note twice.
       if (book.notes) await addStandaloneNote({ bookId: id, note: book.notes });
       await remember(id, book);
+      made.push({ id, title: book.title, author: book.author || null });
+      count.created.push(id);
       count.added += 1;
     }
     if (at % 20 === 0) await yieldToUI();
-    onProgress?.(at + 1, books.length);
+    onProgress?.(at + 1, plan.length);
   }
   return count;
 }

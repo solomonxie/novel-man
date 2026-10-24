@@ -19,7 +19,7 @@ import { hasBooks } from '../db/repo';
  * safe", and the only answer to that is the list of files, with their dates and
  * their sizes, and a way to open each one.
  */
-export type CopyKind = 'daily' | 'database' | 'guard' | 'pre-deletion' | 'export' | 'other';
+export type CopyKind = 'daily' | 'weekly' | 'database' | 'guard' | 'pre-deletion' | 'export' | 'other';
 
 export type LocalCopy = {
   name: string;
@@ -36,6 +36,7 @@ const EXPORTS = 'exports';
 function kindOf(name: string): CopyKind {
   if (name.includes('-database-')) return 'database';
   if (name.includes('-daily-')) return 'daily';
+  if (name.includes('-weekly-')) return 'weekly';
   if (name.includes('-before-')) return 'guard';
   if (name.includes('-pre-deletion-')) return 'pre-deletion';
   return 'other';

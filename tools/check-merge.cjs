@@ -263,6 +263,26 @@ function pure() {
     check('switching back puts it on its words again', back.slice(again.start, again.end), needle);
   }
 
+  console.log('which books a daily backup carries');
+  {
+    const since = Date.now();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const quiet = await repo.saveRecordBook({ title: 'Quiet', kind: 'novel', source_name: 'by hand' });
+    const mark = Date.now();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await repo.addStandaloneNote({ bookId: quiet, note: 'a thought' });
+    const changed = await repo.booksChangedSince(mark);
+    check('a note marks its book, and only lightly', changed, [{ id: quiet, heavy: false }]);
+    check('a new book counts as wholly changed',
+      (await repo.booksChangedSince(since)).find((book) => book.id === quiet)?.heavy, true);
+    check('reading does not count', (await (async () => {
+      const after = Date.now();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await repo.saveProgress(quiet, 10);
+      return repo.booksChangedSince(after);
+    })()).length, 0);
+  }
+
   console.log(failures ? `\n${failures} failing` : '\nall passing');
   process.exit(failures ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

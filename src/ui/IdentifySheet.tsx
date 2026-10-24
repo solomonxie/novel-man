@@ -20,6 +20,7 @@ import { updateBook, type Book } from '../db/repo';
 import { keepCoverFrom } from '../books/save';
 import {
   CatalogsUnreachable,
+  coverHeaders,
   findBook,
   fillFromEdition,
   isChineseIsbn,
@@ -35,7 +36,7 @@ import { Grabber, Row } from './primitives';
 import { radius, space, usePalette } from '../theme';
 
 /** Ten is what fits in a glance without becoming a list to read. */
-const LIMIT = 10;
+const LIMIT = 20;
 const PER_ROW = 3;
 /** Every cover ever printed is about this shape. */
 const COVER_RATIO = 1.5;
@@ -332,7 +333,7 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
               onScroll={drag.onScroll}
               scrollEventThrottle={16}
             >
-              {/* Ten rows, by definition — a `.map` with a ceiling. */}
+              {/* Twenty at most — a `.map` with a ceiling. */}
               {(found ?? []).map((candidate) => (
                 <Pressable
                   key={candidate.id}
@@ -353,7 +354,7 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
                   >
                     {candidate.thumb ? (
                       <Image
-                        source={{ uri: candidate.thumb }}
+                        source={{ uri: candidate.thumb, headers: coverHeaders(candidate.thumb) }}
                         style={{ width: tile, height: Math.round(tile * COVER_RATIO) }}
                         resizeMode="cover"
                       />

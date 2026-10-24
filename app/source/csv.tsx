@@ -1,20 +1,17 @@
-import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
 import { COLUMNS, booksFromCsv } from '../../src/sources/shelfCsv';
 import type { Shelved } from '../../src/sources/goodreads';
-import { CSV_FILE, keepShelved, type KeptCount } from '../../src/books/save';
-import { pickSpreadsheet } from '../../src/import/sources/picker';
-import { File } from '../../src/storage/fs';
+import { CSV_FILE, keepShelved, planShelved, type KeptCount } from '../../src/books/save';
+import { pickSpreadsheet, type PickedFile } from '../../src/import/sources/picker';
+import { readText } from '../../src/storage/text';
+import { shelfBooks, type Planned } from '../../src/books/imports';
+import { recordRun } from '../../src/books/importRuns';
+import type { BookListItem } from '../../src/db/repo';
+import { LastImport, OntoSheet, PlanRow, planCounts } from '../../src/ui/ImportPlan';
 import { DEFAULT_KIND } from '../../src/books/kinds';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { radius, space, usePalette } from '../../src/theme';
@@ -31,33 +28,52 @@ import { radius, space, usePalette } from '../../src/theme';
  * the tap was, not a screenful further down.
  */
 export default function ImportFromCsv() {
-  const { kind } = useLocalSearchParams<{ kind?: string }>();
+  const { kind, uri, name } = useLocalSearchParams<{ kind?: string; uri?: string; name?: string }>();
   const { t } = useTranslation();
   const palette = usePalette();
-  const [books, setBooks] = useState<Shelved[] | null>(null);
+  const [plan, setPlan] = useState<Planned<Shelved>[] | null>(null);
+  const [shelf, setShelf] = useState<BookListItem[]>([]);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [recorded, setRecorded] = useState(0);
+  const books = plan?.map((entry) => entry.item) ?? null;
   const [from, setFrom] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [kept, setKept] = useState<KeptCount | null>(null);
 
+  // Opened from another app: the file is already chosen.
+  useEffect(() => {
+    if (uri) void readFrom({ uri, name: name ?? '' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uri]);
+
   async function readCsv() {
     setError(null);
     try {
       const picked = await pickSpreadsheet();
-      if (!picked) return;
+      if (picked) await readFrom(picked);
+    } catch (problem) {
+      setError(String(problem));
+    }
+  }
+
+  async function readFrom(picked: PickedFile) {
+    setError(null);
+    try {
       // Named before it is read: a file that turns out to hold no books still
       // has to show which file that was.
       setFrom(picked.name);
-      setBooks(null);
+      setPlan(null);
       setKept(null);
       setBusy(true);
-      const found = booksFromCsv(await new File(picked.uri).text());
+      const found = booksFromCsv(await readText(picked.uri));
       if (!found.length) {
         setError(t('csv.notACsv'));
         return;
       }
-      setBooks(found);
+      setPlan(await planShelved(found, CSV_FILE));
+      setShelf(await shelfBooks());
     } catch (problem) {
       setError(String(problem));
     } finally {
@@ -66,18 +82,19 @@ export default function ImportFromCsv() {
   }
 
   async function bringOver() {
-    if (!books) return;
+    if (!plan) return;
     setBusy(true);
     setError(null);
     try {
-      setKept(
-        await keepShelved(
-          books,
-          kind ?? DEFAULT_KIND,
-          (done, total) => setProgress({ done, total }),
-          CSV_FILE
-        )
+      const done = await keepShelved(
+        plan,
+        kind ?? DEFAULT_KIND,
+        (at, total) => setProgress({ done: at, total }),
+        CSV_FILE
       );
+      await recordRun({ source: 'csv', from, created: done.created, notes: [], was: done.was });
+      setRecorded((was) => was + 1);
+      setKept(done);
     } catch (problem) {
       setError(String(problem));
     } finally {
@@ -90,15 +107,12 @@ export default function ImportFromCsv() {
   const reviewed = books?.filter((book) => book.review).length ?? 0;
   const read = books?.filter((book) => book.status === 'read').length ?? 0;
   const wanted = books?.filter((book) => book.status === 'wishlist').length ?? 0;
+  const counts = planCounts(plan ?? []);
 
-  return (
-    <ScrollView
-      style={{ backgroundColor: palette.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
-    >
-      <Stack.Screen options={{ title: t('source.csv'), headerBackTitle: ' ' }} />
-
+  const header = (
+    <View>
       <Hint>{t('csv.why')}</Hint>
+      <LastImport source="csv" refresh={recorded} />
 
       <Pressable onPress={busy ? undefined : readCsv} style={styles.link}>
         {busy && !progress ? (
@@ -147,9 +161,10 @@ export default function ImportFromCsv() {
             >
               {progress
                 ? t('gr.bringingOver', { done: progress.done, total: progress.total })
-                : t('gr.bringOver', { count: books.length })}
+                : t('gr.bringOver', { count: books.length - counts.skipped })}
             </Text>
           </Pressable>
+          <Hint>{t('importPlan.summary', counts)}</Hint>
           <Hint>{t('gr.whatHappens')}</Hint>
         </>
       ) : null}
@@ -193,7 +208,41 @@ export default function ImportFromCsv() {
           <Hint>{t('csv.how')}</Hint>
         </View>
       )}
-    </ScrollView>
+      {plan ? (
+        <Text style={[styles.heading, { color: palette.dim }]}>
+          {kept ? t('importPlan.where') : t('importPlan.tapToChange')}
+        </Text>
+      ) : null}
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: palette.bg }}>
+      <Stack.Screen options={{ title: t('source.csv'), headerBackTitle: ' ' }} />
+      <FlatList
+        data={plan ?? []}
+        keyExtractor={(_, index) => `${index}`}
+        ListHeaderComponent={header}
+        contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
+        renderItem={({ item, index }) => (
+          <PlanRow
+            entry={item}
+            title={item.item.author ? `${item.item.title} · ${item.item.author}` : item.item.title}
+            onPress={() => (kept || busy ? undefined : setEditing(index))}
+          />
+        )}
+      />
+      <OntoSheet
+        shelf={shelf}
+        entry={editing !== null && plan ? plan[editing] : null}
+        title={editing !== null && plan ? plan[editing].item.title : ''}
+        onChange={(onto, skip) => {
+          setPlan((was) => was && was.map((entry, at) => (at === editing ? { ...entry, onto, skip } : entry)));
+          setEditing(null);
+        }}
+        onClose={() => setEditing(null)}
+      />
+    </View>
   );
 }
 
@@ -205,4 +254,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
   },
+  heading: { marginTop: space.xl, marginBottom: space.sm, fontSize: 13, textTransform: 'uppercase' },
 });
