@@ -131,10 +131,13 @@ export type Annotation = {
   note: string | null;
   prefix: string;
   suffix: string;
-  /** A note about the book rather than about a sentence in it: nothing quoted. */
+  /** A note about the book rather than a place in it. It may carry a quote from
+      another edition or a scan, which is never placed in the text. */
   standalone: number;
   /** The wording of its chapter it was written on, once that chapter has more than one. */
   version: string | null;
+  /** The chapter by name, where there is no chapter row to point at. */
+  place: string | null;
   created_at: number;
 };
 
@@ -1311,7 +1314,7 @@ export async function renameChapter(id: string, title: string) {
 export async function listAnnotations(bookId: string): Promise<Annotation[]> {
   const database = await db();
   return database.getAllAsync<Annotation>(
-    'SELECT * FROM annotations WHERE book_id = ? ORDER BY start',
+    'SELECT * FROM annotations WHERE book_id = ? ORDER BY start, created_at, rowid',
     bookId
   );
 }
@@ -1329,6 +1332,7 @@ export async function addAnnotation(input: {
   suffix: string;
   /** Set for a note that quotes nothing — see the column. */
   standalone?: boolean;
+  place?: string | null;
 }) {
   const database = await db();
   const id = newId();
@@ -1342,8 +1346,8 @@ export async function addAnnotation(input: {
           input.bookId, input.start, input.start);
   await database.runAsync(
     `INSERT INTO annotations (id, book_id, chapter_id, kind, color, start, end, quote, note,
-                             prefix, suffix, standalone, version, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                             prefix, suffix, standalone, version, place, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.bookId,
     input.chapterId ?? null,
@@ -1357,6 +1361,7 @@ export async function addAnnotation(input: {
     input.suffix,
     input.standalone ? 1 : 0,
     version?.version ?? null,
+    input.place ?? null,
     Date.now()
   );
   return id;
@@ -1965,8 +1970,8 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
     for (const annotation of record.annotations) {
       await database.runAsync(
         `INSERT INTO annotations (id, book_id, chapter_id, kind, color, start, end, quote, note,
-                                  prefix, suffix, standalone, version, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                  prefix, suffix, standalone, version, place, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         // Which chapter the mark is in, through the same remap every other
         // reference gets. Dropped here until now, and only a fetched edition
         // ever felt it: a bible's chapters each start at offset zero, so a
@@ -1975,7 +1980,8 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
         annotation.chapter_id ? chapterMap.get(annotation.chapter_id) ?? null : null,
         annotation.kind, annotation.color, annotation.start, annotation.end,
         annotation.quote, annotation.note, annotation.prefix ?? '', annotation.suffix ?? '',
-        annotation.standalone ?? 0, annotation.version ?? null, annotation.created_at
+        annotation.standalone ?? 0, annotation.version ?? null, annotation.place ?? null,
+        annotation.created_at
       );
     }
     for (const entity of record.entities) {
@@ -2074,11 +2080,12 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
     for (const annotation of record.annotations) {
       await database.runAsync(
         `INSERT INTO annotations (id, book_id, kind, color, start, end, quote, note, prefix, suffix,
-                                  standalone, version, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                  standalone, version, place, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         newId(), bookId, annotation.kind, annotation.color, annotation.start, annotation.end,
         annotation.quote, annotation.note, annotation.prefix ?? '', annotation.suffix ?? '',
-        annotation.standalone ?? 0, annotation.version ?? null, annotation.created_at
+        annotation.standalone ?? 0, annotation.version ?? null, annotation.place ?? null,
+        annotation.created_at
       );
     }
     for (const entity of record.entities) {
@@ -2494,4 +2501,18 @@ export async function listFlags(bookId: string): Promise<ContinuityFlag[]> {
 export async function setFlagStatus(id: string, status: ContinuityFlag['status']) {
   const database = await db();
   await database.runAsync('UPDATE continuity_flags SET status = ? WHERE id = ?', status, id);
+}
+
+/** Every stored file a book still points at, by hash or path. */
+export async function storedFileReferences(): Promise<{ hashes: Set<string>; paths: string }> {
+  const database = await db();
+  const rows = await database.getAllAsync<{
+    source_hash: string;
+    source_path: string;
+    origin_path: string | null;
+  }>('SELECT source_hash, source_path, origin_path FROM books');
+  return {
+    hashes: new Set(rows.map((row) => row.source_hash).filter(Boolean)),
+    paths: rows.map((row) => `${row.source_path}\n${row.origin_path ?? ''}`).join('\n'),
+  };
 }

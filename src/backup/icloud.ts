@@ -13,7 +13,6 @@ import { bundleName, isBundleName, type BundleAbout } from './format';
 import { backedUpAt, libraryToken, markBackedUp, subscribeToChanges, unnoticed } from './changes';
 import { restoreBundle, type RestoreReport } from './restore';
 import { recordAttempt } from './attempts';
-import { timed, trace } from '../dev/trace';
 
 const AUTO = 'icloud.auto';
 const RESTORED = 'icloud.restoredAt';
@@ -137,11 +136,11 @@ export async function backUp(): Promise<boolean> {
   const token = await libraryToken();
   if ((await backedUpAt(LEDGER)) === token) return false;
   // An empty shelf overwrites today's copy under the same day-named key.
-  if (!(await timed('hasBooks', hasBooks()))) return false;
+  if (!(await hasBooks())) return false;
   if (!drive) return false;
   // A destination that is switched on and cannot be reached is a failure worth
   // recording, not a quiet nothing: it is the state someone needs told about.
-  const state = await timed('driveStatus', refreshDriveStatus());
+  const state = await refreshDriveStatus();
   if (state !== 'available') {
     await unnoticed(() => recordAttempt('icloud', { ok: false, error: `iCloud is ${state}` }));
     return false;
@@ -149,13 +148,10 @@ export async function backUp(): Promise<boolean> {
   running = true;
   try {
     const name = backupName();
-    const bundle = await timed('buildBundle', buildBundle());
+    const bundle = await buildBundle();
     const body = bundle.body as Uint8Array;
-    let at = performance.now();
     const hash = contentHash('icloud', fingerprint(body));
-    trace(`fingerprint ${Math.round(performance.now() - at)}ms of ${body.length} bytes`);
-    if ((await timed('lastUploadHash', lastUploadHash(LEDGER, name))) === hash) {
-      trace('unchanged — nothing uploaded');
+    if ((await lastUploadHash(LEDGER, name)) === hash) {
       // Up to date is up to date, however it got that way.
       await markBackedUp(LEDGER, token);
       await unnoticed(() =>
@@ -167,20 +163,18 @@ export async function backUp(): Promise<boolean> {
     const staged = new File(Paths.cache, STAGED);
     if (staged.exists) staged.delete();
     staged.create();
-    at = performance.now();
     await staged.writeInSlices(body, yieldToUI);
-    trace(`staged.write ${Math.round(performance.now() - at)}ms`);
     try {
-      await timed('drive.copyIn', drive.copyIn(nativePath(staged), name));
+      await drive.copyIn(nativePath(staged), name);
     } finally {
       staged.delete();
     }
-    await unnoticed(() => timed('recordUpload', recordUpload(LEDGER, name, hash)));
+    await unnoticed(() => recordUpload(LEDGER, name, hash));
     await markBackedUp(LEDGER, token);
     await unnoticed(() =>
       recordAttempt('icloud', { ok: true, bytes: body.length, name, ...counts(bundle) })
     );
-    await timed('prune', prune());
+    await prune();
     return true;
   } catch (problem) {
     // Recorded and swallowed rather than thrown. A backup must never interrupt

@@ -1,5 +1,7 @@
 import { AppState } from 'react-native';
 import { Directory, File, Paths } from '../storage/fs';
+import { ownPath } from '../storage/own';
+import { zipInto } from '../storage/compress';
 
 import type { Database } from '../db';
 
@@ -26,7 +28,7 @@ const FOLDER = 'Backups';
 /** When it was taken, what it is for, whose it is — in that order, so the
  *  folder sorts chronologically and reads as a sentence. */
 const rollingName = () => `${dayStamp()}-daily-novel-man.zip`;
-const databaseName = () => `${dayStamp()}-database-novel-man.db`;
+const databaseName = () => `${dayStamp()}-database-novel-man.zip`;
 /**
  * Ours to sweep, which the daily and the database copy are and a pre-deletion
  * copy never is. The guard copies were meant to be in here and were not: they
@@ -38,6 +40,9 @@ const OURS = /^(\d{4}-\d{2}-\d{2}-(daily|database)|\d{14}-before-)/;
 /** A week, not a count: once an operation can add a file, a count silently
  *  caps how many imports you get before yesterday is gone. */
 const KEEP_DAYS = 7;
+/** The database copy guards against a bad migration, which shows within a
+ *  day; the portable daily zip holds the same library for the full week. */
+const KEEP_DATABASE_DAYS = 2;
 
 function folder(): Directory {
   const dir = new Directory(Paths.document, FOLDER);
@@ -50,19 +55,49 @@ function folder(): Directory {
  * problem, which no row-level undo can fix — and the checkpoint is what makes
  * it a copy of the present: without it the newest writes are still sitting in
  * the write-ahead log beside the file, and the copy is silently behind.
+ *
+ * Zipped: 60 MB raw is 20 MB deflated, and a week of them was most of what the
+ * app took up. Copied first and zipped from the copy, so the zip reads a file
+ * nothing is writing to.
  */
 export async function snapshotDatabase(open?: Database): Promise<boolean> {
   try {
     const database = open ?? (await db());
     await database.execAsync('PRAGMA wal_checkpoint(FULL)');
-    const live = new File(Paths.document, 'SQLite/novelman.db');
+    const live = new File(ownPath('SQLite'), 'novelman.db');
     if (!live.exists) return false;
-    const target = new File(folder(), databaseName());
-    if (target.exists) target.delete();
-    live.copy(target);
+    const copy = new File(Paths.cache, 'database-snapshot.db');
+    if (copy.exists) copy.delete();
+    live.copy(copy);
+    try {
+      const target = new File(folder(), databaseName());
+      if (target.exists) target.delete();
+      await zipInto(copy, target, 'novelman.db');
+    } catch {
+      // Unzipped beats none.
+      const raw = new File(folder(), databaseName().replace(/\.zip$/, '.db'));
+      if (raw.exists) raw.delete();
+      copy.copy(raw);
+    } finally {
+      copy.delete();
+    }
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Database copies written raw before they were zipped, zipped now. */
+export async function zipDatabaseCopies(): Promise<void> {
+  for (const entry of folder().list()) {
+    if (!(entry instanceof File) || !/-database-novel-man\.db$/.test(entry.name)) continue;
+    const target = new File(folder(), entry.name.replace(/\.db$/, '.zip'));
+    try {
+      if (!target.exists) await zipInto(entry, target, 'novelman.db');
+      entry.delete();
+    } catch {
+      // Kept raw; tried again next launch.
+    }
   }
 }
 
@@ -141,13 +176,14 @@ export async function backUpLocally(): Promise<boolean> {
  * ("anything from the last week"), and it does not move when a file is copied.
  */
 function prune(): void {
-  const cutoff = Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000;
+  const daysAgo = (days: number) => Date.now() - days * 24 * 60 * 60 * 1000;
   try {
     for (const entry of folder().list()) {
       if (!(entry instanceof File)) continue;
       if (!OURS.test(entry.name)) continue;
       const day = dateOf(entry.name);
-      if (day && day.getTime() < cutoff) entry.delete();
+      const keep = entry.name.includes('-database-') ? KEEP_DATABASE_DAYS : KEEP_DAYS;
+      if (day && day.getTime() < daysAgo(keep)) entry.delete();
     }
   } catch {
     // Tidying is never worth failing a backup for.

@@ -1,4 +1,5 @@
-import { Directory, File, Paths } from '../storage/fs';
+import { Directory, File } from '../storage/fs';
+import { ownPath } from '../storage/own';
 
 import { db, newId } from '../db';
 import { deleteBook, getBook } from '../db/repo';
@@ -40,7 +41,7 @@ export type TrashedBook = {
 };
 
 function folder(): Directory {
-  const dir = new Directory(Paths.document, FOLDER);
+  const dir = new Directory(ownPath(FOLDER));
   if (!dir.exists) dir.create({ intermediates: true });
   return dir;
 }

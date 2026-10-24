@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { File, Paths } from '../storage/fs';
+import { File } from '../storage/fs';
+import { ownPath } from '../storage/own';
 import { attachBookRecord, supersedeSkeleton, type BookRecord } from '../db/repo';
 import { writeImage } from '../storage/files';
 import { openBundle } from './bundle';
@@ -15,7 +16,7 @@ const APPLIED = 'icloud.pendingApplied';
  * and portraits are bytes and a JSON file is not where bytes belong.
  */
 function heldFile(): File {
-  return new File(Paths.document, HELD);
+  return new File(ownPath(HELD));
 }
 
 export function hold(bytes: Uint8Array) {

@@ -18,7 +18,6 @@ import { hueFrom } from '../ui/fields';
 import { yieldToUI } from '../async/yield';
 import { detectLanguage } from '../text/language';
 import { languageFrom, needsRelabel } from './language';
-import { trace } from '../dev/trace';
 import { addEvent } from '../db/timeline';
 
 /**
@@ -252,7 +251,6 @@ export async function relabelLanguages(): Promise<Relabelled[]> {
     await AsyncStorage.setItem(RELABELLED, String(Date.now()));
   } catch (problem) {
     // Leaving the marker unset means the next launch picks up the rest.
-    trace(`language sweep: ${String(problem)}`);
   }
   return changed;
 }

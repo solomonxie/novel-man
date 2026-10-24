@@ -24,6 +24,10 @@ export const Paths = {
   get cache(): string {
     return RNFSTurbo.CachesDirectoryPath;
   },
+  /** What the app keeps for itself: backed up by the system, not shown in Files. */
+  get support(): string {
+    return `${RNFSTurbo.LibraryDirectoryPath}/Application Support`;
+  },
 };
 
 function pathOf(part: string | Entry): string {
@@ -68,6 +72,13 @@ abstract class Entry {
 export class File extends Entry {
   get size(): number {
     return this.exists ? RNFSTurbo.stat(this.path).size : 0;
+  }
+
+  /** Milliseconds since the epoch; 0 where it cannot be read. */
+  get modifiedAt(): number {
+    if (!this.exists) return 0;
+    const at: unknown = RNFSTurbo.stat(this.path).mtime;
+    return at instanceof Date ? at.getTime() : typeof at === 'number' ? at : 0;
   }
 
   /** An empty file, so a later `write` has somewhere to land. */

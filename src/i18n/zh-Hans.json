@@ -1078,7 +1078,9 @@
     "goodreadsHint": "Goodreads 已关闭 API，所以这里读取你的导出文件或书架的 RSS。",
     "csv": "从 CSV 文件导入",
     "csvDetail": "从任何平台的 CSV 导入书单",
-    "csvHint": "任何平台的 CSV 都行，只要带着这一页列出的那些列。"
+    "csvHint": "任何平台的 CSV 都行，只要带着这一页列出的那些列。",
+    "notes": "从文件导入笔记",
+    "notesDetail": "把别处记下的摘录和批注加到你的书上"
   },
   "find": {
     "prompt": "输入要找的内容，然后点搜索。",
@@ -1368,6 +1370,19 @@
     "savedWhen_other": "{{count}} 本书 · 上次读取 {{date}}",
     "savedRead": "重新读取",
     "savedForget": "不再在这里显示这个书架？已导入的书不受影响。"
+  },
+  "notesImport": {
+    "why": "别处记下的摘录和批注，每条作为一则关于这本书的笔记加进来。书架上已有的书直接加上笔记，没有的会新建。同一个文件导入两次不会重复。",
+    "choose": "选择笔记文件",
+    "notNotes": "这个文件里没有找到笔记。",
+    "add": "加入 {{count}} 条笔记",
+    "summary": "共 {{books}} 本：{{matched}} 本已在书架上，{{created}} 本将新建。",
+    "where": "每本书的笔记加到哪里",
+    "onto": "{{count}} 条 → {{title}}",
+    "asNew": "{{count}} 条 → 新建这本书",
+    "added": "加入的笔记",
+    "already": "已经有了",
+    "newBooks": "新建的书"
   },
   "csv": {
     "why": "任何平台的书单，只要是 CSV。Goodreads 自己的导出文件可以直接读；其他文件也一样，只要表头带着下面这些列。",

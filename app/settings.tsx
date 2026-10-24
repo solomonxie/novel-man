@@ -115,6 +115,12 @@ export default function SettingsPage() {
             detail={t('source.csvDetail')}
             value="›"
             onPress={() => router.push('/source/csv')}
+          />
+          <Row
+            label={t('source.notes')}
+            detail={t('source.notesDetail')}
+            value="›"
+            onPress={() => router.push('/source/notes')}
             last
           />
         </Section>

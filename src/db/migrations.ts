@@ -937,4 +937,7 @@ export const migrations: string[] = [
      PRIMARY KEY (chapter_id, hash)
    );
    CREATE INDEX chapter_versions_book ON chapter_versions(book_id);`,
+  // Where in the book a note was made, in words, for a book with no chapter
+  // to point at: notes brought over from elsewhere onto a record.
+  `ALTER TABLE annotations ADD COLUMN place TEXT;`,
 ];

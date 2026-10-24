@@ -2,6 +2,7 @@ import { openDatabase, type Scalar } from './driver';
 import { databaseName } from '../dev/demo';
 import { noticeChange } from '../backup/changes';
 import { migrations } from './migrations';
+import { ownPath } from '../storage/own';
 
 /**
  * The four calls the app makes of a database, over whichever driver is
@@ -58,10 +59,10 @@ export function db(): Promise<Database> {
 }
 
 async function open() {
-  // The same file, in the same place expo-sqlite kept it. Opening anywhere
-  // else would silently start an empty library — which is also exactly what
-  // demo mode wants, under a name of its own.
-  const driver = openDatabase(databaseName());
+  // The same file expo-sqlite kept, wherever `ownPath` finds its folder now.
+  // Opening anywhere else would silently start an empty library — which is
+  // also exactly what demo mode wants, under a name of its own.
+  const driver = openDatabase(databaseName(), ownPath('SQLite'));
   const database: Database = {
     async execAsync(sql) {
       // Migrations arrive as several statements at once; the driver takes one.

@@ -93,6 +93,7 @@ const {
   pageUrl,
 } = await import(join(build, 'sources/goodreads.js'));
 const { COLUMNS, booksFromCsv } = await import(join(build, 'sources/shelfCsv.js'));
+const { notedBooksFrom, shelfMatch, titleKey, noteKey, chapterNamed } = await import(join(build, 'sources/notesFile.js'));
 const { libraryCsv } = await import(join(build, 'export/formats/library.js'));
 const { stripTags } = await import(join(build, 'import/xml.js'));
 const { isSkeleton, starsOf, statusOf, withoutManuscript } = await import(join(build, 'books/record.js'));
@@ -2635,6 +2636,42 @@ console.log('which vendors a build offers');
   const china = vendorsFor('china').map((vendor) => vendor.id);
   check('only the filed ones in it', china, ['deepseek', 'qwen', 'moonshot', 'zhipu']);
   check('and OpenAI is not among them', china.includes('openai'), false);
+}
+
+console.log('\nnotes from a file onto the shelf');
+{
+  const shelf = [
+    { id: 'a', title: 'ANIMAL FARM《动物庄园》', author: null },
+    { id: 'b', title: '基督山伯爵(精)', author: '大仲马' },
+    { id: 'c', title: '中的精神: 吴淸源自传', author: null },
+    { id: 'd', title: '天才在左, 疯子在右', author: '高铭' },
+    { id: 'e', title: '1984', author: 'Fido Nesti' },
+    { id: 'f', title: '三体: 黑暗森林. II', author: null },
+  ];
+  const onto = (title, libraryId = '') => shelfMatch({ title, libraryId }, shelf)?.id ?? null;
+  check('inside 《》', onto('动物庄园'), 'a');
+  check('an edition in brackets', onto('基督山伯爵'), 'b');
+  check('a subtitle on the shelf only', onto('中的精神'), 'c');
+  check('full-width punctuation', onto('天才在左，疯子在右'), 'd');
+  check('an id beats the title', onto('一九八四', 'e'), 'e');
+  check('no id, no match', onto('一九八四'), null);
+  check('a different volume is not the series', onto('三体Ⅲ：死神永生'), null);
+  check('nor its first book', onto('三体'), null);
+  check('a title key', titleKey(' 《动物庄园》 '), '动物庄园');
+  const file = JSON.stringify({ format: 'novel-man-notes', version: 1, books: [
+    { title: '动物庄园', author: '奥威尔', notes: [{ quote: ' 所有动物生而平等 ', note: '' }, { quote: '', note: '' }] },
+    { title: '', notes: [{ quote: 'x' }] },
+    { title: '空', notes: [] },
+  ] });
+  const books = notedBooksFrom(file);
+  check('books with notes', books.map((book) => book.title), ['动物庄园']);
+  check('empty notes dropped, text trimmed', books[0].notes, [{ quote: '所有动物生而平等', note: '', chapter: '' }]);
+  const chapters = [{ title: '第一章 群众的心理' }, { title: '第二章　群众的信念与意见' }];
+  check('a chapter by its name', chapterNamed('第二章 群众的信念与意见', chapters), chapters[1]);
+  check('a chapter the book does not have', chapterNamed('第九章', chapters), null);
+  check('another format', notedBooksFrom('{"books": []}'), []);
+  check('not JSON', notedBooksFrom('Title,Author'), []);
+  check('same note however it wraps', noteKey('a b\nc', null), noteKey('abc', ''));
 }
 
 console.log(failures ? `\n${failures} failing` : '\nall passing');

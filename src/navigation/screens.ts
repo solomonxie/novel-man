@@ -9,6 +9,7 @@ import SourceArxiv from '../../app/source/arxiv';
 import SourceOpenLibrary from '../../app/source/openlibrary';
 import SourceGoodreads from '../../app/source/goodreads';
 import SourceCsv from '../../app/source/csv';
+import SourceNotes from '../../app/source/notes';
 import Book from '../../app/book/[id]';
 import Entity from '../../app/entity/[id]';
 import Chapter from '../../app/chapter/[id]';
@@ -74,6 +75,7 @@ export const screens: Screen[] = [
   { path: '/source/openlibrary', component: SourceOpenLibrary, header: true },
   { path: '/source/goodreads', component: SourceGoodreads, header: true },
   { path: '/source/csv', component: SourceCsv, header: true },
+  { path: '/source/notes', component: SourceNotes, header: true },
   { path: '/book/[id]', component: Book, header: true },
   { path: '/entity/[id]', component: Entity, header: true },
   { path: '/chapter/[id]', component: Chapter, header: true },

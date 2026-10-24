@@ -100,7 +100,6 @@ import { isFavorite, setFavorite } from '../../src/db/shelves';
 import { ESV_SOURCE } from '../../src/sources/esvBook';
 import { EsvKeyRows } from '../../src/settings/EsvKey';
 import { deleteBookSafely } from '../../src/backup/trash';
-import { timed, trace } from '../../src/dev/trace';
 
 /** One line of anything written on this page, and how many lines each box gets. */
 const LINE = 22;
@@ -181,8 +180,7 @@ export default function BookPage() {
 
   const load = useCallback(() => {
     if (!id) return;
-    trace('load fired');
-    timed('getBook', getBook(id)).then((found) => {
+    getBook(id).then((found) => {
       setBook(found);
       // Only while nothing is being typed: a reload mid-sentence must not
       // replace the sentence with what was last saved.
@@ -196,24 +194,24 @@ export default function BookPage() {
         });
       }
     });
-    timed('listChapters', listChapters(id)).then(setChapters);
-    timed('characters', listEntities(id, 'character')).then(setCharacters);
-    timed('places', listEntities(id, 'place')).then(setPlaces);
-    timed('terms', listEntities(id, 'term')).then(setTerms);
-    timed('words', listEntities(id, 'word')).then(setWords);
-    timed('cards', listEntities(id, 'card')).then(setCards);
-    timed('study', studyState(id)).then(setStudy);
-    timed('getProgress', getProgress(id)).then(setOffset);
-    timed('lastReadAt', lastReadAt(id)).then(setReadAt);
-    timed('listAnnotations', listAnnotations(id)).then((rows) => {
+    listChapters(id).then(setChapters);
+    listEntities(id, 'character').then(setCharacters);
+    listEntities(id, 'place').then(setPlaces);
+    listEntities(id, 'term').then(setTerms);
+    listEntities(id, 'word').then(setWords);
+    listEntities(id, 'card').then(setCards);
+    studyState(id).then(setStudy);
+    getProgress(id).then(setOffset);
+    lastReadAt(id).then(setReadAt);
+    listAnnotations(id).then((rows) => {
       setAnnotations(rows);
       setNoteCount(rows.length);
     });
-    timed('listMentions', listMentions(id)).then(setMentions);
-    timed('listRelations', listRelations(id)).then(setRelations);
-    timed('isFavorite', isFavorite(id)).then(setFavorited).catch(() => undefined);
-    timed('listScenes', listScenes(id)).then(setScenes);
-    timed('listParts', listParts(id)).then(setParts);
+    listMentions(id).then(setMentions);
+    listRelations(id).then(setRelations);
+    isFavorite(id).then(setFavorited).catch(() => undefined);
+    listScenes(id).then(setScenes);
+    listParts(id).then(setParts);
   }, [id]);
 
   useFocusEffect(load);
@@ -312,17 +310,18 @@ export default function BookPage() {
         : note.standalone
           ? undefined
           : chapters.find((entry) => note.start >= entry.start && note.start < entry.end);
-      const key = chapter?.id ?? 'book';
+      // Notes brought over onto a book with no chapters still say which one.
+      const place = !chapter && note.standalone ? note.place?.trim() : '';
+      const key = chapter?.id ?? (place ? `place:${place}` : 'book');
       const title = chapter
         ? `${chapter.idx + 1}. ${chapter.title.trim() || t('structure.untitled')}`
-        : t('book.notesAboutBook');
+        : place || t('book.notesAboutBook');
       if (!byChapter.has(key)) byChapter.set(key, { key, title, notes: [] });
       byChapter.get(key)!.notes.push(note);
     }
     const order = new Map(chapters.map((chapter, at) => [chapter.id, at]));
-    return [...byChapter.values()].sort(
-      (a, b) => (order.get(a.key) ?? -1) - (order.get(b.key) ?? -1)
-    );
+    const rank = (key: string) => order.get(key) ?? (key === 'book' ? -2 : -1);
+    return [...byChapter.values()].sort((a, b) => rank(a.key) - rank(b.key));
   }, [annotations, chapters, t]);
 
   /** The same fold as the notes: a chapter, and what it was split into. */
@@ -347,7 +346,6 @@ export default function BookPage() {
     );
   }, [chapters, scenes, t]);
 
-  trace(`render book=${book ? 'yes' : 'no'} chapters=${chapters.length}`);
 
   if (!book) {
     return (

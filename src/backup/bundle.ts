@@ -20,7 +20,6 @@ import {
   type Snapshot,
 } from './format';
 
-import { trace } from '../dev/trace';
 
 const SNAPSHOT = 'snapshot.json';
 
@@ -36,27 +35,20 @@ const SNAPSHOT = 'snapshot.json';
 export async function buildBundle(
   bookIds?: string[]
 ): Promise<ExportFile & { about: BundleAbout }> {
-  let at = performance.now();
   const ids = bookIds ?? (await listBookIds());
   const assets: Record<string, Uint8Array> = {};
   const books: BundledBook[] = [];
 
   for (const id of ids) {
-    const each = performance.now();
     const record = await readBookRecord(id);
     if (!record) continue;
-    const read = performance.now();
     books.push(await withAssets(record, assets));
-    trace(
-      `book ${id} read ${Math.round(read - each)}ms assets ${Math.round(performance.now() - read)}ms`
-    );
     // Every book here is a synchronous file read — `await readBookRecord` is a
     // microtask, not a yield, so without this the whole loop runs as one
     // block: 139 books, most of them free, one of them 2.5s for its images,
     // and nothing in between gets a turn to answer a tap.
     await yieldToUI();
   }
-  trace(`records ${Math.round(performance.now() - at)}ms for ${books.length} books`);
 
   const snapshot: Snapshot = {
     format: BUNDLE_FORMAT,
@@ -72,29 +64,22 @@ export async function buildBundle(
     catalogs: bookIds ? undefined : await keptCatalogs(),
   };
 
-  at = performance.now();
   const json = JSON.stringify(snapshot);
-  trace(`stringify ${Math.round(performance.now() - at)}ms for ${json.length} chars`);
-  at = performance.now();
   const about = aboutOf(books, snapshot.createdAt);
   const entries: Entry[] = [
     { path: ABOUT, bytes: strToU8(JSON.stringify(about)) },
     { path: SNAPSHOT, bytes: strToU8(json) },
     ...(await readableEntries(books)),
   ];
-  trace(`strToU8 ${Math.round(performance.now() - at)}ms`);
   let assetBytes = 0;
   for (const [path, bytes] of Object.entries(assets)) {
     entries.push({ path, bytes });
     assetBytes += bytes.length;
   }
-  trace(`assets ${entries.length - 1} files ${assetBytes} bytes`);
 
   const label =
     books.length === 1 ? `export-${books[0].book.title.slice(0, 40)}` : 'library-novel-man';
-  at = performance.now();
   const body = await archive(entries);
-  trace(`archive ${Math.round(performance.now() - at)}ms to ${body.length} bytes`);
   return {
     fileName: bundleName(label.replace(/[/\\?%*:|"<>]/g, '-') || 'library-novel-man'),
     mimeType: 'application/zip',

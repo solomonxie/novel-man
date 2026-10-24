@@ -14,14 +14,10 @@ export type Driver = { execute(sql: string, params?: Scalar[]): Promise<QueryRes
 
 declare const require: (name: string) => {
   open(options: { name: string; location?: string }): Driver;
-  IOS_DOCUMENT_PATH: string;
 };
 
 const driver = require('@op-engineering/op-sqlite');
 
-/** Where expo-sqlite kept it, and so where it still is. */
-export const SQLITE_FOLDER = `${driver.IOS_DOCUMENT_PATH}/SQLite`;
-
-export function openDatabase(name: string): Driver {
-  return driver.open({ name, location: SQLITE_FOLDER });
+export function openDatabase(name: string, location: string): Driver {
+  return driver.open({ name, location });
 }

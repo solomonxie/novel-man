@@ -4,7 +4,6 @@ import { listCovered, updateBook } from '../db/repo';
 import { imageSize, readImage, removeImage } from '../storage/files';
 import { isPlaceholderCover, PLACEHOLDER_SIZE } from '../sources/identify';
 import { yieldToUI } from '../async/yield';
-import { trace } from '../dev/trace';
 
 /**
  * The covers that are not covers.
@@ -43,7 +42,6 @@ export async function clearPlaceholderCovers(): Promise<SweptCover[]> {
   } catch (problem) {
     // A sweep that cannot finish is not a reason to fail a launch, and leaving
     // the marker unset means the next one picks up what is left.
-    trace(`cover sweep: ${String(problem)}`);
   }
   return cleared;
 }
@@ -75,7 +73,6 @@ export async function clearMissingCovers(): Promise<LostCover[]> {
       await yieldToUI();
     }
   } catch (problem) {
-    trace(`missing cover sweep: ${String(problem)}`);
   }
   return lost;
 }

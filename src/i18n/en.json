@@ -1078,7 +1078,9 @@
     "goodreadsHint": "Goodreads retired its API, so this reads your export file or a shelf’s RSS feed.",
     "csv": "From a CSV file",
     "csvDetail": "Import a library from any platform’s CSV",
-    "csvHint": "Any platform’s CSV, as long as it carries the columns this page lists."
+    "csvHint": "Any platform’s CSV, as long as it carries the columns this page lists.",
+    "notes": "Notes from a file",
+    "notesDetail": "Add quotes and comments kept elsewhere to your books"
   },
   "find": {
     "prompt": "Type what you’re looking for, then tap Search.",
@@ -1368,6 +1370,19 @@
     "savedWhen_other": "{{count}} books · last read {{date}}",
     "savedRead": "Read again",
     "savedForget": "Stop offering this shelf here? Nothing already imported is touched."
+  },
+  "notesImport": {
+    "why": "Quotes and comments kept somewhere else, each added as a note about its book. Books already on the shelf get the notes; the rest are added. Choosing the same file twice adds nothing new.",
+    "choose": "Choose a notes file",
+    "notNotes": "No notes found in that file.",
+    "add": "Add {{count}} notes",
+    "summary": "{{books}} books: {{matched}} already on your shelf, {{created}} to be added.",
+    "where": "Where each book’s notes go",
+    "onto": "{{count}} notes → {{title}}",
+    "asNew": "{{count}} notes → new book",
+    "added": "Notes added",
+    "already": "Already there",
+    "newBooks": "Books added"
   },
   "csv": {
     "why": "A library from anywhere, as a CSV. Goodreads’ own export is read as it stands; any other file works too, as long as its header row carries the columns below.",

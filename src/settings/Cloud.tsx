@@ -22,7 +22,6 @@ import {
 } from '../db/jobs';
 import { listConnections, saveConnection } from '../cloud/connections';
 import { CloudError, discoverRegion, regionFromRefusal } from '../cloud/client';
-import { trace } from '../dev/trace';
 import { drain, queueBackup, subscribeToSync } from '../cloud/sync';
 import {
   endpointFor,
@@ -119,10 +118,8 @@ export function CloudSettings() {
       const endpoint = normaliseEndpoint(typed || endpointFor(provider, { region }));
       // Checked before it is sent. An empty region builds `s3..amazonaws.com`,
       // which fails as a network error and reads as a rejected key.
-      trace(`cloud save provider=${draft.providerId} region=${region} endpoint=${endpoint} bucket=${draft.bucket.trim()} prefix=${draft.prefix.trim()} pathStyle=${!!provider.pathStyle} key=${draft.accessKeyId.trim().length}ch secret=${draft.secretAccessKey.trim().length}ch`);
       const problem = endpointProblem(endpoint);
       if (problem) {
-        trace(`cloud endpoint refused: ${problem}`);
         setError(t(`cloud.endpoint_${problem}`, { endpoint }));
         return;
       }
@@ -152,18 +149,15 @@ export function CloudSettings() {
         // answer and then asking the reader for it is not worth doing.
         const better = refused instanceof CloudError ? regionFromRefusal(refused.detail) : null;
         if (!better) throw refused;
-        trace(`cloud retrying in ${better}`);
         await attempt({
           region: better,
           endpoint: normaliseEndpoint(typed || endpointFor(provider, { region: better })),
         });
       }
-      trace('cloud save ok');
       setDraft(EMPTY);
       setAdding(false);
       load();
     } catch (caught) {
-      trace(`cloud save failed: ${String(caught)}`);
       // A request that never arrived names the host it tried; anything else is
       // the provider's own words.
       setError(

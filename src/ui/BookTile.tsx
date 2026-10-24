@@ -7,7 +7,6 @@ import { formatCount } from '../text/counts';
 import { isSkeleton, statusOf } from '../books/record';
 import type { BookListItem } from '../db/repo';
 import { space, usePalette } from '../theme';
-import { trace } from '../dev/trace';
 
 /** One book on a shelf — the whole shelf, a list of them, or a tag's worth. */
 export function BookTile({ book, width }: { book: BookListItem; width: number }) {
@@ -20,7 +19,6 @@ export function BookTile({ book, width }: { book: BookListItem; width: number })
   return (
     <Pressable
       onPress={() => {
-        trace(`tap ${book.title}`);
         router.push(`/book/${book.id}`);
       }}
       style={{ width }}

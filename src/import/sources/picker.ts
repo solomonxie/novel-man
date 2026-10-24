@@ -47,3 +47,8 @@ export function pickOriginalPdf(): Promise<PickedFile | null> {
 export function pickSpreadsheet(): Promise<PickedFile | null> {
   return pick(['public.comma-separated-values-text', 'public.plain-text']);
 }
+
+/** Notes kept elsewhere, as a JSON file. */
+export function pickNotesFile(): Promise<PickedFile | null> {
+  return pick(['public.json', 'public.plain-text']);
+}

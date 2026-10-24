@@ -411,12 +411,22 @@ export class HttpError extends Error {
  * as long as it felt like — and one of these doors is a deprecated Atom feed
  * that can take tens of seconds or never reply at all. A catalog that has not
  * spoken in five seconds is not going to be part of this search.
+ *
+ * Open Library gets longer. It is the catalog that matters most and it has
+ * days of answering in six or eight seconds; the others land as they come
+ * meanwhile, so waiting on it holds nothing else up.
  */
 const PATIENCE_MS = 5000;
+const OPEN_LIBRARY_PATIENCE_MS = 15000;
 
-async function within(url: string, accept: string, signal?: AbortSignal): Promise<Response> {
+async function within(
+  url: string,
+  accept: string,
+  signal?: AbortSignal,
+  patience = PATIENCE_MS
+): Promise<Response> {
   const stop = new AbortController();
-  const timer = setTimeout(() => stop.abort(), PATIENCE_MS);
+  const timer = setTimeout(() => stop.abort(), patience);
   // The caller's own reason to stop — the search was abandoned, the screen
   // left — on top of the deadline. A request nobody is waiting for should not
   // go on holding the radio for the five seconds it was allowed.
@@ -433,8 +443,8 @@ async function within(url: string, accept: string, signal?: AbortSignal): Promis
   }
 }
 
-async function json(url: string, signal?: AbortSignal): Promise<unknown> {
-  return (await within(url, 'application/json', signal)).json();
+async function json(url: string, signal?: AbortSignal, patience?: number): Promise<unknown> {
+  return (await within(url, 'application/json', signal, patience)).json();
 }
 
 async function xml(url: string, signal?: AbortSignal): Promise<string> {
@@ -583,7 +593,8 @@ export async function findBook(
           isbn
             ? `${OL_SEARCH}?q=isbn:${isbn}&fields=${OL_FIELDS}&limit=${limit}`
             : `${OL_SEARCH}?q=${encodeURIComponent(openLibraryQuery(asked))}&fields=${OL_FIELDS}&limit=${limit}`,
-          signal
+          signal,
+          OPEN_LIBRARY_PATIENCE_MS
         )
       )
     ),

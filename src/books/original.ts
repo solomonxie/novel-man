@@ -1,6 +1,6 @@
 import { File } from '../storage/fs';
 import { fingerprintOf } from '../storage/fingerprint';
-import { adoptSourceFile } from '../storage/files';
+import { adoptSourceFile, openStored } from '../storage/files';
 import { setOrigin, setOriginFile, type Book } from '../db/repo';
 import { originOfEpub } from '../import/formats/epub';
 
@@ -84,7 +84,7 @@ export function wantsOriginal(book: Pick<Book, 'origin_fingerprint'>): boolean {
 export async function recoverOrigin(book: Book): Promise<boolean> {
   if (book.origin_fingerprint || book.source_ext !== 'epub' || !book.source_path) return false;
   try {
-    const file = new File(book.source_path);
+    const file = openStored(book.source_path, book.source_hash, book.source_ext);
     if (!file.exists) return false;
     const origin = originOfEpub(await file.bytes());
     if (!origin) return false;

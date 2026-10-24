@@ -1,3 +1,6 @@
+import { File, Paths } from '../src/storage/fs';
+import { removeDemoFiles, removeUnusedSources } from '../src/storage/tidy';
+import { zipDatabaseCopies } from '../src/backup/local';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -15,7 +18,8 @@ import { router, useFocusEffect } from '../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
-import { listBooks, type BookListItem } from '../src/db/repo';
+import { listBooks, storedFileReferences, type BookListItem } from '../src/db/repo';
+import { demoMode } from '../src/dev/demo';
 import { reviewedBooks, shelfOf, type ReadingStatus } from '../src/books/record';
 import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
 import { pickManuscript } from '../src/import/sources/picker';
@@ -40,7 +44,6 @@ import { BackupOffer, RestoreOffer } from '../src/ui/Safekeeping';
 import { subscribeToRestores } from '../src/backup/changes';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { space, usePalette } from '../src/theme';
-import { timed, trace } from '../src/dev/trace';
 
 /** Enough to read on the way past; the heading leads to the rest. */
 const REVIEWS_SHOWN = 3;
@@ -67,8 +70,7 @@ export default function Home() {
   const [broken, setBroken] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
-    trace('refresh start');
-    timed('listBooks', listBooks())
+    listBooks()
       .then((found) => {
         setBooks(found);
         setBroken(null);
@@ -77,8 +79,8 @@ export default function Home() {
         setBooks([]);
         setBroken(String(problem));
       });
-    timed('listBookLists', listBookLists()).then(setLists).catch(() => undefined);
-    timed('listTags', listTags()).then(setTags).catch(() => undefined);
+    listBookLists().then(setLists).catch(() => undefined);
+    listTags().then(setTags).catch(() => undefined);
   }, []);
 
   /** From Files, matched against the shelf once it has been read. */
@@ -107,20 +109,29 @@ export default function Home() {
   useFocusEffect(refresh);
 
   useEffect(() => {
-    // A beat every second: a gap in it is the JS thread blocked, and the
-    // lines either side of the gap say by what.
-    const beat = setInterval(() => trace('beat'), 1000);
     void (async () => {
       // Pull back before pushing up. Backing an empty shelf over a good
       // backup is exactly how a reinstall would lose what it came for.
-      const restored = await timed('restoreOnLaunch', restoreOnLaunch()).catch(() => null);
+      const restored = await restoreOnLaunch().catch(() => null);
       if (restored) refresh();
     })();
-    timed('syncOnLaunch', syncOnLaunch()).catch(() => undefined);
-    timed('resumeWorkOnLaunch', resumeWorkOnLaunch()).catch(() => undefined);
+    syncOnLaunch().catch(() => undefined);
+    resumeWorkOnLaunch().catch(() => undefined);
     // Thirty days is a promise kept on the way in, not the next time somebody
     // happens to open the page that lists what is waiting to go.
     purgeExpiredTrash().catch(() => undefined);
+    // Timing logs from debugging sessions, left in the Files app.
+    for (const name of ['trace.txt', 'perf.txt']) {
+      const stale = new File(Paths.document, name);
+      if (stale.exists) stale.delete();
+    }
+    zipDatabaseCopies().catch(() => undefined);
+    if (!demoMode()) {
+      removeDemoFiles();
+      storedFileReferences()
+        .then(removeUnusedSources)
+        .catch(() => undefined);
+    }
     // Once ever, and it says so: a cover quietly taken off a book is a change
     // to the shelf, and the books it happened to are the ones worth looking up
     // again. Silence here would be the app tidying somebody's library behind
@@ -167,7 +178,6 @@ export default function Home() {
         );
       })
       .catch(() => undefined);
-    return () => clearInterval(beat);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refresh]);
 

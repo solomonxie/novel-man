@@ -348,7 +348,9 @@ export default function Reader() {
   // needs the whole text, so it waits for it rather than holding it up.
   useEffect(() => {
     if (!id || !text || book?.text_source) return;
-    listAnnotations(id).then((rows) => {
+    listAnnotations(id).then((all) => {
+      // A note about the book may quote it, but it was never placed and must not be.
+      const rows = all.filter((entry) => !entry.standalone);
       const { placed } = repairAll(text, rows);
       setAnnotations(placed);
       for (const repaired of placed) {

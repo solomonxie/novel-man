@@ -1,4 +1,5 @@
-import { File, Paths } from '../storage/fs';
+import { File } from '../storage/fs';
+import { ownPath } from '../storage/own';
 import { unzipSync, strFromU8 } from 'fflate';
 
 import { hueOf, saveBible } from '../scripture/save';
@@ -74,7 +75,7 @@ export function isExtraBook(code: string): boolean {
 }
 
 function cacheFile(): File {
-  return new File(Paths.document, CACHE);
+  return new File(ownPath(CACHE));
 }
 
 export function readCatalog(): Catalog | null {

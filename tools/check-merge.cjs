@@ -32,6 +32,17 @@ const stubs = {
       };
     },
   },
+  'react-native-fs-turbo': {
+    __esModule: true,
+    default: {
+      DocumentDirectoryPath: '/tmp',
+      LibraryDirectoryPath: '/tmp',
+      CachesDirectoryPath: '/tmp',
+      exists: () => false,
+      mkdir() {},
+      moveFile() {},
+    },
+  },
   '@react-native-async-storage/async-storage': {
     __esModule: true,
     default: {

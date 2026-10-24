@@ -116,7 +116,10 @@ export default function Notes() {
       if (!needle) return true;
       return `${entry.quote} ${entry.note ?? ''}`.toLowerCase().includes(needle);
     });
-    const byChapter = new Map<string, { chapter: Chapter | null; items: Annotation[] }>();
+    const byChapter = new Map<
+      string,
+      { key: string; chapter: Chapter | null; place: string; items: Annotation[] }
+    >();
     for (const entry of matching) {
       const chapter =
         (entry.chapter_id
@@ -124,13 +127,14 @@ export default function Notes() {
           : entry.standalone
             ? undefined
             : chapters.find((c) => entry.start >= c.start && entry.start < c.end)) ?? null;
-      const key = chapter?.id ?? 'none';
-      if (!byChapter.has(key)) byChapter.set(key, { chapter, items: [] });
+      const place = !chapter && entry.standalone ? entry.place?.trim() ?? '' : '';
+      const key = chapter?.id ?? (place ? `place:${place}` : 'none');
+      if (!byChapter.has(key)) byChapter.set(key, { key, chapter, place, items: [] });
       byChapter.get(key)!.items.push(entry);
     }
-    return [...byChapter.values()].sort(
-      (a, b) => (a.chapter?.idx ?? -1) - (b.chapter?.idx ?? -1)
-    );
+    const rank = (group: { chapter: Chapter | null; place: string }) =>
+      group.chapter?.idx ?? (group.place ? -1 : -2);
+    return [...byChapter.values()].sort((a, b) => rank(a) - rank(b));
   }, [annotations, chapters, query, filter]);
 
   const total = annotations?.length ?? 0;
@@ -229,12 +233,12 @@ export default function Notes() {
             </Text>
           ) : null}
 
-          {groups.map(({ chapter, items }) => (
-            <View key={chapter?.id ?? 'none'} style={{ marginTop: space.xl }}>
+          {groups.map(({ key, chapter, place, items }) => (
+            <View key={key} style={{ marginTop: space.xl }}>
               <Text style={{ color: palette.text, fontSize: 15, fontWeight: '700' }}>
                 {chapter
                   ? chapter.title.trim() || `${chapter.idx + 1}`
-                  : t(
+                  : place || t(
                       items.every((entry) => entry.standalone)
                         ? 'notes.aboutTheBook'
                         : 'notes.unplaced'

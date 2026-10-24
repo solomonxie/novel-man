@@ -1,15 +1,16 @@
-import { Directory, File, Paths } from './fs';
+import { Directory, File } from './fs';
 import { sha256Hex } from '../cloud/sha256';
 import { extensionOf } from './paths';
 import { fingerprintOf } from './fingerprint';
 import { folderFor } from '../dev/demo';
+import { ownPath } from './own';
 
 export { extensionOf };
 
 const SOURCES = 'sources';
 
 function sourcesDir(): Directory {
-  const dir = new Directory(Paths.document, folderFor(SOURCES));
+  const dir = new Directory(ownPath(folderFor(SOURCES)));
   if (!dir.exists) dir.create({ intermediates: true });
   return dir;
 }
@@ -75,7 +76,7 @@ export function deleteStored(path: string) {
 const IMAGES = 'images';
 
 function imagesDir(): Directory {
-  const dir = new Directory(Paths.document, folderFor(IMAGES));
+  const dir = new Directory(ownPath(folderFor(IMAGES)));
   if (!dir.exists) dir.create({ intermediates: true });
   return dir;
 }

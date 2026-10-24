@@ -184,8 +184,13 @@ async function clearAppData(keepBackup: string) {
     // Left for the system to reclaim.
   }
 
-  const documents = new Directory(Paths.document);
-  for (const entry of documents.list()) {
+  // Documents is what Files shows; the app's own files live beside it.
+  const own = new Directory(Paths.support);
+  const entries = [
+    ...new Directory(Paths.document).list(),
+    ...(own.exists ? own.list() : []),
+  ];
+  for (const entry of entries) {
     // The live database is emptied above rather than deleted, because it is
     // open. Anything else in there is data this wipe promised to remove.
     if (entry.name === 'SQLite' && entry instanceof Directory) {
