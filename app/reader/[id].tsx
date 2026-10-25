@@ -57,7 +57,7 @@ import { EsvError } from '../../src/sources/esv';
 import { codeBlockIn, runsIn } from '../../src/reader/rich';
 import { ReaderImage } from '../../src/ui/ReaderImage';
 import { supports } from '../../src/books/kinds';
-import { quoteWithVerses, versesFromMarkers } from '../../src/scripture/reference';
+import { quotePlain, quoteWithVerses, versesFromMarkers } from '../../src/scripture/reference';
 import { fingerprint, repairAll } from '../../src/reader/anchor';
 import type { Span } from '../../src/text/segment';
 import { scriptOf } from '../../src/text/language';
@@ -667,8 +667,7 @@ export default function Reader() {
     const marked = remote ? versesFromMarkers(source) : verses;
     const edition = remote ? t('reader.esvShort') : book?.title;
     const cited = marked.length ? quoteWithVerses(source, range, marked, chapter.title, edition) : null;
-    const attributed = `${plain}\n\n--- ${book?.title ?? chapter.title}`;
-    await Clipboard.setString(cited ?? attributed);
+    await Clipboard.setString(cited ?? quotePlain(plain, book?.title ?? '', chapter.title));
     endSelection();
     flash(t('reader.copied'));
   }

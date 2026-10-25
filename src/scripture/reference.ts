@@ -22,10 +22,9 @@ export function referenceOf(chapterTitle: string, touched: Verse[]): string {
 }
 
 /**
- * The reference, then the passage with every verse numbered — clipped to what
- * was selected, so half a verse quotes as half a verse under its own number.
- *
- * The reference and edition sit on a line of their own above the verses.
+ * The reference first, then the words. One verse runs on after it on the same
+ * line; several put each verse on its own line under its number, clipped to
+ * what was selected.
  */
 export function quoteWithVerses(
   text: string,
@@ -36,16 +35,21 @@ export function quoteWithVerses(
 ): string | null {
   const touched = versesIn(verses, span);
   if (!touched.length) return null;
-  const body = touched
-    .map((verse) => {
-      const from = Math.max(verse.start, span.start);
-      const to = Math.min(verse.end, span.end);
-      return `[${verse.number}] ${text.slice(from, to).trim()}`;
-    })
-    .filter((line) => line.length > `[] `.length)
-    .join(' ');
-  const label = edition ? ` (${edition})` : '';
-  return `${referenceOf(chapterTitle, touched)}${label}\n${body}`;
+  const clip = (verse: Verse) =>
+    text.slice(Math.max(verse.start, span.start), Math.min(verse.end, span.end)).trim();
+  const head = `${referenceOf(chapterTitle, touched)}${edition ? ` (${edition})` : ''}`;
+  if (touched.length === 1) return `${head} ${clip(touched[0])}`;
+  const lines = touched
+    .map((verse) => ({ number: verse.number, words: clip(verse) }))
+    .filter((line) => line.words)
+    .map((line) => `[${line.number}] ${line.words}`);
+  return [head, ...lines].join('\n');
+}
+
+/** Any other book: where it is from, then the words. */
+export function quotePlain(text: string, bookTitle: string, chapterTitle?: string | null): string {
+  const where = [bookTitle.trim(), chapterTitle?.trim()].filter(Boolean).join(' ');
+  return where ? `${where}: ${text.trim()}` : text.trim();
 }
 
 /**

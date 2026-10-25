@@ -59,7 +59,7 @@ const { chapterMaterial, quotable } = await import(join(build, 'analysis/context
 const { blocksFromHtml, bytesFromBase64 } = await import(join(build, 'import/formats/html.js'));
 const { papersFrom, queryFor, authorLine, fileNameFor: paperFileName, absolute } =
   await import(join(build, 'sources/arxiv.js'));
-const { quoteWithVerses, referenceOf, versesIn } = await import(join(build, 'scripture/reference.js'));
+const { quoteWithVerses, quotePlain, referenceOf, versesIn } = await import(join(build, 'scripture/reference.js'));
 const { escapeLike, looseLike, score, wordLike, isAcronym, hasWordBreaks } =
   await import(join(build, 'sources/matching.js'));
 const { searchLicensed } = await import(join(build, 'sources/special.js'));
@@ -1407,12 +1407,20 @@ console.log('citing a passage');
   check('a verse the selection only abuts is not in it',
     versesIn(verses, { start: 26, end: 41 }).map((v) => v.number), [2]);
 
-  check('the reference leads, every verse is numbered',
-    quoteWithVerses(text, { start: 0, end: 58 }, verses, 'Hebrews 3'),
-    'Hebrews 3:1-3\n[1] Therefore, holy brothers. [2] Consider Jesus. [3] He was faithful.');
+  check('the reference leads, a verse to a line',
+    quoteWithVerses(text, { start: 0, end: 58 }, verses, 'Hebrews 3', 'KJV'),
+    'Hebrews 3:1-3 (KJV)\n[1] Therefore, holy brothers.\n[2] Consider Jesus.\n[3] He was faithful.');
   check('half a verse quotes as half a verse',
     quoteWithVerses(text, { start: 10, end: 41 }, verses, 'Hebrews 3'),
-    'Hebrews 3:1-2\n[1] holy brothers. [2] Consider Jesus.');
+    'Hebrews 3:1-2\n[1] holy brothers.\n[2] Consider Jesus.');
+  check('one verse runs on after its reference',
+    quoteWithVerses(text, { start: 26, end: 41 }, verses, 'Hebrews 3', 'KJV'),
+    'Hebrews 3:2 (KJV) Consider Jesus.');
+  check('any other book says where, then the words',
+    quotePlain(' It was a bright cold day. ', 'Nineteen Eighty-Four', 'Chapter 1'),
+    'Nineteen Eighty-Four Chapter 1: It was a bright cold day.');
+  check('an untitled chapter leaves only the book',
+    quotePlain('Words.', 'A Book', ''), 'A Book: Words.');
   check('a book with no verses is quoted plainly',
     quoteWithVerses(text, { start: 0, end: 20 }, [], 'Chapter 3'), null);
 }
