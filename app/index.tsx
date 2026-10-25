@@ -19,7 +19,7 @@ import { router, useFocusEffect } from '../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
-import { listBooks, storedFileReferences, type BookListItem } from '../src/db/repo';
+import { listBooks, listRecentNotes, storedFileReferences, type BookListItem, type RecentNote } from '../src/db/repo';
 import { demoMode } from '../src/dev/demo';
 import { reviewedBooks, shelfOf, type ReadingStatus } from '../src/books/record';
 import { enqueueImport, subscribeToQueue, type ImportJob } from '../src/import/queue';
@@ -48,6 +48,7 @@ import { space, usePalette } from '../src/theme';
 
 /** Enough to read on the way past; the heading leads to the rest. */
 const REVIEWS_SHOWN = 3;
+const NOTES_SHOWN = 5;
 
 /** The order the shelves are read in, which is not the order they are declared in. */
 const SHELVES: ReadingStatus[] = ['wishlist', 'reading', 'read'];
@@ -67,6 +68,7 @@ export default function Home() {
   /** The two ways the shelf is grouped without moving anything. */
   const [lists, setLists] = useState<BookList[]>([]);
   const [tags, setTags] = useState<{ tag: string; books: number }[]>([]);
+  const [notes, setNotes] = useState<RecentNote[]>([]);
   /** A shelf that cannot be read is not an empty shelf, and must not say it is. */
   const [broken, setBroken] = useState<string | null>(null);
 
@@ -82,6 +84,7 @@ export default function Home() {
       });
     listBookLists().then(setLists).catch(() => undefined);
     listTags().then(setTags).catch(() => undefined);
+    listRecentNotes(NOTES_SHOWN).then(setNotes).catch(() => undefined);
   }, []);
 
   /** From Files, matched against the shelf once it has been read. */
@@ -395,6 +398,53 @@ export default function Home() {
               </View>
             ) : null}
 
+            {/* The last things written, in any book: where each one is, then what it says. */}
+            {notes.length > 0 ? (
+              <View style={{ marginTop: space.xl }}>
+                <SectionHead title={t('shelf.sectionNotes')} />
+                <View style={{ paddingHorizontal: space.lg }}>
+                  <Section flush>
+                    {notes.map((note, index) => {
+                      const chapter =
+                        note.chapter_idx !== null
+                          ? `${note.chapter_idx + 1}. ${note.chapter_title?.trim() || t('structure.untitled')}`
+                          : note.place?.trim() || '';
+                      const written = note.note?.trim();
+                      return (
+                        <Pressable
+                          key={note.id}
+                          onPress={() => router.push(`/book/${note.book_id}/notes`)}
+                          style={({ pressed }) => [
+                            styles.note,
+                            index < notes.length - 1 && {
+                              borderBottomWidth: StyleSheet.hairlineWidth,
+                              borderColor: palette.border,
+                            },
+                            pressed && { opacity: 0.7 },
+                          ]}
+                        >
+                          <Text numberOfLines={1} style={{ color: palette.faint, fontSize: 12 }}>
+                            {[note.book_title, chapter].filter(Boolean).join(' · ')}
+                          </Text>
+                          <Text
+                            numberOfLines={3}
+                            style={{ color: written ? palette.text : palette.dim, fontSize: 15, marginTop: 2 }}
+                          >
+                            {written || note.quote}
+                          </Text>
+                          {written && note.quote ? (
+                            <Text numberOfLines={2} style={{ color: palette.dim, fontSize: 13, marginTop: 2 }}>
+                              {note.quote}
+                            </Text>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </Section>
+                </View>
+              </View>
+            ) : null}
+
             {tags.length > 0 ? (
               <View style={{ marginTop: space.xl }}>
                 <SectionHead title={t('shelf.sectionTags')} />
@@ -493,4 +543,5 @@ const styles = StyleSheet.create({
   appName: { fontSize: 30, fontWeight: '700', letterSpacing: -0.5 },
   shelfRow: { gap: space.md, paddingHorizontal: space.lg, paddingTop: space.md },
   center: { alignItems: 'center', justifyContent: 'center', padding: space.xxl },
+  note: { paddingHorizontal: space.lg, paddingVertical: space.sm + 2 },
 });

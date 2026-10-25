@@ -1016,4 +1016,7 @@ export const migrations: string[] = [
      content_at INTEGER NOT NULL DEFAULT 0
    );
    ${changeTriggers()}`,
+
+  // The newest notes across every book, for the home page.
+  `CREATE INDEX IF NOT EXISTS annotations_recent ON annotations(created_at DESC);`,
 ];

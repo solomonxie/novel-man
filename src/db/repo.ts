@@ -1295,6 +1295,27 @@ export async function listAnnotations(bookId: string): Promise<Annotation[]> {
   );
 }
 
+export type RecentNote = Annotation & {
+  book_title: string;
+  chapter_idx: number | null;
+  chapter_title: string | null;
+};
+
+/** The newest notes on the whole shelf, each with its book and the chapter it is in. */
+export async function listRecentNotes(limit: number): Promise<RecentNote[]> {
+  const database = await db();
+  return database.getAllAsync<RecentNote>(
+    `SELECT a.*, b.title AS book_title, c.idx AS chapter_idx, c.title AS chapter_title
+       FROM (SELECT * FROM annotations ORDER BY created_at DESC LIMIT ?) a
+       JOIN books b ON b.id = a.book_id
+       LEFT JOIN chapters c ON c.id = COALESCE(a.chapter_id, CASE WHEN a.standalone = 0 THEN
+         (SELECT x.id FROM chapters x
+           WHERE x.book_id = a.book_id AND a.start >= x.start AND a.start < x.end LIMIT 1) END)
+      ORDER BY a.created_at DESC`,
+    limit
+  );
+}
+
 export async function addAnnotation(input: {
   bookId: string;
   chapterId?: string | null;

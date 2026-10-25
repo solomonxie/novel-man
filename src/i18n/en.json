@@ -99,7 +99,8 @@
     "noneHere": "Nothing on this shelf yet.",
     "inTerms": "In concepts & cards ({{count}})",
     "sectionReviews": "Reviews",
-    "bookSources": "Book sources"
+    "bookSources": "Book sources",
+    "sectionNotes": "Notes"
   },
   "reviews": {
     "title": "Reviews",

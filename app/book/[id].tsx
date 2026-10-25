@@ -106,6 +106,9 @@ const LINE = 22;
 const BLURB_LINES = 3;
 const IMPRESSION_LINES = 3;
 
+/** Enough to find the last thing written; the heading leads to the rest. */
+const NOTES_SHOWN = 5;
+
 export default function BookPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
@@ -162,7 +165,6 @@ export default function BookPage() {
   const scenesY = useRef(0);
   const [openScenes, setOpenScenes] = useState<string | null>(null);
   /** One chapter's notes at a time: a book's worth at once is a page nobody reads. */
-  const [openNotes, setOpenNotes] = useState<string | null>(null);
   const [keyed, setKeyed] = useState(false);
   /** Choosing where this record's words come from, and the two that need a sheet. */
   const [sourceOpen, setSourceOpen] = useState(false);
@@ -302,26 +304,22 @@ export default function BookPage() {
    * how anybody looks for one. A note that quotes nothing and names no
    * chapter is about the book itself, so it goes first, before chapter one.
    */
-  const noteGroups = useMemo(() => {
-    const byChapter = new Map<string, { key: string; title: string; notes: Annotation[] }>();
-    for (const note of annotations) {
+  /** The newest notes, each with the chapter it was written in. */
+  const recentNotes = useMemo(() => {
+    const placeOf = (note: Annotation) => {
       const chapter = note.chapter_id
         ? chapters.find((entry) => entry.id === note.chapter_id)
         : note.standalone
           ? undefined
           : chapters.find((entry) => note.start >= entry.start && note.start < entry.end);
-      // Notes brought over onto a book with no chapters still say which one.
-      const place = !chapter && note.standalone ? note.place?.trim() : '';
-      const key = chapter?.id ?? (place ? `place:${place}` : 'book');
-      const title = chapter
-        ? `${chapter.idx + 1}. ${chapter.title.trim() || t('structure.untitled')}`
-        : place || t('book.notesAboutBook');
-      if (!byChapter.has(key)) byChapter.set(key, { key, title, notes: [] });
-      byChapter.get(key)!.notes.push(note);
-    }
-    const order = new Map(chapters.map((chapter, at) => [chapter.id, at]));
-    const rank = (key: string) => order.get(key) ?? (key === 'book' ? -2 : -1);
-    return [...byChapter.values()].sort((a, b) => rank(a.key) - rank(b.key));
+      if (chapter) return `${chapter.idx + 1}. ${chapter.title.trim() || t('structure.untitled')}`;
+      return (note.standalone && note.place?.trim()) || t('book.notesAboutBook');
+    };
+    return annotations
+      .slice()
+      .sort((a, b) => b.created_at - a.created_at)
+      .slice(0, NOTES_SHOWN)
+      .map((note) => ({ note, place: placeOf(note) }));
   }, [annotations, chapters, t]);
 
   /** The same fold as the notes: a chapter, and what it was split into. */
@@ -1040,6 +1038,57 @@ export default function BookPage() {
         </Writable>
       </Block>
 
+      {/* The last five things written in this book, newest first, each under
+          the chapter it was written in. The page behind the heading holds all
+          of them, and is where a note is edited, searched or deleted. */}
+      <View onLayout={(event) => { notesY.current = event.nativeEvent.layout.y; }}>
+        <Block
+          title={t('book.notes')}
+          count={noteCount || undefined}
+          onOpen={() => router.push(`/book/${book.id}/notes`)}
+        >
+          {recentNotes.length === 0 ? (
+            <Empty text={t(skeleton ? 'notes.emptyRecord' : 'notes.empty')} />
+          ) : (
+            <Section flush>
+              {recentNotes.map(({ note, place }, index) => (
+                <Pressable
+                  key={note.id}
+                  onPress={() => router.push(`/book/${book.id}/notes`)}
+                  style={({ pressed }) => [
+                    styles.noteLine,
+                    { borderColor: palette.border, opacity: pressed ? 0.7 : 1 },
+                    index === recentNotes.length - 1 && annotations.length <= NOTES_SHOWN && { borderBottomWidth: 0 },
+                  ]}
+                >
+                  <Text numberOfLines={1} style={{ color: palette.faint, fontSize: 12 }}>{place}</Text>
+                  <Text
+                    numberOfLines={3}
+                    style={{ color: note.note?.trim() ? palette.text : palette.dim, fontSize: 15, marginTop: 2 }}
+                  >
+                    {note.note?.trim() || note.quote}
+                  </Text>
+                  {note.note?.trim() && note.quote ? (
+                    <Text numberOfLines={2} style={{ color: palette.dim, fontSize: 13, marginTop: 2 }}>
+                      {note.quote}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              ))}
+              {annotations.length > NOTES_SHOWN ? (
+                <Row
+                  label={t('book.showAll', { count: annotations.length })}
+                  value="›"
+                  link
+                  onPress={() => router.push(`/book/${book.id}/notes`)}
+                  last
+                />
+              ) : null}
+            </Section>
+          )}
+        </Block>
+      </View>
+
       {/* What the chapters were cut into, folded the same way the notes are. */}
       {supports(book.kind, 'scenes') && !skeleton ? (
         <View onLayout={(event) => { scenesY.current = event.nativeEvent.layout.y; }}>
@@ -1183,45 +1232,6 @@ export default function BookPage() {
           with no words: a shelf is kept for what you thought of what is on it,
           and a rating that only records books read on paper is half a shelf. */}
 
-      {/* Everything written in this book, folded into the chapters it was
-          written in. The page behind the heading is where a note is edited,
-          searched or deleted; this is for finding one. */}
-      <View onLayout={(event) => { notesY.current = event.nativeEvent.layout.y; }}>
-        <Block
-          title={t('book.notes')}
-          count={noteCount || undefined}
-          onOpen={() => router.push(`/book/${book.id}/notes`)}
-        >
-          {noteGroups.length === 0 ? (
-            <Empty text={t(skeleton ? 'notes.emptyRecord' : 'notes.empty')} />
-          ) : (
-            <Section flush>
-              {noteGroups.map((group, index) => (
-                <Fragment key={group.key}>
-                  <Row
-                    label={group.title}
-                    value={`${group.notes.length}  ${openNotes === group.key ? '⌃' : '⌄'}`}
-                    onPress={() => setOpenNotes((was) => (was === group.key ? null : group.key))}
-                    last={index === noteGroups.length - 1 && openNotes !== group.key}
-                  />
-                  {openNotes === group.key
-                    ? group.notes.map((note, at) => (
-                        <Item
-                          key={note.id}
-                          title={note.note?.trim() || note.quote}
-                          detail={note.note?.trim() ? note.quote || undefined : undefined}
-                          quiet={!note.note?.trim()}
-                          onPress={() => router.push(`/book/${book.id}/notes`)}
-                          last={at === group.notes.length - 1}
-                        />
-                      ))
-                    : null}
-                </Fragment>
-              ))}
-            </Section>
-          )}
-        </Block>
-      </View>
 
 
 
@@ -1618,6 +1628,19 @@ function shorten(text: string): string {
 }
 
 const styles = StyleSheet.create({
+  noteLine: {
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  copies: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginTop: space.lg,
+    padding: space.md,
+    borderRadius: radius.md,
+  },
   /** In the hero, which supplies its own padding — so this adds none. */
   stands: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.sm },
   stand: {

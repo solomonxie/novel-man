@@ -99,7 +99,8 @@
     "noneHere": "这个书架上还没有书。",
     "inTerms": "在概念与记忆卡中（{{count}}）",
     "sectionReviews": "书评",
-    "bookSources": "书源"
+    "bookSources": "书源",
+    "sectionNotes": "笔记"
   },
   "reviews": {
     "title": "书评",
