@@ -1,5 +1,6 @@
 import type { BookListItem } from '../db/repo';
 import { isSkeleton } from './record';
+import { hasAuthor } from './kinds';
 
 /**
  * What is wrong with a book, as data. Every shelf of any size collects these:
@@ -52,7 +53,7 @@ export function flagsOn(book: BookListItem): FlagId[] {
   ) {
     found.push('oneChapter');
   }
-  if (blank(book.author) || blank(book.year)) found.push('details');
+  if (missingDetails(book).length) found.push('details');
   if (blank(book.cover_path)) found.push('cover');
   return found;
 }
@@ -60,7 +61,7 @@ export function flagsOn(book: BookListItem): FlagId[] {
 /** Which of a book's basics are missing, to say so rather than just "details". */
 export function missingDetails(book: BookListItem): ('author' | 'year')[] {
   const missing: ('author' | 'year')[] = [];
-  if (blank(book.author)) missing.push('author');
+  if (hasAuthor(book.kind) && blank(book.author)) missing.push('author');
   if (blank(book.year)) missing.push('year');
   return missing;
 }

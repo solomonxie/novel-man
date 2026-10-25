@@ -268,7 +268,9 @@
     "originalWrong": "不是同一个文件",
     "originalPages": "本书由 {{expected}} 页的 PDF 生成，而该文件有 {{found}} 页。",
     "originalSize": "该文件的大小与本书所用的文件不同。",
-    "originalContents": "该文件大小相同但内容不同——可能是另一个版本或被修改过的副本。"
+    "originalContents": "该文件大小相同但内容不同——可能是另一个版本或被修改过的副本。",
+    "publisher": "出版社",
+    "website": "网站"
   },
   "reader": {
     "go": "前往",

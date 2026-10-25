@@ -268,7 +268,9 @@
     "originalWrong": "That isn’t the same file",
     "originalPages": "This book was made from a PDF of {{expected}} pages; that one has {{found}}.",
     "originalSize": "That file is a different size from the one this book was made from.",
-    "originalContents": "That file has the same size but different contents — a different printing, or an edited copy."
+    "originalContents": "That file has the same size but different contents — a different printing, or an edited copy.",
+    "publisher": "Publisher",
+    "website": "Website"
   },
   "reader": {
     "go": "Go",

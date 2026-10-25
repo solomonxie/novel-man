@@ -1019,4 +1019,20 @@ export const migrations: string[] = [
 
   // The newest notes across every book, for the home page.
   `CREATE INDEX IF NOT EXISTS annotations_recent ON annotations(created_at DESC);`,
+
+  // Who published it. Typed by the reader; no catalog writes it.
+  `ALTER TABLE books ADD COLUMN publisher TEXT;`,
+
+  // Scripture names no author: kept empty whatever writes one — a lookup, an import,
+  // a restore, or the kind changing to scripture.
+  `UPDATE books SET author = NULL WHERE kind = 'scripture';
+   CREATE TRIGGER IF NOT EXISTS scripture_authorless_insert AFTER INSERT ON books
+     WHEN NEW.kind = 'scripture' AND NEW.author IS NOT NULL
+     BEGIN UPDATE books SET author = NULL WHERE id = NEW.id; END;
+   CREATE TRIGGER IF NOT EXISTS scripture_authorless_update AFTER UPDATE OF author, kind ON books
+     WHEN NEW.kind = 'scripture' AND NEW.author IS NOT NULL
+     BEGIN UPDATE books SET author = NULL WHERE id = NEW.id; END;`,
+
+  // Where the book lives online: a repository, a publisher's page. Typed by the reader.
+  `ALTER TABLE books ADD COLUMN website TEXT;`,
 ];

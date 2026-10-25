@@ -41,6 +41,8 @@ export type Book = {
   impressions: string | null;
   /** Names one printing, so a catalog can be asked rather than searched. */
   isbn: string | null;
+  publisher: string | null;
+  website: string | null;
   /** What the reader made of it: one to five, or null while unrated. */
   stars: number | null;
   /** Their own words about it, as long as they like. Not the summary — the verdict. */
@@ -370,6 +372,8 @@ export type ImportedBook = Omit<
   | 'status'
   | 'impressions'
   | 'isbn'
+  | 'publisher'
+  | 'website'
 >;
 
 export async function saveImportedBook(input: {
@@ -735,7 +739,7 @@ async function insertScenes(
 // the book page is allowed to edit.
 const BOOK_FIELDS = [
   'title', 'author', 'year', 'edition', 'cover_path', 'summary', 'kind', 'review', 'status',
-  'impressions', 'isbn', 'language',
+  'impressions', 'isbn', 'language', 'publisher', 'website',
 ] as const;
 export type EditableBookField = (typeof BOOK_FIELDS)[number];
 
@@ -1923,8 +1927,8 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
       `INSERT INTO books (id, title, author, year, edition, cover_path, language, kind, source_name,
                           source_hash, source_path, source_ext, word_count, char_count, cover_hue,
                           summary, text_source, stars, review, rated_at, reviewed_at, status,
-                          impressions, isbn, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                          impressions, isbn, publisher, website, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id, book.title, book.author, book.year, book.edition, book.cover_path, book.language,
       book.kind ?? DEFAULT_KIND, book.source_name, book.source_hash, book.source_path,
       book.source_ext, book.word_count, book.char_count, book.cover_hue, book.summary,
@@ -1933,7 +1937,7 @@ export async function writeBookRecord(record: BookRecord): Promise<string> {
       // dropped either would hand back a different book.
       book.text_source ?? null, book.stars ?? null, book.review ?? null, book.rated_at ?? null,
       book.reviewed_at ?? null, book.status ?? null, book.impressions ?? null, book.isbn ?? null,
-      book.created_at || now
+      book.publisher ?? null, book.website ?? null, book.created_at || now
     );
     await database.runAsync(
       'INSERT INTO documents (book_id, text, hints) VALUES (?, ?, ?)',
@@ -2035,11 +2039,11 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
       `UPDATE books SET title = ?, author = ?, year = ?, edition = ?, cover_path = ?,
                         kind = ?, cover_hue = ?, summary = ?, stars = ?, review = ?,
                         rated_at = ?, reviewed_at = ?, status = ?, impressions = ?,
-                        isbn = ? WHERE id = ?`,
+                        isbn = ?, publisher = ?, website = ? WHERE id = ?`,
       book.title, book.author, book.year, book.edition, book.cover_path,
       book.kind ?? DEFAULT_KIND, book.cover_hue, book.summary, book.stars ?? null,
       book.review ?? null, book.rated_at ?? null, book.reviewed_at ?? null, book.status ?? null,
-      book.impressions ?? null, book.isbn ?? null, bookId
+      book.impressions ?? null, book.isbn ?? null, book.publisher ?? null, book.website ?? null, bookId
     );
     await database.runAsync('DELETE FROM scenes WHERE book_id = ?', bookId);
     await database.runAsync('DELETE FROM chapters WHERE book_id = ?', bookId);

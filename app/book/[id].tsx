@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -86,7 +87,7 @@ import { addFile } from '../../src/books/add';
 import { pickManuscript, pickOriginalPdf } from '../../src/import/sources/picker';
 import { linkOriginal, recoverOrigin, unlinkOriginal, wantsOriginal } from '../../src/books/original';
 import { subscribeToQueue, type ImportJob } from '../../src/import/queue';
-import { kindOf, shows, supports, unitOf } from '../../src/books/kinds';
+import { hasAuthor, kindOf, shows, supports, unitOf } from '../../src/books/kinds';
 import { isSkeleton, STARS, statusOf, STATUSES } from '../../src/books/record';
 import { Stars } from '../../src/ui/Stars';
 import { IdentifySheet } from '../../src/ui/IdentifySheet';
@@ -105,6 +106,12 @@ import { deleteBookSafely } from '../../src/backup/trash';
 const LINE = 22;
 const BLURB_LINES = 3;
 const IMPRESSION_LINES = 3;
+
+/** Typed as people write it: `github.com/x` is a website too. */
+function withScheme(url: string): string {
+  const trimmed = url.trim();
+  return /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
 
 /** Enough to find the last thing written; the heading leads to the rest. */
 const NOTES_SHOWN = 5;
@@ -567,7 +574,7 @@ export default function BookPage() {
   }
 
   async function edit(
-    field: 'title' | 'author' | 'year' | 'edition' | 'summary' | 'isbn',
+    field: 'title' | 'author' | 'year' | 'edition' | 'summary' | 'isbn' | 'publisher' | 'website',
     value: string
   ) {
     await updateBook(book!.id, { [field]: value.trim() || null });
@@ -860,12 +867,14 @@ export default function BookPage() {
           lines={3}
           style={{ color: palette.text, fontSize: 20, fontWeight: '700', lineHeight: 25 }}
         />
-        <InlineText
-          value={book.author}
-          placeholder={t('book.author')}
-          onCommit={(value) => edit('author', value)}
-          style={{ color: palette.dim, fontSize: 15, marginTop: 2 }}
-        />
+        {hasAuthor(book.kind) ? (
+          <InlineText
+            value={book.author}
+            placeholder={t('book.author')}
+            onCommit={(value) => edit('author', value)}
+            style={{ color: palette.dim, fontSize: 15, marginTop: 2 }}
+          />
+        ) : null}
         <View style={{ flexDirection: 'row', gap: space.lg, marginTop: 2 }}>
           <InlineText
             value={book.year}
@@ -879,6 +888,31 @@ export default function BookPage() {
             onCommit={(value) => edit('edition', value)}
             style={{ color: book.edition ? palette.dim : palette.faint, fontSize: 14 }}
           />
+        </View>
+        <InlineText
+          value={book.publisher}
+          placeholder={t('book.publisher')}
+          onCommit={(value) => edit('publisher', value)}
+          style={{ color: book.publisher ? palette.dim : palette.faint, fontSize: 14, marginTop: 2 }}
+        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: 2 }}>
+          <View style={{ flexShrink: 1 }}>
+            <InlineText
+              value={book.website}
+              placeholder={t('book.website')}
+              onCommit={(value) => edit('website', value)}
+              style={{ color: book.website ? palette.dim : palette.faint, fontSize: 14 }}
+            />
+          </View>
+          {book.website?.trim() ? (
+            <Text
+              onPress={() => void Linking.openURL(withScheme(book.website!))}
+              suppressHighlighting
+              style={{ color: palette.accent, fontSize: 14 }}
+            >
+              ↗
+            </Text>
+          ) : null}
         </View>
         {/* Rarely read and rarely typed, but it is the only field here that
             names one printing — which is what makes a catalog answerable.

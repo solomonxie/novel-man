@@ -87,6 +87,8 @@ export type BookKind = {
   /** What this kind calls the level the reader turns. A paper has sections. */
   unit?: 'chapter' | 'section';
   features: BookFeature[];
+  /** Scripture has no one author to name. */
+  authorless?: boolean;
   /** What sits above a chapter, when this kind has such a thing. */
   part?: 'book' | 'volume';
   sources: BookSource[];
@@ -153,6 +155,7 @@ export const bookKinds: BookKind[] = [
     group: 'scripture',
     subject: 'a work of scripture',
     fiction: false,
+    authorless: true,
     // Scenes, because scripture has them: the ship, the storm, the lots, the
     // sea. What it does not have is paragraphs anyone can number — the words
     // are cited to a pass rather than sent — so a scene here starts at a verse.
@@ -190,6 +193,10 @@ export function kindOf(kind: string | null | undefined): BookKind {
 export function supports(kind: string | null | undefined, feature: BookFeature): boolean {
   if ((feature === 'words' || feature === 'cards') && !offers('drills')) return false;
   return kindOf(kind).features.includes(feature);
+}
+
+export function hasAuthor(kind: string | null | undefined): boolean {
+  return !kindOf(kind).authorless;
 }
 
 /** `chapter` unless the kind says otherwise — a paper turns sections. */
