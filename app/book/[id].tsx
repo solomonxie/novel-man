@@ -84,6 +84,7 @@ import { addChoice } from '../../src/books/add';
 import { choiceFromIndex } from '../../src/sources/chosen';
 import type { Choice } from '../../src/sources/chosen';
 import { addFile } from '../../src/books/add';
+import { canRebuild, rebuild } from '../../src/books/rebuild';
 import { pickManuscript, pickOriginalPdf } from '../../src/import/sources/picker';
 import { linkOriginal, recoverOrigin, unlinkOriginal, wantsOriginal } from '../../src/books/original';
 import { subscribeToQueue, type ImportJob } from '../../src/import/queue';
@@ -158,6 +159,7 @@ export default function BookPage() {
   const [deleting, setDeleting] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [rebuildable, setRebuildable] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [askEstimate, setAskEstimate] = useState<Estimate | null>(null);
   const [favorite, setFavorited] = useState(false);
@@ -354,6 +356,9 @@ export default function BookPage() {
     );
   }, [chapters, scenes, t]);
 
+  useEffect(() => {
+    if (book) canRebuild(book).then(setRebuildable).catch(() => setRebuildable(false));
+  }, [book]);
 
   if (!book) {
     return (
@@ -636,6 +641,13 @@ export default function BookPage() {
     } finally {
       setLinking(false);
     }
+  }
+
+  function confirmRebuild() {
+    Alert.alert(t('book.rebuild'), t('book.rebuildConfirm'), [
+      { text: t('settings.cancel'), style: 'cancel' },
+      { text: t('book.rebuildGo'), onPress: () => router.push(rebuild(book!)) },
+    ]);
   }
 
   function confirmClear() {
@@ -1457,6 +1469,9 @@ export default function BookPage() {
             `text_source` — an ESV fetched a chapter at a time — stores no text
             to remove, and emptying its document would take away nothing while
             telling the reader it had taken away their book. */}
+        {rebuildable && !skeleton ? (
+          <Row label={t('book.rebuild')} detail={t('book.rebuildWhy')} value="›" onPress={confirmRebuild} />
+        ) : null}
         {skeleton || book.text_source ? null : (
           <Row
             label={t('book.clearText')}

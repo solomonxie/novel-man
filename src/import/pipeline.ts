@@ -1,6 +1,6 @@
 import { yieldToUI } from '../async/yield';
 import { adoptSourceFile, extensionOf, writeImage } from '../storage/files';
-import { getBook, replacePages, saveImportedBook, setOrigin } from '../db/repo';
+import { getBook, getDocumentText, getProgress, replacePages, saveImportedBook, saveProgress, setOrigin } from '../db/repo';
 import { shelfBooks } from '../books/imports';
 import { shelfMatch } from '../sources/sameBook';
 import { bookWithSource, chapterBodies, hintsIn, mergeInto, type Decision, type Incoming } from '../db/versions';
@@ -69,7 +69,7 @@ const WEIGHTS: Record<ImportStage, [number, number]> = {
 
 export async function importFile(
   /** `into` lands the words on a book already on the shelf — see `saveImportedBook`. */
-  input: { uri: string; name: string; kind?: string; into?: string; match?: boolean },
+  input: { uri: string; name: string; kind?: string; into?: string; match?: boolean; rebuild?: boolean },
   onProgress?: (progress: ImportProgress) => void,
   confirm?: (preview: ImportPreview) => Promise<boolean>,
   ask?: ImportAsk
@@ -161,7 +161,7 @@ export async function importFile(
   // A book that already has words is never overwritten: the file is lined up
   // against it and folded in, chapter by chapter, keeping every wording.
   const target = into ? await getBook(into) : null;
-  if (into && target && !target.text_source && target.char_count > 0 && ask?.merge) {
+  if (into && target && !target.text_source && target.char_count > 0 && ask?.merge && !input.rebuild) {
     const base = await chapterBodies(into);
     if (base.length) {
       const docHints = hintsOf(doc);
@@ -197,6 +197,7 @@ export async function importFile(
   }
 
   report('saving');
+  const was = input.rebuild && into ? await placeIn(into) : null;
   const bookId = await saveImportedBook({
     into,
     book: {
@@ -224,6 +225,7 @@ export async function importFile(
    * or a scholarly one that marks its printed pages. Everything else leaves
    * both empty and the reader never mentions a page.
    */
+  if (was) await saveProgress(bookId, placeAgain(was, doc.text));
   const pages = pagesOf(doc);
   if (pages.length) await replacePages(bookId, pages);
   if (parsed.origin) await setOrigin(bookId, parsed.origin);
@@ -234,6 +236,22 @@ export async function importFile(
   report('saving', 1);
 
   return { bookId, chapters: detection.chapters.length, confident: detection.method !== 'none' };
+}
+
+/** Where the reader was, by the words there, so a rebuilt book opens at the same page. */
+async function placeIn(bookId: string) {
+  const [text, offset] = await Promise.all([getDocumentText(bookId), getProgress(bookId)]);
+  return { share: text.length ? offset / text.length : 0, words: text.slice(offset, offset + 48) };
+}
+
+function placeAgain(was: { share: number; words: string }, text: string): number {
+  const guess = Math.round(was.share * text.length);
+  if (was.words.trim().length < 12) return guess;
+  let best = -1;
+  for (let at = text.indexOf(was.words); at >= 0; at = text.indexOf(was.words, at + 1)) {
+    if (best < 0 || Math.abs(at - guess) < Math.abs(best - guess)) best = at;
+  }
+  return best >= 0 ? best : guess;
 }
 
 function hueFromTitle(title: string): number {

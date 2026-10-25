@@ -59,7 +59,7 @@ type Listener = (jobs: ImportJob[]) => void;
  * is only who produces the book at the end of it.
  */
 export type QueuedSource =
-  | { via: 'file'; uri: string; name: string; kind?: string; into?: string; match?: boolean }
+  | { via: 'file'; uri: string; name: string; kind?: string; into?: string; match?: boolean; rebuild?: boolean }
   | { via: 'ebible'; translation: Translation; apocrypha: boolean }
   | { via: 'repo'; edition: RepoEdition }
   | { via: 'gutenberg'; book: GutenbergBook; kind?: string; into?: string }
@@ -134,6 +134,8 @@ export function enqueueImport(input: {
   into?: string;
   /** From the search page: ask whether it is a copy of a book already here. */
   match?: boolean;
+  /** The book's own file again, read by today's importer in place of what it made last time. */
+  rebuild?: boolean;
 }): string {
   return enqueue({ ...input, via: 'file' }, input.name);
 }
@@ -375,7 +377,7 @@ type Produced = { bookId?: string; chapters?: number; kept?: number };
 
 /** Every path ends here: a file on disk, the preview gate, the same stages. */
 function importFrom(
-  file: { uri: string; name: string; kind?: string; into?: string; match?: boolean },
+  file: { uri: string; name: string; kind?: string; into?: string; match?: boolean; rebuild?: boolean },
   job: ImportJob
 ) {
   /** The job stops and waits; whoever answers lets it go on. */
