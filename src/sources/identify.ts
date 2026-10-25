@@ -448,6 +448,15 @@ function namesAny(candidate: Candidate, terms: string[]): boolean {
   return terms.some((term) => said.includes(term));
 }
 
+const titleWords = (text: string) => text.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+
+/** One title inside the other: a store's 三体（全三册） is still 三体. */
+export function sameTitle(a: string, b: string): boolean {
+  const one = titleWords(a);
+  const two = titleWords(b);
+  return Boolean(one && two) && (one.includes(two) || two.includes(one));
+}
+
 /** Title and author as a catalog-blind key: the same book, whichever printing. */
 const workKey = (candidate: Candidate) =>
   `${candidate.title.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')}|${(candidate.author ?? '')
@@ -672,11 +681,14 @@ export async function findBook(
   {
     limit = 20,
     googleKey,
+    title,
     onPartial,
     signal,
   }: {
     limit?: number;
     googleKey?: string | null;
+    /** The book's title, for the stores to search when the question is an ISBN. */
+    title?: string | null;
     /** Called each time a catalog answers, with everything known so far. */
     onPartial?: (lookup: Lookup) => void;
     /** Abandon the lookup: nobody is waiting for this search any more. */
@@ -688,6 +700,11 @@ export async function findBook(
   const isbn = isIsbn(asked) ? cleanIsbn(asked) : null;
   const key = googleKey?.trim() || null;
   const terms = isbn ? `isbn:${isbn}` : asked;
+  // Stores take words, not numbers: an ISBN is put to them as the title, and
+  // only rows of that title are kept, since nothing else ties them to it.
+  const words = isbn ? (title?.trim() ?? '') : asked;
+  const titled = (found: Candidate[]) =>
+    isbn ? found.filter((candidate) => sameTitle(candidate.title, words)) : found;
 
   const attempts = [
     ask('openlibrary', async () =>
@@ -717,23 +734,25 @@ export async function findBook(
         await xml(`${GOOGLE_FEED}?q=${encodeURIComponent(terms)}&max-results=${limit}`, signal)
       )
     ),
-    // Store searches take words, not numbers. Apple's mainland store sells
-    // almost no books, so a Chinese title is asked of Taiwan's.
-    isbn
+    // Apple's mainland store sells almost no books, so a Chinese title is
+    // asked of Taiwan's.
+    !words
       ? null
       : ask('apple', async () =>
-          candidatesFromApple(
-            await json(
-              `${APPLE}?term=${encodeURIComponent(asked)}&media=ebook&limit=${limit}` +
-                `&country=${inHan(asked) ? 'tw' : 'us'}`,
-              signal
+          titled(
+            candidatesFromApple(
+              await json(
+                `${APPLE}?term=${encodeURIComponent(words)}&media=ebook&limit=${limit}` +
+                  `&country=${inHan(words) ? 'tw' : 'us'}`,
+                signal
+              )
             )
           )
         ),
-    isbn || !inHan(asked)
+    !words || !inHan(words)
       ? null
       : ask('douban', async () =>
-          candidatesFromDouban(await json(`${DOUBAN}?q=${encodeURIComponent(asked)}`, signal))
+          titled(candidatesFromDouban(await json(`${DOUBAN}?q=${encodeURIComponent(words)}`, signal)))
         ),
   ];
 

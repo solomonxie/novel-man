@@ -86,24 +86,48 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
   const [keyed, setKeyed] = useState(false);
   const ask = questions(book);
 
+  /** The search being shown; an older one still answering is stopped and ignored. */
+  const running = useRef<AbortController | null>(null);
+  const title = useRef(ask.title);
+  title.current = ask.title;
+  useEffect(() => {
+    if (!visible) running.current?.abort();
+  }, [visible]);
+
   const search = useCallback(async (wanted: string) => {
     if (!wanted.trim()) return;
     Keyboard.dismiss();
+    running.current?.abort();
+    const mine = new AbortController();
+    running.current = mine;
     setBusy(true);
     setFailure(null);
+    setFound(null);
+    setCatalogs([]);
     setAsked(wanted.trim());
     try {
       const key = await googleBooksKey();
       setKeyed(Boolean(key));
-      const lookup = await findBook(wanted, { limit: LIMIT, googleKey: key });
+      const lookup = await findBook(wanted, {
+        limit: LIMIT,
+        googleKey: key,
+        title: title.current,
+        signal: mine.signal,
+        // Rows as each catalog answers, rather than once the slowest has.
+        onPartial: (sofar) => {
+          if (running.current === mine) setFound(sofar.candidates);
+        },
+      });
+      if (running.current !== mine) return;
       setFound(lookup.candidates);
       setCatalogs(lookup.catalogs);
     } catch (problem) {
+      if (running.current !== mine) return;
       setFailure(problem instanceof CatalogsUnreachable ? t('identify.unreachable') : String(problem));
       setFound([]);
       setCatalogs([]);
     } finally {
-      setBusy(false);
+      if (running.current === mine) setBusy(false);
     }
     // `t` is stable for the life of the sheet, and listing it re-runs the search.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -315,17 +339,19 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
             </Text>
           ) : null}
 
-          {busy ? (
+          {busy && !found?.length ? (
             <View style={styles.center}><ActivityIndicator /></View>
           ) : failure ? (
             <Text style={{ color: palette.danger, fontSize: 14, marginTop: space.lg }}>
               {t('identify.failed', { error: failure })}
             </Text>
-          ) : found && found.length === 0 ? (
+          ) : !busy && found && found.length === 0 ? (
             <Text style={{ color: palette.dim, fontSize: 14, marginTop: space.lg }}>
               {t('identify.none')}
             </Text>
           ) : (
+            <>
+            {busy ? <ActivityIndicator style={{ marginTop: space.md }} /> : null}
             <ScrollView
               style={{ marginTop: space.md }}
               contentContainerStyle={styles.grid}
@@ -378,6 +404,7 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
                 </Pressable>
               ))}
             </ScrollView>
+            </>
           )}
         </Animated.View>
       </View>
