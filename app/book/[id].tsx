@@ -89,6 +89,7 @@ import { linkOriginal, recoverOrigin, unlinkOriginal, wantsOriginal } from '../.
 import { subscribeToQueue, type ImportJob } from '../../src/import/queue';
 import { hasAuthor, kindOf, shows, supports, unitOf } from '../../src/books/kinds';
 import { isSkeleton, STARS, statusOf, STATUSES } from '../../src/books/record';
+import { copiesOnShelf } from '../../src/books/mergeBooks';
 import { Stars } from '../../src/ui/Stars';
 import { IdentifySheet } from '../../src/ui/IdentifySheet';
 import { TagsBlock } from '../../src/ui/Shelving';
@@ -132,6 +133,7 @@ export default function BookPage() {
   const [offset, setOffset] = useState(0);
   const [readAt, setReadAt] = useState<number | null>(null);
   const [noteCount, setNoteCount] = useState(0);
+  const [copies, setCopies] = useState(0);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
   const [kindOpen, setKindOpen] = useState(false);
@@ -221,6 +223,7 @@ export default function BookPage() {
     isFavorite(id).then(setFavorited).catch(() => undefined);
     listScenes(id).then(setScenes);
     listParts(id).then(setParts);
+    copiesOnShelf(id).then(setCopies).catch(() => undefined);
   }, [id]);
 
   useFocusEffect(load);
@@ -959,6 +962,20 @@ export default function BookPage() {
         </Pressable>
 
       </Hero>
+
+      {copies > 0 ? (
+        <Pressable
+          onPress={() => router.push(`/duplicates?book=${book.id}`)}
+          style={({ pressed }) => [styles.copies, { backgroundColor: palette.soft, opacity: pressed ? 0.75 : 1 }]}
+        >
+          <Text style={{ color: palette.text, fontSize: 14, flex: 1 }}>
+            {t('duplicates.alsoOnShelf', { count: copies })}
+          </Text>
+          <Text style={{ color: palette.accent, fontSize: 14, fontWeight: '600' }}>
+            {`${t('duplicates.review')}  ›`}
+          </Text>
+        </Pressable>
+      ) : null}
 
       {/* What the book is, in its own voice rather than the reader's — italic
           and grey for that reason, and three lines tall, because a blurb that

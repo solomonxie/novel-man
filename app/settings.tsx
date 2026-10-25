@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import i18n from '../src/i18n';
 
 import { flaggedCount } from '../src/books/flags';
+import { findDuplicates } from '../src/books/duplicates';
+import { dismissedPairs } from '../src/books/mergeBooks';
 import { listBooks } from '../src/db/repo';
 import { AiKeysSettings } from '../src/settings/AiKeys';
 import { BackupSettings } from '../src/settings/Backup';
@@ -47,14 +49,17 @@ export default function SettingsPage() {
    * is right the moment it is opened — including straight after fixing one.
    */
   const [books, setBooks] = useState<Awaited<ReturnType<typeof listBooks>>>([]);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   useFocusEffect(
     useCallback(() => {
       listBooks().then(setBooks).catch(() => undefined);
+      dismissedPairs().then(setDismissed).catch(() => undefined);
     }, [])
   );
 
   const flagged = useMemo(() => flaggedCount(books), [books]);
+  const duplicates = useMemo(() => findDuplicates(books, dismissed).length, [books, dismissed]);
 
   const running = work.counts.pending + work.counts.running;
 
@@ -101,6 +106,12 @@ export default function SettingsPage() {
             detail={t('flags.rowWhy')}
             value={flagged > 0 ? t('flags.count', { count: flagged }) : t('flags.clear')}
             onPress={() => router.push('/flagged')}
+          />
+          <Row
+            label={t('duplicates.row')}
+            detail={t('duplicates.rowWhy')}
+            value={duplicates > 0 ? t('duplicates.count', { count: duplicates }) : t('duplicates.clear')}
+            onPress={() => router.push('/duplicates')}
           />
           {offers('goodreads') ? (
             <Row

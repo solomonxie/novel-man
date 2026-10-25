@@ -65,6 +65,7 @@ export const screens: Screen[] = [
   { path: '/tag/[name]', load: () => require('../../app/tag/[name]').default, header: true },
   { path: '/reviews', load: () => require('../../app/reviews').default, header: true },
   { path: '/flagged', load: () => require('../../app/flagged').default, header: true },
+  { path: '/duplicates', load: () => require('../../app/duplicates').default, header: true },
   { path: '/status/[name]', load: () => require('../../app/status/[name]').default, header: true },
   { path: '/reader/[id]', load: () => require('../../app/reader/[id]').default, animation: 'fade' },
 ];

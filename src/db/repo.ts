@@ -164,6 +164,17 @@ export async function listBooks(): Promise<BookListItem[]> {
   );
 }
 
+/** The shelf as names, for comparing books with each other: no counts, no manuscript. */
+export async function listBookNames(): Promise<
+  { id: string; title: string; author: string | null; edition: string | null;
+    word_count: number; text_source: string | null; created_at: number }[]
+> {
+  const database = await db();
+  return database.getAllAsync(
+    'SELECT id, title, author, edition, word_count, text_source, created_at FROM books'
+  );
+}
+
 /**
  * What each book's language can be worked out from, in one pass. The sample
  * is a prefix rather than the manuscript: detection reads the opening anyway,

@@ -65,8 +65,19 @@ function verify(file: File, book: { id: string; word_count: number }): void {
 
 /** The delete a reader asks for: kept, then removed from the shelf. */
 export async function deleteBookSafely(bookId: string): Promise<void> {
+  if (!(await copyToTrash(bookId))) return;
+  await deleteBook(bookId);
+  noticeChange();
+}
+
+/**
+ * The copy a delete leaves behind, written and verified without deleting —
+ * for a merge, which takes rows off the book before it goes. Null when there
+ * is no such book.
+ */
+export async function copyToTrash(bookId: string): Promise<string | null> {
   const book = await getBook(bookId);
-  if (!book) return;
+  if (!book) return null;
   const bundle = await buildBundle([bookId]);
   const body = bundle.body as Uint8Array;
   const name = `${secondStamp()}-deleted-${safeFileName(book.title)}.zip`;
@@ -85,10 +96,11 @@ export async function deleteBookSafely(bookId: string): Promise<void> {
 
   const about = readAbout(body);
   const database = await db();
+  const id = newId();
   await database.runAsync(
     `INSERT INTO deleted_books (id, book_id, title, author, file, words, notes, bytes, deleted_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    newId(),
+    id,
     bookId,
     book.title,
     book.author ?? null,
@@ -98,8 +110,7 @@ export async function deleteBookSafely(bookId: string): Promise<void> {
     body.length,
     Date.now()
   );
-  await deleteBook(bookId);
-  noticeChange();
+  return id;
 }
 
 export async function listTrash(): Promise<TrashedBook[]> {

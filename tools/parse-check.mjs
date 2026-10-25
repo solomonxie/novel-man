@@ -102,6 +102,8 @@ const { libraryCsv } = await import(join(build, 'export/formats/library.js'));
 const { stripTags } = await import(join(build, 'import/xml.js'));
 const { isSkeleton, starsOf, statusOf, withoutManuscript } = await import(join(build, 'books/record.js'));
 const { parseTypedBooks } = await import(join(build, 'books/bulk.js'));
+const { findDuplicates, likeness, keeperOf, canKeep, mergeMode, isSafe, pairKey } =
+  await import(join(build, 'books/duplicates.js'));
 const { flagsOn, flaggedCount, flaggedGroups, missingDetails, fixFor } =
   await import(join(build, 'books/flags.js'));
 const { kindFromSource } = await import(join(build, 'sources/registry.js'));
@@ -2776,6 +2778,57 @@ console.log('\na daily copy with its weekly one');
   check('no longer marked as partial', [by.noted.fromBase, merged.snapshot.changes], [undefined, undefined]);
   check('a rewritten book is the day\'s', by.rewritten.text, 'new words');
   check('a full copy opens as itself', withBase(base, daily), base);
+}
+
+console.log('\nthe same book twice on the shelf');
+{
+  let at = 0;
+  const book = (id, title, extra = {}) => ({
+    id, title, author: null, edition: null, word_count: 0, text_source: null, created_at: ++at, ...extra,
+  });
+  const like = (a, b, extra = {}) => likeness(book('x', a, extra), book('y', b));
+  check('the same title', like('《三体》', '三体'), 'same');
+  check('a subtitle on one side', like('中的精神: 吴清源自传', '中的精神'), 'same');
+  check('a letter out', like('Pride and Prejudise', 'Pride and Prejudice'), 'near');
+  check('a dropped article', like('The Leopard', 'Leopard'), 'near');
+  check('one character out of four', like('百年孤寂', '百年孤独'), 'near');
+  check('not in two characters', like('三体', '三国'), null);
+  check('nor across volumes', like('Dune II', 'Dune I'), null);
+  check('nor 三体 and its second book', like('三体', '三体2'), null);
+  check('nor a short title a letter out', like('Emma', 'Gemma'), null);
+  check('one author missing says nothing', like('Selected Poems', 'Selected Poems', { author: 'Auden' }), 'same');
+  check('by a different author', likeness(
+    book('x', 'Selected Poems', { author: 'W. H. Auden' }),
+    book('y', 'Selected Poems', { author: 'Emily Dickinson' })), null);
+  check('nor two named editions', likeness(
+    book('x', 'Bible', { edition: 'ESV' }), book('y', 'Bible', { edition: 'KJV' })), null);
+
+  const shelf = [
+    book('a', '动物庄园'),
+    book('b', 'Stoner'),
+    book('c', '《动物庄园》', { word_count: 30000 }),
+    book('d', '动物庄园 (精)'),
+    book('e', 'Pride and Prejudice'),
+    book('f', 'Pride and Prejudise'),
+    book('g', 'Middlemarch'),
+  ];
+  const groups = findDuplicates(shelf);
+  check('groups, keeper first', groups.map((group) => group.books.map((one) => one.id)),
+    [['c', 'a', 'd'], ['e', 'f']]);
+  check('which are near-misses', groups.map((group) => group.near), [false, true]);
+  check('the copy with words stays', keeperOf(shelf.slice(0, 4)).id, 'c');
+  check('else the oldest', keeperOf([shelf[4], shelf[5]]).id, 'e');
+  check('a skeleton cannot take over from words', canKeep(shelf[0], groups[0].books), false);
+  check('two manuscripts are editions', mergeMode({ word_count: 1, text_source: null }, { word_count: 2, text_source: null }), 'edition');
+  check('a skeleton folds in', mergeMode({ word_count: 1, text_source: null }, { word_count: 0, text_source: null }), 'merge');
+  check('a near-miss is never merged in bulk', isSafe(groups[1]), false);
+  check('a group with words is not either', isSafe(groups[0]), false);
+  check('a dismissed pair is not suggested again',
+    findDuplicates(shelf, new Set([pairKey('f', 'e')])).length, 1);
+  const many = Array.from({ length: 3000 }, (_, index) => book(`n${index}`, `Book number ${index} of the long series`));
+  const started = Date.now();
+  findDuplicates(many);
+  check('three thousand books in under a second', Date.now() - started < 1000, true);
 }
 
 console.log(failures ? `\n${failures} failing` : '\nall passing');

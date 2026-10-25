@@ -21,7 +21,7 @@ export function titleKey(title: string): string {
  * The same title with its subtitle dropped: 中的精神: 吴清源自传 is 中的精神.
  * Not where the subtitle names a volume — 三体: 黑暗森林. II is not 三体.
  */
-function mainTitleKey(title: string): string {
+export function mainTitleKey(title: string): string {
   const [main, ...rest] = title.normalize('NFKC').toLowerCase().split(/[:：]|\s[-—]\s/);
   if (/\d|\b[ivx]+\b|[上中下卷册部]/u.test(rest.join(' '))) return titleKey(title);
   return titleKey(main);
