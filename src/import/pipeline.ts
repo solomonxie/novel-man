@@ -11,7 +11,6 @@ import { hintsOf, pagesOf } from '../structure/document';
 import { countUnits } from '../text/counts';
 import { detectLanguage } from '../text/language';
 import { DEFAULT_KIND } from '../books/kinds';
-import { renderMath } from './extractor';
 import { normalize } from './normalize';
 import { importerFor } from './registry';
 
@@ -108,7 +107,6 @@ export async function importFile(
   try {
     parsed = await importer.parse(stored.bytes, input.name, {
       saveImage: writeImage,
-      renderMath,
       onProgress: async (done, total) => {
         report('parsing', total ? done / total : 0, importer.label);
         // The scan holds the JS thread until it lets go here.

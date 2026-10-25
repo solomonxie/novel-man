@@ -1612,6 +1612,13 @@ export async function getDocument(bookId: string): Promise<{ text: string; hints
   return { text: row?.text ?? '', hints: parseHints(row?.hints ?? '[]') };
 }
 
+/** Headings, links and anchors without the manuscript, which the reader already has. */
+export async function getDocumentHints(bookId: string): Promise<StructureHint[]> {
+  const database = await db();
+  const row = await database.getFirstAsync<{ hints: string }>('SELECT hints FROM documents WHERE book_id = ?', bookId);
+  return parseHints(row?.hints ?? '[]');
+}
+
 export async function listScenes(bookId: string): Promise<Scene[]> {
   const database = await db();
   return database.getAllAsync<Scene>(

@@ -3,6 +3,7 @@ import type { Block, Importer, Origin, ParseContext } from '../types';
 import { attr, attrValue, decodeEntities, firstTagText, stripTags } from '../xml';
 import { imageMarker } from '../../reader/images';
 import { decodeUtf8 } from '../decode';
+import { idsIn, isWeb, liftedIn, lift, links } from '../markup';
 
 const BLOCK_END = /<\/(p|div|h[1-6]|li|blockquote|section)\s*>/gi;
 const HEADING_OPEN = /^<h([1-6])\b/i;
@@ -33,8 +34,12 @@ export const epubImporter: Importer = {
       const href = hrefById.get(attr(ref, 'idref') ?? '');
       const xhtml = href ? read(zip, href) : undefined;
       if (!xhtml) continue;
-      const parsed = blocksFromXhtml(xhtml, (src) => keepImage(zip, href!, src, context));
-      if (parsed.length) blocks.push({ ...parsed[0], boundary: true }, ...parsed.slice(1));
+      const parsed = blocksFromXhtml(xhtml, (src) => keepImage(zip, href!, src, context), href);
+      if (parsed.length) {
+        // The file itself is a place a link can name: `chapter3.xhtml`.
+        const first = { ...parsed[0], boundary: true, anchors: [href!, ...(parsed[0].anchors ?? [])] };
+        blocks.push(first, ...parsed.slice(1));
+      }
     }
 
     return {
@@ -140,21 +145,42 @@ function pageIn(chunk: string): number | undefined {
   return undefined;
 }
 
-function blocksFromXhtml(xhtml: string, keep: (src: string) => string | null): Block[] {
+/**
+ * Where a link inside the book goes, named the way anchors are: the file it
+ * is in, and the id inside that file. `#x` is in the file it is written in.
+ */
+function linkerFor(path: string) {
+  const dir = path.includes('/') ? path.replace(/\/[^/]*$/, '/') : '';
+  return (href: string): string | null => {
+    if (!href) return null;
+    if (isWeb(href)) return href;
+    if (/^[a-z][\w+.-]*:/i.test(href)) return null;
+    const [file, id] = href.split('#');
+    const target = file ? resolve(dir, file) : path;
+    return `#${id ? `${target}#${id}` : target}`;
+  };
+}
+
+function blocksFromXhtml(xhtml: string, keep: (src: string) => string | null, path = ''): Block[] {
   const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(xhtml)?.[1] ?? xhtml;
   // Same lazy-quantifier trap as the docx scan: only pay for it when it applies.
   const withoutNoise =
     body.indexOf('<script') >= 0 || body.indexOf('<style') >= 0
       ? body.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
       : body;
-  return withoutNoise
+  const link = linkerFor(path);
+  const { html, lifted } = lift(withoutNoise, link);
+  return html
     .replace(/<br\s*\/?>/gi, '\n')
     .split(BLOCK_END)
     .map((chunk) => chunk.trim())
     .filter((chunk) => chunk && !/^(p|div|h[1-6]|li|blockquote|section)$/i.test(chunk))
     .flatMap((chunk) => {
       const heading = HEADING_OPEN.exec(chunk.trimStart());
-      const text = decodeEntities(stripTags(chunk)).replace(/\s+/g, ' ').trim();
+      const anchors = idsIn(chunk).map((id) => `${path}#${id}`);
+      const text = decodeEntities(stripTags(links(chunk, link))).replace(/\s+/g, ' ').trim();
+      const held = liftedIn(text);
+      if (held !== null) return lifted[held] ? [{ text: lifted[held], anchors }] : [];
       // A figure and its caption are two paragraphs, in the order they appear.
       const figures: Block[] = [];
       for (const tag of chunk.match(IMG) ?? []) {
@@ -163,7 +189,7 @@ function blocksFromXhtml(xhtml: string, keep: (src: string) => string | null): B
         if (stored) figures.push({ text: imageMarker(stored, attr(tag, 'alt') ?? '') });
       }
       const page = pageIn(chunk);
-      const body: Block[] = text ? [heading ? { text, heading: Number(heading[1]) } : { text }] : [];
+      const body: Block[] = text ? [heading ? { text, heading: Number(heading[1]), anchors } : { text, anchors }] : [];
       // The marker says a page begins here, so it belongs to whatever is drawn
       // next — the picture if there is one, otherwise the paragraph.
       const all = [...figures, ...body];

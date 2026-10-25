@@ -336,7 +336,11 @@
     "selectTap": "按句子",
     "selectDrag": "拖动选择",
     "originalShort": "原页",
-    "originalPage": "原书第 {{page}} 页"
+    "originalPage": "原书第 {{page}} 页",
+    "sections": "小节",
+    "findSection": "查找小节",
+    "backToLink": "返回",
+    "drawing": "正在绘制…"
   },
   "settings": {
     "title": "设置",

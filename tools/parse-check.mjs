@@ -13,7 +13,7 @@ const { txtImporter, markdownImporter } = await import(join(build, 'import/forma
 const { decodeText, decodeUtf8 } = await import(join(build, 'import/decode.js'));
 const { base64, fromBase64 } = await import(join(build, 'import/base64.js'));
 const { fingerprintOf } = await import(join(build, 'storage/fingerprint.js'));
-const { pagesOf } = await import(join(build, 'structure/document.js'));
+const { pagesOf, referencesOf } = await import(join(build, 'structure/document.js'));
 const { normalize } = await import(join(build, 'import/normalize.js'));
 const { detectChapters, withoutCaption } = await import(join(build, 'structure/detect.js'));
 const { detectLanguage, scriptOf, baseLanguage } = await import(join(build, 'text/language.js'));
@@ -24,7 +24,8 @@ const { layoutChapter, annotationAt } = await import(join(build, 'reader/model.j
 const { originsOf, blockOrigins, documentRange } = await import(join(build, 'reader/selection.js'));
 const { imageIn, imageMarker } = await import(join(build, 'reader/images.js'));
 const { sentenceAtLine } = await import(join(build, 'reader/lines.js'));
-const { runsIn, codeBlockIn } = await import(join(build, 'reader/rich.js'));
+const { runsIn, codeBlockIn, cutAt, blockOf } = await import(join(build, 'reader/rich.js'));
+const { highlight, familyOf } = await import(join(build, 'reader/highlight.js'));
 const { detectScenes, scenesFromBreaks } = await import(join(build, 'structure/scenes.js'));
 const { reanchor } = await import(join(build, 'reader/anchor.js'));
 const { txtExporter, markdownExporter } = await import(join(build, 'export/formats/text.js'));
@@ -761,11 +762,12 @@ console.log('usfm');
 
 console.log('markup a book is written in');
 {
-  check('plain prose is one run', runsIn('She went down anyway.'),
+  const bare = (runs) => runs.map(({ from, ...run }) => run);
+  check('plain prose is one run', bare(runsIn('She went down anyway.')),
     [{ text: 'She went down anyway.' }]);
-  check('bold loses its asterisks', runsIn('a **firm** answer'),
+  check('bold loses its asterisks', bare(runsIn('a **firm** answer')),
     [{ text: 'a ' }, { text: 'firm', bold: true }, { text: ' answer' }]);
-  check('italic too', runsIn('an *aside* here'),
+  check('italic too', bare(runsIn('an *aside* here')),
     [{ text: 'an ' }, { text: 'aside', italic: true }, { text: ' here' }]);
   check('code keeps its spacing but not its backticks',
     runsIn('call `npm run check` first').map((run) => run.text),
@@ -774,12 +776,52 @@ console.log('markup a book is written in');
   check('a marked phrase is a highlight', runsIn('==this==')[0].mark, true);
   check('struck through', runsIn('~~no~~')[0].strike, true);
   check('an unpaired marker is just a character',
-    runsIn('2 * 3 = 6'), [{ text: '2 * 3 = 6' }]);
+    bare(runsIn('2 * 3 = 6')), [{ text: '2 * 3 = 6' }]);
+  check('a run knows where it sits', runsIn('a **firm** answer').map((run) => run.from), [0, 4, 10]);
+  check('inline TeX is a formula', bare(runsIn('so $x^2$ grows')),
+    [{ text: 'so ' }, { text: 'x^2', math: true }, { text: ' grows' }]);
+  check('one letter is one too', runsIn('let $a$ be')[1].math, true);
+  check('two prices are not', bare(runsIn('costs $5 and $10')), [{ text: 'costs $5 and $10' }]);
+  check('a link is cut out of a run',
+    cutAt({ text: 'see the FAQ now', from: 10 }, [{ from: 14, to: 21, href: '#faq' }])
+      .map((piece) => [piece.text, piece.from, piece.link?.href]),
+    [['see ', 10, undefined], ['the FAQ', 14, '#faq'], [' now', 21, undefined]]);
+
+  check('a mermaid fence is a diagram', blockOf('```mermaid\ngraph TD\n \nA-->B\n```'),
+    { kind: 'diagram', body: 'graph TD\n\nA-->B' });
+  check('a fence knows its language', blockOf('```C++ title\nint a;\n```'),
+    { kind: 'code', lang: 'c++', body: 'int a;' });
+  check('display TeX is a formula', blockOf('$$\nE = mc^2\n$$'), { kind: 'math', tex: 'E = mc^2' });
+  check('a table is rows and a head', blockOf('| a | b \\| c |\n|:--|--:|\n| **1** | 2 |'),
+    { kind: 'table', rows: [['a', 'b | c'], ['**1**', '2']], head: true, align: ['left', 'right'] });
+  check('a lone row is prose', blockOf('| not a table |'), null);
+  check('prose is prose', blockOf('She went down anyway.'), null);
 
   check('a fenced block is code', codeBlockIn('```js\nconst a = 1;\n```'), 'const a = 1;');
   check('so is an indented one', codeBlockIn('    const a = 1;\n    const b = 2;'),
     'const a = 1;\nconst b = 2;');
   check('a paragraph is not', codeBlockIn('She went down anyway.'), null);
+}
+
+console.log('code in colour');
+{
+  const kinds = (code, lang) => highlight(code, lang).filter((t) => t.kind !== 'plain').map((t) => [t.kind, t.text]);
+  check('C++ keywords, types, strings, comments', kinds('#include <vector>\nconst int n = 42; // the answer\nauto s = "a\\"b";', 'cpp'),
+    [['meta', '#include'], ['type', 'vector'], ['keyword', 'const'], ['type', 'int'], ['number', '42'], ['comment', '// the answer'],
+     ['keyword', 'auto'], ['string', '"a\\"b"']]);
+  check('a class name reads as a type', kinds('Date d;', 'cpp'), [['type', 'Date']]);
+  check('a block comment runs over lines', kinds('/* a\nb */ x', 'c'), [['comment', '/* a\nb */']]);
+  check('python comments with a hash', kinds('def f():  # note\n    return None', 'python'),
+    [['keyword', 'def'], ['comment', '# note'], ['keyword', 'return'], ['keyword', 'None']]);
+  check('sql in any case', kinds('SELECT a FROM t -- why', 'sql'),
+    [['keyword', 'SELECT'], ['keyword', 'FROM'], ['comment', '-- why']]);
+  check('markup tags and attributes', kinds('<a href="x">', 'html'),
+    [['keyword', '<a'], ['type', 'href'], ['string', '"x"'], ['keyword', '>']]);
+  check('every character survives', highlight('int main() { return 0; } // done', 'cpp').map((t) => t.text).join(''),
+    'int main() { return 0; } // done');
+  check('an unnamed block is guessed', [familyOf('', 'def f():\n  pass'), familyOf('', '$ ls -la'), familyOf('', 'void f();')],
+    ['hash', 'hash', 'c']);
+  check('plain text stays plain', highlight('just words', 'text'), [{ text: 'just words', kind: 'plain' }]);
 }
 
 console.log('a tap that missed the words');
@@ -938,13 +980,64 @@ console.log('a paper read from its own html');
   const texts = blocks.map((block) => block.text);
   check('a heading keeps its level', blocks[0].heading, 2);
   check('an inline formula stays in its sentence, as its own TeX',
-    texts[1], 'Prose with `x^2` inside it.');
-  check('a displayed one is a paragraph of its own', texts[2], '`E = mc^2`');
+    texts[1], 'Prose with $x^2$ inside it.');
+  check('a displayed one is a paragraph of its own', texts[2], '$$\nE = mc^2\n$$');
   check('a figure is a picture', texts[3], '![Figure 1](https://arxiv.org/html/1/x1.png)');
   check('a script is not a paragraph', texts.some((text) => text.includes('ignored')), false);
 
   check('base64 comes back as the bytes that went in',
     Array.from(bytesFromBase64('SGVsbG8=')), [72, 101, 108, 108, 111]);
+}
+
+console.log('an epub written for programmers');
+{
+  const { zipSync, strToU8 } = await import('fflate');
+  const page = (body) => `<html><body>${body}</body></html>`;
+  const epub = zipSync({
+    'META-INF/container.xml': strToU8('<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>'),
+    'OEBPS/content.opf': strToU8([
+      '<package><metadata><dc:title>Perf</dc:title></metadata><manifest>',
+      '<item id="a" href="text/one.xhtml"/><item id="b" href="text/two.xhtml"/>',
+      '</manifest><spine><itemref idref="a"/><itemref idref="b"/></spine></package>',
+    ].join('')),
+    'OEBPS/text/one.xhtml': strToU8(page([
+      '<h1 id="intro">Intro</h1>',
+      '<p>Read <a href="two.xhtml#fork">forking</a>, the <a href="#intro">top</a> or <a href="https://unixism.net">the site</a>.</p>',
+      '<div class="sourceCode"><pre class="sourceCode c"><code class="sourceCode c">int main() {\n    if (x &lt; 1)\n\n        return 0;\n}</code></pre></div>',
+      '<p>Call <code>fork()</code> once.</p>',
+      '<table><thead><tr><th>Server</th><th>RPS</th></tr></thead><tbody><tr><td>Iterative</td><td>1 | 2</td></tr></tbody></table>',
+    ].join(''))),
+    'OEBPS/text/two.xhtml': strToU8(page([
+      '<h1>Forking</h1><p id="fork">It forks.</p>',
+      '<pre class="EnlighterJSRAW" data-enlighter-language="c">fork();</pre>',
+      '<table><tbody><tr><td></td><td colspan="2">requests/second</td></tr>',
+      '<tr><td><strong>n</strong></td><td><strong>forking</strong></td><td><strong>epoll</strong></td></tr>',
+      '<tr><td>20</td><td colspan="2">wide variations</td></tr></tbody></table>',
+    ].join(''))),
+  });
+  const parsed = await epubImporter.parse(epub, 'perf.epub');
+  const doc = normalize(parsed.blocks);
+  const texts = doc.text.split('\n\n');
+  check('a listing keeps its lines, its indentation and its language',
+    blockOf(texts.find((t) => t.startsWith('```'))),
+    { kind: 'code', lang: 'c', body: 'int main() {\n    if (x < 1)\n\n        return 0;\n}' });
+  check('inline code is code', texts.find((t) => t.startsWith('Call')), 'Call `fork()` once.');
+  check('a table is a table', blockOf(texts.find((t) => t.startsWith('|'))),
+    { kind: 'table', rows: [['Server', 'RPS'], ['Iterative', '1 | 2']], head: true, align: ['left', 'left'] });
+  check('an Enlighter listing says its language in a data attribute',
+    blockOf(texts.find((t) => t.includes('fork();')))?.lang, 'c');
+  check('a label spanning the columns is said before the table', texts[texts.indexOf('requests/second') + 1]?.startsWith('| n |'), true);
+  check('a bold first row is the head, and a spanning cell keeps the columns',
+    blockOf(texts.find((t) => t.startsWith('| n |'))),
+    { kind: 'table', rows: [['n', 'forking', 'epoll'], ['20', 'wide variations', '']], head: true, align: ['left', 'left', 'left'] });
+  const hints = referencesOf(doc);
+  const goes = (words) => hints.find((h) => h.href && doc.text.slice(h.start, h.end) === words)?.href;
+  check('a link to another file in the book goes there',
+    goes('forking'), '#OEBPS/text/two.xhtml#fork');
+  check('one inside the same file too', goes('top'), '#OEBPS/text/one.xhtml#intro');
+  check('and one to the web stays one', goes('the site'), 'https://unixism.net');
+  check('the place it names is the paragraph with that id',
+    hints.find((h) => h.anchor === 'OEBPS/text/two.xhtml#fork')?.start, doc.text.indexOf('It forks.'));
 }
 
 console.log('arxiv');
@@ -2589,6 +2682,108 @@ console.log('a hash that is not a heading');
     parsed.blocks.some((b) => b.text.includes('\\')), false);
 }
 
+console.log('markdown read as words, not syntax');
+{
+  const md = [
+    'Authors',
+    '=======',
+    '',
+    '* [Bjarne Stroustrup](https://www.stroustrup.com)',
+    '* [Herb Sutter](https://herbsutter.com/ "his site")',
+    '1. *Missing an abstraction.*',
+    '   It runs on.',
+    '',
+    'See [`throw`](#rc-throw) and [\\[Cline99\\]](#Cline99), [[Str15]](https://x.org/a.pdf).',
+    'Use `[x](y)` as is, <https://isocpp.org> and [the FAQ][faq].',
+    '',
+    '[faq]: https://isocpp.org/faq',
+    '',
+    '| Rule | Why |',
+    '|------|:---:|',
+    '| [F.1](#f1) | short |',
+    '',
+    '![diagram](./param-passing.png)',
+    '',
+    '![remote](https://x.org/a.png)',
+  ].join('\n');
+  const parsed = await markdownImporter.parse(new TextEncoder().encode(md), 'x.md');
+  const doc = normalize(parsed.blocks);
+  const texts = doc.text.split('\n\n');
+  const linked = (text) => doc.links.filter((l) => doc.text.slice(l.start, l.end) === text).map((l) => l.href);
+  check('an underlined title is a heading', [parsed.blocks[0].text, parsed.blocks[0].heading], ['Authors', 1]);
+  check('and can be linked to by its id', parsed.blocks[0].anchors, ['authors']);
+  check('each item its own paragraph, bulleted', texts.slice(1, 4),
+    ['• Bjarne Stroustrup', '• Herb Sutter', '1. *Missing an abstraction.*\n It runs on.']);
+  check('a link reads as its words', texts[4],
+    'See `throw` and [Cline99], [Str15].\nUse `[x](y)` as is, https://isocpp.org and the FAQ.');
+  check('and still goes where it went', [linked('Herb Sutter'), linked('`throw`'), linked('[Cline99]')],
+    [['https://herbsutter.com/'], ['#rc-throw'], ['#Cline99']]);
+  check('an autolink and a reference link too', [linked('https://isocpp.org'), linked('the FAQ')],
+    [['https://isocpp.org'], ['https://isocpp.org/faq']]);
+  check('code that looks like a link is not one', doc.links.some((l) => l.href === 'y'), false);
+  check('a reference definition is not read', texts.some((t) => t.includes('faq]:')), false);
+  check('a table is kept whole for the reader to set', texts[5], '| Rule | Why |\n|------|:---:|\n| F.1 | short |');
+  check('with its links', linked('F.1'), ['#f1']);
+  check('a picture with nowhere to load from is its caption', texts[6], 'diagram');
+  check('one that can be fetched stays a picture', texts[7], '![remote](https://x.org/a.png)');
+}
+
+console.log('markdown as a technical book writes it');
+{
+  const md = [
+    '# <a name="main"></a>Guide',
+    '',
+    'See [the rule](#Rf-1), [Setup](#setup) and [nowhere](#missing).',
+    'Plain https://example.com/a_b. and `https://not.this`.',
+    '',
+    '## <a name="Rf-1"></a>F.1: A rule',
+    '',
+    '## Setup',
+    '',
+    '## Setup',
+    '',
+    '~~~python',
+    'def f():',
+    '',
+    '\treturn 1',
+    '~~~',
+    '',
+    '$$',
+    '\\frac{a}{b}',
+    '$$',
+    '',
+    'Inline $\\{x\\}$ stays and *so* does `\\_`.',
+    '',
+    '- [ ] to do',
+    '- [x] done',
+  ].join('\n');
+  const parsed = await markdownImporter.parse(new TextEncoder().encode(md), 'guide.md');
+  const doc = normalize(parsed.blocks);
+  const texts = doc.text.split('\n\n');
+  check('a title is its words', parsed.title, 'Guide');
+  check('a named anchor and the heading id both name a heading',
+    parsed.blocks.find((b) => b.text === 'F.1: A rule')?.anchors.sort(), ['Rf-1', 'f1-a-rule']);
+  check('a second heading of the same name is numbered',
+    parsed.blocks.filter((b) => b.text === 'Setup').map((b) => b.anchors), [['setup'], ['setup-1']]);
+  const references = referencesOf(doc);
+  check('a link to a place that exists is kept, one to nowhere is not',
+    references.filter((h) => h.href).map((h) => [doc.text.slice(h.start, h.end), h.href]),
+    [['the rule', '#Rf-1'], ['Setup', '#setup'], ['https://example.com/a_b', 'https://example.com/a_b']]);
+  check('only the anchors something names are kept',
+    references.filter((h) => h.anchor).map((h) => h.anchor).sort(), ['Rf-1', 'setup']);
+  check('and they sit where their heading starts',
+    references.find((h) => h.anchor === 'Rf-1')?.start, doc.text.indexOf('F.1: A rule'));
+  check('a tilde fence is written back as backticks, indentation kept, blank line held',
+    texts.find((t) => t.startsWith('```python')), '```python\ndef f():\n \n    return 1\n```');
+  check('and the reader reads it as code', blockOf(texts.find((t) => t.startsWith('```python'))),
+    { kind: 'code', lang: 'python', body: 'def f():\n\n    return 1' });
+  check('display maths is a block of its own', blockOf(texts.find((t) => t.startsWith('$$'))),
+    { kind: 'math', tex: '\\frac{a}{b}' });
+  check('inline TeX keeps its backslashes, code its own', texts.find((t) => t.startsWith('Inline')),
+    'Inline $\\{x\\}$ stays and *so* does `\\_`.');
+  check('a task list is boxes', texts.slice(-2), ['• ☐ to do', '• ☑ done']);
+}
+
 console.log('markdown with no front matter at all');
 {
   const parsed = await markdownImporter.parse(
@@ -2596,7 +2791,8 @@ console.log('markdown with no front matter at all');
     'x.md'
   );
   check('a horizontal rule is not front matter', parsed.title, undefined);
-  check('and the prose either side of it survives', parsed.blocks.length, 3);
+  check('and the prose either side of it survives', parsed.blocks.map((b) => b.text),
+    ['Not front matter.', 'A rule, not a block.']);
 }
 
 console.log('what the reader selected, in the book');

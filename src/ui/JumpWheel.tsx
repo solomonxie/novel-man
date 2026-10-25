@@ -14,12 +14,14 @@ import { radius, space, type ReadingPalette } from '../theme';
  * It unfolds under the title it belongs to, so the chapter being left stays on
  * screen while the next one is chosen.
  */
-export function JumpWheel({ chapters, index, palette, onGo, onClose }: {
+export function JumpWheel({ chapters, index, palette, onGo, onClose, onSections }: {
   chapters: Chapter[];
   index: number;
   palette: ReadingPalette;
   onGo: (chapterIdx: number) => void;
   onClose: () => void;
+  /** Where the book has sections inside its chapters: a list of every heading, to search. */
+  onSections?: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -84,6 +86,11 @@ export function JumpWheel({ chapters, index, palette, onGo, onClose }: {
         <Pressable onPress={onClose} style={styles.action} hitSlop={8}>
           <Text style={{ color: palette.dim, fontSize: 16 }}>{t('settings.cancel')}</Text>
         </Pressable>
+        {onSections ? (
+          <Pressable onPress={onSections} style={styles.action} hitSlop={8}>
+            <Text style={{ color: palette.accent, fontSize: 16 }}>{t('reader.sections')}</Text>
+          </Pressable>
+        ) : null}
         <Pressable onPress={() => onGo(picked)} style={styles.action} hitSlop={8}>
           <Text style={{ color: palette.accent, fontSize: 16, fontWeight: '600' }}>
             {t('reader.go')}

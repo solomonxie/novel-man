@@ -13,6 +13,17 @@ export const readingThemes: Record<ReadingTheme, ReadingPalette> = {
   night: { bg: '#121212', text: '#D6D3CE', dim: '#6E6B67', tint: '#25292E', accent: '#6FA0FF' },
 };
 
+/** Code in colour, tuned to each page: One Light on paper, One Dark at night. */
+export const codeColors: Record<
+  ReadingTheme,
+  { keyword: string; type: string; string: string; number: string; meta: string; comment: string }
+> = {
+  paper: { keyword: '#A626A4', type: '#B76B01', string: '#50A14F', number: '#986801', meta: '#4078F2', comment: '#A0A1A7' },
+  sepia: { keyword: '#8E3B8E', type: '#94600A', string: '#4E7A2A', number: '#8F5A12', meta: '#2F5E9E', comment: '#A1937C' },
+  grey: { keyword: '#6E2C7E', type: '#6F4E00', string: '#2E5E2E', number: '#7A4A10', meta: '#244E80', comment: '#6E7271' },
+  night: { keyword: '#C678DD', type: '#E5C07B', string: '#98C379', number: '#D19A66', meta: '#61AFEF', comment: '#7F848E' },
+};
+
 export const highlightColors = ['#FFE58A', '#BFE3B4', '#BBD9F5', '#F2C2D6'] as const;
 export type HighlightColor = (typeof highlightColors)[number];
 

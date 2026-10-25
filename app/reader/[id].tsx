@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Linking,
   NativeModules,
   Pressable,
   ScrollView,
@@ -28,6 +29,7 @@ import {
   createEntity,
   findEntityNamed,
   getBook,
+  getDocumentHints,
   getDocumentText,
   getProgress,
   listAnnotations,
@@ -54,7 +56,10 @@ import { esvChapterText } from '../../src/sources/esvBook';
 import { neighbouringChapters } from '../../src/scripture/canon';
 import { esvKey } from '../../src/sources/esvKey';
 import { EsvError } from '../../src/sources/esv';
-import { codeBlockIn, runsIn } from '../../src/reader/rich';
+import { blockOf, cutAt, runsIn, type RichBlock } from '../../src/reader/rich';
+import { anchorsOf, destinationOf, linksOf, linksWithin, outlineOf, type Link } from '../../src/reader/links';
+import { CodeBlock, DiagramBlock, InlineMath, MathBlock, TableBlock } from '../../src/ui/RichBlocks';
+import type { StructureHint } from '../../src/structure/document';
 import { ReaderImage } from '../../src/ui/ReaderImage';
 import { supports } from '../../src/books/kinds';
 import { quotePlain, quoteWithVerses, versesFromMarkers } from '../../src/scripture/reference';
@@ -186,6 +191,14 @@ export default function Reader() {
   const [target, setTarget] = useState<string | null>(null);
   const [units, setUnits] = useState<TranslationUnit[]>([]);
   const [verses, setVerses] = useState<Verse[]>([]);
+  /** Headings, links and the places links name — kept beside the words, not in them. */
+  const [hints, setHints] = useState<StructureHint[]>([]);
+  /** Where each followed link was, so Back returns to it. */
+  const [trail, setTrail] = useState<number[]>([]);
+  /** An offset the page should be scrolled to exactly, once its paragraph is laid out. */
+  const [jumpTo, setJumpTo] = useState<number | null>(null);
+  const [sectionsOpen, setSectionsOpen] = useState(false);
+  const contentTop = useRef(0);
   /** A chapter of a book whose words are not here: fetched, then kept. */
   const [remoteText, setRemoteText] = useState('');
   const [remoteError, setRemoteError] = useState<string | null>(null);
@@ -335,6 +348,7 @@ export default function Reader() {
   useEffect(() => {
     if (!id || book?.text_source) return;
     getDocumentText(id).then(setText);
+    getDocumentHints(id).then(setHints).catch(() => undefined);
   }, [id, book?.text_source]);
 
   // A fetched book has nothing to re-anchor against and nothing that drifts:
@@ -421,6 +435,29 @@ export default function Reader() {
    * that reads a span reads it from this, or it reads from the wrong string.
    */
   const source = remote ? remoteText : text;
+
+  const links = useMemo(() => linksOf(hints), [hints]);
+  const anchors = useMemo(() => anchorsOf(hints), [hints]);
+  const headingAt = useMemo(
+    () => new Map(hints.filter((hint) => hint.heading !== undefined).map((hint) => [hint.start, hint.heading!])),
+    [hints]
+  );
+  const topLevel = useMemo(() => Math.min(6, ...headingAt.values()), [headingAt]);
+  /** Every heading in the book, for finding one rule among hundreds. */
+  const outline = useMemo(() => (text ? outlineOf(text, hints, chapters) : []), [text, hints, chapters]);
+
+  /** Indented by depth, with the chapter beside anything deeper than one. */
+  const sectionOptions = useMemo(
+    () =>
+      sectionsOpen
+        ? outline.map((section) => ({
+            id: String(section.start),
+            label: `${'\u2003'.repeat(Math.min(3, section.level - 1))}${section.title}`,
+            detail: section.level > 1 ? chapters[section.chapter]?.title : undefined,
+          }))
+        : [],
+    [sectionsOpen, outline, chapters]
+  );
 
   /** The marks that belong to what is on screen. */
   const marks = useMemo(
@@ -841,6 +878,40 @@ export default function Reader() {
     saveProgress(id, landing);
   }
 
+  /**
+   * Anywhere in the book, exactly: the chapter it is in, then the paragraph
+   * it is in once that is laid out — a chapter's length in characters says
+   * little about its height when half of it is code and diagrams.
+   */
+  function goToOffset(at: number) {
+    const next = chapters.findIndex((entry) => at >= entry.start && at < entry.end);
+    if (next < 0) return;
+    const target = chapters[next];
+    goToChapter(next, (at - target.start) / Math.max(1, target.end - target.start));
+    pendingScroll.current = null;
+    setJumpTo(at);
+    setFlashAt(at);
+  }
+
+  /** Inside the book it is a jump that Back undoes; anything else opens where it lives. */
+  function follow(link: Link) {
+    const where = destinationOf(link.href, anchors);
+    if (!where) return;
+    if (where.kind === 'web') {
+      void Linking.openURL(where.url);
+      return;
+    }
+    setTrail((was) => [...was.slice(-19), link.from]);
+    goToOffset(where.at);
+  }
+
+  function goBack() {
+    const at = trail[trail.length - 1];
+    if (at === undefined) return;
+    setTrail((was) => was.slice(0, -1));
+    goToOffset(at);
+  }
+
   function pageBy(direction: -1 | 1) {
     const step = Math.max(120, viewport.current.layout - lineHeight * 2);
     const max = Math.max(0, viewport.current.content - viewport.current.layout);
@@ -894,7 +965,41 @@ export default function Reader() {
   const showing = !!target && ready.includes(target);
 
 
-  function renderSentence(span: Span, useTarget: boolean) {
+  /**
+   * A sentence's runs, with its links cut out of them and its formulas drawn.
+   * A translated sentence has neither: its offsets are not the book's.
+   */
+  function renderRuns(shown: string, span: Span, own: boolean, free: boolean) {
+    const touching = own && !free ? linksWithin(links, span.start, span.end) : [];
+    const local = touching.map((link) => ({ from: link.from - span.start, to: link.to - span.start, link }));
+    const runs = runsIn(shown);
+    return (local.length ? runs.flatMap((run) => cutAt(run, local)) : runs).map((run, at) => {
+      if (run.math && !free) {
+        return <InlineMath key={at} tex={run.text} theme={settings.theme} fontSize={settings.fontSize} />;
+      }
+      const link = (run as { link?: { link: Link } }).link?.link;
+      return (
+        <Text
+          key={at}
+          onPress={link ? () => follow(link) : undefined}
+          suppressHighlighting
+          style={{
+            fontWeight: run.bold ? '700' : undefined,
+            fontStyle: run.italic ? 'italic' : undefined,
+            textDecorationLine: run.strike ? 'line-through' : undefined,
+            backgroundColor: run.mark ? palette.tint : undefined,
+            fontFamily: run.code || run.math ? 'Menlo' : undefined,
+            fontSize: run.code || run.math ? settings.fontSize * 0.92 : undefined,
+            color: link ? palette.accent : undefined,
+          }}
+        >
+          {versed ? verseMarks(run.text, verseStyle) : run.text}
+        </Text>
+      );
+    });
+  }
+
+  function renderSentence(span: Span, useTarget: boolean, free = false) {
     const marked = annotationAt(marks, span);
     // A dragged range is drawn by the system; tinting it as well would change
     // the text under the handles while they move.
@@ -926,21 +1031,7 @@ export default function Reader() {
           color: mark?.ink ?? palette.text,
         }}
       >
-        {runsIn(shown).map((run, at) => (
-          <Text
-            key={at}
-            style={{
-              fontWeight: run.bold ? '700' : undefined,
-              fontStyle: run.italic ? 'italic' : undefined,
-              textDecorationLine: run.strike ? 'line-through' : undefined,
-              backgroundColor: run.mark ? palette.tint : undefined,
-              fontFamily: run.code ? 'Menlo' : undefined,
-              fontSize: run.code ? settings.fontSize * 0.92 : undefined,
-            }}
-          >
-            {versed ? verseMarks(run.text, verseStyle) : run.text}
-          </Text>
-        ))}
+        {renderRuns(shown, span, !body, free)}
         {/* A full stop in Chinese is already a space wide; one more is a hole. */}
         {endsTight(shown) ? '' : ' '}
       </Text>
@@ -962,7 +1053,7 @@ export default function Reader() {
   const pieces: ({ kind: 'block'; paragraphs: typeof paragraphs } | { kind: 'one'; paragraph: (typeof paragraphs)[number] })[] = [];
   for (const paragraph of paragraphs) {
     const body = source.slice(paragraph.start, paragraph.sentences.at(-1)?.end ?? paragraph.start);
-    const plain = settings.freeSelect && !inTargetPage && !imageIn(body) && !codeBlockIn(body);
+    const plain = settings.freeSelect && !inTargetPage && !imageIn(body) && !blockOf(body);
     const last = pieces[pieces.length - 1];
     if (!plain) pieces.push({ kind: 'one', paragraph });
     else if (last?.kind === 'block') last.paragraphs.push(paragraph);
@@ -974,6 +1065,85 @@ export default function Reader() {
     const shown = source.slice(span.start, span.end);
     return runsIn(shown).map((run) => run.text).join('') + (endsTight(shown) ? '' : ' ');
   };
+
+  const currentSection = sectionsOpen
+    ? String(outline.filter((section) => section.start <= offset).at(-1)?.start ?? '')
+    : undefined;
+
+  /** A heading inside a chapter, sized by how deep it is. */
+  function headingStyle(level: number): TextStyle {
+    const depth = level - topLevel;
+    const scale = depth <= 0 ? 1.3 : depth === 1 ? 1.18 : depth === 2 ? 1.08 : 1;
+    return {
+      fontWeight: '700',
+      fontSize: Math.round(settings.fontSize * scale),
+      lineHeight: Math.round(lineHeight * scale),
+      marginTop: Math.round(lineHeight * 0.5),
+    };
+  }
+
+  /**
+   * Code, a table, a formula or a diagram: drawn by what it is, and selected
+   * whole — a sentence is not a unit any of them is made of.
+   */
+  function renderRich(rich: RichBlock, paragraph: (typeof paragraphs)[number], body: string) {
+    const whole: Span = { start: paragraph.start, end: paragraph.start + body.length };
+    const onPress = (event: GestureResponderEvent) => {
+      if (selection) extendSelect(whole, event);
+      else setChrome(!chromeShown.current);
+    };
+    const onLongPress = (event: GestureResponderEvent) =>
+      selection ? extendSelect(whole, event) : beginSelect(whole, event);
+    const copy = (value: string) => () => {
+      Clipboard.setString(value);
+      flash(t('reader.copied'));
+    };
+    const common = { theme: settings.theme, fontSize: settings.fontSize, onPress, onLongPress };
+    const textWidth = width - settings.margin * 2;
+    const marked = annotationAt(marks, whole);
+    const picked = !dragged && range !== null && whole.start >= range.start && whole.end <= range.end;
+    const background = picked || flashAt !== null && flashAt >= whole.start && flashAt < whole.end
+      ? palette.tint
+      : marked?.color
+        ? markOn(marked.color, settings.theme).bg
+        : undefined;
+    return (
+      <View key={paragraph.start} style={{ marginBottom: lineHeight, backgroundColor: background, borderRadius: 4 }}>
+        {rich.kind === 'code' ? (
+          <CodeBlock {...common} lang={rich.lang} body={rich.body} onCopy={copy(rich.body)} />
+        ) : rich.kind === 'table' ? (
+          <TableBlock {...common} rows={rich.rows} head={rich.head} align={rich.align} />
+        ) : rich.kind === 'math' ? (
+          <MathBlock {...common} tex={rich.tex} width={textWidth} />
+        ) : (
+          <DiagramBlock {...common} body={rich.body} width={textWidth} onCopy={copy(rich.body)} />
+        )}
+      </View>
+    );
+  }
+
+  /** The paragraph a jump is aimed at, wrapped so its place on the page can be read once laid out. */
+  const aimedAt =
+    jumpTo === null ? null : (paragraphs.filter((paragraph) => paragraph.start <= jumpTo).at(-1)?.start ?? null);
+
+  function aimed(piece: (typeof pieces)[number], element: React.ReactNode) {
+    // A chapter's own heading draws nothing, and is still somewhere to land.
+    if (aimedAt === null) return element;
+    const starts = piece.kind === 'block' ? piece.paragraphs.map((paragraph) => paragraph.start) : [piece.paragraph.start];
+    if (!starts.includes(aimedAt)) return element;
+    return (
+      <View
+        key={`aimed-${aimedAt}`}
+        onLayout={(event) => {
+          const y = contentTop.current + event.nativeEvent.layout.y;
+          scrollRef.current?.scrollTo({ y: Math.max(0, y - lineHeight * 2), animated: false });
+          setJumpTo(null);
+        }}
+      >
+        {element}
+      </View>
+    );
+  }
 
   function renderFreeBlock(group: typeof paragraphs) {
     const parts = group.map((paragraph) => ({
@@ -1051,7 +1221,7 @@ export default function Reader() {
                   {'  '}
                 </Text>
               ) : null}
-              {paragraph.sentences.map((span) => renderSentence(span, false))}
+              {paragraph.sentences.map((span) => renderSentence(span, false, true))}
             </Fragment>
           ))}
         </TextInput>
@@ -1109,6 +1279,14 @@ export default function Reader() {
             goToChapter(toIdx, 0);
           }}
           onClose={() => setJumpOpen(false)}
+          onSections={
+            outline.length > chapters.length
+              ? () => {
+                  setJumpOpen(false);
+                  setSectionsOpen(true);
+                }
+              : undefined
+          }
         />
       ) : null}
       </View>
@@ -1216,6 +1394,9 @@ export default function Reader() {
             onPress={() => {
               if (!selection) setChrome(!chromeShown.current);
             }}
+            onLayout={(event) => {
+              contentTop.current = event.nativeEvent.layout.y;
+            }}
           >
             {/* The chapter's name where a printed book puts it: at the head
                 of its own page, large, with air under it, scrolling away
@@ -1283,7 +1464,7 @@ export default function Reader() {
             ) : paragraphs.length === 0 ? (
               <Text style={{ color: palette.dim, marginTop: space.xxl }}>{t('reader.empty')}</Text>
             ) : (
-              pieces.map((piece) => {
+              pieces.map((piece) => aimed(piece, (() => {
                 if (piece.kind === 'block') return renderFreeBlock(piece.paragraphs);
                 const paragraph = piece.paragraph;
                 const body = source.slice(
@@ -1297,28 +1478,11 @@ export default function Reader() {
                 // Its words are in the paragraph above, in the other language:
                 // printing them here too is the same paragraph twice.
                 if (inTarget && place?.kind === 'absorbed') return null;
-                const code = figure ? null : codeBlockIn(body);
-                if (code) {
-                  return (
-                    <Pressable
-                      key={paragraph.start}
-                      onPress={(event) => pressParagraph(paragraph, event)}
-                      onLongPress={(event) => holdParagraph(paragraph, event)}
-                      style={[styles.code, { borderColor: palette.dim, marginBottom: lineHeight }]}
-                    >
-                      <Text
-                        style={{
-                          color: palette.text,
-                          fontFamily: 'Menlo',
-                          fontSize: settings.fontSize * 0.82,
-                          lineHeight: settings.fontSize * 1.25,
-                        }}
-                      >
-                        {code}
-                      </Text>
-                    </Pressable>
-                  );
-                }
+                const rich = figure ? null : blockOf(body);
+                if (rich) return renderRich(rich, paragraph, body);
+                const level = headingAt.get(paragraph.start);
+                // The chapter's own heading is already set large above the words.
+                if (level !== undefined && paragraph === paragraphs[0] && !remote && chapter.title.trim()) return null;
                 if (figure) {
                   // `![$x^2$](…)` is a formula; anything else is a picture.
                   const formula = /^\$[\s\S]*\$$/.test(figure.alt);
@@ -1345,7 +1509,7 @@ export default function Reader() {
                   style={{ marginBottom: lineHeight * 0.6 }}
                 >
                   <Text
-                    style={bodyStyle}
+                    style={level === undefined ? bodyStyle : [bodyStyle, headingStyle(level)]}
                     onTextLayout={(event) =>
                       linesOf.current.set(
                         paragraph.start,
@@ -1395,7 +1559,7 @@ export default function Reader() {
                   ) : null}
                 </Pressable>
                 );
-              })
+              })()))
             )}
           </Pressable>
 
@@ -1579,6 +1743,32 @@ export default function Reader() {
       )}
 
       <PickerSheet
+        visible={sectionsOpen}
+        title={t('reader.sections')}
+        searchPlaceholder={t('reader.findSection')}
+        options={sectionOptions}
+        selectedId={currentSection}
+        onPick={(choice) => {
+          setSectionsOpen(false);
+          goToOffset(Number(choice));
+        }}
+        onClose={() => setSectionsOpen(false)}
+      />
+
+      {trail.length > 0 && !range ? (
+        <Pressable
+          onPress={goBack}
+          style={[
+            styles.backPill,
+            { backgroundColor: palette.tint, bottom: Math.max(insets.bottom, space.md) + 64 },
+          ]}
+          hitSlop={8}
+        >
+          <Text style={{ color: palette.accent, fontSize: 15, fontWeight: '600' }}>‹  {t('reader.backToLink')}</Text>
+        </Pressable>
+      ) : null}
+
+      <PickerSheet
         visible={addingTo !== null}
         title={t('reader.addTitle')}
         searchPlaceholder={t('reader.addSearch')}
@@ -1722,8 +1912,14 @@ const styles = StyleSheet.create({
     paddingVertical: space.md + 2,
     alignItems: 'center',
   },
-  /** Code is set apart by a rule, not a box: a box on a reading page is a form. */
-  code: { borderLeftWidth: 2, paddingLeft: space.md, paddingVertical: space.xs },
+  /** Over the page, above the bar, until it is used. */
+  backPill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm + 2,
+    borderRadius: radius.pill,
+  },
   /**
    * Over the page, not beside it. As a row in the column its height stayed
    * reserved even at zero opacity, leaving a strip of bare background under

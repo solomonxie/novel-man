@@ -1,5 +1,6 @@
 import type { Block, Importer } from '../types';
 import { decodeText } from '../decode';
+import { marked } from '../normalize';
 
 function blocksFromText(text: string): Block[] {
   return text
@@ -52,21 +53,82 @@ const CODE_SPAN = /(`+)[\s\S]*?\1/g;
  * Markup out, code left exactly as it was typed. Splitting on the backtick
  * spans first is what keeps `` `<vector>` `` whole while `<a name="x">` goes.
  */
-function clean(text: string): string {
+type Refs = Map<string, string>;
+
+/** `$x^2$`, kept as typed for the same reason code is: TeX is full of backslashes. */
+const MATH_SPAN = /\$[^\s$](?:[^$\n]*?[^\s$\\])?\$(?!\d)/;
+const PROTECTED = new RegExp(`${CODE_SPAN.source}|${MATH_SPAN.source}`, 'g');
+
+/**
+ * Markup out, links marked, code and maths left exactly as typed. Links go
+ * first, because a link's words are often code: [`throw`](#rc-throw).
+ */
+function clean(source: string, refs: Refs = new Map()): string {
+  const spans = [...source.matchAll(PROTECTED)].map((span) => [span.index ?? 0, (span.index ?? 0) + span[0].length]);
+  const inCode = (at: number) => spans.some(([from, to]) => at > from && at < to);
+  const text = source.replace(LINK, (whole: string, bang: string, words: string, url: string, at: number) => {
+    if (inCode(at)) return whole;
+    const href = url.replace(/^<|>$/g, '');
+    if (bang) return /^(https?:|data:)/i.test(href) && whole.trim() === source.trim() ? whole : words;
+    return words.trim() ? marked(words, href) : '';
+  });
   const parts: string[] = [];
   let cursor = 0;
-  for (const span of text.matchAll(CODE_SPAN)) {
+  for (const span of text.matchAll(PROTECTED)) {
     const at = span.index ?? 0;
-    parts.push(strip(text.slice(cursor, at)), span[0]);
+    parts.push(strip(text.slice(cursor, at), refs), span[0]);
     cursor = at + span[0].length;
   }
-  parts.push(strip(text.slice(cursor)));
+  parts.push(strip(text.slice(cursor), refs));
   return parts.join('');
 }
 
-function strip(prose: string): string {
-  return prose.replace(COMMENTS, '').replace(MARKUP, '').replace(BARE, '');
+/**
+ * `[text](url "title")`, whose text may hold escaped brackets or code. A
+ * picture keeps its marker only alone and fetchable; a relative path resolves
+ * against nothing once this is text.
+ */
+const LINK = /(!?)\[((?:\\.|`[^`\n]*`|\[[^\[\]]*\]|[^\[\]\\`])*)\]\((<[^>]*>|[^()\s]*(?:\([^()]*\)[^()\s]*)*)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g;
+const REF_LINK = /\[((?:\\.|[^\]\\])+)\]\[([^\]]*)\]/g;
+const AUTOLINK = /<((?:https?|mailto):[^<>\s]+)>/g;
+/** A bare address, as GitHub links one — but not one already inside a link. */
+const BARE_URL = /(?<![\w/"'=(])https?:\/\/[^\s<>()\[\]-]*[^\s<>()\[\]-.,;:!?'"*_]/g;
+/** Not `\|`: a table needs it to tell a cell's pipe from the edge of one. */
+const ESCAPE = /\\([\\`*_{}\[\]()#+\-.!<>~])/g;
+
+function strip(prose: string, refs: Refs): string {
+  return prose
+    .replace(COMMENTS, '')
+    .replace(MARKUP, '')
+    .replace(BARE, '')
+    .replace(REF_LINK, (whole, words: string, id: string) => {
+      const href = refs.get((id || words).trim().toLowerCase());
+      return href ? marked(words, href) : words;
+    })
+    .replace(AUTOLINK, (_, url: string) => marked(url, url))
+    .replace(BARE_URL, (url) => marked(url, url))
+    .replace(ESCAPE, '$1');
 }
+
+/** The words a reader sees, for a title or an anchor. */
+function plainOf(label: string): string {
+  return label.replace(/[^]*/g, '').replace(//g, '');
+}
+
+/**
+ * The id GitHub gives a heading, which is what `[see](#the-heading)` names:
+ * lower case, punctuation out, spaces to hyphens.
+ */
+export function slugOf(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[!-,./:-@[-^`{-~]/g, '')
+    .replace(/\s/g, '-');
+}
+
+const ANCHOR_TAG = /<a\s[^>]*?\b(?:name|id)\s*=\s*["']([^"']+)["'][^>]*>/gi;
+const REF_DEFINITION_AT = /^ {0,3}\[([^\]]+)\]:\s+<?([^\s>]+)>?/;
 
 /**
  * Front matter, as every static site generator and half the Markdown in the
@@ -110,6 +172,12 @@ const INDENTED = /^(?: {4}|\t)/;
  * here; a nested list is far commoner than a code block that opens with `*`.
  */
 const BULLET = /^\s*(?:[*+-]|\d+[.)])\s/;
+const LIST_ITEM = /^\s*(?:([*+-])|(\d+[.)]))\s+/;
+const RULE = /^ {0,3}([-*_])(?:\s*\1){2,}\s*$/;
+const SETEXT = /^ {0,3}(=+|-+)\s*$/;
+const TABLE_ROW = /^\s*\|.*\|\s*$/;
+const TABLE_RULE = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
+const REF_DEFINITION = /^ {0,3}\[[^\]]+\]:\s+\S/;
 
 /**
  * Markdown, read a line at a time rather than a blank line at a time.
@@ -126,6 +194,13 @@ const BULLET = /^\s*(?:[*+-]|\d+[.)])\s/;
  */
 function markdownBlocks(input: string): { blocks: Block[]; title?: string; author?: string } {
   const { body: source, title: stated, author } = frontMatter(input);
+  const lines = source.split(/\r?\n/);
+  const refs: Refs = new Map();
+  for (const line of lines) {
+    const definition = REF_DEFINITION_AT.exec(line);
+    if (definition) refs.set(definition[1].trim().toLowerCase(), definition[2]);
+  }
+
   const blocks: Block[] = [];
   // What the front matter said wins: a converted book states its real title,
   // where the first heading is only the best guess available without one.
@@ -133,11 +208,45 @@ function markdownBlocks(input: string): { blocks: Block[]; title?: string; autho
   let paragraph: string[] = [];
   let fence: string | null = null;
   let code: string[] = [];
+  let lang = '';
+  let maths: string[] | null = null;
+  let table: string[] = [];
+  /** Named by an `<a name>` above, waiting for the block it names. */
+  let anchors: string[] = [];
+  const slugs = new Map<string, number>();
+
+  const push = (block: Block) => {
+    if (anchors.length) {
+      block.anchors = [...(block.anchors ?? []), ...anchors];
+      anchors = [];
+    }
+    blocks.push(block);
+  };
+
+  const pushHeading = (raw: string, level: number) => {
+    const label = clean(raw, refs).trim();
+    const words = plainOf(label);
+    if (level === 1 && !title) title = words;
+    if (!label) return;
+    const slug = slugOf(words);
+    const seen = slugs.get(slug) ?? 0;
+    slugs.set(slug, seen + 1);
+    push({ text: label, heading: level, anchors: slug ? [seen ? `${slug}-${seen}` : slug] : [] });
+  };
 
   const endParagraph = () => {
-    const text = clean(paragraph.join('\n')).trim();
+    const text = clean(paragraph.join('\n'), refs).trim();
     paragraph = [];
-    if (text) blocks.push({ text });
+    if (text) push({ text });
+  };
+
+  const endTable = () => {
+    if (!table.length) return;
+    const rows = table;
+    table = [];
+    // One row is not a table, and reads better as the line it is.
+    if (rows.length === 1) push({ text: clean(rows[0].trim().replace(/^\||\|$/g, ''), refs).trim() });
+    else push({ text: rows.map((row) => clean(row.trim(), refs)).join('\n') });
   };
 
   /**
@@ -152,15 +261,22 @@ function markdownBlocks(input: string): { blocks: Block[]; title?: string; autho
    */
   let indented: string[] | null = null;
   const endIndented = () => {
-    const lines = indented ?? [];
+    const held = indented ?? [];
     indented = null;
-    while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
-    if (!lines.length) return;
-    const body = lines.map((line) => line.replace(INDENTED, '')).join('\n');
-    blocks.push({ text: `\`\`\`\n${body}\n\`\`\`` });
+    while (held.length && !held[held.length - 1].trim()) held.pop();
+    if (!held.length) return;
+    const body = held.map((line) => line.replace(INDENTED, '')).join('\n');
+    push({ text: `\`\`\`\n${body}\n\`\`\`` });
   };
 
-  for (const line of source.split(/\r?\n/)) {
+  /** Every fence is written back as three backticks, which is the one the reader reads. */
+  const endFence = () => {
+    push({ text: `\`\`\`${lang}\n${code.join('\n')}\n\`\`\`` });
+    code = [];
+    fence = null;
+  };
+
+  for (const line of lines) {
     if (indented !== null) {
       if (INDENTED.test(line) || !line.trim()) {
         indented.push(line);
@@ -170,15 +286,25 @@ function markdownBlocks(input: string): { blocks: Block[]; title?: string; autho
     }
 
     if (fence !== null) {
-      code.push(line);
       const closed = new RegExp(`^ {0,3}${fence[0] === '`' ? '`' : '~'}{${fence.length},}\\s*$`);
-      if (closed.test(line)) {
-        blocks.push({ text: code.join('\n') });
-        code = [];
-        fence = null;
+      if (closed.test(line)) endFence();
+      else code.push(line);
+      continue;
+    }
+
+    if (maths !== null) {
+      const closing = line.trimEnd().endsWith('$$');
+      maths.push(closing ? line.trimEnd().slice(0, -2) : line);
+      if (closing) {
+        push({ text: `$$\n${maths.join('\n').trim()}\n$$` });
+        maths = null;
       }
       continue;
     }
+
+    if (!TABLE_ROW.test(line)) endTable();
+
+    for (const tag of line.matchAll(ANCHOR_TAG)) anchors.push(tag[1]);
 
     // Only where a paragraph is not already open: Markdown will not let an
     // indented block interrupt one, and a wrapped sentence is often indented.
@@ -191,7 +317,17 @@ function markdownBlocks(input: string): { blocks: Block[]; title?: string; autho
     if (opens) {
       endParagraph();
       fence = opens[1];
-      code = [line];
+      lang = line.slice(opens[0].length).trim().split(/\s+/)[0]?.replace(/^\{\.?|\}$/g, '') ?? '';
+      code = [];
+      continue;
+    }
+
+    const display = /^ {0,3}\$\$(.*)$/.exec(line);
+    if (display) {
+      endParagraph();
+      const rest = display[1].trimEnd();
+      if (rest.endsWith('$$') && rest.length > 2) push({ text: `$$\n${rest.slice(0, -2).trim()}\n$$` });
+      else maths = rest ? [rest] : [];
       continue;
     }
 
@@ -200,13 +336,37 @@ function markdownBlocks(input: string): { blocks: Block[]; title?: string; autho
       continue;
     }
 
+    if (paragraph.length === 1 && SETEXT.test(line)) {
+      const raw = paragraph[0];
+      paragraph = [];
+      pushHeading(raw, line.trim()[0] === '=' ? 1 : 2);
+      continue;
+    }
+
+    if (RULE.test(line) || REF_DEFINITION.test(line)) {
+      endParagraph();
+      continue;
+    }
+
+    if (TABLE_ROW.test(line)) {
+      endParagraph();
+      table.push(line);
+      continue;
+    }
+
+    // Each item its own paragraph, or the list runs together into one.
+    const item = LIST_ITEM.exec(line);
+    if (item) {
+      endParagraph();
+      const rest = line.slice(item[0].length).replace(/^\[ \]\s/, '☐ ').replace(/^\[[xX]\]\s/, '☑ ');
+      paragraph.push(`${item[1] ? '•' : item[2]} ${rest}`);
+      continue;
+    }
+
     const heading = ATX.exec(line);
     if (heading) {
       endParagraph();
-      const label = clean(heading[2]).trim();
-      const level = heading[1].length;
-      if (level === 1 && !title) title = label;
-      if (label) blocks.push({ text: label, heading: level });
+      pushHeading(heading[2], heading[1].length);
       continue;
     }
 
@@ -215,7 +375,9 @@ function markdownBlocks(input: string): { blocks: Block[]; title?: string; autho
 
   // A fence nobody closed still holds the rest of the document; it is code
   // either way, and losing it to a missing line of backticks is worse.
-  if (code.length) blocks.push({ text: code.join('\n') });
+  if (fence !== null) endFence();
+  if (maths !== null) push({ text: `$$\n${(maths as string[]).join('\n').trim()}\n$$` });
+  endTable();
   endIndented();
   endParagraph();
   return { blocks, title, author };

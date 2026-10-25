@@ -336,7 +336,11 @@
     "selectTap": "By sentence",
     "selectDrag": "By dragging",
     "originalShort": "Page",
-    "originalPage": "Page {{page}} of the original"
+    "originalPage": "Page {{page}} of the original",
+    "sections": "Sections",
+    "findSection": "Find a section",
+    "backToLink": "Back",
+    "drawing": "Drawing…"
   },
   "settings": {
     "title": "Settings",

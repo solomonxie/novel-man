@@ -14,6 +14,8 @@ export type Block = {
    * Markdown file has no pages, and neither does a web page.
    */
   page?: number;
+  /** Names a link elsewhere can use for this block. */
+  anchors?: string[];
 };
 
 export type ParsedSource = {
@@ -57,8 +59,6 @@ export type ParseContext = {
    * lets the fixture tests run these outside the app.
    */
   saveImage?: (name: string, bytes: Uint8Array) => string;
-  /** LaTeX in, a base64 PNG per formula out. Absent outside the app. */
-  renderMath?: (latex: string[]) => Promise<string[]>;
 };
 
 export type Importer = {

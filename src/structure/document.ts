@@ -1,12 +1,63 @@
 import type { NormalizedDocument, PlacedBlock } from '../import/normalize';
 
-/** Only blocks carrying structure are worth storing; the rest are recoverable. */
-export type StructureHint = { start: number; end: number; heading?: number; boundary?: boolean };
+/**
+ * Only blocks carrying structure are worth storing; the rest are recoverable.
+ * A link is a range with somewhere to go, and an anchor is a place a link can
+ * name — both kept here because these are already moved with the text.
+ */
+export type StructureHint = {
+  start: number;
+  end: number;
+  heading?: number;
+  boundary?: boolean;
+  href?: string;
+  anchor?: string;
+};
+
+const isBlockHint = (hint: StructureHint) => hint.heading !== undefined || hint.boundary === true;
 
 export function hintsOf(doc: NormalizedDocument): StructureHint[] {
-  return doc.blocks
+  const structure: StructureHint[] = doc.blocks
     .filter((block) => block.heading !== undefined || block.boundary)
     .map(({ start, end, heading, boundary }) => ({ start, end, heading, boundary }));
+  return [...structure, ...referencesOf(doc)];
+}
+
+/**
+ * Links that go somewhere, and only the anchors some link names: an EPUB puts
+ * an id on half its paragraphs, and storing ones nothing points at is weight.
+ */
+export function referencesOf(doc: NormalizedDocument): StructureHint[] {
+  const anchors = new Map<string, number>();
+  for (const anchor of doc.anchors ?? []) if (!anchors.has(anchor.id)) anchors.set(anchor.id, anchor.at);
+  const named = new Set<string>();
+  const links: StructureHint[] = [];
+  for (const link of doc.links ?? []) {
+    if (link.href.startsWith('#')) {
+      const id = findAnchor(anchors, link.href.slice(1));
+      if (id === null) continue;
+      named.add(id);
+      links.push({ start: link.start, end: link.end, href: `#${id}` });
+    } else if (/^(https?:|mailto:)/i.test(link.href)) {
+      links.push({ start: link.start, end: link.end, href: link.href });
+    }
+  }
+  const kept: StructureHint[] = [...named].map((id) => ({ start: anchors.get(id)!, end: anchors.get(id)!, anchor: id }));
+  return [...kept, ...links];
+}
+
+/** Exact, then as GitHub matches a fragment: without regard to case. */
+function findAnchor(anchors: Map<string, number>, id: string): string | null {
+  let wanted = id;
+  try {
+    wanted = decodeURIComponent(id);
+  } catch {
+    // Left as written.
+  }
+  if (anchors.has(wanted)) return wanted;
+  const lower = wanted.toLowerCase();
+  for (const key of anchors.keys()) if (key.toLowerCase() === lower) return key;
+  return null;
 }
 
 export function parseHints(raw: string): StructureHint[] {
@@ -24,7 +75,7 @@ export function parseHints(raw: string): StructureHint[] {
  * only the hints have to be stored.
  */
 export function reconstruct(text: string, hints: StructureHint[]): NormalizedDocument {
-  const byStart = new Map(hints.map((hint) => [hint.start, hint]));
+  const byStart = new Map(hints.filter(isBlockHint).map((hint) => [hint.start, hint]));
   const blocks: PlacedBlock[] = [];
   let cursor = 0;
   for (const chunk of text.split('\n\n')) {
