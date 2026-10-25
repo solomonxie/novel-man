@@ -1,11 +1,12 @@
 import { File, Paths } from '../src/storage/fs';
 import { removeDemoFiles, removeUnusedSources } from '../src/storage/tidy';
 import { zipDatabaseCopies } from '../src/backup/local';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  InteractionManager,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -118,71 +119,86 @@ export default function Home() {
       const restored = await restoreOnLaunch().catch(() => null);
       if (restored) refresh();
     })();
-    syncOnLaunch().catch(() => undefined);
-    resumeWorkOnLaunch().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refresh]);
+
+  /**
+   * Housekeeping, once the shelf is on screen. Every one of these shares the
+   * database with the shelf's own queries, and started at mount they made the
+   * first draw wait behind a directory scan, a cover check per book and a read
+   * of every manuscript. One after another, after the first frame.
+   */
+  const tidied = useRef(false);
+  useEffect(() => {
+    if (books === null || tidied.current) return;
+    tidied.current = true;
+    const task = InteractionManager.runAfterInteractions(() => {
+      void housekeeping();
+    });
+    return () => task.cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [books]);
+
+  async function housekeeping() {
+    const quietly = (work: () => Promise<unknown> | unknown) =>
+      Promise.resolve().then(work).catch(() => undefined);
+    await quietly(syncOnLaunch);
+    await quietly(resumeWorkOnLaunch);
     // Thirty days is a promise kept on the way in, not the next time somebody
     // happens to open the page that lists what is waiting to go.
-    purgeExpiredTrash().catch(() => undefined);
+    await quietly(purgeExpiredTrash);
     // Timing logs from debugging sessions, left in the Files app.
     for (const name of ['trace.txt', 'perf.txt']) {
       const stale = new File(Paths.document, name);
       if (stale.exists) stale.delete();
     }
-    zipDatabaseCopies().catch(() => undefined);
+    await quietly(zipDatabaseCopies);
     if (!demoMode()) {
       removeDemoFiles();
-      storedFileReferences()
-        .then(removeUnusedSources)
-        .catch(() => undefined);
+      await quietly(async () => removeUnusedSources(await storedFileReferences()));
     }
     // Once ever, and it says so: a cover quietly taken off a book is a change
     // to the shelf, and the books it happened to are the ones worth looking up
     // again. Silence here would be the app tidying somebody's library behind
     // their back.
-    clearPlaceholderCovers()
-      .then((cleared) => {
-        if (!cleared.length) return;
-        refresh();
-        Alert.alert(
-          t('covers.sweptTitle', { count: cleared.length }),
-          t('covers.sweptWhat', { titles: cleared.map((book) => book.title).join('\n') })
-        );
-      })
-      .catch(() => undefined);
+    await quietly(async () => {
+      const cleared = await clearPlaceholderCovers();
+      if (!cleared.length) return;
+      refresh();
+      Alert.alert(
+        t('covers.sweptTitle', { count: cleared.length }),
+        t('covers.sweptWhat', { titles: cleared.map((book) => book.title).join('\n') })
+      );
+    });
     // A cover whose file is gone, said out loud rather than left as a blank
     // rectangle nothing on the shelf can explain. These are the books to look
     // up again — or to point at a backup that still holds their pictures.
-    clearMissingCovers()
-      .then((lost) => {
-        if (!lost.length) return;
-        refresh();
-        Alert.alert(
-          t('covers.lostTitle', { count: lost.length }),
-          t('covers.lostWhat', {
-            titles: lost.slice(0, 12).map((book) => book.title).join('\n'),
-          })
-        );
-      })
-      .catch(() => undefined);
+    await quietly(async () => {
+      const lost = await clearMissingCovers();
+      if (!lost.length) return;
+      refresh();
+      Alert.alert(
+        t('covers.lostTitle', { count: lost.length }),
+        t('covers.lostWhat', { titles: lost.slice(0, 12).map((book) => book.title).join('\n') })
+      );
+    });
     // The same bargain, for the same reason: a lookup that answered in
     // romanisation marked a Chinese book English, and English is what every
     // pass has been told to answer in since. Changing it silently would be
     // the app deciding what somebody's books are written in behind them.
-    relabelLanguages()
-      .then((changed) => {
-        if (!changed.length) return;
-        refresh();
-        Alert.alert(
-          t('language.fixedTitle', { count: changed.length }),
-          t('language.fixedWhat', {
-            titles: changed.slice(0, 12).map((book) => book.title).join('\n'),
-            more: Math.max(0, changed.length - 12),
-          })
-        );
-      })
-      .catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refresh]);
+    await quietly(async () => {
+      const changed = await relabelLanguages();
+      if (!changed.length) return;
+      refresh();
+      Alert.alert(
+        t('language.fixedTitle', { count: changed.length }),
+        t('language.fixedWhat', {
+          titles: changed.slice(0, 12).map((book) => book.title).join('\n'),
+          more: Math.max(0, changed.length - 12),
+        })
+      );
+    });
+  }
 
   // A finished task usually changed something on the shelf.
   useWorkRefresh(refresh);

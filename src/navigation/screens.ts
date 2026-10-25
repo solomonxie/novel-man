@@ -1,55 +1,11 @@
 import Index from '../../app/index';
-import Find from '../../app/find';
-import Settings from '../../app/settings';
-import Job from '../../app/job/[id]';
-import Merge from '../../app/merge/[id]';
-import SourceEbible from '../../app/source/ebible';
-import SourceEsv from '../../app/source/esv';
-import SourceArxiv from '../../app/source/arxiv';
-import SourceOpenLibrary from '../../app/source/openlibrary';
-import SourceGoodreads from '../../app/source/goodreads';
-import SourceCsv from '../../app/source/csv';
-import SourceNotes from '../../app/source/notes';
-import Book from '../../app/book/[id]';
-import Entity from '../../app/entity/[id]';
-import Chapter from '../../app/chapter/[id]';
-import Place from '../../app/place/[id]';
-import Term from '../../app/term/[id]';
-import Word from '../../app/word/[id]';
-import Scene from '../../app/scene/[id]';
-import AiKey from '../../app/ai-key/[id]';
-import AiRequest from '../../app/ai-request/[id]';
-import CloudLibrary from '../../app/settings/cloud-library';
-import IcloudBackups from '../../app/settings/icloud-backups';
-import BackupLog from '../../app/settings/backup-log';
-import RecentlyDeleted from '../../app/settings/deleted';
-import YourCopies from '../../app/settings/copies';
-import Notes from '../../app/book/[id]/notes';
-import Structure from '../../app/book/[id]/structure';
-import Cast from '../../app/book/[id]/cast';
-import Scenes from '../../app/book/[id]/scenes';
-import Parts from '../../app/book/[id]/parts';
-import Part from '../../app/book/[id]/part/[idx]';
-import Graph from '../../app/book/[id]/graph';
-import Translation from '../../app/book/[id]/translation';
-import Terms from '../../app/book/[id]/terms';
-import Words from '../../app/book/[id]/words';
-import Cards from '../../app/book/[id]/cards';
-import Study from '../../app/book/[id]/study';
-import Card from '../../app/card/[id]';
-import Mapping from '../../app/book/[id]/mapping';
-import Script from '../../app/book/[id]/script';
-import Reader from '../../app/reader/[id]';
-import BookListScreen from '../../app/list/[id]';
-import Tag from '../../app/tag/[name]';
-import Reviews from '../../app/reviews';
-import Flagged from '../../app/flagged';
-import Status from '../../app/status/[name]';
 
 export type Screen = {
   /** The path the app writes: `/book/[id]/notes`, with `[…]` for a value. */
   path: string;
-  component: React.ComponentType;
+  /** The shelf only; every other screen is loaded the first time it opens. */
+  component?: React.ComponentType;
+  load?: () => React.ComponentType;
   /** Only the shelf and the reader draw their own; the rest get a bar. */
   header?: boolean;
   animation?: 'fade' | 'none';
@@ -62,55 +18,55 @@ export type Screen = {
  */
 export const screens: Screen[] = [
   { path: '/', component: Index },
-  { path: '/job/[id]', component: Job, header: true },
-  { path: '/merge/[id]', component: Merge, header: true },
+  { path: '/job/[id]', load: () => require('../../app/job/[id]').default, header: true },
+  { path: '/merge/[id]', load: () => require('../../app/merge/[id]').default, header: true },
   // No slide: the pill on the shelf becomes this page, and iOS holds the
   // keyboard back until a push has finished — 350ms of slide before the
   // keyboard even starts. Measured: the page's own work is done in 10ms.
-  { path: '/find', component: Find, header: true, animation: 'none' },
-  { path: '/settings', component: Settings, header: true },
-  { path: '/source/ebible', component: SourceEbible, header: true },
-  { path: '/source/esv', component: SourceEsv, header: true },
-  { path: '/source/arxiv', component: SourceArxiv, header: true },
-  { path: '/source/openlibrary', component: SourceOpenLibrary, header: true },
-  { path: '/source/goodreads', component: SourceGoodreads, header: true },
-  { path: '/source/csv', component: SourceCsv, header: true },
-  { path: '/source/notes', component: SourceNotes, header: true },
-  { path: '/book/[id]', component: Book, header: true },
-  { path: '/entity/[id]', component: Entity, header: true },
-  { path: '/chapter/[id]', component: Chapter, header: true },
-  { path: '/place/[id]', component: Place, header: true },
-  { path: '/term/[id]', component: Term, header: true },
-  { path: '/word/[id]', component: Word, header: true },
-  { path: '/scene/[id]', component: Scene, header: true },
-  { path: '/ai-key/[id]', component: AiKey, header: true },
-  { path: '/ai-request/[id]', component: AiRequest, header: true },
-  { path: '/settings/cloud-library', component: CloudLibrary, header: true },
-  { path: '/settings/icloud-backups', component: IcloudBackups, header: true },
-  { path: '/settings/backup-log', component: BackupLog, header: true },
-  { path: '/settings/deleted', component: RecentlyDeleted, header: true },
-  { path: '/settings/copies', component: YourCopies, header: true },
-  { path: '/book/[id]/notes', component: Notes, header: true },
-  { path: '/book/[id]/structure', component: Structure, header: true },
-  { path: '/book/[id]/cast', component: Cast, header: true },
-  { path: '/book/[id]/scenes', component: Scenes, header: true },
-  { path: '/book/[id]/parts', component: Parts, header: true },
-  { path: '/book/[id]/part/[idx]', component: Part, header: true },
-  { path: '/book/[id]/graph', component: Graph, header: true },
-  { path: '/book/[id]/translation', component: Translation, header: true },
-  { path: '/book/[id]/terms', component: Terms, header: true },
-  { path: '/book/[id]/words', component: Words, header: true },
-  { path: '/book/[id]/study', component: Study, header: true },
-  { path: '/book/[id]/cards', component: Cards, header: true },
-  { path: '/card/[id]', component: Card, header: true },
-  { path: '/book/[id]/mapping', component: Mapping, header: true },
-  { path: '/book/[id]/script', component: Script, header: true },
-  { path: '/list/[id]', component: BookListScreen, header: true },
-  { path: '/tag/[name]', component: Tag, header: true },
-  { path: '/reviews', component: Reviews, header: true },
-  { path: '/flagged', component: Flagged, header: true },
-  { path: '/status/[name]', component: Status, header: true },
-  { path: '/reader/[id]', component: Reader, animation: 'fade' },
+  { path: '/find', load: () => require('../../app/find').default, header: true, animation: 'none' },
+  { path: '/settings', load: () => require('../../app/settings').default, header: true },
+  { path: '/source/ebible', load: () => require('../../app/source/ebible').default, header: true },
+  { path: '/source/esv', load: () => require('../../app/source/esv').default, header: true },
+  { path: '/source/arxiv', load: () => require('../../app/source/arxiv').default, header: true },
+  { path: '/source/openlibrary', load: () => require('../../app/source/openlibrary').default, header: true },
+  { path: '/source/goodreads', load: () => require('../../app/source/goodreads').default, header: true },
+  { path: '/source/csv', load: () => require('../../app/source/csv').default, header: true },
+  { path: '/source/notes', load: () => require('../../app/source/notes').default, header: true },
+  { path: '/book/[id]', load: () => require('../../app/book/[id]').default, header: true },
+  { path: '/entity/[id]', load: () => require('../../app/entity/[id]').default, header: true },
+  { path: '/chapter/[id]', load: () => require('../../app/chapter/[id]').default, header: true },
+  { path: '/place/[id]', load: () => require('../../app/place/[id]').default, header: true },
+  { path: '/term/[id]', load: () => require('../../app/term/[id]').default, header: true },
+  { path: '/word/[id]', load: () => require('../../app/word/[id]').default, header: true },
+  { path: '/scene/[id]', load: () => require('../../app/scene/[id]').default, header: true },
+  { path: '/ai-key/[id]', load: () => require('../../app/ai-key/[id]').default, header: true },
+  { path: '/ai-request/[id]', load: () => require('../../app/ai-request/[id]').default, header: true },
+  { path: '/settings/cloud-library', load: () => require('../../app/settings/cloud-library').default, header: true },
+  { path: '/settings/icloud-backups', load: () => require('../../app/settings/icloud-backups').default, header: true },
+  { path: '/settings/backup-log', load: () => require('../../app/settings/backup-log').default, header: true },
+  { path: '/settings/deleted', load: () => require('../../app/settings/deleted').default, header: true },
+  { path: '/settings/copies', load: () => require('../../app/settings/copies').default, header: true },
+  { path: '/book/[id]/notes', load: () => require('../../app/book/[id]/notes').default, header: true },
+  { path: '/book/[id]/structure', load: () => require('../../app/book/[id]/structure').default, header: true },
+  { path: '/book/[id]/cast', load: () => require('../../app/book/[id]/cast').default, header: true },
+  { path: '/book/[id]/scenes', load: () => require('../../app/book/[id]/scenes').default, header: true },
+  { path: '/book/[id]/parts', load: () => require('../../app/book/[id]/parts').default, header: true },
+  { path: '/book/[id]/part/[idx]', load: () => require('../../app/book/[id]/part/[idx]').default, header: true },
+  { path: '/book/[id]/graph', load: () => require('../../app/book/[id]/graph').default, header: true },
+  { path: '/book/[id]/translation', load: () => require('../../app/book/[id]/translation').default, header: true },
+  { path: '/book/[id]/terms', load: () => require('../../app/book/[id]/terms').default, header: true },
+  { path: '/book/[id]/words', load: () => require('../../app/book/[id]/words').default, header: true },
+  { path: '/book/[id]/study', load: () => require('../../app/book/[id]/study').default, header: true },
+  { path: '/book/[id]/cards', load: () => require('../../app/book/[id]/cards').default, header: true },
+  { path: '/card/[id]', load: () => require('../../app/card/[id]').default, header: true },
+  { path: '/book/[id]/mapping', load: () => require('../../app/book/[id]/mapping').default, header: true },
+  { path: '/book/[id]/script', load: () => require('../../app/book/[id]/script').default, header: true },
+  { path: '/list/[id]', load: () => require('../../app/list/[id]').default, header: true },
+  { path: '/tag/[name]', load: () => require('../../app/tag/[name]').default, header: true },
+  { path: '/reviews', load: () => require('../../app/reviews').default, header: true },
+  { path: '/flagged', load: () => require('../../app/flagged').default, header: true },
+  { path: '/status/[name]', load: () => require('../../app/status/[name]').default, header: true },
+  { path: '/reader/[id]', load: () => require('../../app/reader/[id]').default, animation: 'fade' },
 ];
 
 /**

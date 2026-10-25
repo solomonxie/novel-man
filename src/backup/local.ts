@@ -75,12 +75,23 @@ function folder(): Directory {
  * app took up. Copied first and zipped from the copy, so the zip reads a file
  * nothing is writing to.
  */
-export async function snapshotDatabase(open?: Database): Promise<boolean> {
+export async function snapshotDatabase(
+  open?: Database,
+  { zip = true }: { zip?: boolean } = {}
+): Promise<boolean> {
   try {
     const database = open ?? (await db());
     await database.execAsync('PRAGMA wal_checkpoint(FULL)');
     const live = new File(ownPath('SQLite'), 'novelman.db');
     if (!live.exists) return false;
+    const raw = new File(folder(), databaseName().replace(/\.zip$/, '.db'));
+    if (!zip) {
+      // Before a migration the copy has to exist, not be small: zipping 60 MB
+      // here held the whole shelf back. `zipDatabaseCopies` deflates it later.
+      if (raw.exists) raw.delete();
+      live.copy(raw);
+      return true;
+    }
     const copy = new File(Paths.cache, 'database-snapshot.db');
     if (copy.exists) copy.delete();
     live.copy(copy);
@@ -90,7 +101,6 @@ export async function snapshotDatabase(open?: Database): Promise<boolean> {
       await zipInto(copy, target, 'novelman.db');
     } catch {
       // Unzipped beats none.
-      const raw = new File(folder(), databaseName().replace(/\.zip$/, '.db'));
       if (raw.exists) raw.delete();
       copy.copy(raw);
     } finally {
@@ -108,7 +118,9 @@ export async function zipDatabaseCopies(): Promise<void> {
     if (!(entry instanceof File) || !/-database-novel-man\.db$/.test(entry.name)) continue;
     const target = new File(folder(), entry.name.replace(/\.db$/, '.zip'));
     try {
-      if (!target.exists) await zipInto(entry, target, 'novelman.db');
+      // The raw one is the newer: it is the copy taken before a migration.
+      if (target.exists) target.delete();
+      await zipInto(entry, target, 'novelman.db');
       entry.delete();
     } catch {
       // Kept raw; tried again next launch.
@@ -281,7 +293,7 @@ function sameDay(at: number, now: number): boolean {
 
 // Registered on import, which is before anything can open the database: the
 // hook has to be in place for the very first migration of a fresh install.
-setBeforeMigrations(snapshotDatabase);
+setBeforeMigrations((open) => snapshotDatabase(open, { zip: false }));
 
 /** Backgrounding is the one moment the app reliably gets before it is gone. */
 export function watchForLocalBackup(): () => void {

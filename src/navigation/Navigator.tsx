@@ -82,7 +82,7 @@ function Shell({ screen }: { screen?: string }) {
               <Stack.Screen
                 key={screen.path}
                 name={screen.path}
-                component={screen.component}
+                {...(screen.load ? { getComponent: screen.load } : { component: screen.component! })}
                 options={{
                   headerShown: screen.header ?? false,
                   title: '',
