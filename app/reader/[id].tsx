@@ -197,8 +197,11 @@ export default function Reader() {
   const [trail, setTrail] = useState<number[]>([]);
   /** An offset the page should be scrolled to exactly, once its paragraph is laid out. */
   const [jumpTo, setJumpTo] = useState<number | null>(null);
+  const jumpRef = useRef<number | null>(null);
+  jumpRef.current = jumpTo;
   const [sectionsOpen, setSectionsOpen] = useState(false);
   const contentTop = useRef(0);
+  const places = useRef(new Map<number, { from: number; to: number; y: number; height: number }>());
   /** A chapter of a book whose words are not here: fetched, then kept. */
   const [remoteText, setRemoteText] = useState('');
   const [remoteError, setRemoteError] = useState<string | null>(null);
@@ -324,6 +327,10 @@ export default function Reader() {
         : loadedChapters.findIndex((c) => target >= c.start && target < c.end);
       setIndex(requested ?? (holding >= 0 ? holding : resumed >= 0 ? resumed : 0));
       pendingScroll.current = 0;
+      if (target === null && requested === null && resumed >= 0 && saved > loadedChapters[resumed].start) {
+        pendingScroll.current = null;
+        setJumpTo(saved);
+      }
 
       if (target !== null) {
         const landing = loadedChapters[requested ?? (holding >= 0 ? holding : 0)];
@@ -1122,27 +1129,52 @@ export default function Reader() {
     );
   }
 
-  /** The paragraph a jump is aimed at, wrapped so its place on the page can be read once laid out. */
-  const aimedAt =
-    jumpTo === null ? null : (paragraphs.filter((paragraph) => paragraph.start <= jumpTo).at(-1)?.start ?? null);
+  const endOf = (paragraph: (typeof paragraphs)[number]) => paragraph.sentences.at(-1)?.end ?? paragraph.start;
 
-  function aimed(piece: (typeof pieces)[number], element: React.ReactNode) {
-    // A chapter's own heading draws nothing, and is still somewhere to land.
-    if (aimedAt === null) return element;
-    const starts = piece.kind === 'block' ? piece.paragraphs.map((paragraph) => paragraph.start) : [piece.paragraph.start];
-    if (!starts.includes(aimedAt)) return element;
+  /**
+   * Every piece wrapped so its place on the page is known: what is saved is the
+   * offset under the top of the screen, and a jump or a resume lands on that
+   * line rather than on a share of the chapter's height.
+   */
+  function placed(piece: (typeof pieces)[number], element: React.ReactNode) {
+    const first = piece.kind === 'block' ? piece.paragraphs[0] : piece.paragraph;
+    const last = piece.kind === 'block' ? piece.paragraphs.at(-1)! : piece.paragraph;
+    const from = first.start;
+    const to = endOf(last);
     return (
       <View
-        key={`aimed-${aimedAt}`}
+        key={`at-${from}`}
         onLayout={(event) => {
-          const y = contentTop.current + event.nativeEvent.layout.y;
-          scrollRef.current?.scrollTo({ y: Math.max(0, y - lineHeight * 2), animated: false });
-          setJumpTo(null);
+          const { y, height } = event.nativeEvent.layout;
+          places.current.set(from, { from, to, y, height });
+          const aim = jumpRef.current;
+          if (aim === null || aim < from || aim > to) return;
+          jumpRef.current = null;
+          // The content's own top is laid out after its children; read it a frame later.
+          requestAnimationFrame(() => {
+            const within = to > from ? (aim - from) / (to - from) : 0;
+            const top = contentTop.current + y + within * height - lineHeight * 2;
+            scrollRef.current?.scrollTo({ y: Math.max(0, top), animated: false });
+            setJumpTo(null);
+          });
         }}
       >
         {element}
       </View>
     );
+  }
+
+  /** The offset of the line two lines below the top of the screen: where `placed` lands one. */
+  function offsetAtTop(scrolled: number): number | null {
+    const line = scrolled + lineHeight * 2 - contentTop.current;
+    let best: { from: number; to: number; y: number; height: number } | null = null;
+    for (const place of places.current.values()) {
+      if (place.from < chapter.start || place.from >= chapter.end || place.y > line) continue;
+      if (!best || place.y > best.y) best = place;
+    }
+    if (!best) return null;
+    const within = best.height ? Math.min(1, Math.max(0, (line - best.y) / best.height)) : 0;
+    return best.from + Math.round(within * (best.to - best.from));
   }
 
   function renderFreeBlock(group: typeof paragraphs) {
@@ -1331,9 +1363,11 @@ export default function Reader() {
               const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
               scrolledY.current = contentOffset.y;
               viewport.current = { content: contentSize.height, layout: layoutMeasurement.height };
-              if (remote) return;
+              if (remote || jumpRef.current !== null) return;
               const ratio = contentOffset.y / Math.max(1, contentSize.height - layoutMeasurement.height);
-              const at = chapter.start + Math.round(Math.min(1, Math.max(0, ratio)) * (chapter.end - chapter.start));
+              const at =
+                offsetAtTop(contentOffset.y) ??
+                chapter.start + Math.round(Math.min(1, Math.max(0, ratio)) * (chapter.end - chapter.start));
               setOffset(at);
               if (id) saveProgress(id, at);
             },
@@ -1464,7 +1498,7 @@ export default function Reader() {
             ) : paragraphs.length === 0 ? (
               <Text style={{ color: palette.dim, marginTop: space.xxl }}>{t('reader.empty')}</Text>
             ) : (
-              pieces.map((piece) => aimed(piece, (() => {
+              pieces.map((piece) => placed(piece, (() => {
                 if (piece.kind === 'block') return renderFreeBlock(piece.paragraphs);
                 const paragraph = piece.paragraph;
                 const body = source.slice(
