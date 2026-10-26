@@ -2,7 +2,7 @@ import type { Block, Importer, ParseContext } from '../types';
 import { attr, decodeEntities, stripTags } from '../xml';
 import { decodeText } from '../decode';
 import { imageMarker } from '../../reader/images';
-import { idsIn, isWeb, lift, liftedIn, links } from '../markup';
+import { emphasis, idsIn, isWeb, lift, liftedIn, links } from '../markup';
 
 const BLOCK_END = /<\/(p|div|h[1-6]|li|blockquote|section|article|figcaption|pre|td)\s*>/gi;
 const IMG = /<(?:img|image)\b[^>]*>/gi;
@@ -107,7 +107,7 @@ export async function blocksFromHtml(html: string, _context?: ParseContext): Pro
       }
     }
     const anchors = idsIn(piece);
-    const text = decodeEntities(stripTags(links(piece, link))).replace(/[^\S\n]+/g, ' ').trim();
+    const text = decodeEntities(stripTags(links(closed ? piece : emphasis(piece), link))).replace(/[^\S\n]+/g, ' ').trim();
     if (!text) continue;
     const index = liftedIn(text);
     if (index !== null) {

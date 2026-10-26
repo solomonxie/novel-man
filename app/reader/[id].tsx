@@ -58,7 +58,7 @@ import { esvKey } from '../../src/sources/esvKey';
 import { EsvError } from '../../src/sources/esv';
 import { blockOf, cutAt, runsIn, type RichBlock } from '../../src/reader/rich';
 import { anchorsOf, destinationOf, linksOf, linksWithin, outlineOf, type Link } from '../../src/reader/links';
-import { CodeBlock, DiagramBlock, InlineMath, MathBlock, TableBlock } from '../../src/ui/RichBlocks';
+import { CodeBlock, DiagramBlock, InlineMath, MathBlock, TableBlock, runStyle } from '../../src/ui/RichBlocks';
 import type { StructureHint } from '../../src/structure/document';
 import { ReaderImage } from '../../src/ui/ReaderImage';
 import { supports } from '../../src/books/kinds';
@@ -990,15 +990,7 @@ export default function Reader() {
           key={at}
           onPress={link ? () => follow(link) : undefined}
           suppressHighlighting
-          style={{
-            fontWeight: run.bold ? '700' : undefined,
-            fontStyle: run.italic ? 'italic' : undefined,
-            textDecorationLine: run.strike ? 'line-through' : undefined,
-            backgroundColor: run.mark ? palette.tint : undefined,
-            fontFamily: run.code || run.math ? 'Menlo' : undefined,
-            fontSize: run.code || run.math ? settings.fontSize * 0.92 : undefined,
-            color: link ? palette.accent : undefined,
-          }}
+          style={runStyle(run, settings.theme, settings.fontSize, Boolean(link))}
         >
           {versed ? verseMarks(run.text, verseStyle) : run.text}
         </Text>
@@ -1119,7 +1111,19 @@ export default function Reader() {
         {rich.kind === 'code' ? (
           <CodeBlock {...common} lang={rich.lang} body={rich.body} onCopy={copy(rich.body)} />
         ) : rich.kind === 'table' ? (
-          <TableBlock {...common} rows={rich.rows} head={rich.head} align={rich.align} />
+          <TableBlock
+            {...common}
+            rows={rich.rows}
+            at={rich.at}
+            head={rich.head}
+            align={rich.align}
+            links={linksWithin(links, whole.start, whole.end).map((link) => ({
+              from: link.from - whole.start,
+              to: link.to - whole.start,
+              link,
+            }))}
+            onLink={follow}
+          />
         ) : rich.kind === 'math' ? (
           <MathBlock {...common} tex={rich.tex} width={textWidth} />
         ) : (

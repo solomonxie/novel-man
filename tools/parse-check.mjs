@@ -15,6 +15,7 @@ const { base64, fromBase64 } = await import(join(build, 'import/base64.js'));
 const { fingerprintOf } = await import(join(build, 'storage/fingerprint.js'));
 const { pagesOf, referencesOf } = await import(join(build, 'structure/document.js'));
 const { normalize } = await import(join(build, 'import/normalize.js'));
+const { emphasis } = await import(join(build, 'import/markup.js'));
 const { detectChapters, withoutCaption } = await import(join(build, 'structure/detect.js'));
 const { detectLanguage, scriptOf, baseLanguage } = await import(join(build, 'text/language.js'));
 const { partsOf, salvageRows, meaningfulName } = await import(join(build, 'structure/document.js'));
@@ -792,7 +793,18 @@ console.log('markup a book is written in');
   check('a fence knows its language', blockOf('```C++ title\nint a;\n```'),
     { kind: 'code', lang: 'c++', body: 'int a;' });
   check('display TeX is a formula', blockOf('$$\nE = mc^2\n$$'), { kind: 'math', tex: 'E = mc^2' });
-  check('a table is rows and a head', blockOf('| a | b \\| c |\n|:--|--:|\n| **1** | 2 |'),
+  const styles = (text) => runsIn(text).map(({ from, ...run }) => run);
+  check('styles nest', styles('**bold _and italic_**'),
+    [{ text: 'bold ', bold: true }, { text: 'and italic', bold: true, italic: true }]);
+  check('three stars are both', styles('***both***'), [{ text: 'both', bold: true, italic: true }]);
+  check('an underscore inside a word is the word', styles('snake_case_name'), [{ text: 'snake_case_name' }]);
+  check('C++ is not underlined', styles('C++ and C++/CLI'), [{ text: 'C++ and C++/CLI' }]);
+  check('pluses underline', styles('a ++b++'), [{ text: 'a ' }, { text: 'b', underline: true }]);
+  check('code is taken as written', styles('`**x**`'), [{ text: '**x**', code: true }]);
+  check('html emphasis becomes markers, spaces outside them',
+    emphasis('A <b> firm </b> and <em>soft <u>under</u></em>, <s>gone</s> <img src=x> <span>s</span>'),
+    'A  **firm**  and *soft ++under++*, ~~gone~~ <img src=x> <span>s</span>');
+  check('a table is rows and a head', (({ at, ...shape }) => shape)(blockOf('| a | b \\| c |\n|:--|--:|\n| **1** | 2 |')),
     { kind: 'table', rows: [['a', 'b | c'], ['**1**', '2']], head: true, align: ['left', 'right'] });
   check('a lone row is prose', blockOf('| not a table |'), null);
   check('prose is prose', blockOf('She went down anyway.'), null);
@@ -1022,13 +1034,16 @@ console.log('an epub written for programmers');
     blockOf(texts.find((t) => t.startsWith('```'))),
     { kind: 'code', lang: 'c', body: 'int main() {\n    if (x < 1)\n\n        return 0;\n}' });
   check('inline code is code', texts.find((t) => t.startsWith('Call')), 'Call `fork()` once.');
-  check('a table is a table', blockOf(texts.find((t) => t.startsWith('|'))),
+  const table = texts.find((t) => t.startsWith('|'));
+  const { at: cellsAt, ...shape } = blockOf(table);
+  check('a table is a table', shape,
     { kind: 'table', rows: [['Server', 'RPS'], ['Iterative', '1 | 2']], head: true, align: ['left', 'left'] });
+  check('and knows where each cell begins', table.slice(cellsAt[1][0], cellsAt[1][0] + 9), 'Iterative');
   check('an Enlighter listing says its language in a data attribute',
     blockOf(texts.find((t) => t.includes('fork();')))?.lang, 'c');
   check('a label spanning the columns is said before the table', texts[texts.indexOf('requests/second') + 1]?.startsWith('| n |'), true);
   check('a bold first row is the head, and a spanning cell keeps the columns',
-    blockOf(texts.find((t) => t.startsWith('| n |'))),
+    (({ at, ...shape }) => shape)(blockOf(texts.find((t) => t.startsWith('| n |')))),
     { kind: 'table', rows: [['n', 'forking', 'epoll'], ['20', 'wide variations', '']], head: true, align: ['left', 'left', 'left'] });
   const hints = referencesOf(doc);
   const goes = (words) => hints.find((h) => h.href && doc.text.slice(h.start, h.end) === words)?.href;

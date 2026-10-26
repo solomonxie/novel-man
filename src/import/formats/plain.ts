@@ -1,6 +1,7 @@
 import type { Block, Importer } from '../types';
 import { decodeText } from '../decode';
 import { marked } from '../normalize';
+import { emphasis } from '../markup';
 
 function blocksFromText(text: string): Block[] {
   return text
@@ -97,8 +98,7 @@ const BARE_URL = /(?<![\w/"'=(])https?:\/\/[^\s<>()\[\]-]*[^\s<>()\[
 const ESCAPE = /\\([\\`*_{}\[\]()#+\-.!<>~])/g;
 
 function strip(prose: string, refs: Refs): string {
-  return prose
-    .replace(COMMENTS, '')
+  return emphasis(prose.replace(COMMENTS, ''))
     .replace(MARKUP, '')
     .replace(BARE, '')
     .replace(REF_LINK, (whole, words: string, id: string) => {

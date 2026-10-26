@@ -2,10 +2,7 @@
  * The markup a technical book is actually written in. A tutorial from a repo,
  * a README, a set of notes — they arrive as Markdown, and reading `**this**`
  * with the asterisks still in it is reading the source rather than the book.
- *
- * Only inline styles live here, and only ones that cannot be confused with the
- * app's own marks: underline is the app's own, so an
- * underline in the text would be a lie about what the reader put there.
+ * An EPUB's `<b>`, `<em>`, `<u>` and the rest are written the same way on import.
  */
 export type Run = {
   text: string;
@@ -13,6 +10,8 @@ export type Run = {
   italic?: boolean;
   code?: boolean;
   strike?: boolean;
+  /** `++inserted++`, which is how `<u>` and `<ins>` are kept. */
+  underline?: boolean;
   /** `==marked==`, the one piece of syntax that means "highlight". */
   mark?: boolean;
   /** `$x^2$`: TeX, drawn as a formula where it can be. */
@@ -21,28 +20,55 @@ export type Run = {
   from: number;
 };
 
-const INLINE =
-  /(\*\*|__)(?=\S)([\s\S]*?\S)\1|(\*|_)(?=\S)([\s\S]*?\S)\3|`([^`\n]+)`|~~(?=\S)([\s\S]*?\S)~~|==(?=\S)([\s\S]*?\S)==|\$([^\s$](?:[^$\n]*?[^\s$\\])?)\$(?!\d)/g;
+type Style = 'bold' | 'italic' | 'code' | 'strike' | 'underline' | 'mark' | 'math';
+
+/** One capture group each, so group `n` is `SPANS[n - 1]`. Underscores never open inside a word. */
+const SPANS: [string, Style[]][] = [
+  [String.raw`\*\*\*(?=\S)([\s\S]*?\S)\*\*\*`, ['bold', 'italic']],
+  [String.raw`(?<!\w)___(?=\S)([\s\S]*?\S)___(?!\w)`, ['bold', 'italic']],
+  [String.raw`\*\*(?=\S)([\s\S]*?\S)\*\*`, ['bold']],
+  [String.raw`(?<!\w)__(?=\S)([\s\S]*?\S)__(?!\w)`, ['bold']],
+  [String.raw`\*(?=[^\s*])([\s\S]*?[^\s*])\*`, ['italic']],
+  [String.raw`(?<!\w)_(?=[^\s_])([\s\S]*?[^\s_])_(?!\w)`, ['italic']],
+  ['`([^`\\n]+)`', ['code']],
+  [String.raw`~~(?=\S)([\s\S]*?\S)~~`, ['strike']],
+  [String.raw`(?<![\w+])\+\+(?=[^\s+])([\s\S]*?[^\s+])\+\+(?![\w+])`, ['underline']],
+  [String.raw`==(?=\S)([\s\S]*?\S)==`, ['mark']],
+  [String.raw`\$([^\s$](?:[^$\n]*?[^\s$\\])?)\$(?!\d)`, ['math']],
+];
+const INLINE = new RegExp(SPANS.map(([source]) => source).join('|'), 'g');
 
 /** Most sentences carry no markup at all, and Hermes charges per regex run. */
-const MARKERS = /[*_`~=$]/;
+const MARKERS = /[*_`~=$+]/;
 
-const STYLES = ['bold', 'italic', 'code', 'strike', 'mark', 'math'] as const;
-
+/** Styles inside styles: `**bold _and italic_**`. Code and TeX are taken as written. */
 export function runsIn(text: string): Run[] {
   if (!MARKERS.test(text)) return [{ text, from: 0 }];
+  const runs = styledRuns(text, 0, {});
+  return runs.length ? runs : [{ text, from: 0 }];
+}
+
+function styledRuns(text: string, base: number, outer: Partial<Record<Style, true>>): Run[] {
   const runs: Run[] = [];
   let cursor = 0;
+  const plain = (to: number) => {
+    if (to > cursor) runs.push({ text: text.slice(cursor, to), ...outer, from: base + cursor });
+  };
   for (const match of text.matchAll(INLINE)) {
     const at = match.index ?? 0;
-    if (at > cursor) runs.push({ text: text.slice(cursor, at), from: cursor });
-    const group = [2, 4, 5, 6, 7, 8].findIndex((index) => match[index] !== undefined);
-    const inner = match[[2, 4, 5, 6, 7, 8][group]];
-    runs.push({ text: inner, from: at + match[0].indexOf(inner), [STYLES[group]]: true });
+    plain(at);
+    const group = match.findIndex((value, index) => index > 0 && value !== undefined);
+    const inner = match[group];
+    const styles = SPANS[group - 1][1];
+    const from = at + match[0].indexOf(inner);
+    const style = { ...outer };
+    for (const each of styles) style[each] = true;
+    if (style.code || style.math || !MARKERS.test(inner)) runs.push({ text: inner, ...style, from: base + from });
+    else runs.push(...styledRuns(inner, base + from, style));
     cursor = at + match[0].length;
   }
-  if (cursor < text.length) runs.push({ text: text.slice(cursor), from: cursor });
-  return runs.length ? runs : [{ text, from: 0 }];
+  plain(text.length);
+  return runs;
 }
 
 /**
@@ -73,7 +99,8 @@ export type RichBlock =
   | { kind: 'code'; lang: string; body: string }
   | { kind: 'diagram'; body: string }
   | { kind: 'math'; tex: string }
-  | { kind: 'table'; rows: string[][]; head: boolean; align: Align[] };
+  /** `at`: where each cell's words begin in the paragraph, so a link in one can be found. */
+  | { kind: 'table'; rows: string[][]; at: number[][]; head: boolean; align: Align[] };
 
 const FENCED = /^```([^\n]*)\n([\s\S]*?)\n?```$/;
 const DISPLAY_MATH = /^\$\$([\s\S]+?)\$\$$/;
@@ -84,10 +111,21 @@ const TABLE_RULE = /^\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?$/;
 const unblank = (body: string) => body.replace(/^ $/gm, '');
 
 function cellsOf(line: string): string[] {
-  return line
-    .slice(1, -1)
-    .split(/(?<!\\)\|/)
-    .map((cell) => cell.trim().replace(/\\\|/g, '|'));
+  return cellsAt(line, 0).map((cell) => cell.text);
+}
+
+function cellsAt(line: string, base: number): { text: string; at: number }[] {
+  const cells: { text: string; at: number }[] = [];
+  let from = 1;
+  for (const edge of line.slice(1, -1).matchAll(/(?<!\\)\||$/g)) {
+    const end = 1 + (edge.index ?? 0);
+    const raw = line.slice(from, end);
+    const lead = raw.length - raw.trimStart().length;
+    cells.push({ text: raw.trim().replace(/\\\|/g, '|'), at: base + from + lead });
+    from = end + 1;
+    if (!edge[0]) break;
+  }
+  return cells;
 }
 
 export function blockOf(paragraph: string): RichBlock | null {
@@ -107,13 +145,26 @@ export function blockOf(paragraph: string): RichBlock | null {
   if (first === '|') {
     const lines = trimmed.split('\n').map((line) => line.trim());
     if (lines.length >= 2 && lines.every((line) => TABLE_LINE.test(line))) {
+      const placed: { text: string; at: number }[][] = [];
+      let cursor = 0;
+      for (const line of lines) {
+        const at = paragraph.indexOf(line, cursor);
+        placed.push(cellsAt(line, at));
+        cursor = at + line.length;
+      }
       const head = TABLE_RULE.test(lines[1]);
       const align: Align[] = head
         ? cellsOf(lines[1]).map((cell) =>
             cell.startsWith(':') && cell.endsWith(':') ? 'center' : cell.endsWith(':') ? 'right' : 'left')
         : [];
-      const rows = lines.filter((_, at) => !(head && at === 1)).map(cellsOf);
-      return { kind: 'table', rows, head, align };
+      const kept = placed.filter((_, at) => !(head && at === 1));
+      return {
+        kind: 'table',
+        rows: kept.map((row) => row.map((cell) => cell.text)),
+        at: kept.map((row) => row.map((cell) => cell.at)),
+        head,
+        align,
+      };
     }
   }
   const indented = indentedCode(paragraph);

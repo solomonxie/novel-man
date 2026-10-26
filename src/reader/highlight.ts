@@ -7,7 +7,7 @@
 export type TokenKind = 'plain' | 'keyword' | 'type' | 'string' | 'comment' | 'number' | 'meta';
 export type Token = { text: string; kind: TokenKind };
 
-type Family = 'c' | 'hash' | 'sql' | 'markup' | 'plain';
+type Family = 'c' | 'hash' | 'sql' | 'markup' | 'markdown' | 'plain';
 
 const words = (list: string) => new Set(list.split(' '));
 
@@ -33,6 +33,7 @@ for (const name of 'c h cpp c++ cc cxx hpp hxx objc objective-c java js javascri
 for (const name of 'python py python3 ruby rb sh bash shell zsh console shell-session fish yaml yml toml perl pl r makefile make dockerfile nginx conf ini cmake elixir ex nim powershell ps1'.split(' ')) FAMILY[name] = 'hash';
 for (const name of 'sql sqlite mysql postgres postgresql psql lua haskell hs ada'.split(' ')) FAMILY[name] = 'sql';
 for (const name of 'html xml xhtml svg vue'.split(' ')) FAMILY[name] = 'markup';
+for (const name of 'markdown md mdx gfm commonmark rmd'.split(' ')) FAMILY[name] = 'markdown';
 for (const name of 'text txt plain plaintext output none diff'.split(' ')) FAMILY[name] = 'plain';
 
 /** An unnamed block, guessed at: the CppCoreGuidelines name none of theirs. */
@@ -51,11 +52,14 @@ const NUMBER = `\\b(?:0x[\\da-fA-F']+|\\d[\\d']*(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)[
 const WORD = `[A-Za-z_$][\\w$]*`;
 
 /** Groups, in this order: comment, string, number, meta, word. */
-const PATTERNS: Record<Exclude<Family, 'plain' | 'markup'>, RegExp> = {
+const PATTERNS: Record<Exclude<Family, 'plain' | 'markup' | 'markdown'>, RegExp> = {
   c: new RegExp(`(\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?(?:\\*\\/|(?![\\s\\S])))|(${STRING}|\`(?:\\\\.|[^\`\\\\])*\`)|(${NUMBER})|(^[ \\t]*#[ \\t]*\\w+|@\\w+)|(${WORD})`, 'gm'),
   hash: new RegExp(`(#[^\\n]*)|("""[\\s\\S]*?(?:"""|(?![\\s\\S]))|'''[\\s\\S]*?(?:'''|(?![\\s\\S]))|${STRING})|(${NUMBER})|(^[ \\t]*\\$(?= )|@\\w+|\\$\\{?\\w+\\}?)|(${WORD})`, 'gm'),
   sql: new RegExp(`(--[^\\n]*|\\/\\*[\\s\\S]*?(?:\\*\\/|(?![\\s\\S])))|(${STRING})|(${NUMBER})|(@\\w+)|(${WORD})`, 'gm'),
 };
+/** Quotes and comments, code and links, headings, then list markers, emphasis and fences. */
+const MARKDOWN =
+  /(^[ \t]*>.*$|<!--[\s\S]*?(?:-->|$))|(`[^`\n]+`|!?\[[^\]\n]*\]\([^)\n]*\))|(^ {0,3}#{1,6}[ \t].*$)|(^[ \t]*(?:[-*+]|\d+[.)])(?=[ \t])|^[ \t]*(?:```|~~~).*$|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\s][^*\n]*\*)/gm;
 const MARKUP = /(<!--[\s\S]*?(?:-->|$))|("[^"\n]*"|'[^'\n]*')|(<\/?[\w:-]+|\/?>)|([\w:-]+(?==))/g;
 
 const KEYWORDS: Record<string, Set<string>> = { c: C_KEYWORDS, hash: HASH_KEYWORDS, sql: SQL_KEYWORDS };
@@ -70,12 +74,16 @@ function scan(code: string, family: Family): Token[] {
     if (last && last.kind === kind) last.text += text;
     else tokens.push({ text, kind });
   };
-  const pattern = family === 'markup' ? MARKUP : PATTERNS[family];
+  const pattern = family === 'markup' ? MARKUP : family === 'markdown' ? MARKDOWN : PATTERNS[family];
   pattern.lastIndex = 0;
   for (const match of code.matchAll(pattern)) {
     const at = match.index ?? 0;
     push(code.slice(cursor, at), 'plain');
     cursor = at + match[0].length;
+    if (family === 'markdown') {
+      push(match[0], match[1] ? 'comment' : match[2] ? 'string' : match[3] ? 'keyword' : 'meta');
+      continue;
+    }
     if (family === 'markup') {
       push(match[0], match[1] ? 'comment' : match[2] ? 'string' : match[3] ? 'keyword' : 'type');
       continue;

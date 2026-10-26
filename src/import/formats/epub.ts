@@ -3,7 +3,7 @@ import type { Block, Importer, Origin, ParseContext } from '../types';
 import { attr, attrValue, decodeEntities, firstTagText, stripTags } from '../xml';
 import { imageMarker } from '../../reader/images';
 import { decodeUtf8 } from '../decode';
-import { idsIn, isWeb, liftedIn, lift, links } from '../markup';
+import { emphasis, idsIn, isWeb, liftedIn, lift, links } from '../markup';
 
 const BLOCK_END = /<\/(p|div|h[1-6]|li|blockquote|section)\s*>/gi;
 const HEADING_OPEN = /^<h([1-6])\b/i;
@@ -178,7 +178,8 @@ function blocksFromXhtml(xhtml: string, keep: (src: string) => string | null, pa
     .flatMap((chunk) => {
       const heading = HEADING_OPEN.exec(chunk.trimStart());
       const anchors = idsIn(chunk).map((id) => `${path}#${id}`);
-      const text = decodeEntities(stripTags(links(chunk, link))).replace(/\s+/g, ' ').trim();
+      // A heading is set bold already; its markers would only reach the chapter's title.
+      const text = decodeEntities(stripTags(links(heading ? chunk : emphasis(chunk), link))).replace(/\s+/g, ' ').trim();
       const held = liftedIn(text);
       if (held !== null) return lifted[held] ? [{ text: lifted[held], anchors }] : [];
       // A figure and its caption are two paragraphs, in the order they appear.

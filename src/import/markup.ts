@@ -42,7 +42,9 @@ function codeOf(attrs: string, inner: string): string {
 
 /** Inline markup a cell keeps: code, and links once they are marked. */
 function cellText(html: string, link: (href: string) => string | null): string {
-  const text = decodeEntities(stripTags(links(html.replace(CODE, (_, code: string) => `\`${stripTags(code)}\``), link)));
+  const coded = html.replace(CODE, (_, code: string) => `\`${stripTags(code)}\``);
+  // A cell bold throughout is a heading, set heavier already.
+  const text = decodeEntities(stripTags(links(BOLD.test(html) ? coded : emphasis(coded), link)));
   return text.replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|');
 }
 
@@ -106,8 +108,33 @@ export function lift(html: string, link: (href: string) => string | null): { htm
     })
     .replace(PRE, (_, attrs: string, inner: string) => hold(codeOf(attrs, inner)))
     .replace(TABLE, (_, inner: string) => hold(...tableOf(inner, link)))
-    .replace(CODE, (_, inner: string) => `\`${inner}\``);
+    .replace(CODE, (_, inner: string) => `\`${stripTags(inner)}\``);
   return { html: out, lifted };
+}
+
+const EMPHASIS: [RegExp, string][] = [
+  [/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi, '**'],
+  [/<(em|i|cite|dfn)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi, '*'],
+  [/<(s|del|strike)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi, '~~'],
+  [/<(u|ins)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi, '++'],
+  [/<(mark)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi, '=='],
+];
+
+/**
+ * `<b>`, `<em>`, `<u>` and the rest written as the reader's own markers, which
+ * `runsIn` draws. The spaces inside a tag go outside the markers, where they
+ * still read as spaces and do not stop the markers being read.
+ */
+export function emphasis(html: string): string {
+  if (!/<(?:strong|b|em|i|cite|dfn|s|del|strike|u|ins|mark)\b/i.test(html)) return html;
+  let out = html;
+  for (const [pattern, marker] of EMPHASIS) {
+    out = out.replace(pattern, (whole: string, _tag: string, inner: string) => {
+      const found = /^(\s*)([\s\S]*?)(\s*)$/.exec(inner)!;
+      return stripTags(found[2]).trim() ? `${found[1]}${marker}${found[2]}${marker}${found[3]}` : inner;
+    });
+  }
+  return out;
 }
 
 const A_HREF = /<a\b([^>]*\bhref\s*=\s*["']([^"']*)["'][^>]*)>([\s\S]*?)<\/a>/gi;

@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  type TextStyle,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -14,7 +15,8 @@ import { useTranslation } from 'react-i18next';
 
 import { codeColors, readingThemes, space, type ReadingTheme } from '../theme';
 import { highlight } from '../reader/highlight';
-import { runsIn, type Align, type Run } from '../reader/rich';
+import { cutAt, runsIn, type Align, type Run } from '../reader/rich';
+import type { Link } from '../reader/links';
 import { useDrawing } from '../reader/drawings';
 import { DRAWN_SCALE, PX_PER_EX } from '../import/extractor';
 
@@ -32,7 +34,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
   javascript: 'JavaScript', ts: 'TypeScript', typescript: 'TypeScript', py: 'Python', python: 'Python',
   sh: 'Shell', bash: 'Shell', shell: 'Shell', zsh: 'Shell', console: 'Shell', rb: 'Ruby', rs: 'Rust',
   rust: 'Rust', go: 'Go', golang: 'Go', kt: 'Kotlin', yml: 'YAML', yaml: 'YAML', json: 'JSON',
-  html: 'HTML', xml: 'XML', sql: 'SQL', swift: 'Swift', java: 'Java', tex: 'TeX', mermaid: 'Mermaid',
+  html: 'HTML', xml: 'XML', md: 'Markdown', markdown: 'Markdown', sql: 'SQL', swift: 'Swift', java: 'Java', tex: 'TeX', mermaid: 'Mermaid',
 };
 
 /** Menlo's advance, as a share of its size: CJK takes two. */
@@ -109,14 +111,25 @@ export function CodeBlock({ lang, body, theme, fontSize, onPress, onLongPress, o
   );
 }
 
-function styled(run: Run, theme: ReadingTheme, fontSize: number) {
+const LINES = {
+  '': undefined,
+  u: 'underline',
+  s: 'line-through',
+  us: 'underline line-through',
+} as const;
+
+/** How a run is drawn, on the page and in a table alike. A link is underlined so it reads as one. */
+export function runStyle(run: Run, theme: ReadingTheme, fontSize: number, link = false): TextStyle {
+  const palette = readingThemes[theme];
   return {
-    fontWeight: run.bold ? ('700' as const) : undefined,
-    fontStyle: run.italic ? ('italic' as const) : undefined,
-    textDecorationLine: run.strike ? ('line-through' as const) : undefined,
-    backgroundColor: run.mark ? readingThemes[theme].tint : undefined,
+    fontWeight: run.bold ? '700' : undefined,
+    fontStyle: run.italic ? 'italic' : undefined,
+    textDecorationLine: LINES[`${run.underline || link ? 'u' : ''}${run.strike ? 's' : ''}`],
+    // A shade of the page's grey, so code never looks like the reader's own highlight.
+    backgroundColor: run.mark ? palette.tint : run.code ? `${palette.dim}2E` : undefined,
     fontFamily: run.code || run.math ? MONO : undefined,
     fontSize: run.code || run.math ? Math.round(fontSize * 0.92) : undefined,
+    color: link ? palette.accent : undefined,
   };
 }
 
@@ -133,10 +146,14 @@ function columnWidths(rows: string[][], fontSize: number): number[] {
 }
 
 /** Rows and columns, scrolling sideways when there are more than the page is wide. */
-export function TableBlock({ rows, head, align, theme, fontSize, onPress, onLongPress }: Common & {
+export function TableBlock({ rows, at, head, align, links = [], onLink, theme, fontSize, onPress, onLongPress }: Common & {
   rows: string[][];
+  at: number[][];
   head: boolean;
   align: Align[];
+  /** Offsets in the same paragraph `at` counts in. */
+  links?: { from: number; to: number; link: Link }[];
+  onLink?: (link: Link) => void;
 }) {
   const palette = readingThemes[theme];
   const size = Math.round(fontSize * 0.85);
@@ -145,16 +162,16 @@ export function TableBlock({ rows, head, align, theme, fontSize, onPress, onLong
     <Pressable onPress={onPress} onLongPress={onLongPress}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} bounces={false}>
         <View style={[styles.table, { borderColor: palette.dim }]}>
-          {rows.map((row, at) => {
-            const isHead = head && at === 0;
+          {rows.map((row, rowAt) => {
+            const isHead = head && rowAt === 0;
             return (
               <View
-                key={at}
+                key={rowAt}
                 style={[
                   styles.row,
                   { borderColor: palette.dim },
                   isHead ? { backgroundColor: palette.tint } : null,
-                  at === rows.length - 1 ? { borderBottomWidth: 0 } : null,
+                  rowAt === rows.length - 1 ? { borderBottomWidth: 0 } : null,
                 ]}
               >
                 {widths.map((width, column) => (
@@ -168,8 +185,13 @@ export function TableBlock({ rows, head, align, theme, fontSize, onPress, onLong
                         textAlign: align[column] ?? 'left',
                       }}
                     >
-                      {runsIn(row[column] ?? '').map((run, index) => (
-                        <Text key={index} style={styled(run, theme, size)}>
+                      {cellRuns(row[column] ?? '', at[rowAt]?.[column] ?? 0, links).map((run, index) => (
+                        <Text
+                          key={index}
+                          onPress={run.link && onLink ? () => onLink(run.link!.link) : undefined}
+                          suppressHighlighting
+                          style={runStyle(run, theme, size, Boolean(run.link))}
+                        >
                           {run.text}
                         </Text>
                       ))}
@@ -183,6 +205,17 @@ export function TableBlock({ rows, head, align, theme, fontSize, onPress, onLong
       </ScrollView>
     </Pressable>
   );
+}
+
+type Placed = { from: number; to: number; link: Link };
+
+function cellRuns(cell: string, at: number, links: Placed[]): (Run & { link?: Placed })[] {
+  const runs = runsIn(cell);
+  const end = at + cell.length;
+  const inside = links
+    .filter((link) => link.from < end && link.to > at)
+    .map((link) => ({ from: link.from - at, to: link.to - at, link: link.link }));
+  return inside.length ? runs.flatMap((run) => cutAt(run, inside)) : runs;
 }
 
 function useSize(uri: string | null): { width: number; height: number } | null {
