@@ -1,12 +1,13 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
+  type LayoutChangeEvent,
   Alert,
   Animated,
   Linking,
   NativeModules,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -47,7 +48,7 @@ import {
   type Entity,
   type Verse,
 } from '../../src/db/repo';
-import { annotationAt, layoutChapter } from '../../src/reader/model';
+import { annotationAt, layoutChapter, type Paragraph } from '../../src/reader/model';
 import { blockOrigins, documentRange } from '../../src/reader/selection';
 import { OriginalPage } from '../../src/ui/OriginalPage';
 import { imageIn } from '../../src/reader/images';
@@ -119,6 +120,36 @@ const { TextOffset } = NativeModules as {
 
 /** Idle time before the bars go. Short, because touching a bar restarts it. */
 const CHROME_IDLE_MS = 1000;
+
+/**
+ * Paragraphs a free-select block may join. Uncapped, a novel's chapter was one
+ * block, and one item is a list that cannot leave anything undrawn.
+ */
+const BLOCK_CAP = 24;
+
+type Piece = { kind: 'block'; paragraphs: Paragraph[] } | { kind: 'one'; paragraph: Paragraph };
+
+/** Where a list cell landed, in the list's own coordinates — the only place that knows. */
+const Placing = createContext<(index: number, y: number, height: number) => void>(() => undefined);
+
+function PlacedCell({ index, onLayout, children, ...rest }: {
+  index: number;
+  onLayout?: (event: LayoutChangeEvent) => void;
+  children?: React.ReactNode;
+}) {
+  const report = useContext(Placing);
+  return (
+    <View
+      {...rest}
+      onLayout={(event) => {
+        onLayout?.(event);
+        report(index, event.nativeEvent.layout.y, event.nativeEvent.layout.height);
+      }}
+    >
+      {children}
+    </View>
+  );
+}
 /** Apple and Android both put the floor at 44pt / 48dp. */
 const TOUCH = 44;
 
@@ -200,7 +231,6 @@ export default function Reader() {
   const jumpRef = useRef<number | null>(null);
   jumpRef.current = jumpTo;
   const [sectionsOpen, setSectionsOpen] = useState(false);
-  const contentTop = useRef(0);
   const places = useRef(new Map<number, { from: number; to: number; y: number; height: number }>());
   /** A chapter of a book whose words are not here: fetched, then kept. */
   const [remoteText, setRemoteText] = useState('');
@@ -214,7 +244,9 @@ export default function Reader() {
   /** Where each paragraph's lines ended up, so a tap that missed the words
    *  can still be answered by the line it landed on. */
   const linesOf = useRef(new Map<number, Line[]>());
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<FlatList<Piece>>(null);
+  const placesFor = useRef<unknown>(null);
+  const indexRetries = useRef(0);
   const viewport = useRef({ content: 0, layout: 0 });
   /** Driven by the scroll itself, so the thumb keeps up without JavaScript. */
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -333,11 +365,8 @@ export default function Reader() {
       }
 
       if (target !== null) {
-        const landing = loadedChapters[requested ?? (holding >= 0 ? holding : 0)];
-        if (landing) {
-          pendingScroll.current =
-            (target - landing.start) / Math.max(1, landing.end - landing.start);
-        }
+        pendingScroll.current = null;
+        setJumpTo(target);
         setFlashAt(target);
       }
     })();
@@ -532,9 +561,30 @@ export default function Reader() {
   /** Every sentence on the page in reading order — what walking the far end
    *  of a selection back by one needs. */
   const spans = useMemo(
-    () => paragraphs.flatMap((paragraph) => paragraph.sentences),
+    () => paragraphs.flatMap((paragraph) => paragraphs.length ? paragraph.sentences : []),
     [paragraphs]
   );
+
+  /** Set once the pieces are known, further down; called by the list's cells and by a jump. */
+  const onPlaced = useRef<(index: number, y: number, height: number) => void>(() => undefined);
+  const reportPlace = useCallback((index: number, y: number, height: number) => onPlaced.current(index, y, height), []);
+  const startJump = useRef<(at: number) => void>(() => undefined);
+
+  // A share of a chapter, asked for before its paragraphs existed, becomes an offset in them.
+  useEffect(() => {
+    const within = pendingScroll.current;
+    if (within === null || !paragraphs.length) return;
+    pendingScroll.current = null;
+    if (within <= 0) return;
+    const first = paragraphs[0].start;
+    const last = paragraphs[paragraphs.length - 1];
+    const end = last.sentences.at(-1)?.end ?? last.start;
+    setJumpTo(first + Math.round(within * (end - first)));
+  }, [paragraphs]);
+
+  useEffect(() => {
+    if (jumpTo !== null) startJump.current(jumpTo);
+  }, [jumpTo, paragraphs]);
 
   /**
    * Where each translated sentence lands on the page — and which paragraphs
@@ -926,7 +976,7 @@ export default function Reader() {
     const next = current + direction * step;
     // Stops at the chapter's own ends: changing chapter is a decision, not
     // something a tap near the margin does on your behalf.
-    scrollRef.current?.scrollTo({ y: Math.min(max, Math.max(0, next)), animated: true });
+    scrollRef.current?.scrollToOffset({ offset: Math.min(max, Math.max(0, next)), animated: true });
   }
 
   const scrolledY = useRef(0);
@@ -935,7 +985,7 @@ export default function Reader() {
   const coasting = useRef(false);
   const whereScrolled = useCallback(() => scrolledY.current, []);
   const scrollPageTo = useCallback((y: number) => {
-    scrollRef.current?.scrollTo({ y, animated: false });
+    scrollRef.current?.scrollToOffset({ offset: y, animated: false });
   }, []);
 
   if (!book || !chapter) {
@@ -1049,15 +1099,18 @@ export default function Reader() {
    * selection can run on into the next paragraph; a picture or a code block
    * ends the block, being drawn by something else.
    */
-  const pieces: ({ kind: 'block'; paragraphs: typeof paragraphs } | { kind: 'one'; paragraph: (typeof paragraphs)[number] })[] = [];
+  const pieces: Piece[] = [];
   for (const paragraph of paragraphs) {
     const body = source.slice(paragraph.start, paragraph.sentences.at(-1)?.end ?? paragraph.start);
     const plain = settings.freeSelect && !inTargetPage && !imageIn(body) && !blockOf(body);
     const last = pieces[pieces.length - 1];
     if (!plain) pieces.push({ kind: 'one', paragraph });
-    else if (last?.kind === 'block') last.paragraphs.push(paragraph);
+    else if (last?.kind === 'block' && last.paragraphs.length < BLOCK_CAP) last.paragraphs.push(paragraph);
     else pieces.push({ kind: 'block', paragraphs: [paragraph] });
   }
+
+  /** Nothing to list while the words are on their way, or there are none. */
+  const listed = (remote ? fetching || remoteError : !text) ? [] : pieces;
 
   /** The text a sentence is drawn as, which is what selection offsets count. */
   const drawnOf = (span: Span) => {
@@ -1140,37 +1193,73 @@ export default function Reader() {
    * offset under the top of the screen, and a jump or a resume lands on that
    * line rather than on a share of the chapter's height.
    */
-  function placed(piece: (typeof pieces)[number], element: React.ReactNode) {
+  const rangeOf = (piece: Piece) => {
     const first = piece.kind === 'block' ? piece.paragraphs[0] : piece.paragraph;
     const last = piece.kind === 'block' ? piece.paragraphs.at(-1)! : piece.paragraph;
-    const from = first.start;
-    const to = endOf(last);
+    return { from: first.start, to: endOf(last) };
+  };
+
+  /** The gaps between paragraphs belong to the page, and a tap on the page is the chrome. */
+  function placed(element: React.ReactNode) {
     return (
-      <View
-        key={`at-${from}`}
-        onLayout={(event) => {
-          const { y, height } = event.nativeEvent.layout;
-          places.current.set(from, { from, to, y, height });
-          const aim = jumpRef.current;
-          if (aim === null || aim < from || aim > to) return;
-          jumpRef.current = null;
-          // The content's own top is laid out after its children; read it a frame later.
-          requestAnimationFrame(() => {
-            const within = to > from ? (aim - from) / (to - from) : 0;
-            const top = contentTop.current + y + within * height - lineHeight * 2;
-            scrollRef.current?.scrollTo({ y: Math.max(0, top), animated: false });
-            setJumpTo(null);
-          });
+      <Pressable
+        onPress={() => {
+          if (!selection) setChrome(!chromeShown.current);
         }}
       >
         {element}
-      </View>
+      </Pressable>
     );
   }
 
-  /** The offset of the line two lines below the top of the screen: where `placed` lands one. */
+  /** The aimed-at line two lines below the top of the screen. */
+  function landOn(aim: number, place: { from: number; to: number; y: number; height: number }) {
+    const within = place.to > place.from ? (aim - place.from) / (place.to - place.from) : 0;
+    const top = place.y + within * place.height - lineHeight * 2;
+    scrollRef.current?.scrollToOffset({ offset: Math.max(0, top), animated: false });
+    setJumpTo(null);
+  }
+
+  // A new set of paragraphs is a new page: nothing measured on the old one holds.
+  if (placesFor.current !== paragraphs) {
+    placesFor.current = paragraphs;
+    places.current.clear();
+  }
+
+  /**
+   * Every cell says where it landed: what is saved is the offset under the top
+   * of the screen, and a jump or a resume lands on that line rather than on a
+   * share of the chapter's height.
+   */
+  onPlaced.current = (index, y, height) => {
+    const piece = pieces[index];
+    if (!piece) return;
+    const place = { ...rangeOf(piece), y, height };
+    places.current.set(place.from, place);
+    const aim = jumpRef.current;
+    if (aim === null || aim < place.from || aim > place.to) return;
+    jumpRef.current = null;
+    requestAnimationFrame(() => landOn(aim, place));
+  };
+
+  /** Straight there if it has been drawn; otherwise to its row, and the cell finishes the landing. */
+  startJump.current = (aim) => {
+    let at = -1;
+    for (let each = 0; each < pieces.length && rangeOf(pieces[each]).from <= aim; each++) at = each;
+    if (at < 0) return;
+    const known = places.current.get(rangeOf(pieces[at]).from);
+    if (known) {
+      jumpRef.current = null;
+      landOn(aim, known);
+      return;
+    }
+    indexRetries.current = 0;
+    scrollRef.current?.scrollToIndex({ index: at, animated: false });
+  };
+
+  /** The offset of the line two lines below the top of the screen: where a jump lands one. */
   function offsetAtTop(scrolled: number): number | null {
-    const line = scrolled + lineHeight * 2 - contentTop.current;
+    const line = scrolled + lineHeight * 2;
     let best: { from: number; to: number; y: number; height: number } | null = null;
     for (const place of places.current.values()) {
       if (place.from < chapter.start || place.from >= chapter.end || place.y > line) continue;
@@ -1335,8 +1424,221 @@ export default function Reader() {
           setPageTop(y);
         }}
       >
-        <Animated.ScrollView
+        <Placing.Provider value={reportPlace}>
+        <Animated.FlatList
+          // One list per chapter: a new one starts at its own top.
+          key={`chapter-${index}`}
           ref={scrollRef}
+          data={listed}
+          keyExtractor={(piece: Piece) => String(rangeOf(piece).from)}
+          renderItem={({ item: piece }: { item: Piece }) => placed((() => {
+            if (piece.kind === 'block') return renderFreeBlock(piece.paragraphs);
+            const paragraph = piece.paragraph;
+            const body = source.slice(
+              paragraph.start,
+              paragraph.sentences.at(-1)?.end ?? paragraph.start
+            );
+            const figure = imageIn(body);
+            const inTarget = showing && settings.bilingual === 'target';
+            const place = page.paragraphs.get(paragraph.start);
+            const asParagraph = place?.text ?? '';
+            // Its words are in the paragraph above, in the other language:
+            // printing them here too is the same paragraph twice.
+            if (inTarget && place?.kind === 'absorbed') return null;
+            const rich = figure ? null : blockOf(body);
+            if (rich) return renderRich(rich, paragraph, body);
+            const level = headingAt.get(paragraph.start);
+            // The chapter's own heading is already set large above the words.
+            if (level !== undefined && paragraph === paragraphs[0] && !remote && chapter.title.trim()) return null;
+            if (figure) {
+              // `![$x^2$](…)` is a formula; anything else is a picture.
+              const formula = /^\$[\s\S]*\$$/.test(figure.alt);
+              return (
+                <View key={paragraph.start} style={{ marginBottom: lineHeight }}>
+                  <ReaderImage
+                    uri={figure.uri}
+                    alt={figure.alt}
+                    width={width - settings.margin * 2}
+                    cap={formula ? lineHeight * 6 : height * 0.7}
+                    tint={palette.dim}
+                    ink={palette.text}
+                    formula={formula}
+                  />
+                </View>
+              );
+            }
+
+            return (
+            <Pressable
+              key={paragraph.start}
+              onPress={(event) => pressParagraph(paragraph, event)}
+              onLongPress={(event) => holdParagraph(paragraph, event)}
+              style={{ marginBottom: lineHeight * 0.6 }}
+            >
+              <Text
+                style={level === undefined ? bodyStyle : [bodyStyle, headingStyle(level)]}
+                onTextLayout={(event) =>
+                  linesOf.current.set(
+                    paragraph.start,
+                    event.nativeEvent.lines.map((line) => ({
+                      y: line.y,
+                      height: line.height,
+                      length: line.text.length,
+                    }))
+                  )
+                }
+              >
+                {/* Raised, small and in the accent: a number to find a
+                    verse by, not a word in the sentence it opens — so it
+                    is set off by more than the space between two words. */}
+                {numberAt.has(paragraph.start) ? (
+                  <Text
+                    style={{
+                      color: palette.accent,
+                      fontWeight: '600',
+                      fontSize: Math.round(settings.fontSize * 0.62),
+                      lineHeight,
+                    }}
+                  >
+                    {numberAt.get(paragraph.start)}
+                    {'  '}
+                  </Text>
+                ) : null}
+                {inTarget && place?.kind === 'paragraph'
+                  ? asParagraph
+                  : paragraph.sentences.map((span) => renderSentence(span, inTarget))}
+              </Text>
+              {/* Both languages read as two paragraphs, the way a bilingual
+                  edition prints them — not as alternating lines. */}
+              {showing && settings.bilingual === 'both' && asParagraph ? (
+                <Text
+                  style={[
+                    bodyStyle,
+                    {
+                      color: palette.dim,
+                      fontSize: settings.fontSize - 1,
+                      marginTop: lineHeight * 0.25,
+                    },
+                  ]}
+                >
+                  {asParagraph}
+                </Text>
+              ) : null}
+            </Pressable>
+            );
+          })())}
+          CellRendererComponent={PlacedCell}
+          // Only what is near the screen is drawn: a chapter of code was over ten thousand views.
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={9}
+          // A paragraph above drawn late, taller than guessed, does not move the line being read.
+          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+          onScrollToIndexFailed={(info) => {
+            if (indexRetries.current++ > 8) return;
+            scrollRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+            setTimeout(() => scrollRef.current?.scrollToIndex({ index: info.index, animated: false }), 50);
+          }}
+          ListHeaderComponent={
+            <Pressable
+              onPress={() => {
+                if (!selection) setChrome(!chromeShown.current);
+              }}
+            >
+            {paragraphs.length > 0 ? (
+              <View style={{ marginBottom: lineHeight * 1.4 }}>
+                {/* The number a title would otherwise swallow: a printed book
+                    sets "Chapter Twelve" above a title worth having, in a
+                    size that says it is the lesser of the two facts. */}
+                {chapter.title.trim() ? (
+                  <Text
+                    style={{
+                      color: palette.accent,
+                      fontSize: 12,
+                      fontWeight: '700',
+                      letterSpacing: 1.5,
+                      marginBottom: space.xs,
+                    }}
+                  >
+                    {t('chapter.number', { index: index + 1 }).toUpperCase()}
+                  </Text>
+                ) : null}
+                <Text
+                  style={{
+                    color: palette.text,
+                    fontFamily: bodyStyle.fontFamily,
+                    fontSize: Math.round(settings.fontSize * 1.7),
+                    lineHeight: Math.round(settings.fontSize * 2.1),
+                    fontWeight: '600',
+                  }}
+                >
+                  {heading}
+                </Text>
+                <View
+                  style={{
+                    width: 32,
+                    height: 2,
+                    borderRadius: 1,
+                    backgroundColor: palette.accent,
+                    marginTop: space.md,
+                  }}
+                />
+              </View>
+            ) : null}
+            {/* A chapter nobody has translated yet, while the page is set to
+                a language: it is shown in its own words, and says so rather
+                than pretending the original is the translation. */}
+            {settings.bilingual !== 'off' && !!target && !showing ? (
+              <Text style={{ color: palette.dim, fontSize: settings.fontSize - 3, marginBottom: space.md }}>
+                {t('reader.notTranslated', { language: labelFor(target) })}
+              </Text>
+            ) : null}
+            {remote && fetching ? (
+              <ActivityIndicator style={{ marginTop: space.xxl }} />
+            ) : remote && remoteError ? (
+              <Text style={{ color: palette.dim, marginTop: space.xxl, lineHeight: 24 }}>
+                {t(`lookup.${remoteError}`)}
+              </Text>
+            ) : !remote && !text ? (
+              <ActivityIndicator style={{ marginTop: space.xxl }} />
+            ) : paragraphs.length === 0 ? (
+              <Text style={{ color: palette.dim, marginTop: space.xxl }}>{t('reader.empty')}</Text>
+            ) : null}
+            </Pressable>
+          }
+          ListFooterComponent={
+            <>
+          {paragraphs.length > 0 ? (
+            <View style={styles.ends}>
+              <Text style={{ color: palette.dim, fontSize: 13, textAlign: 'center' }}>
+                {t('reader.endOfChapter', { name: heading })}
+              </Text>
+              <View style={styles.endButtons}>
+                {index > 0 ? (
+                  <Pressable
+                    onPress={() => goToChapter(index - 1, 0)}
+                    style={[styles.endButton, { borderColor: palette.tint }]}
+                  >
+                    <Text numberOfLines={1} style={{ color: palette.accent, fontSize: 15 }}>
+                      ‹  {t('reader.prevChapter')}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {index < chapters.length - 1 ? (
+                  <Pressable
+                    onPress={() => goToChapter(index + 1, 0)}
+                    style={[styles.endButton, { borderColor: palette.tint, backgroundColor: palette.tint }]}
+                  >
+                    <Text numberOfLines={1} style={{ color: palette.accent, fontSize: 15, fontWeight: '600' }}>
+                      {t('reader.nextChapter')}  ›
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+            </>
+          }
           /**
            * The system's own, after an attempt at a better one.
            *
@@ -1411,229 +1713,9 @@ export default function Reader() {
           }}
           onContentSizeChange={(_, contentHeight) => {
             viewport.current.content = contentHeight;
-            // The spinner's height is not the chapter's: landing on a verse
-            // has to wait for the words, or it lands at the top of nothing.
-            if (!text) return;
-            const within = pendingScroll.current;
-            // Only a jump that was asked for moves the page. A height that
-            // changed under the reader — a mark drawn, a picture arrived — is
-            // not a reason to send them back to the top.
-            if (within === null) return;
-            pendingScroll.current = null;
-            const max = Math.max(0, contentHeight - viewport.current.layout);
-            scrollRef.current?.scrollTo({ y: within * max, animated: false });
           }}
-        >
-          {/* A selection ends when you say so. The gaps between paragraphs are
-              most of the page, and losing a two-paragraph selection to a thumb
-              that landed in one of them is the whole reason this isn't a tap
-              to cancel — the menu carries its own ✕. */}
-          <Pressable
-            onPress={() => {
-              if (!selection) setChrome(!chromeShown.current);
-            }}
-            onLayout={(event) => {
-              contentTop.current = event.nativeEvent.layout.y;
-            }}
-          >
-            {/* The chapter's name where a printed book puts it: at the head
-                of its own page, large, with air under it, scrolling away
-                with the words. The bar carries it too and still should —
-                that answers "where am I" from the middle of a chapter. This
-                answers where the chapter begins, which is the question a
-                book has always answered by setting the title and then
-                leaving a gap. */}
-            {paragraphs.length > 0 ? (
-              <View style={{ marginBottom: lineHeight * 1.4 }}>
-                {/* The number a title would otherwise swallow: a printed book
-                    sets "Chapter Twelve" above a title worth having, in a
-                    size that says it is the lesser of the two facts. */}
-                {chapter.title.trim() ? (
-                  <Text
-                    style={{
-                      color: palette.accent,
-                      fontSize: 12,
-                      fontWeight: '700',
-                      letterSpacing: 1.5,
-                      marginBottom: space.xs,
-                    }}
-                  >
-                    {t('chapter.number', { index: index + 1 }).toUpperCase()}
-                  </Text>
-                ) : null}
-                <Text
-                  style={{
-                    color: palette.text,
-                    fontFamily: bodyStyle.fontFamily,
-                    fontSize: Math.round(settings.fontSize * 1.7),
-                    lineHeight: Math.round(settings.fontSize * 2.1),
-                    fontWeight: '600',
-                  }}
-                >
-                  {heading}
-                </Text>
-                <View
-                  style={{
-                    width: 32,
-                    height: 2,
-                    borderRadius: 1,
-                    backgroundColor: palette.accent,
-                    marginTop: space.md,
-                  }}
-                />
-              </View>
-            ) : null}
-            {/* A chapter nobody has translated yet, while the page is set to
-                a language: it is shown in its own words, and says so rather
-                than pretending the original is the translation. */}
-            {settings.bilingual !== 'off' && !!target && !showing ? (
-              <Text style={{ color: palette.dim, fontSize: settings.fontSize - 3, marginBottom: space.md }}>
-                {t('reader.notTranslated', { language: labelFor(target) })}
-              </Text>
-            ) : null}
-            {remote && fetching ? (
-              <ActivityIndicator style={{ marginTop: space.xxl }} />
-            ) : remote && remoteError ? (
-              <Text style={{ color: palette.dim, marginTop: space.xxl, lineHeight: 24 }}>
-                {t(`lookup.${remoteError}`)}
-              </Text>
-            ) : !remote && !text ? (
-              <ActivityIndicator style={{ marginTop: space.xxl }} />
-            ) : paragraphs.length === 0 ? (
-              <Text style={{ color: palette.dim, marginTop: space.xxl }}>{t('reader.empty')}</Text>
-            ) : (
-              pieces.map((piece) => placed(piece, (() => {
-                if (piece.kind === 'block') return renderFreeBlock(piece.paragraphs);
-                const paragraph = piece.paragraph;
-                const body = source.slice(
-                  paragraph.start,
-                  paragraph.sentences.at(-1)?.end ?? paragraph.start
-                );
-                const figure = imageIn(body);
-                const inTarget = showing && settings.bilingual === 'target';
-                const place = page.paragraphs.get(paragraph.start);
-                const asParagraph = place?.text ?? '';
-                // Its words are in the paragraph above, in the other language:
-                // printing them here too is the same paragraph twice.
-                if (inTarget && place?.kind === 'absorbed') return null;
-                const rich = figure ? null : blockOf(body);
-                if (rich) return renderRich(rich, paragraph, body);
-                const level = headingAt.get(paragraph.start);
-                // The chapter's own heading is already set large above the words.
-                if (level !== undefined && paragraph === paragraphs[0] && !remote && chapter.title.trim()) return null;
-                if (figure) {
-                  // `![$x^2$](…)` is a formula; anything else is a picture.
-                  const formula = /^\$[\s\S]*\$$/.test(figure.alt);
-                  return (
-                    <View key={paragraph.start} style={{ marginBottom: lineHeight }}>
-                      <ReaderImage
-                        uri={figure.uri}
-                        alt={figure.alt}
-                        width={width - settings.margin * 2}
-                        cap={formula ? lineHeight * 6 : height * 0.7}
-                        tint={palette.dim}
-                        ink={palette.text}
-                        formula={formula}
-                      />
-                    </View>
-                  );
-                }
-
-                return (
-                <Pressable
-                  key={paragraph.start}
-                  onPress={(event) => pressParagraph(paragraph, event)}
-                  onLongPress={(event) => holdParagraph(paragraph, event)}
-                  style={{ marginBottom: lineHeight * 0.6 }}
-                >
-                  <Text
-                    style={level === undefined ? bodyStyle : [bodyStyle, headingStyle(level)]}
-                    onTextLayout={(event) =>
-                      linesOf.current.set(
-                        paragraph.start,
-                        event.nativeEvent.lines.map((line) => ({
-                          y: line.y,
-                          height: line.height,
-                          length: line.text.length,
-                        }))
-                      )
-                    }
-                  >
-                    {/* Raised, small and in the accent: a number to find a
-                        verse by, not a word in the sentence it opens — so it
-                        is set off by more than the space between two words. */}
-                    {numberAt.has(paragraph.start) ? (
-                      <Text
-                        style={{
-                          color: palette.accent,
-                          fontWeight: '600',
-                          fontSize: Math.round(settings.fontSize * 0.62),
-                          lineHeight,
-                        }}
-                      >
-                        {numberAt.get(paragraph.start)}
-                        {'  '}
-                      </Text>
-                    ) : null}
-                    {inTarget && place?.kind === 'paragraph'
-                      ? asParagraph
-                      : paragraph.sentences.map((span) => renderSentence(span, inTarget))}
-                  </Text>
-                  {/* Both languages read as two paragraphs, the way a bilingual
-                      edition prints them — not as alternating lines. */}
-                  {showing && settings.bilingual === 'both' && asParagraph ? (
-                    <Text
-                      style={[
-                        bodyStyle,
-                        {
-                          color: palette.dim,
-                          fontSize: settings.fontSize - 1,
-                          marginTop: lineHeight * 0.25,
-                        },
-                      ]}
-                    >
-                      {asParagraph}
-                    </Text>
-                  ) : null}
-                </Pressable>
-                );
-              })()))
-            )}
-          </Pressable>
-
-          {/* The end of the words is where the next chapter belongs — reached
-              by finishing this one, not by a thumb near an edge. Part of the
-              page, so it scrolls away with the text rather than hovering. */}
-          {paragraphs.length > 0 ? (
-            <View style={styles.ends}>
-              <Text style={{ color: palette.dim, fontSize: 13, textAlign: 'center' }}>
-                {t('reader.endOfChapter', { name: heading })}
-              </Text>
-              <View style={styles.endButtons}>
-                {index > 0 ? (
-                  <Pressable
-                    onPress={() => goToChapter(index - 1, 0)}
-                    style={[styles.endButton, { borderColor: palette.tint }]}
-                  >
-                    <Text numberOfLines={1} style={{ color: palette.accent, fontSize: 15 }}>
-                      ‹  {t('reader.prevChapter')}
-                    </Text>
-                  </Pressable>
-                ) : null}
-                {index < chapters.length - 1 ? (
-                  <Pressable
-                    onPress={() => goToChapter(index + 1, 0)}
-                    style={[styles.endButton, { borderColor: palette.tint, backgroundColor: palette.tint }]}
-                  >
-                    <Text numberOfLines={1} style={{ color: palette.accent, fontSize: 15, fontWeight: '600' }}>
-                      {t('reader.nextChapter')}  ›
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-          ) : null}
-        </Animated.ScrollView>
+        />
+        </Placing.Provider>
 
 
       </View>
