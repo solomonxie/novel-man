@@ -15,6 +15,7 @@ export const docxImporter = {
     const zip = unzipSync(bytes);
     const documentXml = readEntry(zip, 'word/document.xml');
     if (!documentXml) throw new Error('not-a-docx');
+    const styleLevels = headingStyles(readEntry(zip, 'word/styles.xml') ?? '');
 
     const blocks: Block[] = [];
     let styledTitle: string | undefined;
@@ -33,7 +34,7 @@ export const docxImporter = {
         styledTitle = text;
         continue;
       }
-      const heading = headingLevel(paragraph);
+      const heading = headingLevel(paragraph, styleLevels);
       blocks.push(heading ? { text, heading } : { text });
     }
     await context?.onProgress?.(total, total);
@@ -63,19 +64,37 @@ function paragraphText(paragraph: string): string {
 }
 
 /** Word marks chapters two different ways and real documents use both. */
-function headingLevel(paragraph: string): number | undefined {
+function headingLevel(paragraph: string, styleLevels: Map<string, number>): number | undefined {
+  const outline = outlineLevel(paragraph);
+  if (outline) return outline;
   const value = styleValue(paragraph);
-  if (value) {
-    const named = HEADING_STYLE.exec(value);
-    if (named) return Number(named[1]);
+  if (!value) return undefined;
+  const named = HEADING_STYLE.exec(value);
+  return named ? Number(named[1]) : styleLevels.get(value);
+}
+
+function outlineLevel(xml: string): number | undefined {
+  const outlineAt = xml.indexOf('<w:outlineLvl');
+  if (outlineAt < 0) return undefined;
+  const end = xml.indexOf('>', outlineAt);
+  const level = Number(attrValue(xml.slice(outlineAt, end + 1), 'w:val'));
+  return Number.isFinite(level) && level <= 5 ? level + 1 : undefined;
+}
+
+/** Chinese Word calls 标题 1 by the id "1": the level is in styles.xml, by name or outline. */
+function headingStyles(stylesXml: string): Map<string, number> {
+  const levels = new Map<string, number>();
+  for (const style of eachElement(stylesXml, 'w:style')) {
+    const open = style.slice(0, style.indexOf('>') + 1);
+    const id = attrValue(open, 'w:styleId');
+    if (!id) continue;
+    const nameAt = style.indexOf('<w:name');
+    const name = nameAt < 0 ? undefined : attrValue(style.slice(nameAt, style.indexOf('>', nameAt) + 1), 'w:val');
+    const named = name ? HEADING_STYLE.exec(name) : null;
+    const level = named ? Number(named[1]) : outlineLevel(style);
+    if (level) levels.set(id, level);
   }
-  const outlineAt = paragraph.indexOf('<w:outlineLvl');
-  if (outlineAt >= 0) {
-    const end = paragraph.indexOf('>', outlineAt);
-    const level = Number(attrValue(paragraph.slice(outlineAt, end + 1), 'w:val'));
-    if (Number.isFinite(level) && level <= 5) return level + 1;
-  }
-  return undefined;
+  return levels;
 }
 
 function styleValue(paragraph: string): string | undefined {

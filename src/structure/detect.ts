@@ -35,14 +35,47 @@ export function detectChapters(doc: NormalizedDocument, language: string): Detec
 
 type Start = { block: PlacedBlock; title: string };
 
+/** Fewer headings than this at the top level are acts or parts, not chapters. */
+const MAX_PARTS = 3;
+
 function fromHeadings(doc: NormalizedDocument): Start[] {
-  const levels = doc.blocks.filter((block) => block.heading).map((block) => block.heading!);
-  if (!levels.length) return [];
-  // The shallowest level present is the chapter level; deeper ones are sections.
-  const chapterLevel = Math.min(...levels);
-  return doc.blocks
-    .filter((block) => block.heading === chapterLevel)
-    .map((block) => ({ block, title: withoutCaption(titleOf(doc, block)) }));
+  const headed = doc.blocks.filter((block) => block.heading);
+  if (!headed.length) return [];
+  const count = new Map<number, number>();
+  for (const block of headed) count.set(block.heading!, (count.get(block.heading!) ?? 0) + 1);
+  const levels = [...count.keys()].sort((a, b) => a - b);
+  // The shallowest level is the chapter level, unless it is a few acts with
+  // the chapters under them: 序幕 and 第一幕 over nine chapters.
+  let depth = 0;
+  while (
+    depth + 1 < levels.length &&
+    count.get(levels[depth])! <= MAX_PARTS &&
+    count.get(levels[depth + 1])! > count.get(levels[depth])!
+  ) {
+    depth++;
+  }
+  const chapterLevel = levels[depth];
+  // An act heading with a chapter straight under it is a label, not a chapter:
+  // the chapter starts there, so the label is not left at the end of the last.
+  const starts: Start[] = [];
+  let label: PlacedBlock | undefined;
+  headed.forEach((block, index) => {
+    if (block.heading! > chapterLevel) return;
+    const next = headed[index + 1];
+    const isLabel = block.heading! < chapterLevel && next && next.heading! > block.heading! && !hasBody(doc, block, next);
+    if (isLabel) {
+      label ??= block;
+      return;
+    }
+    const title = withoutCaption(titleOf(doc, block));
+    starts.push({ block: label ? { ...block, start: label.start } : block, title });
+    label = undefined;
+  });
+  return starts;
+}
+
+function hasBody(doc: NormalizedDocument, block: PlacedBlock, next: PlacedBlock): boolean {
+  return doc.text.slice(block.end, next.start).trim().length > 0;
 }
 
 /** An illustrated edition puts the plate's caption in the heading: "He rode a black horse. CHAPTER III." */

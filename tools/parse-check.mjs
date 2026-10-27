@@ -186,6 +186,34 @@ console.log('illustrated headings');
   check('a title that merely mentions a chapter is kept', withoutCaption('The Book of Days'), 'The Book of Days');
 }
 
+console.log('acts over chapters');
+{
+  // A Chinese Word file: 标题 1 is style "1", 标题 2 is "2"; the acts hold the chapters.
+  const { zipSync, strToU8 } = await import('fflate');
+  const para = (text, style) =>
+    `<w:p>${style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : ''}<w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const body = [para('序幕', '1'), para('雨夜。')];
+  body.push(para('第一幕 小丑', '1'));
+  for (let i = 1; i <= 9; i++) body.push(para(`第${i}章`, '2'), para(`第${i}章的正文。`));
+  const styles = '<w:styles>' +
+    '<w:style w:type="paragraph" w:styleId="1"><w:name w:val="heading 1"/></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="2"><w:name w:val="heading 2"/><w:pPr><w:outlineLvl w:val="1"/></w:pPr></w:style>' +
+    '</w:styles>';
+  const bytes = zipSync({
+    'word/document.xml': strToU8(`<w:document><w:body>${body.join('')}</w:body></w:document>`),
+    'word/styles.xml': strToU8(styles),
+  });
+  const parsed = await docxImporter.parse(bytes, 'acts.docx');
+  check('a heading style named in styles.xml is a heading', parsed.blocks.filter((b) => b.heading).length, 11);
+  const doc = normalize(parsed.blocks);
+  const chapters = detectChapters(doc, 'zh-Hans').chapters;
+  check('chapters under two acts are chapters', chapters.map((c) => c.title),
+    ['序幕', ...Array.from({ length: 9 }, (_, i) => `第${i + 1}章`)]);
+  check('the act label opens the chapter under it',
+    doc.text.slice(chapters[1].start, chapters[1].end).startsWith('第一幕 小丑'), true);
+  check('and does not trail the one before', doc.text.slice(chapters[0].start, chapters[0].end).includes('第一幕'), false);
+}
+
 console.log('epub');
 {
   const { parsed, detection, ms } = await parse(epubImporter, 'sample.epub');
