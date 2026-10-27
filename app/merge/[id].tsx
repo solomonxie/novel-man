@@ -11,6 +11,13 @@ import { Action } from '../../src/ui/detail';
 import { Hint, Toggle } from '../../src/ui/primitives';
 import { radius, space, usePalette } from '../../src/theme';
 
+const TALLY = [
+  ['changed', 'merge.tallyChanged'],
+  ['added', 'merge.tallyAdded'],
+  ['kept', 'merge.tallyKept'],
+  ['same', 'merge.tallySame'],
+] as const;
+
 /**
  * Two copies of a book, side by side, the way a merge is read in git: what is
  * the same is folded away, what is new goes in, and a chapter both copies
@@ -94,7 +101,9 @@ export default function MergePage() {
               {t('merge.from', { file: proposal.fileName })}
             </Text>
             <Text style={{ color: palette.text, fontSize: 14, marginTop: space.sm }}>
-              {t('merge.tally', counts)}
+              {TALLY.filter(([key]) => counts[key] > 0)
+                .map(([key, label]) => t(label, { count: counts[key] }))
+                .join(' · ')}
             </Text>
             <Hint>{t('merge.safe')}</Hint>
             {changed.length > 1 ? (
