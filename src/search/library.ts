@@ -1,5 +1,7 @@
 import { db } from '../db';
 import { escapeLike } from '../sources/matching';
+import { TOPIC_KIND } from '../books/kinds';
+import { topicName } from '../db/topics';
 import type { BookListItem } from '../db/repo';
 
 export type ContentHit = {
@@ -131,9 +133,9 @@ async function searchMeta(needle: string): Promise<MetaHit[]> {
 
   const entities = await database.getAllAsync<{
     id: string; book_id: string; kind: string; name: string; alias: string | null;
-    summary: string | null; role: string | null; book_title: string;
+    summary: string | null; role: string | null; book_title: string; book_kind: string;
   }>(
-    `SELECT e.id, e.book_id, e.kind, e.name, e.alias, e.summary, e.role, b.title AS book_title
+    `SELECT e.id, e.book_id, e.kind, e.name, e.alias, e.summary, e.role, b.title AS book_title, b.kind AS book_kind
      FROM entities e JOIN books b ON b.id = e.book_id
      WHERE instr(lower(e.name), $needle) > 0
         OR instr(lower(COALESCE(e.alias, '')), $needle) > 0
@@ -197,6 +199,7 @@ async function searchMeta(needle: string): Promise<MetaHit[]> {
   }
 
   for (const entity of entities) {
+    if (entity.book_kind === TOPIC_KIND) entity.book_title = topicName(entity.book_title);
     const named = Math.min(
       rank(FIELD.name, entity.name, needle),
       rank(FIELD.name, entity.alias, needle)

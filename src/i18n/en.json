@@ -100,7 +100,9 @@
     "inTerms": "In concepts & cards ({{count}})",
     "sectionReviews": "Reviews",
     "bookSources": "Book sources",
-    "sectionNotes": "Notes"
+    "sectionNotes": "Notes",
+    "sectionCards": "Flashcards",
+    "newCard": "＋ New flashcard"
   },
   "reviews": {
     "title": "Reviews",
@@ -227,10 +229,10 @@
     "deleteWhere": "Waits 30 days in Recently deleted",
     "deleteKept": "Nothing was deleted",
     "termsShort": "terms",
-    "cards": "Flash cards",
-    "cardsEmpty": "No flash cards yet.",
-    "addCard": "＋ Add a flash card",
-    "searchCards": "Search flash cards",
+    "cards": "Flashcards",
+    "cardsEmpty": "No flashcards yet.",
+    "addCard": "＋ Add a flashcard",
+    "searchCards": "Search flashcards",
     "jumpNone": "No chapters here.",
     "jumpSearch": "Search chapters",
     "languageRow": "Language",
@@ -332,7 +334,7 @@
     "addTo": "Add",
     "addTitle": "Add this passage to",
     "addSearch": "Search",
-    "newCard": "＋ A new flash card from this",
+    "newCard": "＋ A new flashcard from this",
     "newTerm": "＋ A new concept or term from this",
     "added": "Added to {{name}}",
     "word": "Word",
@@ -1273,12 +1275,12 @@
     "firstSaid": "first in",
     "inChapters": "chapters",
     "fields": "Anything else",
-    "hint": "Words you keep show up in this book’s flash cards.",
+    "hint": "Words you keep show up in this book’s flashcards.",
     "deleteConfirm": "Forget this word?",
     "study": "Study it further"
   },
   "card": {
-    "eyebrow": "Flash card",
+    "eyebrow": "Flashcard",
     "frontPlaceholder": "The front — what you want to be asked",
     "backPlaceholder": "The description — what you want to recall, in your own words.",
     "excerpts": "From the book",
@@ -1289,10 +1291,12 @@
     "hint": "A card is yours: nothing here is written or rewritten by a pass over the book.",
     "removeExcerpt": "Take this passage off?",
     "deleteConfirm": "Delete this card? The passages on it go too; the book and your highlights are untouched.",
-    "manage": "Passages"
+    "manage": "Passages",
+    "topics": "Topics",
+    "noTopics": "Not filed under a topic yet."
   },
   "study": {
-    "title": "Flash cards",
+    "title": "Flashcards",
     "start": "Study",
     "startDue": "Study {{n}} due",
     "caughtUp": "Nothing due",
@@ -1566,5 +1570,19 @@
     "alsoOnShelf_one": "This book is on your shelf once more",
     "alsoOnShelf_other": "This book is on your shelf {{count}} more times",
     "review": "Review"
+  },
+  "cards": {
+    "title": "Flashcards",
+    "empty": "No flashcards yet. Make one here, or from a passage while reading.",
+    "search": "Search flashcards",
+    "all": "All",
+    "noMatches": "No matching cards."
+  },
+  "topic": {
+    "ask": "Topic",
+    "askWhy": "What is this card about? It can be filed under more topics later.",
+    "add": "＋ Topic",
+    "remove": "Take “{{topic}}” off this card?",
+    "confirm": "Add"
   }
 }

@@ -15,7 +15,12 @@ import {
   type Excerpt,
 } from '../../src/db/repo';
 import { EditableLine } from '../../src/ui/EditableLine';
-import { Badge, Block, Empty, Hero, Item } from '../../src/ui/detail';
+import { Badge, Block, Chip, ChipRow, Empty, Hero, Item } from '../../src/ui/detail';
+import { hueFrom } from '../../src/ui/fields';
+import { askTopic } from '../../src/ui/askTopic';
+import { addCardTopic, listTopics, removeCardTopic, topicsOf } from '../../src/db/topics';
+import { TOPIC_KIND } from '../../src/books/kinds';
+import { getBook } from '../../src/db/repo';
 import { Hint, Row, Section } from '../../src/ui/primitives';
 import { space, usePalette } from '../../src/theme';
 
@@ -34,6 +39,10 @@ export default function CardPage() {
   const [card, setCard] = useState<Entity | null>(null);
   const [excerpts, setExcerpts] = useState<Excerpt[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [topics, setTopics] = useState<string[]>([]);
+  /** Topics used elsewhere and not on this card yet, offered for one tap. */
+  const [others, setOthers] = useState<string[]>([]);
+  const [fromTopic, setFromTopic] = useState(false);
   const latest = useRef<Entity | null>(null);
   latest.current = card;
 
@@ -56,6 +65,10 @@ export default function CardPage() {
       if (!found) return;
       setExcerpts(await listExcerpts(found.id));
       setChapters(await listChapters(found.book_id));
+      setFromTopic((await getBook(found.book_id))?.kind === TOPIC_KIND);
+      const own = await topicsOf(found.id);
+      setTopics(own);
+      setOthers((await listTopics()).map((entry) => entry.topic).filter((topic) => !own.includes(topic)).slice(0, 12));
     });
   }, [id]);
 
@@ -87,6 +100,17 @@ export default function CardPage() {
           await deleteExcerpt(excerpt.id);
           load();
         },
+      },
+    ]);
+  }
+
+  function confirmUntopic(topic: string) {
+    Alert.alert(t('topic.remove', { topic }), undefined, [
+      { text: t('settings.cancel'), style: 'cancel' },
+      {
+        text: t('settings.delete'),
+        style: 'destructive',
+        onPress: () => void removeCardTopic(card!.id, topic).then(load),
       },
     ]);
   }
@@ -133,6 +157,31 @@ export default function CardPage() {
         />
       </Hero>
 
+      <Block
+        title={t('card.topics')}
+        count={topics.length || undefined}
+        action={{ label: t('topic.add'), onPress: () => askTopic(t, (topic) => void addCardTopic(card.id, topic).then(load)) }}
+      >
+        {topics.length === 0 && others.length === 0 ? <Empty text={t('card.noTopics')} /> : null}
+      </Block>
+      {topics.length || others.length ? (
+        <ChipRow>
+          {topics.map((topic) => (
+            <Chip key={topic} label={topic} hue={hueFrom(topic)} onPress={() => confirmUntopic(topic)} />
+          ))}
+          {others.map((topic) => (
+            <Chip
+              key={topic}
+              label={`＋ ${topic}`}
+              hue={hueFrom(topic)}
+              onPress={() => void addCardTopic(card.id, topic).then(load)}
+            />
+          ))}
+        </ChipRow>
+      ) : null}
+
+      {fromTopic && excerpts.length === 0 ? null : (
+      <>
       <Block title={t('card.excerpts')} count={excerpts.length || undefined}>
         {excerpts.length === 0 ? (
           <Empty text={t('card.noExcerpts')} />
@@ -156,6 +205,8 @@ export default function CardPage() {
         )}
       </Block>
       <Hint>{t(excerpts.length ? 'card.excerptHint' : 'card.addHint')}</Hint>
+      </>
+      )}
 
       <Section>
         <Row label={t('settings.delete')} onPress={confirmDelete} danger last />

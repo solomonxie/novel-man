@@ -1214,35 +1214,6 @@ export default function BookPage() {
         </>
       )}
 
-      {/* Neither people nor places: what the book names and keeps using. */}
-      {supports(book.kind, 'terms') && (
-        <EntitySection
-          title={t('book.terms')}
-          entities={byFrequency(terms, mentions)}
-          onAdd={() => addEntity('term')}
-          extra={{
-            label: t('book.termsAll'),
-            value: `${terms.length}  ›`,
-            onPress: () => router.push(`/book/${book.id}/terms`),
-          }}
-        />
-      )}
-
-      {/* The reader's own vocabulary. Chips rather than rows: a word is
-          recognised at a glance, which is the whole point of having kept it. */}
-      {supports(book.kind, 'words') && (
-        <EntitySection
-          title={t('book.words')}
-          entities={byFrequency(words, mentions)}
-          onAdd={() => addEntity('word')}
-          extra={{
-            label: t('book.wordsAll'),
-            value: `${words.length}  ›`,
-            onPress: () => router.push(`/book/${book.id}/words`),
-          }}
-        />
-      )}
-
       {/* Made rather than found. A card's front is a sentence, not a name, so
           these are rows to read and not chips to recognise. */}
       {supports(book.kind, 'cards') && (
@@ -1267,6 +1238,14 @@ export default function BookPage() {
               onPress={() => router.push(`/book/${book.id}/study`)}
             />
           ) : null}
+          {/* Concepts are drilled with the cards, so they are found from here. */}
+          {terms.length > 0 ? (
+            <Row
+              label={t('book.terms')}
+              value={`${terms.length}  ›`}
+              onPress={() => router.push(`/book/${book.id}/terms`)}
+            />
+          ) : null}
           {cards.length === 0 ? (
             <Empty
               text={t('book.cardsEmpty')}
@@ -1284,6 +1263,21 @@ export default function BookPage() {
             ))
           )}
         </Block>
+      )}
+
+      {/* The reader's own vocabulary. Chips rather than rows: a word is
+          recognised at a glance, which is the whole point of having kept it. */}
+      {supports(book.kind, 'words') && (
+        <EntitySection
+          title={t('book.words')}
+          entities={byFrequency(words, mentions)}
+          onAdd={() => addEntity('word')}
+          extra={{
+            label: t('book.wordsAll'),
+            value: `${words.length}  ›`,
+            onPress: () => router.push(`/book/${book.id}/words`),
+          }}
+        />
       )}
 
       {/* Tags stay on the page because they are said *about* the book. Which

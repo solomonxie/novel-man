@@ -100,7 +100,9 @@
     "inTerms": "在概念与记忆卡中（{{count}}）",
     "sectionReviews": "书评",
     "bookSources": "书源",
-    "sectionNotes": "笔记"
+    "sectionNotes": "笔记",
+    "sectionCards": "记忆卡",
+    "newCard": "＋ 新建记忆卡"
   },
   "reviews": {
     "title": "书评",
@@ -1289,7 +1291,9 @@
     "hint": "这张卡是你自己的：这里的内容不会被任何一次分析写入或改写。",
     "removeExcerpt": "把这段原文移除？",
     "deleteConfirm": "删除这张卡？卡上的原文也会一起删除；书和你的划线不受影响。",
-    "manage": "原文"
+    "manage": "原文",
+    "topics": "主题",
+    "noTopics": "还没有归入任何主题。"
   },
   "study": {
     "title": "记忆卡",
@@ -1566,5 +1570,19 @@
     "alsoOnShelf_one": "书架上还有 1 本同样的书",
     "alsoOnShelf_other": "书架上还有 {{count}} 本同样的书",
     "review": "查看"
+  },
+  "cards": {
+    "title": "记忆卡",
+    "empty": "还没有记忆卡。可以在这里新建，也可以在阅读时从段落新建。",
+    "search": "搜索记忆卡",
+    "all": "全部",
+    "noMatches": "没有匹配的卡片。"
+  },
+  "topic": {
+    "ask": "主题",
+    "askWhy": "这张卡是关于什么的？之后还可以归入更多主题。",
+    "add": "＋ 主题",
+    "remove": "把“{{topic}}”从这张卡上移除？",
+    "confirm": "添加"
   }
 }

@@ -45,10 +45,14 @@ import { BackupOffer, RestoreOffer } from '../src/ui/Safekeeping';
 import { subscribeToRestores } from '../src/backup/changes';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { space, usePalette } from '../src/theme';
+import { countCards, createTopicCard, recentCards, type CardLine } from '../src/db/topics';
+import { askTopic } from '../src/ui/askTopic';
+import { CardRow } from '../src/ui/CardRow';
 
 /** Enough to read on the way past; the heading leads to the rest. */
 const REVIEWS_SHOWN = 3;
 const NOTES_SHOWN = 5;
+const CARDS_SHOWN = 3;
 
 /** The order the shelves are read in, which is not the order they are declared in. */
 const SHELVES: ReadingStatus[] = ['wishlist', 'reading', 'read'];
@@ -69,6 +73,8 @@ export default function Home() {
   const [lists, setLists] = useState<BookList[]>([]);
   const [tags, setTags] = useState<{ tag: string; books: number }[]>([]);
   const [notes, setNotes] = useState<RecentNote[]>([]);
+  const [cards, setCards] = useState<CardLine[]>([]);
+  const [cardCount, setCardCount] = useState(0);
   /** A shelf that cannot be read is not an empty shelf, and must not say it is. */
   const [broken, setBroken] = useState<string | null>(null);
 
@@ -85,7 +91,14 @@ export default function Home() {
     listBookLists().then(setLists).catch(() => undefined);
     listTags().then(setTags).catch(() => undefined);
     listRecentNotes(NOTES_SHOWN).then(setNotes).catch(() => undefined);
+    recentCards(CARDS_SHOWN).then(setCards).catch(() => undefined);
+    countCards().then(setCardCount).catch(() => undefined);
   }, []);
+
+  /** A card about a topic rather than a book: the topic is asked for, and holds it. */
+  function newCard() {
+    askTopic(t, async (topic) => router.push(`/card/${await createTopicCard(topic)}`), cards[0]?.topics?.split(' · ')[0] ?? '');
+  }
 
   /** From Files, matched against the shelf once it has been read. */
   async function fromFile() {
@@ -444,6 +457,23 @@ export default function Home() {
                 </View>
               </View>
             ) : null}
+
+            {/* The newest cards from any book or topic, and the way to make one about a topic. */}
+            <View style={{ marginTop: space.xl }}>
+              <SectionHead
+                title={t('shelf.sectionCards')}
+                count={cardCount || undefined}
+                onOpen={() => router.push('/cards')}
+              />
+              <View style={{ paddingHorizontal: space.lg }}>
+                {cards.map((card) => (
+                  <CardRow key={card.id} card={card} />
+                ))}
+                <Pressable onPress={newCard} hitSlop={8} style={{ paddingVertical: space.sm }}>
+                  <Text style={{ color: palette.accent, fontSize: 15 }}>{t('shelf.newCard')}</Text>
+                </Pressable>
+              </View>
+            </View>
 
             {tags.length > 0 ? (
               <View style={{ marginTop: space.xl }}>

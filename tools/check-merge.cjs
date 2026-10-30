@@ -63,6 +63,7 @@ const versions = require(path.join(out, 'db/versions.js'));
 const { alignChapters, diffParagraphs } = require(path.join(out, 'structure/merge.js'));
 const { mapOffset, mergeSegments, offsetCase, indexCase } = require(path.join(out, 'structure/remap.js'));
 const { db } = require(path.join(out, 'db/index.js'));
+const topics = require(path.join(out, 'db/topics.js'));
 
 let failures = 0;
 function check(name, actual, expected) {
@@ -281,6 +282,23 @@ function pure() {
       await repo.saveProgress(quiet, 10);
       return repo.booksChangedSince(after);
     })()).length, 0);
+  }
+
+  console.log('flashcards under topics');
+  {
+    const shelf = (await repo.listBooks()).length;
+    const card = await topics.createTopicCard('  Linear   algebra ');
+    await repo.updateEntity(card, { name: 'What is a basis?' });
+    check('a topic is not a book on the shelf', (await repo.listBooks()).length, shelf);
+    check('the same topic is the same deck',
+      (await repo.getEntity(await topics.createTopicCard('Linear algebra'))).book_id,
+      (await repo.getEntity(card)).book_id);
+    await topics.addCardTopic(card, 'Exams');
+    check('a card under two topics', await topics.topicsOf(card), ['Exams', 'Linear algebra']);
+    check('the newest card is on top', (await topics.recentCards(1))[0].id, card);
+    const restored = await repo.writeBookRecord(await repo.readBookRecord((await repo.getEntity(card)).book_id));
+    const back = (await repo.listEntities(restored, 'card')).find((entry) => entry.name === 'What is a basis?');
+    check('a restore keeps its topics', back && (await topics.topicsOf(back.id)), ['Exams', 'Linear algebra']);
   }
 
   console.log(failures ? `\n${failures} failing` : '\nall passing');

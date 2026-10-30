@@ -8,7 +8,7 @@ import { isChinaStore } from './storefront';
  */
 export type Extra = 'scripture' | 'papers' | 'goodreads' | 'drills';
 
-const HELD_BACK: Extra[] = ['scripture', 'papers', 'goodreads', 'drills'];
+const HELD_BACK: Extra[] = ['scripture', 'papers', 'goodreads'];
 
 export function offers(extra: Extra): boolean {
   if (extra === 'scripture' && isChinaStore()) return false;

@@ -1,7 +1,7 @@
 import { db, newId, transaction, type Database } from './index';
 import { addTag, listsHolding, setInList, tagsOf, FAVORITES, findListNamed, createBookList } from './shelves';
 import { scenesFromBreaks } from '../structure/scenes';
-import { DEFAULT_KIND } from '../books/kinds';
+import { DEFAULT_KIND, ON_SHELF } from '../books/kinds';
 import { reconstruct, parseHints, type StructureHint } from '../structure/document';
 import type { Certainty, Pin } from '../cast/location';
 import { reverseTie } from '../cast/ties';
@@ -160,7 +160,7 @@ export async function listBooks(): Promise<BookListItem[]> {
             (SELECT COUNT(*) FROM chapters c WHERE c.book_id = b.id) AS chapter_count,
             (SELECT offset FROM reading_state r WHERE r.book_id = b.id) AS offset,
             (SELECT updated_at FROM reading_state r WHERE r.book_id = b.id) AS read_at
-     FROM books b ORDER BY COALESCE(read_at, b.created_at) DESC`
+     FROM books b WHERE ${ON_SHELF} ORDER BY COALESCE(read_at, b.created_at) DESC`
   );
 }
 
@@ -171,7 +171,7 @@ export async function listBookNames(): Promise<
 > {
   const database = await db();
   return database.getAllAsync(
-    'SELECT id, title, author, edition, word_count, text_source, created_at FROM books'
+    `SELECT id, title, author, edition, word_count, text_source, created_at FROM books b WHERE ${ON_SHELF}`
   );
 }
 
@@ -188,7 +188,7 @@ export async function languageEvidence(): Promise<
   return database.getAllAsync(
     `SELECT b.id, b.title, b.author, b.language, b.isbn,
             substr(COALESCE(d.text, ''), 1, 2000) AS sample
-       FROM books b LEFT JOIN documents d ON d.book_id = b.id`
+       FROM books b LEFT JOIN documents d ON d.book_id = b.id WHERE ${ON_SHELF}`
   );
 }
 
@@ -1802,6 +1802,8 @@ export const CARRIED_TABLES = [
   // Every wording a chapter has been held in. The one being read is in the
   // manuscript too; the others exist nowhere else.
   'chapter_versions',
+  // The topics a flash card is filed under, beyond the book it came from.
+  'card_topics',
 ] as const;
 
 export type CarriedRows = Record<string, Record<string, unknown>[]>;
@@ -2140,7 +2142,7 @@ export async function attachBookRecord(bookId: string, record: BookRecord) {
  */
 export async function hasBooks(): Promise<boolean> {
   const database = await db();
-  return (await database.getAllAsync<{ one: number }>('SELECT 1 AS one FROM books LIMIT 1')).length > 0;
+  return (await database.getAllAsync<{ one: number }>(`SELECT 1 AS one FROM books b WHERE ${ON_SHELF} LIMIT 1`)).length > 0;
 }
 
 export async function listBookIds(): Promise<string[]> {
@@ -2567,7 +2569,7 @@ export async function libraryCounts(): Promise<{
 }> {
   const database = await db();
   const row = await database.getFirstAsync<Record<string, number>>(
-    `SELECT (SELECT COUNT(*) FROM books) AS books,
+    `SELECT (SELECT COUNT(*) FROM books b WHERE ${ON_SHELF}) AS books,
             (SELECT COUNT(*) FROM chapters) AS chapters,
             (SELECT COUNT(*) FROM annotations WHERE kind = 'note') AS notes,
             (SELECT COUNT(*) FROM entities WHERE kind = 'character') AS people,

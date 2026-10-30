@@ -40,20 +40,24 @@ function mark(book: string, heavy: boolean): string {
       WHERE book_id = ${book};`;
 }
 
+/** A table added after `book_changes` brings its own; the lists above are what that migration ran with. */
+function tableTriggers(table: string, heavy: boolean): string[] {
+  return (
+    [['INSERT', 'NEW'], ['UPDATE', 'NEW'], ['DELETE', 'OLD']] as const
+  ).map(
+    ([event, row]) =>
+      `CREATE TRIGGER IF NOT EXISTS changed_${table}_${event.toLowerCase()} AFTER ${event} ON ${table}
+         BEGIN ${mark(`${row}.book_id`, heavy)} END;`
+  );
+}
+
 function changeTriggers(): string {
   const triggers: string[] = [];
   const tables = [
     ...HEAVY_BOOK_TABLES.map((table) => [table, true] as const),
     ...LIGHT_BOOK_TABLES.map((table) => [table, false] as const),
   ];
-  for (const [table, heavy] of tables) {
-    for (const [event, row] of [['INSERT', 'NEW'], ['UPDATE', 'NEW'], ['DELETE', 'OLD']] as const) {
-      triggers.push(
-        `CREATE TRIGGER IF NOT EXISTS changed_${table}_${event.toLowerCase()} AFTER ${event} ON ${table}
-         BEGIN ${mark(`${row}.book_id`, heavy)} END;`
-      );
-    }
-  }
+  for (const [table, heavy] of tables) triggers.push(...tableTriggers(table, heavy));
   triggers.push(
     `CREATE TRIGGER IF NOT EXISTS changed_books_insert AFTER INSERT ON books
      BEGIN ${mark('NEW.id', true)} END;`,
@@ -1035,4 +1039,18 @@ export const migrations: string[] = [
 
   // Where the book lives online: a repository, a publisher's page. Typed by the reader.
   `ALTER TABLE books ADD COLUMN website TEXT;`,
+
+  // Flash cards filed under topics. A topic is also a book of kind "topic",
+  // kept off the shelf, holding the cards made outside any book; the newest
+  // cards anywhere are on the home page.
+  `CREATE TABLE card_topics (
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+     topic TEXT NOT NULL,
+     PRIMARY KEY (entity_id, topic)
+   );
+   CREATE INDEX card_topics_topic ON card_topics(topic);
+   CREATE INDEX card_topics_book ON card_topics(book_id);
+   CREATE INDEX entities_recent ON entities(kind, created_at DESC);
+   ${tableTriggers('card_topics', false).join('\n   ')}`,
 ];

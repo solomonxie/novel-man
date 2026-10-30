@@ -232,3 +232,9 @@ export function kindFromSubjects(subjects: string[]): string | null {
   if (/\bfiction\b|\bnovels?\b|\bstories\b/.test(said)) return 'novel';
   return 'nonfiction';
 }
+
+/** Not a book: the flash cards filed under one topic, kept off the shelf (`db/topics.ts`). */
+export const TOPIC_KIND = 'topic';
+
+/** SQL keeping topics off anything that lists books, for a query aliasing books as `b`. */
+export const ON_SHELF = `b.kind != '${TOPIC_KIND}'`;
