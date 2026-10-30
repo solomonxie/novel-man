@@ -43,7 +43,7 @@
   "identify": {
     "title": "Lookup",
     "hint": "Cover, title, author, year and ISBN, from Open Library and Google Books.",
-    "search": "Search",
+    "searchImage": "Search image",
     "byIsbn": "By ISBN",
     "byTitle": "By title",
     "placeholder": "Title, author, or ISBN",

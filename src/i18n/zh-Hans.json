@@ -43,7 +43,7 @@
   "identify": {
     "title": "查书目",
     "hint": "封面、书名、作者、出版年和 ISBN，来自 Open Library 与 Google Books。",
-    "search": "搜索",
+    "searchImage": "搜图片",
     "byIsbn": "按 ISBN",
     "byTitle": "按书名",
     "placeholder": "书名、作者或 ISBN",

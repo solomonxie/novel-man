@@ -5,6 +5,7 @@ import {
   Easing,
   Image,
   Keyboard,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -47,6 +48,15 @@ function questions(book: Book) {
     isbn: book.isbn?.trim() ?? '',
     title: book.title.trim(),
   };
+}
+
+/** A web image search on what is selected: the ISBN alone, or the title with its author. */
+function imageSearchUrl(query: string, book: Book): string {
+  const wanted = query.trim();
+  const ask = questions(book);
+  const author = book.author?.trim();
+  const words = wanted === ask.isbn || !author || wanted.includes(author) ? wanted : `${wanted} ${author}`;
+  return `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(words)}`;
 }
 
 /**
@@ -246,11 +256,13 @@ export function IdentifySheet({ visible, book, onClose, onFilled }: {
             <Text style={{ color: palette.text, fontSize: 15, fontWeight: '600' }}>
               {t('identify.title')}
             </Text>
-            {/* The row that balances Cancel. Searching again is the same
-                button as searching, so there is nothing else to put here. */}
-            <Pressable onPress={() => search(query)} hitSlop={12} disabled={!query.trim()}>
+            <Pressable
+              onPress={() => void Linking.openURL(imageSearchUrl(query, book))}
+              hitSlop={12}
+              disabled={!query.trim()}
+            >
               <Text style={{ color: query.trim() ? palette.accent : palette.faint, fontSize: 16 }}>
-                {t('identify.search')}
+                {t('identify.searchImage')}
               </Text>
             </Pressable>
             </View>
