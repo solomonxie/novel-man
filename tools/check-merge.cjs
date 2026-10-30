@@ -64,6 +64,7 @@ const { alignChapters, diffParagraphs } = require(path.join(out, 'structure/merg
 const { mapOffset, mergeSegments, offsetCase, indexCase } = require(path.join(out, 'structure/remap.js'));
 const { db } = require(path.join(out, 'db/index.js'));
 const topics = require(path.join(out, 'db/topics.js'));
+const cardsFile = require(path.join(out, 'sources/cardsFile.js'));
 
 let failures = 0;
 function check(name, actual, expected) {
@@ -299,6 +300,30 @@ function pure() {
     const restored = await repo.writeBookRecord(await repo.readBookRecord((await repo.getEntity(card)).book_id));
     const back = (await repo.listEntities(restored, 'card')).find((entry) => entry.name === 'What is a basis?');
     check('a restore keeps its topics', back && (await topics.topicsOf(back.id)), ['Exams', 'Linear algebra']);
+  }
+
+  console.log('flashcards from a file');
+  {
+    const shelfBook = (await repo.listBooks())[0];
+    const csv = cardsFile.parseCardsFile(`\uFEFFLinear algebra; Exams,,"Rank, of a matrix","Dimension of
+its column space"\n,,,no front\n,,Null space,\nCharacters,${shelfBook.title.toUpperCase()},Who is here?,A reader\n,Not On Any Shelf,Who is Ahab?,Captain\n`);
+    check('topics, book, front, back, in that order', csv.map((card) => [card.topics, card.front, card.back, card.book]), [
+      [['Linear algebra', 'Exams'], 'Rank, of a matrix', 'Dimension of\nits column space', ''],
+      [[], 'Null space', '', ''],
+      [['Characters'], 'Who is here?', 'A reader', shelfBook.title.toUpperCase()],
+      [[], 'Who is Ahab?', 'Captain', 'Not On Any Shelf'],
+    ]);
+    const named = cardsFile.parseCardsFile('#separator:tab\nFront\tBook\tTags\nEigenvalue\t\tmath; exams\n');
+    check('any order under a header', named, [{ topics: ['math', 'exams'], front: 'Eigenvalue', back: '', book: '' }]);
+    const first = await topics.importCards(csv, 'Imported');
+    check('every card is added', first, { added: 4, skipped: 0, unmatched: 1 });
+    const cards = await topics.recentCards();
+    const byFront = (front) => cards.find((card) => card.name === front);
+    check('a card with no topic goes under the one named', await topics.topicsOf(byFront('Null space').id), ['Imported']);
+    check('a book on the shelf takes its card', byFront('Who is here?').book_id, shelfBook.id);
+    check('a book not on the shelf is a topic', await topics.topicsOf(byFront('Who is Ahab?').id), ['Not On Any Shelf']);
+    check('the same file twice adds nothing', await topics.importCards(csv, 'Imported'), { added: 0, skipped: 4, unmatched: 0 });
+    check('imported topics stay off the shelf', (await repo.listBooks()).some((book) => book.kind === 'topic'), false);
   }
 
   console.log(failures ? `\n${failures} failing` : '\nall passing');

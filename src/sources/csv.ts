@@ -37,6 +37,13 @@ export function forEachCsvRow(
   });
 }
 
+/** Rows as cells, header and all. */
+export function csvRows(source: string): string[][] {
+  const rows: string[][] = [];
+  eachRow(source.replace(/^\uFEFF/, ''), (cells) => rows.push(cells));
+  return rows;
+}
+
 function eachRow(source: string, onCells: (cells: string[]) => void): void {
   let row: string[] = [];
   let cell = '';

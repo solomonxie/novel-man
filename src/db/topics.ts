@@ -1,6 +1,7 @@
 import { db, newId, transaction } from './index';
-import { createEntity, type Entity } from './repo';
-import { TOPIC_KIND } from '../books/kinds';
+import { createEntity, updateEntity, type Entity } from './repo';
+import type { CardDraft } from '../sources/cardsFile';
+import { ON_SHELF, TOPIC_KIND } from '../books/kinds';
 
 /**
  * A topic is a book of kind `topic`, kept off the shelf: it holds the flash
@@ -112,4 +113,62 @@ export async function countCards(): Promise<number> {
 /** Where a card is from, in words: its book, or for a topic's own card, nothing — the topics say it. */
 export function cardSource(card: CardLine): string {
   return card.book_kind === TOPIC_KIND ? '' : card.book_title;
+}
+
+export type CardsImported = { added: number; skipped: number; unmatched: number };
+
+/**
+ * Cards out of a file. A card naming a book on the shelf goes into it; one
+ * naming a book that isn't here gets that title as a topic instead. The rest
+ * live in their first topic, or `fallback`. A card already here, front and back
+ * alike, is skipped, so importing the same file twice adds nothing.
+ */
+export async function importCards(drafts: CardDraft[], fallback: string): Promise<CardsImported> {
+  const database = await db();
+  const known = new Set(
+    (
+      await database.getAllAsync<{ name: string; summary: string | null }>(
+        "SELECT name, summary FROM entities WHERE kind = 'card'"
+      )
+    ).map((card) => sameCard(card.name, card.summary ?? ''))
+  );
+  const shelf = new Map(
+    (await database.getAllAsync<{ id: string; title: string }>(`SELECT b.id, b.title FROM books b WHERE ${ON_SHELF}`))
+      .map((book) => [book.title.trim().toLowerCase(), book.id])
+  );
+  let unmatched = 0;
+  const fresh = drafts
+    .filter((draft) => {
+      const key = sameCard(draft.front, draft.back);
+      if (known.has(key)) return false;
+      known.add(key);
+      return true;
+    })
+    .map((draft) => {
+      const bookId = draft.book ? shelf.get(draft.book.toLowerCase()) : undefined;
+      const topics = draft.topics.map(cleanTopic);
+      if (draft.book && !bookId) {
+        unmatched++;
+        topics.push(cleanTopic(draft.book));
+      }
+      if (!bookId && !topics.length) topics.push(cleanTopic(fallback));
+      return { ...draft, bookId, topics };
+    });
+  // Decks first: making one is its own transaction, and those don't nest.
+  const decks = new Map<string, string>();
+  for (const { bookId, topics } of fresh) {
+    if (!bookId && !decks.has(topics[0])) decks.set(topics[0], await topicBook(topics[0]));
+  }
+  await transaction(async () => {
+    for (const draft of fresh) {
+      const cardId = await createEntity(draft.bookId ?? decks.get(draft.topics[0])!, 'card', draft.front);
+      if (draft.back) await updateEntity(cardId, { summary: draft.back });
+      for (const topic of draft.topics) await addCardTopic(cardId, topic);
+    }
+  });
+  return { added: fresh.length, skipped: drafts.length - fresh.length, unmatched };
+}
+
+function sameCard(front: string, back: string): string {
+  return `${front.trim().toLowerCase()}\u0000${back.trim().toLowerCase()}`;
 }

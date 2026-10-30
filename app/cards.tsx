@@ -1,9 +1,12 @@
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect } from '../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
-import { createTopicCard, listTopics, recentCards, type CardLine } from '../src/db/topics';
+import { createTopicCard, importCards, listTopics, recentCards, type CardLine } from '../src/db/topics';
+import { parseCardsFile } from '../src/sources/cardsFile';
+import { pickCardsFile } from '../src/import/sources/picker';
+import { File } from '../src/storage/fs';
 import { CardRow } from '../src/ui/CardRow';
 import { askTopic } from '../src/ui/askTopic';
 import { Chip, ChipRow } from '../src/ui/detail';
@@ -39,6 +42,35 @@ export default function AllCards() {
 
   function add() {
     askTopic(t, async (picked) => router.push(`/card/${await createTopicCard(picked)}`), topic ?? '');
+  }
+
+  function explain() {
+    Alert.alert(t('cards.formatTitle'), t('cards.format'));
+  }
+
+  async function importFile() {
+    try {
+      const picked = await pickCardsFile();
+      if (!picked) return;
+      const drafts = parseCardsFile(await new File(picked.uri).text());
+      if (!drafts.length) {
+        Alert.alert(t('cards.importNone'), t('cards.format'));
+        return;
+      }
+      const run = async (fallback: string) => {
+        const { added, skipped, unmatched } = await importCards(drafts, fallback);
+        load();
+        const notes = [
+          skipped ? t('cards.importSkipped', { count: skipped }) : '',
+          unmatched ? t('cards.importUnmatched', { count: unmatched }) : '',
+        ].filter(Boolean);
+        Alert.alert(t('cards.imported', { count: added }), notes.join('\n\n') || undefined);
+      };
+      if (drafts.every((draft) => draft.topics.length || draft.book)) await run('');
+      else askTopic(t, (chosen) => void run(chosen), topic ?? picked.name.replace(/\.[^.]+$/, ''));
+    } catch (problem) {
+      Alert.alert(t('cards.importFailed'), String(problem));
+    }
   }
 
   return (
@@ -79,9 +111,19 @@ export default function AllCards() {
           ) : null
         }
         ListFooterComponent={
-          <Pressable onPress={add} style={{ paddingVertical: space.lg }}>
-            <Text style={{ color: palette.accent, fontSize: 16 }}>{t('shelf.newCard')}</Text>
-          </Pressable>
+          <View>
+            <Pressable onPress={add} style={{ paddingVertical: space.lg }}>
+              <Text style={{ color: palette.accent, fontSize: 16 }}>{t('shelf.newCard')}</Text>
+            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+              <Pressable onPress={() => void importFile()} style={{ paddingVertical: space.sm }}>
+                <Text style={{ color: palette.accent, fontSize: 16 }}>{t('cards.import')}</Text>
+              </Pressable>
+              <Pressable onPress={explain} hitSlop={12} accessibilityLabel={t('cards.formatTitle')}>
+                <Text style={{ color: palette.dim, fontSize: 17 }}>ⓘ</Text>
+              </Pressable>
+            </View>
+          </View>
         }
         renderItem={({ item }) => <CardRow card={item} />}
       />

@@ -1576,7 +1576,18 @@
     "empty": "还没有记忆卡。可以在这里新建，也可以在阅读时从段落新建。",
     "search": "搜索记忆卡",
     "all": "全部",
-    "noMatches": "没有匹配的卡片。"
+    "noMatches": "没有匹配的卡片。",
+    "import": "从文件导入",
+    "formatTitle": "记忆卡文件格式",
+    "format": "每行一张卡片，按这个顺序：\n\ntopics, book, front, back\n（主题、书、正面、背面）\n\n例如：\n\n线性代数;考试,,什么是基？,线性无关的生成集\n人物,白鲸,亚哈是谁？,裴廓德号的船长\n\n• 只有正面必填，其他可以留空。\n• 多个主题用 ; 分隔。\n• book 填书架上某本书的书名，卡片会放进那本书；书架上没有的书名会变成一个主题。\n• 含逗号的字段放在英文双引号里。\n• 有表头行（topics, book, front, back）时，列可以任意顺序。\n• 制表符分隔的文本和 CSV 一样可用。\n\n没有主题也没有书的卡片会放到你指定的主题下；已有的卡片会跳过。",
+    "importNone": "这个文件里没有记忆卡",
+    "imported_one": "已添加 {{count}} 张记忆卡",
+    "imported_other": "已添加 {{count}} 张记忆卡",
+    "importSkipped_one": "{{count}} 张已存在，已跳过。",
+    "importSkipped_other": "{{count}} 张已存在，已跳过。",
+    "importFailed": "读不了这个文件",
+    "importUnmatched_one": "{{count}} 张写的书不在书架上，已改为以书名作主题。",
+    "importUnmatched_other": "{{count}} 张写的书不在书架上，已改为以书名作主题。"
   },
   "topic": {
     "ask": "主题",

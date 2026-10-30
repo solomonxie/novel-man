@@ -59,3 +59,12 @@ export function pickSpreadsheet(): Promise<PickedFile | null> {
 export function pickNotesFile(): Promise<PickedFile | null> {
   return pick(['public.json', 'public.plain-text']);
 }
+
+/** Flashcards kept elsewhere: a CSV, or tab-separated text as Anki and Quizlet export. */
+export function pickCardsFile(): Promise<PickedFile | null> {
+  return pick([
+    'public.comma-separated-values-text',
+    'public.tab-separated-values-text',
+    'public.plain-text',
+  ]);
+}
