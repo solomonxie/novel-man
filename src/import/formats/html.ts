@@ -114,7 +114,8 @@ export async function blocksFromHtml(html: string, _context?: ParseContext): Pro
       if (held[index]) blocks.push({ text: held[index], anchors });
       continue;
     }
-    blocks.push(closed ? { text, heading: Number(closed[1]), anchors } : { text, anchors });
+    const item = /^li$/i.test(parts[at + 1] ?? '');
+    blocks.push(closed ? { text, heading: Number(closed[1]), anchors } : { text: item ? `• ${text}` : text, anchors });
   }
   return blocks;
 }

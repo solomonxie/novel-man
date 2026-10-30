@@ -71,6 +71,29 @@ function styledRuns(text: string, base: number, outer: Partial<Record<Style, tru
   return runs;
 }
 
+/** Inline code is padded by a thin space each side, so its tint does not touch the letters. */
+const PAD = '\u2009';
+
+export function drawn(run: Run): string {
+  return run.code ? `${PAD}${run.text}${PAD}` : run.text;
+}
+
+export function drawnText(text: string): string {
+  return runsIn(text).map(drawn).join('');
+}
+
+/** Where a character drawn `at` into `text` sits in `text` itself, markup and padding undone. */
+export function sourceOffset(text: string, at: number): number {
+  let shown = 0;
+  for (const run of runsIn(text)) {
+    const pad = run.code ? PAD.length : 0;
+    const length = run.text.length + pad * 2;
+    if (at < shown + length) return run.from + Math.min(run.text.length - 1, Math.max(0, at - shown - pad));
+    shown += length;
+  }
+  return text.length;
+}
+
 /**
  * A run cut where links begin and end, offsets measured in the same text the
  * runs were found in.

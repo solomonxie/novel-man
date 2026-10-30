@@ -170,12 +170,12 @@ function blocksFromXhtml(xhtml: string, keep: (src: string) => string | null, pa
       : body;
   const link = linkerFor(path);
   const { html, lifted } = lift(withoutNoise, link);
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .split(BLOCK_END)
-    .map((chunk) => chunk.trim())
-    .filter((chunk) => chunk && !/^(p|div|h[1-6]|li|blockquote|section)$/i.test(chunk))
-    .flatMap((chunk) => {
+  // The split keeps each closing tag's name after its chunk: `li` makes it a list item.
+  const split = html.replace(/<br\s*\/?>/gi, '\n').split(BLOCK_END);
+  return split
+    .flatMap((raw, at) => (at % 2 ? [] : [{ chunk: raw.trim(), item: /^li$/i.test(split[at + 1] ?? '') }]))
+    .filter(({ chunk }) => chunk)
+    .flatMap(({ chunk, item }) => {
       const heading = HEADING_OPEN.exec(chunk.trimStart());
       const anchors = idsIn(chunk).map((id) => `${path}#${id}`);
       // A heading is set bold already; its markers would only reach the chapter's title.
@@ -190,7 +190,9 @@ function blocksFromXhtml(xhtml: string, keep: (src: string) => string | null, pa
         if (stored) figures.push({ text: imageMarker(stored, attr(tag, 'alt') ?? '') });
       }
       const page = pageIn(chunk);
-      const body: Block[] = text ? [heading ? { text, heading: Number(heading[1]), anchors } : { text, anchors }] : [];
+      const body: Block[] = text
+        ? [heading ? { text, heading: Number(heading[1]), anchors } : { text: item ? `• ${text}` : text, anchors }]
+        : [];
       // The marker says a page begins here, so it belongs to whatever is drawn
       // next — the picture if there is one, otherwise the paragraph.
       const all = [...figures, ...body];

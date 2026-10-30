@@ -359,7 +359,8 @@ function markdownBlocks(input: string): { blocks: Block[]; title?: string; autho
     if (item) {
       endParagraph();
       const rest = line.slice(item[0].length).replace(/^\[ \]\s/, '☐ ').replace(/^\[[xX]\]\s/, '☑ ');
-      paragraph.push(`${item[1] ? '•' : item[2]} ${rest}`);
+      const nested = /^\s{2,}/.test(line);
+      paragraph.push(`${item[1] ? (nested ? '◦' : '•') : item[2]} ${rest}`);
       continue;
     }
 

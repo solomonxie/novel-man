@@ -24,6 +24,14 @@ export const codeColors: Record<
   night: { keyword: '#C678DD', type: '#E5C07B', string: '#98C379', number: '#D19A66', meta: '#61AFEF', comment: '#7F848E' },
 };
 
+/** `code` in a sentence: a quiet well and an ink of its own, as a technical page sets it. */
+export const inlineCode: Record<ReadingTheme, { bg: string; ink: string }> = {
+  paper: { bg: '#F0F1F4', ink: '#B4245A' },
+  sepia: { bg: '#EBE0C8', ink: '#8E3B3B' },
+  grey: { bg: '#C3C7C1', ink: '#6E2C4E' },
+  night: { bg: '#24282E', ink: '#E5A07A' },
+};
+
 export const highlightColors = ['#FFE58A', '#BFE3B4', '#BBD9F5', '#F2C2D6'] as const;
 export type HighlightColor = (typeof highlightColors)[number];
 

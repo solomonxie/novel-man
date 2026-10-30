@@ -57,7 +57,7 @@ import { esvChapterText } from '../../src/sources/esvBook';
 import { neighbouringChapters } from '../../src/scripture/canon';
 import { esvKey } from '../../src/sources/esvKey';
 import { EsvError } from '../../src/sources/esv';
-import { blockOf, cutAt, runsIn, type RichBlock } from '../../src/reader/rich';
+import { blockOf, cutAt, drawn, drawnText, runsIn, sourceOffset, type RichBlock } from '../../src/reader/rich';
 import { anchorsOf, destinationOf, linksOf, linksWithin, outlineOf, type Link } from '../../src/reader/links';
 import { CodeBlock, DiagramBlock, InlineMath, MathBlock, TableBlock, runStyle } from '../../src/ui/RichBlocks';
 import type { StructureHint } from '../../src/structure/document';
@@ -678,11 +678,27 @@ export default function Reader() {
    * without dragging out its exact ends.
    */
   async function markUnder(x: number, y: number, parts: { prefix: number; spans: Span[] }[]): Promise<Span | null> {
-    const drawn = await TextOffset?.at(x, y);
-    if (drawn == null) return null;
-    const at = documentRange(blockOrigins(parts, PARAGRAPH_BREAK.length, drawnOf), drawn, drawn + 1);
-    const mark = at && marks.find((entry) => entry.start <= at.start && at.start < entry.end);
+    const at = await offsetUnder(x, y, parts);
+    const mark = at === null ? null : marks.find((entry) => entry.start <= at && at < entry.end);
     return mark ? { start: mark.start, end: mark.end } : null;
+  }
+
+  /** The book offset of the character a tap on a free block landed on, its markup undone. */
+  async function offsetUnder(x: number, y: number, parts: { prefix: number; spans: Span[] }[]): Promise<number | null> {
+    const shown = await TextOffset?.at(x, y);
+    if (shown == null) return null;
+    const origin = blockOrigins(parts, PARAGRAPH_BREAK.length, drawnOf).find(
+      (each) => shown >= each.shownStart && shown < each.shownEnd
+    );
+    if (!origin) return null;
+    const span = parts.flatMap((part) => part.spans).find((each) => each.start === origin.docStart);
+    if (!span) return null;
+    return span.start + sourceOffset(source.slice(span.start, span.end), shown - origin.shownStart);
+  }
+
+  async function linkUnder(x: number, y: number, parts: { prefix: number; spans: Span[] }[]): Promise<Link | null> {
+    const at = await offsetUnder(x, y, parts);
+    return at === null ? null : linksWithin(links, at, at + 1)[0] ?? null;
   }
 
   function endSelection() {
@@ -1027,7 +1043,8 @@ export default function Reader() {
    * A translated sentence has neither: its offsets are not the book's.
    */
   function renderRuns(shown: string, span: Span, own: boolean, free: boolean) {
-    const touching = own && !free ? linksWithin(links, span.start, span.end) : [];
+    // Drawn in a free block too; there the tap is found by `freeTap`, as a Text inside a TextInput hears none.
+    const touching = own ? linksWithin(links, span.start, span.end) : [];
     const local = touching.map((link) => ({ from: link.from - span.start, to: link.to - span.start, link }));
     const runs = runsIn(shown);
     return (local.length ? runs.flatMap((run) => cutAt(run, local)) : runs).map((run, at) => {
@@ -1038,11 +1055,11 @@ export default function Reader() {
       return (
         <Text
           key={at}
-          onPress={link ? () => follow(link) : undefined}
+          onPress={link && !free ? () => follow(link) : undefined}
           suppressHighlighting
           style={runStyle(run, settings.theme, settings.fontSize, Boolean(link))}
         >
-          {versed ? verseMarks(run.text, verseStyle) : run.text}
+          {versed ? verseMarks(drawn(run), verseStyle) : drawn(run)}
         </Text>
       );
     });
@@ -1104,8 +1121,10 @@ export default function Reader() {
     const body = source.slice(paragraph.start, paragraph.sentences.at(-1)?.end ?? paragraph.start);
     const plain = settings.freeSelect && !inTargetPage && !imageIn(body) && !blockOf(body);
     const last = pieces[pieces.length - 1];
+    // A list item hangs its words off its bullet, which one block of text cannot do for two.
+    const joins = last?.kind === 'block' && !paragraph.marker && !last.paragraphs[0].marker;
     if (!plain) pieces.push({ kind: 'one', paragraph });
-    else if (last?.kind === 'block' && last.paragraphs.length < BLOCK_CAP) last.paragraphs.push(paragraph);
+    else if (joins && last.paragraphs.length < BLOCK_CAP) last.paragraphs.push(paragraph);
     else pieces.push({ kind: 'block', paragraphs: [paragraph] });
   }
 
@@ -1115,7 +1134,7 @@ export default function Reader() {
   /** The text a sentence is drawn as, which is what selection offsets count. */
   const drawnOf = (span: Span) => {
     const shown = source.slice(span.start, span.end);
-    return runsIn(shown).map((run) => run.text).join('') + (endsTight(shown) ? '' : ' ');
+    return drawnText(shown) + (endsTight(shown) ? '' : ' ');
   };
 
   const currentSection = sectionsOpen
@@ -1198,6 +1217,44 @@ export default function Reader() {
     const last = piece.kind === 'block' ? piece.paragraphs.at(-1)! : piece.paragraph;
     return { from: first.start, to: endOf(last) };
   };
+
+  /** Items of one list sit closer than paragraphs. */
+  const listContinues = new Set<number>();
+  paragraphs.forEach((paragraph, at) => {
+    if (paragraph.marker && paragraphs[at + 1]?.marker) listContinues.add(paragraph.start);
+  });
+
+  /** A bullet or number in a column of its own, the item's lines hanging clear of it. */
+  function listItem(paragraph: Paragraph, element: React.ReactNode) {
+    if (!paragraph.marker || !element) return element;
+    const gap = lineHeight * 0.6;
+    const numbered = paragraph.marker !== '•';
+    return (
+      <View
+        key={paragraph.start}
+        style={{
+          flexDirection: 'row',
+          paddingLeft: settings.fontSize * (0.5 + (paragraph.depth ?? 0) * 1.5),
+          marginBottom: listContinues.has(paragraph.start) ? lineHeight * 0.15 : gap,
+        }}
+      >
+        <Text
+          style={[
+            bodyStyle,
+            {
+              width: settings.fontSize * (numbered ? 2 : 1.5),
+              paddingRight: numbered ? settings.fontSize * 0.4 : 0,
+              textAlign: numbered ? 'right' : 'left',
+              fontVariant: ['tabular-nums'],
+            },
+          ]}
+        >
+          {paragraph.marker}
+        </Text>
+        <View style={{ flex: 1, marginBottom: -gap }}>{element}</View>
+      </View>
+    );
+  }
 
   /** The gaps between paragraphs belong to the page, and a tap on the page is the chrome. */
   function placed(element: React.ReactNode) {
@@ -1293,10 +1350,13 @@ export default function Reader() {
           if (!start || start.busy || Date.now() - start.at > 300) return;
           const { pageX, pageY } = event.nativeEvent;
           if (Math.hypot(pageX - start.x, pageY - start.y) >= 8) return;
-          void markUnder(pageX, pageY, parts).then((mark) => {
+          void (async () => {
+            const link = await linkUnder(pageX, pageY, parts);
+            if (link) return follow(link);
+            const mark = await markUnder(pageX, pageY, parts);
             if (mark) setDragged(mark);
             else setChrome(!chromeShown.current);
-          });
+          })();
         }}
         onTouchCancel={() => {
           tapStart.current = null;
@@ -1432,7 +1492,7 @@ export default function Reader() {
           data={listed}
           keyExtractor={(piece: Piece) => String(rangeOf(piece).from)}
           renderItem={({ item: piece }: { item: Piece }) => placed((() => {
-            if (piece.kind === 'block') return renderFreeBlock(piece.paragraphs);
+            if (piece.kind === 'block') return listItem(piece.paragraphs[0], renderFreeBlock(piece.paragraphs));
             const paragraph = piece.paragraph;
             const body = source.slice(
               paragraph.start,
@@ -1468,7 +1528,7 @@ export default function Reader() {
               );
             }
 
-            return (
+            return listItem(paragraph,
             <Pressable
               key={paragraph.start}
               onPress={(event) => pressParagraph(paragraph, event)}

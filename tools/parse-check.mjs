@@ -25,7 +25,8 @@ const { layoutChapter, annotationAt } = await import(join(build, 'reader/model.j
 const { originsOf, blockOrigins, documentRange } = await import(join(build, 'reader/selection.js'));
 const { imageIn, imageMarker } = await import(join(build, 'reader/images.js'));
 const { sentenceAtLine } = await import(join(build, 'reader/lines.js'));
-const { runsIn, codeBlockIn, cutAt, blockOf } = await import(join(build, 'reader/rich.js'));
+const { runsIn, codeBlockIn, cutAt, blockOf, drawnText, sourceOffset } = await import(join(build, 'reader/rich.js'));
+const { destinationOf } = await import(join(build, 'reader/links.js'));
 const { highlight, familyOf } = await import(join(build, 'reader/highlight.js'));
 const { detectScenes, scenesFromBreaks } = await import(join(build, 'structure/scenes.js'));
 const { reanchor } = await import(join(build, 'reader/anchor.js'));
@@ -184,6 +185,28 @@ console.log('illustrated headings');
   check('a quoted caption too', withoutCaption('“The obsequious civility.” CHAPTER LX.'), 'CHAPTER LX.');
   check('a plain heading is kept', withoutCaption('Chapter I.'), 'Chapter I.');
   check('a title that merely mentions a chapter is kept', withoutCaption('The Book of Days'), 'The Book of Days');
+}
+
+console.log('lists, links and code as a technical page sets them');
+{
+  const text = 'Problems:\n\n• The sets of rules.\n\n◦ Nested.\n\n12. Twelfth.\n\n•';
+  const paragraphs = layoutChapter(text, { id: 'c', idx: 0, title: '', start: 0, end: text.length }, 'en');
+  check('a bullet is a marker, not a word', paragraphs.map((p) => p.marker ?? null), [null, '•', '•', '12.', null]);
+  check('and its words start after it', text.slice(paragraphs[1].sentences[0].start, paragraphs[1].sentences[0].end), 'The sets of rules.');
+  check('an indented bullet goes one deeper', paragraphs[2].depth, 1);
+
+  const md = await markdownImporter.parse(new TextEncoder().encode('- one\n  - two\n'), 'l.md');
+  check('a nested markdown bullet is kept as nested', md.blocks.map((b) => b.text), ['• one', '◦ two']);
+
+  const anchors = new Map([['S-introduction', 40]]);
+  check('an anchor in another case still lands', destinationOf('#s-introduction', anchors), { kind: 'inside', at: 40 });
+  check('an escaped one too', destinationOf('#S%2Dintroduction', anchors), { kind: 'inside', at: 40 });
+
+  const sentence = 'Use `span` here.';
+  const shown = drawnText(sentence);
+  check('inline code is padded where drawn', shown, 'Use  span  here.');
+  check('a tap on code finds its letter', sentence[sourceOffset(sentence, shown.indexOf('p'))], 'p');
+  check('a tap after it finds its own', sentence[sourceOffset(sentence, shown.indexOf('h'))], 'h');
 }
 
 console.log('acts over chapters');

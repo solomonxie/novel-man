@@ -1,7 +1,10 @@
 import type { Annotation, Chapter } from '../db/repo';
 import { segmentSentences, type Span } from '../text/segment';
 
-export type Paragraph = { start: number; sentences: Span[] };
+/** `marker`: a list item's bullet or number, drawn hanging outside its words. */
+export type Paragraph = { start: number; sentences: Span[]; marker?: string; depth?: number };
+
+const LIST_MARK = /^(•|◦|\d{1,3}[.)])[ \t]+/;
 
 /** Paragraphs keep the manuscript's shape; sentences inside them are the tap targets. */
 export function layoutChapter(text: string, chapter: Chapter, language: string): Paragraph[] {
@@ -12,7 +15,13 @@ export function layoutChapter(text: string, chapter: Chapter, language: string):
     const start = chapter.start + cursor;
     cursor += chunk.length + 2;
     if (!chunk.trim()) continue;
-    paragraphs.push({ start, sentences: segmentSentences(chunk, language, start) });
+    const list = LIST_MARK.exec(chunk);
+    if (list && chunk.length > list[0].length) {
+      const from = start + list[0].length;
+      const marker = list[1] === '◦' ? '•' : list[1];
+      const depth = list[1] === '◦' ? 1 : 0;
+      paragraphs.push({ start, sentences: segmentSentences(chunk.slice(list[0].length), language, from), marker, depth });
+    } else paragraphs.push({ start, sentences: segmentSentences(chunk, language, start) });
   }
   return paragraphs;
 }

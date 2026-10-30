@@ -37,10 +37,23 @@ export type Destination = { kind: 'inside'; at: number } | { kind: 'web'; url: s
 
 export function destinationOf(href: string, anchors: Map<string, number>): Destination {
   if (href.startsWith('#')) {
-    const at = anchors.get(href.slice(1));
+    const at = anchorAt(href.slice(1), anchors);
     return at === undefined ? null : { kind: 'inside', at };
   }
   return /^(https?:|mailto:)/i.test(href) ? { kind: 'web', url: href } : null;
+}
+
+/** As written first; then as a browser would forgive it: escaped, or in another case. */
+function anchorAt(id: string, anchors: Map<string, number>): number | undefined {
+  const exact = anchors.get(id);
+  if (exact !== undefined) return exact;
+  let decoded = id;
+  try {
+    decoded = decodeURIComponent(id);
+  } catch {}
+  const wanted = decoded.toLowerCase();
+  for (const [anchor, at] of anchors) if (anchor.toLowerCase() === wanted) return at;
+  return undefined;
 }
 
 export type Section = { level: number; title: string; start: number; chapter: number };

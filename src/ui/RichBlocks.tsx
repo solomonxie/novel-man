@@ -13,9 +13,9 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { codeColors, readingThemes, space, type ReadingTheme } from '../theme';
+import { codeColors, inlineCode, readingThemes, space, type ReadingTheme } from '../theme';
 import { highlight } from '../reader/highlight';
-import { cutAt, runsIn, type Align, type Run } from '../reader/rich';
+import { cutAt, drawn, runsIn, type Align, type Run } from '../reader/rich';
 import type { Link } from '../reader/links';
 import { useDrawing } from '../reader/drawings';
 import { DRAWN_SCALE, PX_PER_EX } from '../import/extractor';
@@ -118,18 +118,18 @@ const LINES = {
   us: 'underline line-through',
 } as const;
 
-/** How a run is drawn, on the page and in a table alike. A link is underlined so it reads as one. */
+/** How a run is drawn, on the page and in a table alike. A link is its colour, as on the web. */
 export function runStyle(run: Run, theme: ReadingTheme, fontSize: number, link = false): TextStyle {
   const palette = readingThemes[theme];
+  const code = run.code ? inlineCode[theme] : null;
   return {
     fontWeight: run.bold ? '700' : undefined,
     fontStyle: run.italic ? 'italic' : undefined,
-    textDecorationLine: LINES[`${run.underline || link ? 'u' : ''}${run.strike ? 's' : ''}`],
-    // A shade of the page's grey, so code never looks like the reader's own highlight.
-    backgroundColor: run.mark ? palette.tint : run.code ? `${palette.dim}2E` : undefined,
+    textDecorationLine: LINES[`${run.underline ? 'u' : ''}${run.strike ? 's' : ''}`],
+    backgroundColor: run.mark ? palette.tint : code?.bg,
     fontFamily: run.code || run.math ? MONO : undefined,
-    fontSize: run.code || run.math ? Math.round(fontSize * 0.92) : undefined,
-    color: link ? palette.accent : undefined,
+    fontSize: run.code ? Math.round(fontSize * 0.86) : run.math ? Math.round(fontSize * 0.92) : undefined,
+    color: link ? palette.accent : code?.ink,
   };
 }
 
@@ -192,7 +192,7 @@ export function TableBlock({ rows, at, head, align, links = [], onLink, theme, f
                           suppressHighlighting
                           style={runStyle(run, theme, size, Boolean(run.link))}
                         >
-                          {run.text}
+                          {drawn(run)}
                         </Text>
                       ))}
                     </Text>
