@@ -190,12 +190,13 @@ export async function isFavorite(cardId: string): Promise<boolean> {
 }
 
 /** What narrows the deck: a topic, a tag in it, a mark, typed words. */
-export type CardFilter = { topic?: string; tag?: string; mark?: 'favorite' | Verdict; query?: string };
+export type CardFilter = { book?: string; topic?: string; tag?: string; mark?: 'favorite' | Verdict; query?: string };
 
-export function filterCards(cards: CardLine[], { topic, tag, mark: wanted, query }: CardFilter): CardLine[] {
+export function filterCards(cards: CardLine[], { book, topic, tag, mark: wanted, query }: CardFilter): CardLine[] {
   const typed = query?.trim().toLowerCase();
   return cards.filter(
     (card) =>
+      (!book || card.book_id === book) &&
       (!topic || listOf(card.topics).includes(topic)) &&
       (!tag || listOf(card.tags).includes(tag)) &&
       (!wanted || (wanted === 'favorite' ? Boolean(card.favorite) : card.verdict === wanted)) &&

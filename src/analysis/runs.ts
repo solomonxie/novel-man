@@ -94,6 +94,8 @@ export async function queueChapterRun(
   if (kind !== 'chapter-brief') {
     await queueWork({ bookId, kind: 'cast-wrapup', engine: 'local', units: [{ label: 'index' }] });
   }
+  // The concepts an analysis finds are flashcard drafts until this joins them.
+  if (kind === 'deep-analyze') await queueWork({ bookId, kind: 'card-merge', units: [{ label: 'cards' }] });
   return runId;
 }
 
@@ -132,6 +134,33 @@ export async function queueChapterRecap(bookId: string, chapter: Chapter): Promi
     bookId,
     kind: 'chapter-recap',
     units: [{ label: label(chapter), chapterIdx: chapter.idx }],
+  });
+}
+
+/**
+ * Flash cards for these chapters, map then reduce: one pass per chapter
+ * proposes cards, and a merge queued behind them makes the same term from
+ * several chapters one card. The merge takes every draft the book has, so one
+ * left by a chapter that failed is joined the next time cards are made.
+ */
+export async function queueCardRun(bookId: string, chapters: Chapter[]): Promise<string> {
+  await identifyFirst(bookId);
+  const runId = await queueWork({
+    bookId,
+    kind: 'card-chapter',
+    units: chapters.map((chapter) => ({ label: label(chapter), chapterIdx: chapter.idx })),
+  });
+  await queueWork({ bookId, kind: 'card-merge', units: [{ label: 'cards' }] });
+  return runId;
+}
+
+/** A chapter in, a few cards out; the merge adds a little on top for a book. */
+export function estimateCards(text: string, chapters: Chapter[], book: Priced): Promise<Estimate | null> {
+  return estimate({
+    units: unitsFor(text, chapters, book),
+    language: book.language,
+    outputRatio: 0.06,
+    overheadTokens: CONTEXT_OVERHEAD.deep,
   });
 }
 

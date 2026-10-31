@@ -111,7 +111,7 @@ export async function studyState(bookId: string, now = Date.now()): Promise<Stud
      FROM entities e
      LEFT JOIN study s ON s.entity_id = e.id
      WHERE e.book_id = ? AND e.kind IN (${STUDIED.map(() => '?').join(', ')})
-       AND TRIM(e.name) <> ''`,
+       AND TRIM(e.name) <> '' AND TRIM(COALESCE(e.summary, '')) <> ''`,
     now,
     bookId,
     ...STUDIED

@@ -3,7 +3,9 @@ import { contentHash, readCache, writeCache } from '../ai/cache';
 import { runChat } from '../ai/keys';
 import type { ChatMessage } from '../ai/client';
 import {
+  addExcerpt,
   addObservation,
+  createEntity,
   findOrCreateEntity,
   getBook,
   getDocumentText,
@@ -29,6 +31,7 @@ import {
   updateCast,
   updateEntity,
   type Book,
+  type Entity,
   type Chapter,
   type Verse,
 } from '../db/repo';
@@ -58,6 +61,16 @@ import {
   type ChapterParagraph,
   type Passage,
 } from '../analysis/context';
+import {
+  clearDrafts,
+  draftFronts,
+  groupDrafts,
+  listDrafts,
+  replaceChapterDrafts,
+  type CardDraft,
+  type DraftGroup,
+} from '../cards/drafts';
+import { addCardTag } from '../db/topics';
 
 export type Handler = (job: WorkJob, signal: AbortSignal) => Promise<void>;
 
@@ -84,6 +97,8 @@ export const handlers: Record<WorkKind, Handler> = {
   'scene-suggest': notHere,
   'translate-span': translateChapter,
   'script-scene': notHere,
+  'card-chapter': draftChapterCards,
+  'card-merge': mergeCards,
 };
 
 async function notHere(): Promise<void> {
@@ -995,24 +1010,22 @@ async function recordPlaces(
  * chapter said about it belongs to the chapter, and what it *is* is those
  * notes read together.
  */
+/**
+ * A chapter's concepts are flashcard drafts: the merge queued behind the run
+ * joins the same one from several chapters, as it does for a card pass.
+ */
 async function recordTerms(
   bookId: string,
   chapterIdx: number,
   terms: { name?: string; note?: string; details?: Detail[] }[]
 ) {
-  for (const term of terms) {
-    if (!term?.name?.trim()) continue;
-    const entityId = await findOrCreateEntity(bookId, 'term', term.name.trim(), []);
-    if (Array.isArray(term.details)) await mergeFields(entityId, term.details);
-    await addObservation({
-      book_id: bookId,
-      entity_id: entityId,
-      chapter_idx: chapterIdx,
-      appearance: null,
-      voice: null,
-      note: term.note?.trim() || null,
-    });
-  }
+  await replaceChapterDrafts(
+    bookId,
+    chapterIdx,
+    terms
+      .filter((term) => term?.name?.trim() && term.note?.trim())
+      .map((term) => ({ front: term.name!.trim(), back: term.note!.trim(), quote: '', tags: ['concept'] }))
+  );
 }
 
 /**
@@ -1180,7 +1193,7 @@ async function deepAnalyze(job: WorkJob, signal: AbortSignal) {
           // A cast list is only worth its tokens to a pass that answers with names.
           characters: wantsCast ? characters : [],
           places: wantsCast ? places : [],
-          terms: wantsTerms ? await listEntities(job.book_id, 'term') : [],
+          terms: wantsTerms ? await knownCards(job.book_id) : [],
           text,
           passage,
           previousScenes,
@@ -1615,4 +1628,196 @@ async function polishCharacter(job: WorkJob, signal: AbortSignal) {
     arc: polished.arc?.trim() || entity.arc,
   });
   if (Array.isArray(polished.details)) await mergeFields(entityId, polished.details);
+}
+
+/**
+ * The map step of making flash cards: one chapter, a handful of cards. The
+ * fronts already proposed for this book go with it, so a term the book keeps
+ * returning to comes back under the same wording and the merge can join it.
+ */
+const CARD_RULES =
+  'You write flash cards for someone studying a book, from one chapter of it. Reply with ' +
+  'JSON only: {"cards":[{"front","back","quote","tags"}]}. "front" is what the reader ' +
+  'should be able to recall: a term, a name, an idea, an event or a short question — a few ' +
+  'words, not a sentence about the chapter. "back" answers it in one to three sentences, ' +
+  'from what this chapter says. "quote" is one short sentence copied exactly from the ' +
+  'chapter that supports it, or "" when there is none. "tags" is one or two short lowercase ' +
+  'words for what kind of card it is, such as concept, person, place, event, definition. ' +
+  'Write in the language of the book. Choose what matters for understanding the book and ' +
+  'skip trivia; a chapter with nothing worth keeping gets {"cards":[]}. When the chapter is ' +
+  'about something listed under ALREADY CARDED, use that front exactly as written, and ' +
+  'give only what this chapter adds on its back.';
+
+const FRONTS_SENT = 200;
+
+/** Fewer cards from a short chapter than from a long one, and never a pile. */
+function cardsFor(length: number): number {
+  return Math.max(3, Math.min(12, Math.round(length / 2500)));
+}
+
+async function draftChapterCards(job: WorkJob, signal: AbortSignal) {
+  const { book, chapters, chapter, text, passage } = await loadChapter(job);
+  const known = [
+    ...(await listEntities(job.book_id, 'card')).map((card) => card.name),
+    ...(await draftFronts(job.book_id)),
+  ].slice(0, FRONTS_SENT);
+  const material = chapterMaterial(book, chapter, text, passage);
+
+  const answer = await ask(
+    'card-chapter',
+    [
+      {
+        role: 'system',
+        content: `${CARD_RULES} At most ${cardsFor(material.length)} cards.${
+          citedNotSent(book) ? ` ${NOTHING_TO_LIST}` : ''
+        }`,
+      },
+      {
+        role: 'user',
+        content: [
+          bookHeader(book, chapters),
+          known.length ? `ALREADY CARDED\n${known.map((front) => `- ${front}`).join('\n')}` : '',
+          `CHAPTER ${chapter.idx + 1}\n${material}`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      },
+    ],
+    2000,
+    signal,
+    readable
+  );
+
+  type Proposed = { front?: string; back?: string; quote?: string; tags?: string[] | string };
+  const result = citedNotSent(book)
+    ? readCited<{ cards?: Proposed[] }>(answer, chapter)
+    : parseJson<{ cards?: Proposed[] }>(answer);
+  await replaceChapterDrafts(
+    job.book_id,
+    chapter.idx,
+    (result.cards ?? [])
+      .filter((card) => card.front?.trim() && card.back?.trim())
+      .map((card) => ({
+        front: card.front!.trim(),
+        back: card.back!.trim(),
+        quote: card.quote?.trim() ?? '',
+        tags: (Array.isArray(card.tags) ? card.tags : card.tags ? [card.tags] : [])
+          .map((tag) => String(tag).trim().toLowerCase())
+          .filter(Boolean)
+          .slice(0, 2),
+      }))
+  );
+}
+
+/** Groups to a request when joining backs: enough to be few calls, short enough to come back whole. */
+const MERGE_BATCH = 25;
+
+const MERGE_RULES =
+  'You are given flash cards on the same thing, drafted from different chapters of one ' +
+  'book. Join each group into one card. Reply with JSON only: {"cards":[{"id","front","back"}]}, ' +
+  'one per group, "id" copied from the group. "front" is the clearest of the fronts given. ' +
+  '"back" says in two to four sentences what the book says about it overall, keeping what ' +
+  'each chapter adds and saying how it changes or develops where it does; do not list the ' +
+  'chapters one by one and do not add anything the drafts do not say. Write in the language ' +
+  'of the drafts.';
+
+/**
+ * The reduce step. Drafts are grouped by their front, locally: a term seen in
+ * one chapter is a card as it is, and only a term seen in several costs a
+ * request, which joins its backs into one. Every card keeps the passages its
+ * drafts quoted, and the union of their tags.
+ *
+ * Grouping is by wording, after the map step was asked to reuse it, so a
+ * synonym the model did not reuse stays its own card — cheaper and more
+ * predictable than asking a model to compare every card with every other.
+ */
+async function mergeCards(job: WorkJob, signal: AbortSignal) {
+  const drafts = await listDrafts(job.book_id);
+  if (!drafts.length) return;
+  const existing = (await listEntities(job.book_id, 'card')).map((card) => card.name);
+  const { single, repeated } = groupDrafts(drafts, existing);
+
+  const joined = new Map<string, { front: string; back: string }>();
+  for (let at = 0; at < repeated.length; at += MERGE_BATCH) {
+    const batch = repeated.slice(at, at + MERGE_BATCH);
+    const answer = await ask(
+      'card-merge',
+      [
+        { role: 'system', content: MERGE_RULES },
+        {
+          role: 'user',
+          content: batch
+            .map((group, index) =>
+              [
+                `GROUP ${index + 1}`,
+                ...group.drafts.map((draft) => `- chapter ${draft.chapterIdx + 1}: ${draft.front} — ${draft.back}`),
+              ].join('\n')
+            )
+            .join('\n\n'),
+        },
+      ],
+      Math.min(4000, 220 * batch.length),
+      signal,
+      readable
+    );
+    for (const card of parseJson<{ cards?: { id?: string | number; front?: string; back?: string }[] }>(answer).cards ?? []) {
+      const group = batch[Number(card.id) - 1];
+      if (group && card.back?.trim()) {
+        joined.set(group.key, { front: card.front?.trim() || group.drafts[0].front, back: card.back.trim() });
+      }
+    }
+  }
+
+  const text = await getDocumentText(job.book_id);
+  const chapters = await listChapters(job.book_id);
+  for (const group of [...single, ...repeated]) {
+    // A group the merge left out keeps its first draft rather than vanishing.
+    const card = joined.get(group.key) ?? { front: group.drafts[0].front, back: joinBacks(group) };
+    await writeCard(job.book_id, card, group.drafts, text, chapters);
+  }
+  await clearDrafts(job.book_id);
+}
+
+function joinBacks(group: DraftGroup): string {
+  return [...new Set(group.drafts.map((draft) => draft.back))].join(' ');
+}
+
+/** The fronts this book already has, carded or drafted, for a pass to reuse. */
+async function knownCards(bookId: string): Promise<Entity[]> {
+  const cards = await listEntities(bookId, 'card');
+  const drafted = (await draftFronts(bookId)).map((name) => ({ name }) as Entity);
+  return [...cards, ...drafted];
+}
+
+async function writeCard(
+  bookId: string,
+  card: { front: string; back: string },
+  drafts: CardDraft[],
+  text: string,
+  chapters: Chapter[]
+) {
+  const id = await createEntity(bookId, 'card', card.front);
+  await updateEntity(id, { summary: card.back });
+  for (const tag of [...new Set(drafts.flatMap((draft) => draft.tags))].slice(0, 3)) await addCardTag(id, tag);
+  // What each chapter said is kept against it, so the chapter page lists the card.
+  for (const draft of drafts) {
+    await addObservation({
+      book_id: bookId,
+      entity_id: id,
+      chapter_idx: draft.chapterIdx,
+      appearance: null,
+      voice: null,
+      note: draft.back,
+    });
+  }
+  // A quote is only kept where it is found word for word in its chapter.
+  let kept = 0;
+  for (const draft of drafts) {
+    const chapter = chapters.find((entry) => entry.idx === draft.chapterIdx);
+    if (!draft.quote || !chapter || kept >= 3) continue;
+    const at = text.slice(chapter.start, chapter.end).indexOf(draft.quote);
+    if (at < 0) continue;
+    await addExcerpt({ bookId, entityId: id, quote: draft.quote, at: chapter.start + at, chapterIdx: chapter.idx });
+    kept++;
+  }
 }

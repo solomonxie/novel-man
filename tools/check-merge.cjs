@@ -65,6 +65,7 @@ const { mapOffset, mergeSegments, offsetCase, indexCase } = require(path.join(ou
 const { db } = require(path.join(out, 'db/index.js'));
 const topics = require(path.join(out, 'db/topics.js'));
 const cardsFile = require(path.join(out, 'sources/cardsFile.js'));
+const drafts = require(path.join(out, 'cards/drafts.js'));
 
 let failures = 0;
 function check(name, actual, expected) {
@@ -347,6 +348,47 @@ its column space"\n,,,no front\n,,Null space,\nCharacters,${shelfBook.title.toUp
     check('a book not on the shelf is a topic', await topics.topicsOf(byFront('Who is Ahab?').id), ['Not On Any Shelf']);
     check('the same file twice adds nothing', await topics.importCards(csv, 'Imported'), { added: 0, skipped: 4, unmatched: 0 });
     check('imported topics stay off the shelf', (await repo.listBooks()).some((book) => book.kind === 'topic'), false);
+  }
+
+  console.log('flashcards made chapter by chapter, then merged');
+  {
+    check('one key for case, article, punctuation and plural',
+      ['The Whale', 'whales', 'whale.', '“Whale”'].map(drafts.cardKey), ['whale', 'whale', 'whale', 'whale']);
+    check('a Chinese front keeps its characters', drafts.cardKey('捕鲸船。'), '捕鲸船');
+    const bookId = (await repo.listBooks())[0].id;
+    await drafts.replaceChapterDrafts(bookId, 0, [
+      { front: 'Ahab', back: 'Captain of the Pequod.', quote: '', tags: ['person'] },
+      { front: 'The Pequod', back: 'A whaling ship.', quote: '', tags: ['place'] },
+    ]);
+    await drafts.replaceChapterDrafts(bookId, 2, [
+      { front: 'ahab', back: 'Lost his leg to the whale.', quote: '', tags: ['person', 'event'] },
+      { front: 'Moby Dick', back: 'The white whale.', quote: '', tags: [] },
+    ]);
+    await drafts.replaceChapterDrafts(bookId, 2, [
+      { front: 'ahab', back: 'Lost his leg to the whale.', quote: '', tags: ['person', 'event'] },
+      { front: 'Moby Dick', back: 'The white whale.', quote: '', tags: [] },
+      { front: 'Moby-Dick', back: 'Hunted by Ahab.', quote: '', tags: [] },
+    ]);
+    check('a chapter run again replaces its drafts', (await drafts.listDrafts(bookId)).length, 5);
+    check('later chapters are shown the fronts so far', await drafts.draftFronts(bookId), ['Ahab', 'The Pequod', 'Moby Dick', 'Moby-Dick', 'ahab']);
+    const { single, repeated } = drafts.groupDrafts(await drafts.listDrafts(bookId), ['Pequod']);
+    check('a term already carded is left out', single.map((group) => group.key), ['moby dick']);
+    check('the same term in two chapters is one group, to be joined',
+      repeated.map((group) => [group.key, group.drafts.map((draft) => draft.chapterIdx)]), [['ahab', [0, 2]]]);
+    check('two spellings in one chapter are one card, not a merge', single[0].drafts.length, 2);
+    await drafts.clearDrafts(bookId);
+    check('the merge clears what it used', (await drafts.listDrafts(bookId)).length, 0);
+  }
+
+  console.log('an upsert on a tracked table');
+  {
+    const bookId = (await repo.listBooks())[0].id;
+    const entity = await repo.createEntity(bookId, 'character', 'Starbuck');
+    const seen = { book_id: bookId, entity_id: entity, chapter_idx: 0, appearance: 'tall', voice: null, note: null };
+    await repo.addObservation(seen);
+    let failed = null;
+    await repo.addObservation({ ...seen, appearance: 'tall, grave' }).catch((problem) => (failed = String(problem)));
+    check('re-analysing a chapter updates its observation', failed, null);
   }
 
   console.log(failures ? `\n${failures} failing` : '\nall passing');

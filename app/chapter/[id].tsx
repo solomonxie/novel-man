@@ -31,7 +31,7 @@ import {
   type Book,
   type Scene,
 } from '../../src/db/repo';
-import { estimateDeep, queueChapterRecap, queueChapterRun } from '../../src/analysis/runs';
+import { estimateDeep, queueCardRun, queueChapterRecap, queueChapterRun } from '../../src/analysis/runs';
 import { stoppedWithoutKey } from '../../src/ai/guard';
 import { sceneOpening } from '../../src/structure/scenes';
 import { formatUsd, type Estimate } from '../../src/ai/cost';
@@ -124,10 +124,10 @@ export default function ChapterPage() {
   // A pass that lands while this page is open has to show up on it.
   useWorkRefresh(load);
 
-  /** A term the reader met and the passes did not: blank, and observed here. */
+  /** A card about this chapter: blank, and noted here so it is listed here. */
   async function addTerm() {
     if (!chapter) return;
-    const entityId = await createEntity(chapter.book_id, 'term', '');
+    const entityId = await createEntity(chapter.book_id, 'card', '');
     await addObservation({
       book_id: chapter.book_id,
       entity_id: entityId,
@@ -136,7 +136,7 @@ export default function ChapterPage() {
       voice: null,
       note: null,
     });
-    router.push(`/term/${entityId}`);
+    router.push(`/card/${entityId}`);
   }
 
   if (!chapter) {
@@ -169,6 +169,8 @@ export default function ChapterPage() {
     }
   }
 
+  const makeCards = () => void queueing(() => queueCardRun(chapter.book_id, [chapter]));
+
   const aiActions = [
     // Only where there is nothing to read: a book the app holds needs no
     // account of a chapter it can open.
@@ -182,6 +184,12 @@ export default function ChapterPage() {
       label: t('chapter.analyzeShort'),
       onPress: () => void queueing(() => queueChapterRun(chapter.book_id, 'deep-analyze', [chapter])),
     },
+    ...(supports(book?.kind, 'cards')
+      ? [{
+          label: t('chapter.makeCards'),
+          onPress: () => void queueing(() => queueCardRun(chapter.book_id, [chapter])),
+        }]
+      : []),
   ];
 
   return (
@@ -405,12 +413,12 @@ export default function ChapterPage() {
           Adding one by hand is how a term nobody ran a pass for gets in: the
           blank page opens, and what is typed there is recorded as met here. */}
       <Block
-        title={t('chapter.terms')}
+        title={t('book.cards')}
         count={terms.length || undefined}
         action={{ label: '＋', onPress: addTerm }}
       >
         {terms.length === 0 ? (
-          <Empty text={t('chapter.noTerms')} action={{ label: t('chapter.addTerm'), onPress: addTerm }} />
+          <Empty text={t('chapter.noCards')} action={{ label: t('chapter.makeCards'), onPress: makeCards }} />
         ) : (
           <ChipRow>
             {terms.map((term) => (
@@ -419,7 +427,7 @@ export default function ChapterPage() {
                 label={term.name}
                 detail={term.observed_note ?? undefined}
                 hue={hueFrom(term.name)}
-                onPress={() => router.push(`/term/${term.id}`)}
+                onPress={() => router.push(`/card/${term.id}`)}
               />
             ))}
           </ChipRow>

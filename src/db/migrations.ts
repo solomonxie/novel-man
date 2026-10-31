@@ -34,8 +34,14 @@ export const LIGHT_BOOK_TABLES = [
 
 const NOW_MS = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
 
+/**
+ * Not `INSERT OR IGNORE`: a trigger's conflict clause is overridden by the
+ * statement that fired it, so an upsert on a tracked table turned the IGNORE
+ * into a unique-constraint failure. A guarded insert has no conflict to resolve.
+ */
 function mark(book: string, heavy: boolean): string {
-  return `INSERT OR IGNORE INTO book_changes (book_id) VALUES (${book});
+  return `INSERT INTO book_changes (book_id) SELECT ${book}
+      WHERE NOT EXISTS (SELECT 1 FROM book_changes WHERE book_id = ${book});
      UPDATE book_changes SET changed_at = ${NOW_MS}${heavy ? `, content_at = ${NOW_MS}` : ''}
       WHERE book_id = ${book};`;
 }
@@ -51,12 +57,35 @@ function tableTriggers(table: string, heavy: boolean): string[] {
   );
 }
 
-function changeTriggers(): string {
-  const triggers: string[] = [];
-  const tables = [
+const CARD_TABLES = ['card_topics', 'card_tags', 'card_marks'] as const;
+
+function trackedTables() {
+  return [
     ...HEAVY_BOOK_TABLES.map((table) => [table, true] as const),
     ...LIGHT_BOOK_TABLES.map((table) => [table, false] as const),
   ];
+}
+
+/** Every change trigger dropped and made again, for when `mark` itself changes. */
+function rebuiltTriggers(): string {
+  const names = [
+    ...[...trackedTables().map(([table]) => table), ...CARD_TABLES].flatMap((table) =>
+      ['insert', 'update', 'delete'].map((event) => `changed_${table}_${event}`)
+    ),
+    'changed_books_insert',
+    'changed_books_update',
+    'changed_books_source',
+  ];
+  return [
+    ...names.map((name) => `DROP TRIGGER IF EXISTS ${name};`),
+    changeTriggers(),
+    ...CARD_TABLES.flatMap((table) => tableTriggers(table, false)),
+  ].join('\n   ');
+}
+
+function changeTriggers(): string {
+  const triggers: string[] = [];
+  const tables = trackedTables();
   for (const [table, heavy] of tables) triggers.push(...tableTriggers(table, heavy));
   triggers.push(
     `CREATE TRIGGER IF NOT EXISTS changed_books_insert AFTER INSERT ON books
@@ -1073,4 +1102,31 @@ export const migrations: string[] = [
    );
    CREATE INDEX card_marks_book ON card_marks(book_id);
    ${[...tableTriggers('card_tags', false), ...tableTriggers('card_marks', false)].join('\n   ')}`,
+
+  // Cards a chapter pass proposed, waiting for the merge that turns the same
+  // term from several chapters into one card. Scratch: not backed up.
+  `CREATE TABLE card_drafts (
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     chapter_idx INTEGER NOT NULL,
+     front TEXT NOT NULL,
+     back TEXT NOT NULL,
+     quote TEXT,
+     tags TEXT NOT NULL DEFAULT '[]',
+     PRIMARY KEY (book_id, chapter_idx, front)
+   );`,
+
+  // The change triggers again, with a mark that an upsert can't break.
+  rebuiltTriggers(),
+
+  // Concepts are flashcards: what the chapters said about one is its back,
+  // and it keeps a "concept" tag so the set can still be drilled on its own.
+  `UPDATE entities SET summary = (
+       SELECT GROUP_CONCAT(note, ' ') FROM (
+         SELECT note FROM observations o
+          WHERE o.entity_id = entities.id AND TRIM(COALESCE(note, '')) != ''
+          ORDER BY chapter_idx))
+     WHERE kind = 'term' AND TRIM(COALESCE(summary, '')) = '';
+   INSERT OR IGNORE INTO card_tags (book_id, entity_id, tag)
+     SELECT book_id, id, 'concept' FROM entities WHERE kind = 'term';
+   UPDATE entities SET kind = 'card' WHERE kind = 'term';`,
 ];

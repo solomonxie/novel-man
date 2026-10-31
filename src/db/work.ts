@@ -20,7 +20,11 @@ export type WorkKind =
   | 'image-draw'
   | 'scene-suggest'
   | 'translate-span'
-  | 'script-scene';
+  | 'script-scene'
+  /** Flash cards proposed from one chapter: the map step. */
+  | 'card-chapter'
+  /** The proposals joined, the same term from several chapters made one card: the reduce. */
+  | 'card-merge';
 
 /** Whether this unit spends money. The queue shows it per row. */
 export type Engine = 'ai' | 'local';

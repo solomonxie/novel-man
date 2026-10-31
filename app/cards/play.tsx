@@ -159,7 +159,9 @@ export default function PlayCards() {
     deck.filter((one) => (tally === 'favorite' ? Boolean(one.favorite) : one.verdict === tally));
   const later = inTally('later');
   const known = history.filter((one) => one.to === 'known').length;
-  const title = [params.topic, params.tag && `#${params.tag}`].filter(Boolean).join(' · ') || t('cards.title');
+  const title =
+    [params.book ? deck[0]?.book_title : params.topic, params.tag && `#${params.tag}`].filter(Boolean).join(' · ') ||
+    t('cards.title');
 
   const rotate = position.x.interpolate({ inputRange: [-300, 0, 300], outputRange: ['-8deg', '0deg', '8deg'] });
   const knownShown = position.x.interpolate({ inputRange: [0, SWIPE], outputRange: [0, 1], extrapolate: 'clamp' });

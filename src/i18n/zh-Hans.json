@@ -276,7 +276,11 @@
     "originalSize": "该文件的大小与本书所用的文件不同。",
     "originalContents": "该文件大小相同但内容不同——可能是另一个版本或被修改过的副本。",
     "publisher": "出版社",
-    "website": "网站"
+    "website": "网站",
+    "makeCards": "从整本书生成闪卡",
+    "makeCardsDetail": "每章先提出卡片，再把各章中的同一概念合并成一张",
+    "summarizeOpeningWhat": "根据开头部分写出全书简介。先为各章生成摘要，可以得到基于全书的简介。",
+    "cardsShort": "闪卡"
   },
   "reader": {
     "go": "前往",
@@ -346,7 +350,8 @@
     "sections": "小节",
     "findSection": "查找小节",
     "backToLink": "返回",
-    "drawing": "正在绘制…"
+    "drawing": "正在绘制…",
+    "editNote": "编辑笔记"
   },
   "settings": {
     "title": "设置",
@@ -394,9 +399,9 @@
     "grade_fast": "快速",
     "grade_normal": "普通",
     "grade_best": "最佳",
-    "gradeHint_fast": "旧模型，512 px。快而便宜，但对提示词的还原最松。",
+    "gradeHint_fast": "小模型，1024 px。快而便宜，细节较少。",
     "gradeHint_normal": "当前模型，1024 px，最省的一档。紧扣提示词。",
-    "gradeHint_best": "当前模型，1024 px，最慢的一档。同样紧扣提示词，细节更多。",
+    "gradeHint_best": "最精细的模型，1024 px，最慢的一档。细节更多。",
     "removeAll": "删除所有应用数据",
     "removeAllTitle": "删除所有应用数据？",
     "removeAllWarning": "删除前会先在本机保存一份完整备份，若已设置，也会上传到 iCloud 和已连接的存储桶。备份包含除密钥以外的一切：书籍正文、笔记、翻译、设置，以及导入时用的原始文件。备份全部完成后才开始删除；若云端备份失败，则不会删除任何数据。",
@@ -546,7 +551,11 @@
     "inBook": "在书中",
     "emptyRecord": "还没有笔记。点 ＋ 写一条关于这本书的。",
     "aboutTheBook": "关于这本书",
-    "onVersion": "写于 {{version}} {{reading}}"
+    "onVersion": "写于 {{version}} {{reading}}",
+    "selectAll": "全选",
+    "selectNone": "取消全选",
+    "copiedCount_one": "已复制 {{count}} 条",
+    "copiedCount_other": "已复制 {{count}} 条"
   },
   "structure": {
     "deleteWhere": "本章的文字会并入相邻的一章，并入哪一章？",
@@ -932,7 +941,9 @@
     "task_book-outline": "获取{{what}}的目录",
     "task_book-correct": "校对{{what}}的书目信息",
     "task_chapter-recap": "回忆{{what}}",
-    "task_image-draw": "绘制{{what}}"
+    "task_image-draw": "绘制{{what}}",
+    "task_card-chapter": "从{{what}}起草闪卡",
+    "task_card-merge": "合并各章闪卡"
   },
   "chapter": {
     "addTerm": "添加词条",
@@ -971,7 +982,9 @@
     "reading": "正在读",
     "switchTitle": "改读版本 {{n}}？",
     "switchBody": "此后这一章按这个版本显示。你现在读的版本会保留，上面的笔记也会保留。",
-    "switch": "切换"
+    "switch": "切换",
+    "makeCards": "生成闪卡",
+    "noCards": "这一章还没有闪卡。"
   },
   "part": {
     "read": "从这里开始读 →",
@@ -1325,7 +1338,13 @@
     "done": "完成",
     "kind_card": "卡片",
     "kind_term": "概念",
-    "kind_word": "词语"
+    "kind_word": "词语",
+    "ofCards_one": "{{count}} 张闪卡",
+    "ofCards_other": "{{count}} 张闪卡",
+    "ofTerms_one": "{{count}} 个概念",
+    "ofTerms_other": "{{count}} 个概念",
+    "ofWords_one": "{{count}} 个词",
+    "ofWords_other": "{{count}} 个词"
   },
   "demo": {
     "title": "演示书库",
@@ -1457,7 +1476,7 @@
     "edit": "编辑"
   },
   "timeline": {
-    "title": "阅读时间线",
+    "title": "阅读记录",
     "empty": "还没有记录。设置阅读状态、读完一章，或者从 Goodreads 导入，都会写在这里——你也可以自己添加一条。",
     "add": "＋ 添加一条",
     "save": "保存",

@@ -51,6 +51,7 @@ import { byFrequency } from '../../src/cast/mentions';
 import { AiRunSheet } from '../../src/ui/AiRunSheet';
 import {
   estimateBookSummary,
+  estimateCards,
   estimateDeep,
   estimateLookup,
   estimateOutline,
@@ -58,6 +59,7 @@ import {
   queueBookLookup,
   queueBookOutline,
   queueBookSummary,
+  queueCardRun,
   queueChapterRun,
   queueTranslation,
 } from '../../src/analysis/runs';
@@ -75,7 +77,6 @@ import { pickImage } from '../../src/ui/fields';
 import { adoptImage } from '../../src/storage/files';
 import { InlineText } from '../../src/ui/inline';
 import { radius, space, usePalette } from '../../src/theme';
-import { studyState, type StudyState } from '../../src/db/study';
 import { useWorkRefresh } from '../../src/work/refresh';
 import { KindList } from '../../src/ui/KindList';
 import { AddByLink, ConfirmAdd } from '../../src/ui/AddSheets';
@@ -126,11 +127,9 @@ export default function BookPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [characters, setCharacters] = useState<Entity[]>([]);
   const [places, setPlaces] = useState<Entity[]>([]);
-  const [terms, setTerms] = useState<Entity[]>([]);
   const [words, setWords] = useState<Entity[]>([]);
   const [cards, setCards] = useState<Entity[]>([]);
   /** How much of this book is waiting to be studied, for the row that offers it. */
-  const [study, setStudy] = useState<StudyState | null>(null);
   const [offset, setOffset] = useState(0);
   const [readAt, setReadAt] = useState<number | null>(null);
   const [noteCount, setNoteCount] = useState(0);
@@ -210,10 +209,8 @@ export default function BookPage() {
     listChapters(id).then(setChapters);
     listEntities(id, 'character').then(setCharacters);
     listEntities(id, 'place').then(setPlaces);
-    listEntities(id, 'term').then(setTerms);
     listEntities(id, 'word').then(setWords);
     listEntities(id, 'card').then(setCards);
-    studyState(id).then(setStudy);
     getProgress(id).then(setOffset);
     lastReadAt(id).then(setReadAt);
     listAnnotations(id).then((rows) => {
@@ -421,11 +418,11 @@ export default function BookPage() {
             label: t('units.unit_cast'),
             onPress: () => router.push(`/book/${book.id}/cast`),
           }
-        : supports(book.kind, 'terms')
+        : supports(book.kind, 'cards')
           ? {
-              value: terms.length,
-              label: t('book.termsShort'),
-              onPress: () => router.push(`/book/${book.id}/terms`),
+              value: cards.length,
+              label: t('book.cardsShort'),
+              onPress: () => router.push(`/book/${book.id}/cards`),
             }
           : null;
 
@@ -456,17 +453,19 @@ export default function BookPage() {
   /**
    * The blurb, written by a model. Two passes behind one ✨, because from the
    * reader's side it is one question: once the chapters have briefs it is
-   * built from those and costs a single small request; before that there is
-   * nothing to build from, so the title is asked instead. Neither of them
-   * reads the book — see `docs/design/DESIGN.md`.
+   * built from those and costs a single small request; before that, a book
+   * whose words are here is summarised from its opening, and only one with no
+   * words is asked about by title — a manuscript of your own has no title a
+   * model could place. See `docs/design/DESIGN.md`.
    */
-  const briefed = chapters.some((chapter) => chapter.brief?.trim());
+  const briefed = chapters.some((chapter) => chapter.brief?.trim()) || Boolean(book && !isSkeleton(book));
 
-  function openSummary() {
+  async function openSummary() {
     setSummaryOpen(true);
     setSummaryEstimate(null);
+    const opening = chapters.some((chapter) => chapter.brief?.trim()) ? '' : (await document.read()).text;
     const priced = briefed
-      ? estimateBookSummary(book!, chapters, '')
+      ? estimateBookSummary(book!, chapters, opening)
       : estimateLookup(book!);
     priced.then(setSummaryEstimate).catch(() => undefined);
   }
@@ -514,6 +513,18 @@ export default function BookPage() {
       askToQueue(t('book.analyzeAll'), chapters.length, priced, () =>
         queueChapterRun(book.id, 'deep-analyze', chapters)
       );
+    } finally {
+      setPreparing(false);
+    }
+  }
+
+  async function confirmMakeCards() {
+    if (!book || !chapters.length || await stoppedWithoutKey(t)) return;
+    setPreparing(true);
+    try {
+      const text = citedNotSent(book) ? '' : (await document.read()).text;
+      const priced = await estimateCards(text, chapters, book).catch(() => null);
+      askToQueue(t('book.makeCards'), chapters.length, priced, () => queueCardRun(book.id, chapters));
     } finally {
       setPreparing(false);
     }
@@ -1035,8 +1046,8 @@ export default function BookPage() {
           )}
 
           {/* More, then Edit — and the ✨, which is the other way a blurb gets
-              written: from the briefs where there are any, from the title
-              where there are none. See `openSummary`. */}
+              written: from the briefs where there are any, then from the
+              opening, and from the title only for a book with no words. See `openSummary`. */}
           <View style={styles.summaryFoot}>
             <View style={{ flexDirection: 'row', gap: space.lg }}>
               {summaryLines >= BLURB_LINES && !writingSummary ? (
@@ -1223,27 +1234,22 @@ export default function BookPage() {
           onOpen={() => router.push(`/book/${book.id}/cards`)}
           action={{ label: '＋', onPress: () => addEntity('card') }}
         >
-          {/* The deck is wider than the cards: what a reader drills is
-              everything they kept, the terms and the words included. So the
-              count here is the deck's and not this section's. */}
-          {study && study.total > 0 ? (
+          {/* The same deck as the Flashcards page, narrowed to this book. */}
+          {cards.length > 0 ? (
             <Row
-              label={study.due > 0 ? t('study.startDue', { n: study.due }) : t('study.start')}
-              detail={
-                study.due > 0
-                  ? t('study.kept', { n: study.total })
-                  : t('study.caughtUp')
-              }
+              label={t('cards.play', { count: cards.length })}
+              detail={t('play.swipeHint')}
               link
-              onPress={() => router.push(`/book/${book.id}/study`)}
+              onPress={() => router.push(`/cards/play?book=${book.id}`)}
             />
           ) : null}
-          {/* Concepts are drilled with the cards, so they are found from here. */}
-          {terms.length > 0 ? (
+          {chapters.length > 0 ? (
             <Row
-              label={t('book.terms')}
-              value={`${terms.length}  ›`}
-              onPress={() => router.push(`/book/${book.id}/terms`)}
+              label={t('book.makeCards')}
+              detail={t('book.makeCardsDetail')}
+              link
+              busy={preparing}
+              onPress={preparing ? undefined : () => void confirmMakeCards()}
             />
           ) : null}
           {cards.length === 0 ? (
@@ -1488,7 +1494,13 @@ export default function BookPage() {
       <AiRunSheet
         visible={summaryOpen}
         title={t('book.summarize')}
-        description={t(briefed ? 'book.summarizeWhat' : 'book.lookUpWhat')}
+        description={t(
+          chapters.some((chapter) => chapter.brief?.trim())
+            ? 'book.summarizeWhat'
+            : briefed
+              ? 'book.summarizeOpeningWhat'
+              : 'book.lookUpWhat'
+        )}
         estimate={summaryEstimate}
         hasKey={keyed}
         onRun={async () => {

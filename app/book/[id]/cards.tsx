@@ -59,7 +59,7 @@ export default function CardsPage() {
             {/* Ahead of the search box: the reason to open this page is more
                 often to study than to find one card. */}
             <Pressable
-              onPress={() => router.push(`/book/${id}/study`)}
+              onPress={() => router.push(`/cards/play?book=${id}`)}
               style={[styles.study, { borderColor: palette.accent, backgroundColor: palette.soft }]}
             >
               <Text style={{ color: palette.accent, fontSize: 16, fontWeight: '600' }}>

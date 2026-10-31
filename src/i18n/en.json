@@ -276,7 +276,11 @@
     "originalSize": "That file is a different size from the one this book was made from.",
     "originalContents": "That file has the same size but different contents — a different printing, or an edited copy.",
     "publisher": "Publisher",
-    "website": "Website"
+    "website": "Website",
+    "makeCards": "Make flashcards from the book",
+    "makeCardsDetail": "Each chapter proposes cards, then the same term across chapters is merged into one",
+    "summarizeOpeningWhat": "Writes a summary of the book from its opening pages. Summarize the chapters first for one built from the whole book.",
+    "cardsShort": "flashcards"
   },
   "reader": {
     "go": "Go",
@@ -346,7 +350,8 @@
     "sections": "Sections",
     "findSection": "Find a section",
     "backToLink": "Back",
-    "drawing": "Drawing…"
+    "drawing": "Drawing…",
+    "editNote": "Edit note"
   },
   "settings": {
     "title": "Settings",
@@ -394,9 +399,9 @@
     "grade_fast": "Fast",
     "grade_normal": "Normal",
     "grade_best": "Best",
-    "gradeHint_fast": "512 px on the older model. Fast and cheap, but follows the prompt loosely.",
-    "gradeHint_normal": "1024 px on the current model, cheapest setting. Follows the prompt closely.",
-    "gradeHint_best": "1024 px on the current model, slowest setting. Follows the prompt just as closely, with more detail.",
+    "gradeHint_fast": "The small model, 1024 px. Fast and cheap, with less detail.",
+    "gradeHint_normal": "The current model, 1024 px, cheapest setting. Follows the prompt closely.",
+    "gradeHint_best": "The most precise model, 1024 px, slowest setting. More detail.",
     "removeAll": "Remove all app data",
     "removeAllTitle": "Remove all app data?",
     "removeAllWarning": "A full backup is saved on this device first — and to iCloud and any connected buckets, if set up. It holds everything but your keys: books, notes, translations, settings, even the files they were imported from. Deletion starts only after the backups finish; if a cloud backup fails, nothing is deleted.",
@@ -546,7 +551,11 @@
     "inBook": "In book",
     "emptyRecord": "No notes yet. Tap ＋ to write one about this book.",
     "aboutTheBook": "About the book",
-    "onVersion": "Written on {{version}} {{reading}}"
+    "onVersion": "Written on {{version}} {{reading}}",
+    "selectAll": "Select all",
+    "selectNone": "Select none",
+    "copiedCount_one": "Copied {{count}} note",
+    "copiedCount_other": "Copied {{count}} notes"
   },
   "structure": {
     "deleteWhere": "Its text will be merged into a neighboring chapter. Which one?",
@@ -932,7 +941,9 @@
     "task_book-outline": "Get the table of contents for {{what}}",
     "task_book-correct": "Check the details of {{what}}",
     "task_chapter-recap": "Recall {{what}}",
-    "task_image-draw": "Draw {{what}}"
+    "task_image-draw": "Draw {{what}}",
+    "task_card-chapter": "Draft flashcards from {{what}}",
+    "task_card-merge": "Merge flashcards across chapters"
   },
   "chapter": {
     "addTerm": "Add a term",
@@ -971,7 +982,9 @@
     "reading": "Reading",
     "switchTitle": "Read version {{n}}?",
     "switchBody": "The chapter reads as this wording from now on. The one you are reading now is kept, and so are your notes on it.",
-    "switch": "Switch"
+    "switch": "Switch",
+    "makeCards": "Make flashcards",
+    "noCards": "No flashcards from this chapter yet."
   },
   "part": {
     "read": "Read from here →",
@@ -1325,7 +1338,13 @@
     "done": "Done",
     "kind_card": "Card",
     "kind_term": "Term",
-    "kind_word": "Word"
+    "kind_word": "Word",
+    "ofCards_one": "{{count}} flashcard",
+    "ofCards_other": "{{count}} flashcards",
+    "ofTerms_one": "{{count}} concept",
+    "ofTerms_other": "{{count}} concepts",
+    "ofWords_one": "{{count}} word",
+    "ofWords_other": "{{count}} words"
   },
   "demo": {
     "title": "Demo library",
@@ -1457,7 +1476,7 @@
     "edit": "Edit"
   },
   "timeline": {
-    "title": "Reading timeline",
+    "title": "Reading log",
     "empty": "Nothing yet. Setting a status, finishing a chapter or importing from Goodreads writes here — or add a moment yourself.",
     "add": "＋ Add a moment",
     "save": "Save",

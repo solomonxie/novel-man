@@ -1122,13 +1122,18 @@ export async function listChapterPlaces(bookId: string, chapterIdx: number): Pro
 
 export type ChapterTerm = Entity & { observed_note: string | null };
 
+/** Flashcards this chapter speaks to: noted here by a pass, or holding a passage from it. */
 export async function listChapterTerms(bookId: string, chapterIdx: number): Promise<ChapterTerm[]> {
   const database = await db();
   return database.getAllAsync<ChapterTerm>(
     `SELECT e.*, o.note AS observed_note
-       FROM observations o JOIN entities e ON e.id = o.entity_id
-      WHERE o.book_id = ? AND o.chapter_idx = ? AND e.kind = 'term'
+       FROM entities e
+       LEFT JOIN observations o ON o.entity_id = e.id AND o.chapter_idx = ?
+      WHERE e.book_id = ? AND e.kind = 'card' AND TRIM(e.name) != ''
+        AND (o.entity_id IS NOT NULL
+             OR EXISTS (SELECT 1 FROM excerpts x WHERE x.entity_id = e.id AND x.chapter_idx = ?))
       ORDER BY e.name`,
+    chapterIdx,
     bookId,
     chapterIdx
   );
