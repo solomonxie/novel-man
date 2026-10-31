@@ -1,6 +1,6 @@
 import { db, transaction } from '../db';
 import { yieldToUI } from '../async/yield';
-import { escapeLike, isAcronym, looseLike, score, wordLike } from './matching';
+import { escapeLike, hasWordBreaks, isAcronym, looseLike, score, wordLike } from './matching';
 
 /**
  * The index a source publishes, kept on the device — `apt update`, for books.
@@ -258,6 +258,9 @@ async function within(
 
   const whole = await select(sources, terms.map(wordLike), limit);
   if (whole.length >= limit || isAcronym(terms)) return rank(whole, terms, limit);
+  // Chinese or Japanese has no word starts: the first pass was already
+  // "anywhere", and its letters with gaps between them are noise.
+  if (!terms.some(hasWordBreaks)) return rank(whole, terms, limit);
 
   const seen = new Set(whole.map(keyOf));
   const inside = (await select(sources, terms.map((term) => [`%${escapeLike(term)}%`]), limit))

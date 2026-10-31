@@ -67,6 +67,7 @@ const { escapeLike, looseLike, score, wordLike, isAcronym, hasWordBreaks } =
   await import(join(build, 'sources/matching.js'));
 const { searchLicensed } = await import(join(build, 'sources/special.js'));
 const { oneAtATime } = await import(join(build, 'search/oneAtATime.js'));
+const { newestOnly } = await import(join(build, 'search/newestOnly.js'));
 const {
   candidatesFromGoogleFeed,
   cleanIsbn,
@@ -2394,6 +2395,37 @@ console.log('a search nobody is waiting for any more');
   waits.get('war and').reject(new Error('aborted'));
   await settle();
   check('a run already in the air says nothing more', said, []);
+}
+
+console.log('local search: one at a time, newest waiting');
+{
+  const settle = () => new Promise((done) => setImmediate(done));
+  const started = [];
+  const waits = new Map();
+  const shown = [];
+  const local = newestOnly(
+    (term) => {
+      started.push(term);
+      return new Promise((resolve) => waits.set(term, resolve));
+    },
+    (term, value) => shown.push(`${term}:${value}`)
+  );
+  local.ask('h');
+  local.ask('ha');
+  local.ask('ham');
+  check('letters typed while one runs do not each start a scan', started, ['h']);
+  waits.get('h')('1');
+  await settle();
+  check('only the newest goes next', started, ['h', 'ham']);
+  check('and a stale answer is not shown', shown, []);
+  waits.get('ham')('3');
+  await settle();
+  check('the newest answer lands', shown, ['ham:3']);
+  local.ask('hamlet');
+  local.stop();
+  waits.get('hamlet')('6');
+  await settle();
+  check('a stopped search shows nothing', shown, ['ham:3']);
 }
 
 

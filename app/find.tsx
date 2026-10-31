@@ -29,6 +29,7 @@ import { googleBooksKey } from '../src/sources/googleBooksKey';
 import { rememberSeen, seenCandidate, SEEN } from '../src/sources/seen';
 import { NO_RESULTS, rankBook, searchLibrary, type LibraryResults } from '../src/search/library';
 import { oneAtATime } from '../src/search/oneAtATime';
+import { newestOnly } from '../src/search/newestOnly';
 import { searchIndex, type IndexedBook } from '../src/sources/catalog';
 import { publicSources } from '../src/sources/registry';
 import { choiceFromIndex, takeChoice, type Choice } from '../src/sources/chosen';
@@ -89,7 +90,7 @@ const SETTLE = 140;
  * keystroke itself, the kept lists a breath later, and the catalogs fill in
  * underneath as they reply.
  */
-const REACH = 450;
+const REACH = 300;
 
 /** What a section of hits is titled, in the order somebody means them. */
 const SECTIONS: { id: string; title: string }[] = [
@@ -230,19 +231,62 @@ export default function Find() {
   // Everything else is a query per keystroke, so it waits for a pause: one is
   // a scan of every short column in the library, the other of every word of
   // every manuscript on the device.
+  //
+  // A pause between two letters is often longer than that wait, so each letter
+  // would start a scan and the last one's answer queued behind all of them.
+  // Now one runs at a time and only the newest term waits. A term that only
+  // adds letters to one that found nothing finds nothing too, so it is not asked.
+  const sourcesNow = useRef(sources);
+  const nothingUnder = useRef<{ library: string | null; index: string | null; sources: string }>({
+    library: null,
+    index: null,
+    sources: sourceKey,
+  });
+  const local = useMemo(
+    () =>
+      newestOnly(
+        async (term) => {
+          const none = nothingUnder.current;
+          const extends_ = (empty: string | null) => empty !== null && term.startsWith(empty);
+          const [library, index] = await Promise.all([
+            extends_(none.library) ? NO_RESULTS : searchLibrary(term).catch(() => NO_RESULTS),
+            extends_(none.index) ? [] : searchIndex(term, sourcesNow.current).catch(() => []),
+          ]);
+          // Content search starts at two letters, so one letter's nothing proves nothing.
+          if (!library.meta.length && !library.text.length && term.length >= 2) none.library ??= term;
+          if (!index.length) none.index ??= term;
+          return { library, index };
+        },
+        (_term, { library, index }) => {
+          setResults(library);
+          setHits(index);
+        }
+      ),
+    []
+  );
+
   useEffect(() => {
-    const term = query.trim();
+    sourcesNow.current = sources;
+    const none = nothingUnder.current;
+    if (none.sources !== sourceKey) Object.assign(none, { index: null, sources: sourceKey });
+  }, [sources, sourceKey]);
+
+  useEffect(() => {
+    const term = query.trim().toLowerCase();
+    const none = nothingUnder.current;
+    if (none.library && !term.startsWith(none.library)) none.library = null;
+    if (none.index && !term.startsWith(none.index)) none.index = null;
     if (!term) {
+      local.stop();
       setResults(NO_RESULTS);
       setHits([]);
       return;
     }
-    const timer = setTimeout(() => {
-      searchLibrary(term).then(setResults).catch(() => setResults(NO_RESULTS));
-      searchIndex(term, sources).then(setHits).catch(() => setHits([]));
-    }, SETTLE);
+    const timer = setTimeout(() => local.ask(term), SETTLE);
     return () => clearTimeout(timer);
-  }, [query, sources]);
+  }, [query, sources, local]);
+
+  useEffect(() => () => local.stop(), [local]);
 
   /**
    * Published books of this name, asked of the catalogs that record them.

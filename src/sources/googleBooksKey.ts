@@ -19,14 +19,23 @@ const SECRET_OPTIONS: SecureStore.SecretOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
 
-export async function googleBooksKey(): Promise<string | null> {
-  return SecureStore.getItemAsync(KEY, SECRET_OPTIONS);
+/** Read once: the keychain is a trip to another process, and search asked it every lookup. */
+let kept: Promise<string | null> | null = null;
+
+export function googleBooksKey(): Promise<string | null> {
+  kept ??= SecureStore.getItemAsync(KEY, SECRET_OPTIONS).catch((problem) => {
+    kept = null;
+    throw problem;
+  });
+  return kept;
 }
 
 export async function saveGoogleBooksKey(value: string): Promise<void> {
   await SecureStore.setItemAsync(KEY, value.trim(), SECRET_OPTIONS);
+  kept = Promise.resolve(value.trim());
 }
 
 export async function forgetGoogleBooksKey(): Promise<void> {
   await SecureStore.deleteItemAsync(KEY, SECRET_OPTIONS);
+  kept = Promise.resolve(null);
 }
