@@ -45,8 +45,7 @@ import { BackupOffer, RestoreOffer } from '../src/ui/Safekeeping';
 import { subscribeToRestores } from '../src/backup/changes';
 import { syncOnLaunch } from '../src/cloud/sync';
 import { space, usePalette } from '../src/theme';
-import { countCards, createTopicCard, recentCards, type CardLine } from '../src/db/topics';
-import { askTopic } from '../src/ui/askTopic';
+import { countCards, recentCards, type CardLine } from '../src/db/topics';
 import { CardRow } from '../src/ui/CardRow';
 
 /** Enough to read on the way past; the heading leads to the rest. */
@@ -94,11 +93,6 @@ export default function Home() {
     recentCards(CARDS_SHOWN).then(setCards).catch(() => undefined);
     countCards().then(setCardCount).catch(() => undefined);
   }, []);
-
-  /** A card about a topic rather than a book: the topic is asked for, and holds it. */
-  function newCard() {
-    askTopic(t, async (topic) => router.push(`/card/${await createTopicCard(topic)}`), cards[0]?.topics?.split(' · ')[0] ?? '');
-  }
 
   /** From Files, matched against the shelf once it has been read. */
   async function fromFile() {
@@ -458,7 +452,7 @@ export default function Home() {
               </View>
             ) : null}
 
-            {/* The newest cards from any book or topic, and the way to make one about a topic. */}
+            {/* The newest cards from any book or topic; new ones are made on the Flashcards page. */}
             <View style={{ marginTop: space.xl }}>
               <SectionHead
                 title={t('shelf.sectionCards')}
@@ -469,9 +463,6 @@ export default function Home() {
                 {cards.map((card) => (
                   <CardRow key={card.id} card={card} />
                 ))}
-                <Pressable onPress={newCard} hitSlop={8} style={{ paddingVertical: space.sm }}>
-                  <Text style={{ color: palette.accent, fontSize: 15 }}>{t('shelf.newCard')}</Text>
-                </Pressable>
               </View>
             </View>
 
