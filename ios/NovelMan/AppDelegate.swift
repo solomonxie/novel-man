@@ -1,4 +1,5 @@
 import UIKit
+import CoreSpotlight
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
@@ -106,9 +107,25 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
   }
 
-  // Universal Links.
+  // Universal Links, and a tapped Spotlight result.
   func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+    if let url = spotlightLink(userActivity) {
+      _ = RCTLinkingManager.application(.shared, open: url, options: [:])
+      return
+    }
     _ = RCTLinkingManager.application(.shared, continue: userActivity) { _ in }
+  }
+
+  /** A Spotlight item's identifier is the route it opens; see `Spotlight.m`. */
+  private func spotlightLink(_ activity: NSUserActivity) -> URL? {
+    guard activity.activityType == CSSearchableItemActionType,
+      let route = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String
+    else { return nil }
+    var link = URLComponents()
+    link.scheme = "novelman"
+    link.host = "open"
+    link.queryItems = [URLQueryItem(name: "path", value: route)]
+    return link.url
   }
 
   /**
@@ -122,6 +139,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   ) -> [UIApplication.LaunchOptionsKey: Any] {
     if let context = options.urlContexts.first {
       return [.url: readable(context)]
+    }
+    if let activity = options.userActivities.first, let url = spotlightLink(activity) {
+      return [.url: url]
     }
     if let activity = options.userActivities.first {
       let dictionary: [AnyHashable: Any] = [

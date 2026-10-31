@@ -19,6 +19,7 @@
 		F11748502D0722820044C1DA /* ChineseVariant.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748512D0722820044C1DA /* ChineseVariant.m */; };
 		F11748602D0722820044C1DB /* Dictionary.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748612D0722820044C1DB /* Dictionary.m */; };
 		F11748702D0722820044C1DC /* Storefront.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748712D0722820044C1DD /* Storefront.m */; };
+		5B0C1E2A9F3D4A6B8C7D0E1F /* Spotlight.m in Sources */ = {isa = PBXBuildFile; fileRef = 5B0C1E2A9F3D4A6B8C7D0E20 /* Spotlight.m */; };
 		F11748722D0722820044C1DE /* Zip.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748732D0722820044C1DF /* Zip.m */; };
 		F11748742D0722820044C1E0 /* TextFile.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748752D0722820044C1E1 /* TextFile.m */; };
 /* End PBXBuildFile section */
@@ -54,6 +55,7 @@
 		F11748512D0722820044C1DA /* ChineseVariant.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = ChineseVariant.m; path = NovelMan/ChineseVariant.m; sourceTree = "<group>"; };
 		F11748612D0722820044C1DB /* Dictionary.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Dictionary.m; path = NovelMan/Dictionary.m; sourceTree = "<group>"; };
 		F11748712D0722820044C1DD /* Storefront.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Storefront.m; path = NovelMan/Storefront.m; sourceTree = "<group>"; };
+		5B0C1E2A9F3D4A6B8C7D0E20 /* Spotlight.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Spotlight.m; path = NovelMan/Spotlight.m; sourceTree = "<group>"; };
 		F11748732D0722820044C1DF /* Zip.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Zip.m; path = NovelMan/Zip.m; sourceTree = "<group>"; };
 		F11748752D0722820044C1E1 /* TextFile.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = TextFile.m; path = NovelMan/TextFile.m; sourceTree = "<group>"; };
 		F55E3B88E60879C6C1010125 /* Pods-NovelMan.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NovelMan.debug.xcconfig"; path = "Target Support Files/Pods-NovelMan/Pods-NovelMan.debug.xcconfig"; sourceTree = "<group>"; };
@@ -86,6 +88,7 @@
 				F11748512D0722820044C1DA /* ChineseVariant.m */,
 				F11748612D0722820044C1DB /* Dictionary.m */,
 				F11748712D0722820044C1DD /* Storefront.m */,
+				5B0C1E2A9F3D4A6B8C7D0E20 /* Spotlight.m */,
 				F11748732D0722820044C1DF /* Zip.m */,
 				F11748752D0722820044C1E1 /* TextFile.m */,
 				F11748442D0722820044C1D9 /* NovelMan-Bridging-Header.h */,
@@ -373,6 +376,7 @@
 				F11748502D0722820044C1DA /* ChineseVariant.m in Sources */,
 				F11748602D0722820044C1DB /* Dictionary.m in Sources */,
 				F11748702D0722820044C1DC /* Storefront.m in Sources */,
+				5B0C1E2A9F3D4A6B8C7D0E1F /* Spotlight.m in Sources */,
 				F11748722D0722820044C1DE /* Zip.m in Sources */,
 				F11748742D0722820044C1E0 /* TextFile.m in Sources */,
 				4AA59815BF31DE3DDFEBF71E /* TextOffset.m in Sources */,

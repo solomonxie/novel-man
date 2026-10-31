@@ -11,6 +11,7 @@ import { listenForIncoming } from '../import/sources/incoming';
 import { loadAppearance } from '../theme/appearance';
 import { watchForChanges } from '../backup/icloud';
 import { watchForLocalBackup } from '../backup/local';
+import { watchSpotlight } from '../search/spotlight';
 import { palettes, usePalette, useScheme, type Palette, type Scheme } from '../theme';
 import { loadDemoMode } from '../dev/demo';
 import { openScreen, prepareScreenshots } from '../dev/screenshot';
@@ -55,6 +56,7 @@ function Shell({ screen }: { screen?: string }) {
   }, []);
   useEffect(watchForChanges, []);
   useEffect(watchForLocalBackup, []);
+  useEffect(watchSpotlight, []);
   useEffect(() => {
     if (screen) setTimeout(() => void openScreen(screen), 800);
   }, [screen]);

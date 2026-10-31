@@ -4,6 +4,7 @@ import { supportedExtensions } from '../registry';
 import { enqueueImport } from '../queue';
 import { fetchManuscript } from './url';
 import { router } from '../../navigation/router';
+import { SPOTLIGHT_ROUTE } from '../../search/spotlight';
 
 /** A file that is not a book goes to the page that reads its kind. */
 const PAGES: Record<string, string> = {
@@ -36,6 +37,12 @@ export function handleIncoming(url: string): boolean {
   const remote = queryValue(query, 'url');
   if (path === 'import' && remote) {
     void fetchManuscript(remote).then(enqueueImport).catch(() => undefined);
+    return true;
+  }
+  // A Spotlight result: the route it was indexed under.
+  const route = queryValue(query, 'path');
+  if (path === 'open' && route && SPOTLIGHT_ROUTE.test(route)) {
+    router.pushWhenReady(route);
     return true;
   }
   return false;
