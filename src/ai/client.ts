@@ -40,8 +40,9 @@ async function openAICompatible(
       messages,
     }),
   });
-  const body = await response.json();
-  if (!response.ok) throw new AiError(body?.error?.message ?? response.status, body?.error?.code);
+  // A gateway's error page is HTML; its status is still the answer.
+  const body = await response.json().catch(() => null);
+  if (!response.ok) throw new AiError(body?.error?.message ?? response.status, body?.error?.code, response.status);
   return body?.choices?.[0]?.message?.content ?? '';
 }
 
@@ -67,8 +68,9 @@ async function anthropic(
       messages: messages.filter((m) => m.role !== 'system'),
     }),
   });
-  const body = await response.json();
-  if (!response.ok) throw new AiError(body?.error?.message ?? response.status, body?.error?.type);
+  // A gateway's error page is HTML; its status is still the answer.
+  const body = await response.json().catch(() => null);
+  if (!response.ok) throw new AiError(body?.error?.message ?? response.status, body?.error?.type, response.status);
   return body?.content?.[0]?.text ?? '';
 }
 
@@ -90,14 +92,15 @@ async function google(
       }),
     }
   );
-  const body = await response.json();
-  if (!response.ok) throw new AiError(body?.error?.message ?? response.status, body?.error?.status);
+  // A gateway's error page is HTML; its status is still the answer.
+  const body = await response.json().catch(() => null);
+  if (!response.ok) throw new AiError(body?.error?.message ?? response.status, body?.error?.status, response.status);
   return body?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
 /** The vendor's own code is what tells the user which field to fix. */
 export class AiError extends Error {
-  constructor(message: string | number, public code?: string) {
+  constructor(message: string | number, public code?: string, public status?: number) {
     super(String(message));
   }
 }

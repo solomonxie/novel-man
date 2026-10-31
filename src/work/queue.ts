@@ -16,6 +16,7 @@ import {
   type WorkUnit,
 } from '../db/work';
 import { handlers } from './handlers';
+import { AiError, AiTimeout } from '../ai/client';
 
 export type WorkFeed = { units: WorkUnit[]; counts: WorkCounts };
 
@@ -117,7 +118,7 @@ async function loop(): Promise<void> {
     controller = new AbortController();
     runningId = job.id;
     try {
-      await handlers[job.kind](job, controller.signal);
+      await withBackoff(() => handlers[job.kind](job, controller!.signal), controller.signal);
       await finishJob(job.id, 'done');
     } catch (error) {
       await finishJob(job.id, controller.signal.aborted ? 'canceled' : 'failed', String(error));
@@ -127,6 +128,42 @@ async function loop(): Promise<void> {
     }
     await publish();
   }
+}
+
+const TRIES = 5;
+const FIRST_WAIT = 2000;
+
+/**
+ * A dropped connection, a timeout, a rate limit or an overloaded vendor is
+ * worth asking again; a wrong key or an unreadable answer is not. Waits double
+ * each time — 2, 4, 8, 16, 32 seconds — and a stop ends the wait too.
+ */
+export function transient(error: unknown): boolean {
+  if (error instanceof AiTimeout) return true;
+  if (error instanceof AiError && error.status) return error.status === 408 || error.status === 429 || error.status >= 500;
+  return /network|timed? ?out|socket|connection|offline|overloaded|rate.?limit|temporarily/i.test(String(error));
+}
+
+async function withBackoff(run: () => Promise<void>, signal: AbortSignal) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      if (signal.aborted || attempt + 1 >= TRIES || !transient(error)) throw error;
+      await wait(FIRST_WAIT * 2 ** attempt, signal);
+      if (signal.aborted) throw error;
+    }
+  }
+}
+
+function wait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((done) => {
+    const timer = setTimeout(done, ms);
+    signal.addEventListener('abort', () => {
+      clearTimeout(timer);
+      done();
+    });
+  });
 }
 
 /** Work outlives the app, so it has to be picked back up when it reopens. */
