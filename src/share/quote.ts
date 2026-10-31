@@ -22,6 +22,29 @@ export function quoteAsText(quote: Quote): string {
 }
 
 /**
+ * Several marks as one text to paste: the book named once, then each passage
+ * in quotation marks with what was written about it underneath, a blank line
+ * between them, and a chapter's name where the chapter changes.
+ */
+export function quotesAsText(
+  book: { title: string; author?: string | null },
+  entries: { text: string; note?: string | null; chapter?: string | null }[]
+): string {
+  const lines = [[book.title, book.author].filter(Boolean).join(' · ')];
+  let chapter: string | null | undefined;
+  for (const entry of entries) {
+    if (entry.chapter && entry.chapter !== chapter) {
+      lines.push(/[\u3400-\u9fff]/.test(entry.chapter) ? `【${entry.chapter}】` : `— ${entry.chapter} —`);
+    }
+    chapter = entry.chapter;
+    lines.push(
+      [entry.text.trim() ? `“${entry.text.trim()}”` : '', entry.note?.trim() ?? ''].filter(Boolean).join('\n')
+    );
+  }
+  return lines.filter(Boolean).join('\n\n');
+}
+
+/**
  * The same mark, in the form it is useful in somebody else's notes app: the
  * book's words as a blockquote, the reader's own words under them as their
  * own, and the line that says where it came from.

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { highlightColors, radius, space, type HighlightColor } from '../theme';
 
@@ -15,7 +15,7 @@ export type MenuAction = { key: string; label: string; onPress: () => void };
  * one marks the passage, tapping the one already on it takes the mark off.
  * There is no Highlight button because there is nothing left for it to say.
  */
-export function SentenceMenu({ actions, activeColor, onColor, onDismiss, dismissLabel, dark }: {
+export function SentenceMenu({ actions, activeColor, onColor, onDismiss, dismissLabel, dark, note, onNote }: {
   actions: MenuAction[];
   activeColor?: string | null;
   onColor?: (color: HighlightColor) => void;
@@ -23,6 +23,9 @@ export function SentenceMenu({ actions, activeColor, onColor, onDismiss, dismiss
   onDismiss?: () => void;
   dismissLabel: string;
   dark: boolean;
+  /** What was written on the mark, shown first: a tapped highlight is usually opened to read it. */
+  note?: string | null;
+  onNote?: () => void;
 }) {
   // Clear of the home indicator, and off the screen edges: a control that
   // reaches the glass is a control the hand rests on by accident.
@@ -34,6 +37,13 @@ export function SentenceMenu({ actions, activeColor, onColor, onDismiss, dismiss
         { backgroundColor: dark ? '#2A2A2E' : '#2B2B2F', bottom: Math.max(insets.bottom, space.md) },
       ]}
     >
+      {note?.trim() ? (
+        <Pressable onPress={onNote} style={styles.note}>
+          <ScrollView style={{ maxHeight: 140 }} contentContainerStyle={{ padding: space.md }}>
+            <Text style={styles.noteText}>{note.trim()}</Text>
+          </ScrollView>
+        </Pressable>
+      ) : null}
       {onColor ? (
         <View style={[styles.row, styles.colors]}>
           {highlightColors.map((color) => (
@@ -109,6 +119,8 @@ const styles = StyleSheet.create({
     borderLeftColor: 'rgba(255,255,255,0.18)',
   },
   dismissLabel: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  note: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.18)' },
+  noteText: { color: '#FFFFFF', fontSize: 15, lineHeight: 21 },
   label: { color: '#FFFFFF', fontSize: 15 },
   swatchTarget: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
   swatch: { width: 24, height: 24, borderRadius: 12 },

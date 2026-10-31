@@ -39,6 +39,40 @@ export function annotationAt(annotations: Annotation[], span: Span): Annotation 
   );
 }
 
+/** The mark this exact range made — the one a note or a colour on it belongs to. */
+export function annotationExact(annotations: Annotation[], span: Span): Annotation | undefined {
+  return annotations.find((entry) => entry.start === span.start && entry.end === span.end);
+}
+
+/** Of the marks over one offset, the narrowest: a phrase marked inside a marked sentence wins. */
+export function markAt(annotations: Annotation[], at: number): Annotation | undefined {
+  return annotations
+    .filter((entry) => entry.start <= at && at < entry.end)
+    .sort((a, b) => a.end - a.start - (b.end - b.start))[0];
+}
+
+export type MarkedPiece = Span & { mark?: Annotation };
+
+/**
+ * A sentence cut where marks begin and end, so a highlight is drawn over the
+ * words it covers rather than the whole sentence it falls in. Each piece wears
+ * the narrowest mark over it; a sentence no mark touches is one piece.
+ */
+export function markedPieces(span: Span, annotations: Annotation[]): MarkedPiece[] {
+  const touching = annotations.filter((entry) => entry.color && entry.end > span.start && entry.start < span.end);
+  const cuts = new Set([span.start, span.end]);
+  for (const entry of touching) {
+    if (entry.start > span.start) cuts.add(entry.start);
+    if (entry.end < span.end) cuts.add(entry.end);
+  }
+  const at = [...cuts].sort((a, b) => a - b);
+  return at.slice(0, -1).map((start, index) => ({
+    start,
+    end: at[index + 1],
+    mark: markAt(touching, start),
+  }));
+}
+
 export function progressWithin(chapter: Chapter, offset: number): number {
   const length = Math.max(1, chapter.end - chapter.start);
   return Math.min(1, Math.max(0, (offset - chapter.start) / length));

@@ -48,7 +48,7 @@ import {
   type Entity,
   type Verse,
 } from '../../src/db/repo';
-import { annotationAt, layoutChapter, type Paragraph } from '../../src/reader/model';
+import { annotationAt, annotationExact, layoutChapter, markAt, markedPieces, type Paragraph } from '../../src/reader/model';
 import { blockOrigins, documentRange } from '../../src/reader/selection';
 import { OriginalPage } from '../../src/ui/OriginalPage';
 import { imageIn } from '../../src/reader/images';
@@ -321,9 +321,7 @@ export default function Reader() {
    */
   const loadFilable = useCallback(async (kind: string | undefined) => {
     if (!id) return;
-    const wanted = (['term', 'card'] as const).filter((each) =>
-      supports(kind, each === 'term' ? 'terms' : 'cards')
-    );
+    const wanted = supports(kind, 'cards') ? (['card'] as const) : [];
     const lists = await Promise.all(wanted.map((each) => listEntities(id, each)));
     setFilable(lists.flat());
   }, [id]);
@@ -666,6 +664,12 @@ export default function Reader() {
     else beginSelect(found, event);
   }
 
+  /** A tap on a highlight opens it: its note, and what can be done to it. */
+  function openMark(mark: Annotation) {
+    setDragged({ start: mark.start, end: mark.end });
+    setChrome(true);
+  }
+
   function beginSelect(span: Span, event: GestureResponderEvent) {
     setSelection({ anchor: span, focus: span, y: event.nativeEvent.pageY });
     setChrome(true);
@@ -679,7 +683,7 @@ export default function Reader() {
    */
   async function markUnder(x: number, y: number, parts: { prefix: number; spans: Span[] }[]): Promise<Span | null> {
     const at = await offsetUnder(x, y, parts);
-    const mark = at === null ? null : marks.find((entry) => entry.start <= at && at < entry.end);
+    const mark = at === null ? null : markAt(marks, at);
     return mark ? { start: mark.start, end: mark.end } : null;
   }
 
@@ -759,7 +763,7 @@ export default function Reader() {
         }
       : null);
 
-  const selected = range ? annotationAt(marks, range) : undefined;
+  const selected = range ? annotationExact(marks, range) : undefined;
   /** Somewhere for a passage to go: this kind of book has terms, or cards, or both. */
   const canAdd = supports(book?.kind, 'terms') || supports(book?.kind, 'cards');
   /**
@@ -860,7 +864,7 @@ export default function Reader() {
   async function onColor(color: HighlightColor) {
     if (!range || !id) return;
     remember(color);
-    const existing = annotationAt(marks, range);
+    const existing = annotationExact(marks, range);
     if (existing?.kind === 'highlight' && existing.color === color) {
       await removeAnnotation(existing.id);
     } else if (existing) await updateAnnotation(existing.id, { color });
@@ -871,7 +875,7 @@ export default function Reader() {
 
   async function saveNote(body: string) {
     if (!noteFor || !id) return;
-    const existing = annotationAt(marks, noteFor);
+    const existing = annotationExact(marks, noteFor);
     if (existing) {
       await updateAnnotation(existing.id, { note: body || null, kind: body ? 'note' : 'highlight' });
     } else if (body) {
@@ -890,7 +894,7 @@ export default function Reader() {
 
   /** Takes the whole mark off — the highlight and whatever was written on it. */
   function confirmRemoveMark(span: Span) {
-    const existing = annotationAt(marks, span);
+    const existing = annotationExact(marks, span);
     if (!existing) return;
     Alert.alert(t('notes.deleteConfirm'), undefined, [
       { text: t('settings.cancel'), style: 'cancel' },
@@ -930,7 +934,7 @@ export default function Reader() {
       title: book?.title ?? '',
       author: book?.author,
       chapter: chapter?.title.trim() || null,
-      note: annotationAt(marks, span)?.note ?? null,
+      note: annotationExact(marks, span)?.note ?? null,
     };
   }
 
@@ -1066,7 +1070,6 @@ export default function Reader() {
   }
 
   function renderSentence(span: Span, useTarget: boolean, free = false) {
-    const marked = annotationAt(marks, span);
     // A dragged range is drawn by the system; tinting it as well would change
     // the text under the handles while they move.
     const active = !dragged && range !== null && span.start >= range.start && span.end <= range.end;
@@ -1079,7 +1082,20 @@ export default function Reader() {
      */
     const body = useTarget ? page.sentences.get(span.start) : undefined;
     const shown = body || source.slice(span.start, span.end);
-    const mark = marked?.color ? markOn(marked.color, settings.theme) : null;
+    /**
+     * Marks are drawn over the words they cover, not the sentence they are in.
+     * A translated sentence has none of the book's offsets, and a cut that
+     * would split markup apart draws differently — either way the sentence
+     * wears its mark whole, as it used to.
+     */
+    const cut = body ? [] : markedPieces(span, marks);
+    const exact =
+      cut.length > 1 &&
+      cut.map((piece) => drawnText(source.slice(piece.start, piece.end))).join('') === drawnText(shown);
+    const pieces = exact ? cut : [{ ...span, mark: annotationAt(marks, span) }];
+    const tint = (mark?: Annotation) =>
+      active || flashing ? palette.tint : mark?.color ? markOn(mark.color, settings.theme).bg : 'transparent';
+    const ink = (mark?: Annotation) => (mark?.color ? markOn(mark.color, settings.theme).ink : palette.text);
     return (
       <Text
         key={span.start}
@@ -1090,14 +1106,27 @@ export default function Reader() {
         onLongPress={(event) => beginSelect(span, event)}
         onPress={(event) => {
           if (selection) return extendSelect(span, event);
+          if (!exact && pieces[0].mark && !free) return openMark(pieces[0].mark);
           setChrome(!chromeShown.current);
         }}
-        style={{
-          backgroundColor: active || flashing ? palette.tint : mark?.bg ?? 'transparent',
-          color: mark?.ink ?? palette.text,
-        }}
+        style={exact ? { color: palette.text } : { backgroundColor: tint(pieces[0].mark), color: ink(pieces[0].mark) }}
       >
-        {renderRuns(shown, span, !body, free)}
+        {exact
+          ? pieces.map((piece) => (
+              <Text
+                key={piece.start}
+                suppressHighlighting
+                onPress={
+                  piece.mark && !free
+                    ? (event) => (selection ? extendSelect(span, event) : openMark(piece.mark!))
+                    : undefined
+                }
+                style={{ backgroundColor: tint(piece.mark), color: ink(piece.mark) }}
+              >
+                {renderRuns(source.slice(piece.start, piece.end), piece, true, free)}
+              </Text>
+            ))
+          : renderRuns(shown, span, !body, free)}
         {/* A full stop in Chinese is already a space wide; one more is a hole. */}
         {endsTight(shown) ? '' : ' '}
       </Text>
@@ -1875,13 +1904,15 @@ export default function Reader() {
           activeColor={selected?.color ?? settings.highlight}
           onColor={onColor}
           onDismiss={endSelection}
+          note={selected?.note}
+          onNote={() => setNoteFor(range!)}
           actions={[
             { key: 'copy', label: t('reader.copy'), onPress: onCopy },
             ...(selected
               ? [
                   {
                     key: 'remove',
-                    label: t('reader.unhighlight'),
+                    label: selected.note ? t('settings.delete') : t('reader.unhighlight'),
                     // A note is the reader's own writing, so that one asks first.
                     onPress: () => (selected.note ? confirmRemoveMark(range!) : void removeMark(selected.id)),
                   },
@@ -1889,7 +1920,7 @@ export default function Reader() {
               : []),
             {
               key: 'note',
-              label: t('reader.note'),
+              label: selected?.note ? t('reader.editNote') : t('reader.note'),
               // The selection stays while the sheet is open: backing out of a
               // note is a change of mind about the note, not about the words.
               onPress: () => setNoteFor(range!),
@@ -1956,9 +1987,6 @@ export default function Reader() {
           ...(supports(book?.kind, 'cards')
             ? [{ id: `${NEW}card`, label: t('reader.newCard') }]
             : []),
-          ...(supports(book?.kind, 'terms')
-            ? [{ id: `${NEW}term`, label: t('reader.newTerm') }]
-            : []),
           ...filable.map((one) => ({
             id: one.id,
             label: one.name || t(one.kind === 'card' ? 'card.frontPlaceholder' : 'term.name'),
@@ -1994,11 +2022,11 @@ export default function Reader() {
       <NoteSheet
         visible={noteFor !== null}
         quote={noteFor ? source.slice(noteFor.start, noteFor.end) : ''}
-        note={noteFor ? annotationAt(marks, noteFor)?.note ?? null : null}
+        note={noteFor ? annotationExact(marks, noteFor)?.note ?? null : null}
         onSave={saveNote}
         // Nothing to delete on a passage that has never been marked.
         onDelete={
-          noteFor && annotationAt(marks, noteFor) ? () => confirmRemoveMark(noteFor) : undefined
+          noteFor && annotationExact(marks, noteFor) ? () => confirmRemoveMark(noteFor) : undefined
         }
         onClose={() => setNoteFor(null)}
       />

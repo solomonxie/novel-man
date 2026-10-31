@@ -21,7 +21,7 @@ const { detectLanguage, scriptOf, baseLanguage } = await import(join(build, 'tex
 const { partsOf, salvageRows, meaningfulName } = await import(join(build, 'structure/document.js'));
 const { languageFrom, needsRelabel } = await import(join(build, 'books/language.js'));
 const { normalizeLanguage, labelFor } = await import(join(build, 'translate/languages.js'));
-const { layoutChapter, annotationAt } = await import(join(build, 'reader/model.js'));
+const { layoutChapter, annotationAt, annotationExact, markedPieces } = await import(join(build, 'reader/model.js'));
 const { originsOf, blockOrigins, documentRange } = await import(join(build, 'reader/selection.js'));
 const { imageIn, imageMarker } = await import(join(build, 'reader/images.js'));
 const { sentenceAtLine } = await import(join(build, 'reader/lines.js'));
@@ -2395,6 +2395,22 @@ console.log('a search nobody is waiting for any more');
   waits.get('war and').reject(new Error('aborted'));
   await settle();
   check('a run already in the air says nothing more', said, []);
+}
+
+console.log('a highlight drawn over the words it covers');
+{
+  const mark = (id, start, end) => ({ id, start, end, color: 'yellow' });
+  const sentence = { start: 0, end: 40 };
+  const whole = mark('whole', 0, 40);
+  const phrase = mark('phrase', 10, 20);
+  check('an unmarked sentence is one piece', markedPieces(sentence, []).map((p) => [p.start, p.end, p.mark?.id ?? null]), [[0, 40, null]]);
+  check('a phrase is cut out of its sentence', markedPieces(sentence, [phrase]).map((p) => [p.start, p.end, p.mark?.id ?? null]),
+    [[0, 10, null], [10, 20, 'phrase'], [20, 40, null]]);
+  check('the narrower mark wins inside a wider one', markedPieces(sentence, [whole, phrase]).map((p) => p.mark?.id),
+    ['whole', 'phrase', 'whole']);
+  check('a mark running past the sentence is cut at its edge', markedPieces({ start: 30, end: 60 }, [mark('long', 0, 45)]).map((p) => [p.start, p.end]),
+    [[30, 45], [45, 60]]);
+  check('a note goes on the exact range, not the sentence it falls in', annotationExact([whole], { start: 10, end: 20 }), undefined);
 }
 
 console.log('local search: one at a time, newest waiting');

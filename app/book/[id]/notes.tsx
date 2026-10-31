@@ -16,7 +16,7 @@ import {
   type Book,
   type Chapter,
 } from '../../../src/db/repo';
-import { quoteAsMarkdown, shareQuoteText, type Quote } from '../../../src/share/quote';
+import { quoteAsMarkdown, quotesAsText, shareQuoteText, type Quote } from '../../../src/share/quote';
 import { NoteSheet } from '../../../src/ui/NoteSheet';
 import { listVersions, versionLabel, type ChapterVersion } from '../../../src/db/versions';
 import { Toast, useFlash } from '../../../src/ui/primitives';
@@ -138,6 +138,29 @@ export default function Notes() {
   }, [annotations, chapters, query, filter]);
 
   const total = annotations?.length ?? 0;
+  const shownEntries = groups.flatMap((group) => group.items.map((entry) => ({ entry, chapter: group.chapter })));
+
+  function copyPicked() {
+    const chosen = shownEntries.filter(({ entry }) => picked.has(entry.id));
+    Clipboard.setString(
+      quotesAsText(
+        { title: book?.title ?? '', author: book?.author },
+        chosen.map(({ entry, chapter }) => ({
+          text: entry.quote,
+          note: entry.note,
+          chapter: chapter?.title.trim() || null,
+        }))
+      )
+    );
+    flash(t('notes.copiedCount', { count: chosen.length }));
+    endSelecting();
+  }
+
+  function pickAll() {
+    setPicked(
+      picked.size === shownEntries.length ? new Set() : new Set(shownEntries.map(({ entry }) => entry.id))
+    );
+  }
 
   function confirmRemove(entry: Annotation) {
     Alert.alert(t('notes.deleteConfirm'), undefined, [
@@ -375,13 +398,25 @@ export default function Notes() {
 
       {/* Only once something is picked: a delete button over an empty
           selection is a button that can only disappoint. */}
-      {selecting && picked.size > 0 ? (
+      {selecting ? (
         <View style={[styles.bar, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-          <Pressable onPress={confirmRemovePicked} style={styles.barButton}>
-            <Text style={{ color: palette.danger, fontSize: 16, fontWeight: '600' }}>
-              {t('notes.deleteSelected', { count: picked.size })}
+          <Pressable onPress={pickAll} style={styles.barButton}>
+            <Text style={{ color: palette.accent, fontSize: 16 }}>
+              {picked.size === shownEntries.length && picked.size > 0 ? t('notes.selectNone') : t('notes.selectAll')}
             </Text>
           </Pressable>
+          {picked.size > 0 ? (
+            <>
+              <Pressable onPress={copyPicked} style={styles.barButton}>
+                <Text style={{ color: palette.accent, fontSize: 16, fontWeight: '600' }}>{t('reader.copy')}</Text>
+              </Pressable>
+              <Pressable onPress={confirmRemovePicked} style={styles.barButton}>
+                <Text style={{ color: palette.danger, fontSize: 16, fontWeight: '600' }}>
+                  {t('notes.deleteSelected', { count: picked.size })}
+                </Text>
+              </Pressable>
+            </>
+          ) : null}
         </View>
       ) : null}
 
@@ -464,8 +499,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingBottom: space.xl,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
   },
-  barButton: { paddingVertical: space.md, alignItems: 'center' },
+  barButton: { paddingVertical: space.md, paddingHorizontal: space.md, alignItems: 'center' },
   cardFoot: {
     flexDirection: 'row',
     justifyContent: 'space-between',
