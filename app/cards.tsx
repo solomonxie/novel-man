@@ -112,6 +112,18 @@ export default function AllCards() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={{ gap: space.md, marginBottom: space.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+              <Pressable onPress={add} hitSlop={8}>
+                <Text style={{ color: palette.accent, fontSize: 16 }}>{t('shelf.newCard')}</Text>
+              </Pressable>
+              <View style={{ flex: 1 }} />
+              <Pressable onPress={() => void importFile()} hitSlop={8}>
+                <Text style={{ color: palette.accent, fontSize: 16 }}>{t('cards.import')}</Text>
+              </Pressable>
+              <Pressable onPress={explain} hitSlop={12} accessibilityLabel={t('cards.formatTitle')}>
+                <Text style={{ color: palette.dim, fontSize: 17 }}>ⓘ</Text>
+              </Pressable>
+            </View>
             {(cards?.length ?? 0) > 8 ? (
               <Search value={query} onChange={setQuery} placeholder={t('cards.search')} />
             ) : null}
@@ -179,21 +191,6 @@ export default function AllCards() {
               {cards.length ? t('cards.noMatches') : t('cards.empty')}
             </Text>
           ) : null
-        }
-        ListFooterComponent={
-          <View>
-            <Pressable onPress={add} style={{ paddingVertical: space.lg }}>
-              <Text style={{ color: palette.accent, fontSize: 16 }}>{t('shelf.newCard')}</Text>
-            </Pressable>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-              <Pressable onPress={() => void importFile()} style={{ paddingVertical: space.sm }}>
-                <Text style={{ color: palette.accent, fontSize: 16 }}>{t('cards.import')}</Text>
-              </Pressable>
-              <Pressable onPress={explain} hitSlop={12} accessibilityLabel={t('cards.formatTitle')}>
-                <Text style={{ color: palette.dim, fontSize: 17 }}>ⓘ</Text>
-              </Pressable>
-            </View>
-          </View>
         }
         renderItem={({ item }) => <CardRow card={item} />}
       />
