@@ -1293,7 +1293,11 @@
     "deleteConfirm": "Delete this card? The passages on it go too; the book and your highlights are untouched.",
     "manage": "Passages",
     "topics": "Topics",
-    "noTopics": "Not filed under a topic yet."
+    "noTopics": "Not filed under a topic yet.",
+    "tags": "Tags",
+    "noTags": "No tags yet. Tags split a topic into smaller sets to drill.",
+    "favorite": "Favorite",
+    "unfavorite": "Unfavorite"
   },
   "study": {
     "title": "Flashcards",
@@ -1579,7 +1583,7 @@
     "noMatches": "No matching cards.",
     "import": "Import from a file",
     "formatTitle": "Flashcard file",
-    "format": "One card per row, in this order:\n\ntopics, book, front, back\n\nfor example:\n\nLinear algebra;Exams,,What is a basis?,A linearly independent spanning set\nCharacters,Moby-Dick,Who is Ahab?,Captain of the Pequod\n\n• Only front is required; leave the others empty.\n• Several topics are split by ;\n• book is the title of a book on your shelf, and the card goes into it. A title that isn’t on the shelf becomes a topic instead.\n• Commas inside a field go in \"double quotes\".\n• Columns can come in any order under a header row naming them: topics, book, front, back.\n• Tab-separated text works the same as CSV.\n\nCards with no topic and no book go under one you name. Cards already here are skipped.",
+    "format": "One card per row, in this order:\n\ntopics, tags, book, front, back\n\nfor example:\n\nLinear algebra;Exams,proofs,,What is a basis?,A linearly independent spanning set\nCharacters,crew;whaling,Moby-Dick,Who is Ahab?,Captain of the Pequod\n\n• Only front is required; leave the others empty.\n• Several topics or tags are split by ;\n• Tags group cards inside a topic, so you can drill one tag at a time.\n• book is the title of a book on your shelf, and the card goes into it. A title that isn’t on the shelf becomes a topic instead.\n• Commas inside a field go in \"double quotes\".\n• Columns can come in any order under a header row naming them: topics, tags, book, front, back.\n• Tab-separated text works the same as CSV. An older file without the tags column still reads.\n\nCards with no topic and no book go under one you name. Cards already here are skipped.",
     "importNone": "No flashcards in that file",
     "imported_one": "{{count}} flashcard added",
     "imported_other": "{{count}} flashcards added",
@@ -1587,7 +1591,13 @@
     "importSkipped_other": "{{count}} were already here and skipped.",
     "importFailed": "Couldn’t read that file",
     "importUnmatched_one": "{{count}} named a book that isn’t on the shelf, so it went under that title as a topic.",
-    "importUnmatched_other": "{{count}} named books that aren’t on the shelf, so they went under those titles as topics."
+    "importUnmatched_other": "{{count}} named books that aren’t on the shelf, so they went under those titles as topics.",
+    "mark_favorite": "Favorite",
+    "mark_known": "Understood",
+    "mark_later": "Review later",
+    "play_one": "Play {{count}} card",
+    "play_other": "Play {{count}} cards",
+    "playDetail": "{{later}} to review · {{known}} understood"
   },
   "topic": {
     "ask": "Topic",
@@ -1595,5 +1605,25 @@
     "add": "＋ Topic",
     "remove": "Take “{{topic}}” off this card?",
     "confirm": "Add"
+  },
+  "tag": {
+    "ask": "Tag",
+    "askWhy": "A word to group this card with others in its topic.",
+    "add": "＋ Tag",
+    "remove": "Take “#{{tag}}” off this card?"
+  },
+  "play": {
+    "undo": "Undo",
+    "noBack": "Nothing written on the back yet.",
+    "done": "That’s the deck",
+    "again": "Play again",
+    "later_one": "Play the {{count}} to review",
+    "later_other": "Play the {{count}} to review",
+    "these": "Play these",
+    "shuffle": "Shuffle",
+    "question": "QUESTION",
+    "answer": "ANSWER",
+    "swipeHint": "← Review later   ·   Understood →",
+    "summary": "{{known}} understood · {{later}} to review this round"
   }
 }

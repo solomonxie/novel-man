@@ -1804,6 +1804,9 @@ export const CARRIED_TABLES = [
   'chapter_versions',
   // The topics a flash card is filed under, beyond the book it came from.
   'card_topics',
+  // A card's tags, and what was said of it while playing the deck.
+  'card_tags',
+  'card_marks',
 ] as const;
 
 export type CarriedRows = Record<string, Record<string, unknown>[]>;

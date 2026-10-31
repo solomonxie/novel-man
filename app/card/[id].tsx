@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from '../../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
@@ -17,8 +17,19 @@ import {
 import { EditableLine } from '../../src/ui/EditableLine';
 import { Badge, Block, Chip, ChipRow, Empty, Hero, Item } from '../../src/ui/detail';
 import { hueFrom } from '../../src/ui/fields';
-import { askTopic } from '../../src/ui/askTopic';
-import { addCardTopic, listTopics, removeCardTopic, topicsOf } from '../../src/db/topics';
+import { askTag, askTopic } from '../../src/ui/askTopic';
+import {
+  addCardTag,
+  addCardTopic,
+  isFavorite,
+  listTopics,
+  nearbyTags,
+  removeCardTag,
+  removeCardTopic,
+  setFavorite,
+  tagsOf,
+  topicsOf,
+} from '../../src/db/topics';
 import { TOPIC_KIND } from '../../src/books/kinds';
 import { getBook } from '../../src/db/repo';
 import { Hint, Row, Section } from '../../src/ui/primitives';
@@ -42,6 +53,9 @@ export default function CardPage() {
   const [topics, setTopics] = useState<string[]>([]);
   /** Topics used elsewhere and not on this card yet, offered for one tap. */
   const [others, setOthers] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [otherTags, setOtherTags] = useState<string[]>([]);
+  const [favorite, setFavoriteShown] = useState(false);
   const [fromTopic, setFromTopic] = useState(false);
   const latest = useRef<Entity | null>(null);
   latest.current = card;
@@ -69,6 +83,10 @@ export default function CardPage() {
       const own = await topicsOf(found.id);
       setTopics(own);
       setOthers((await listTopics()).map((entry) => entry.topic).filter((topic) => !own.includes(topic)).slice(0, 12));
+      const ownTags = await tagsOf(found.id);
+      setTags(ownTags);
+      setOtherTags((await nearbyTags(found.id)).filter((tag) => !ownTags.includes(tag)).slice(0, 12));
+      setFavoriteShown(await isFavorite(found.id));
     });
   }, [id]);
 
@@ -115,6 +133,22 @@ export default function CardPage() {
     ]);
   }
 
+  function confirmUntag(tag: string) {
+    Alert.alert(t('tag.remove', { tag }), undefined, [
+      { text: t('settings.cancel'), style: 'cancel' },
+      {
+        text: t('settings.delete'),
+        style: 'destructive',
+        onPress: () => void removeCardTag(card!.id, tag).then(load),
+      },
+    ]);
+  }
+
+  function toggleFavorite() {
+    setFavoriteShown(!favorite);
+    void setFavorite(card!.id, !favorite);
+  }
+
   function confirmDelete() {
     Alert.alert(t('card.deleteConfirm'), undefined, [
       { text: t('settings.cancel'), style: 'cancel' },
@@ -137,7 +171,21 @@ export default function CardPage() {
       automaticallyAdjustKeyboardInsets
       keyboardDismissMode="interactive"
     >
-      <Stack.Screen options={{ title: card.name || t('card.eyebrow'), headerBackTitle: ' ' }} />
+      <Stack.Screen
+        options={{
+          title: card.name || t('card.eyebrow'),
+          headerBackTitle: ' ',
+          headerRight: () => (
+            <Pressable
+              onPress={toggleFavorite}
+              hitSlop={12}
+              accessibilityLabel={t(favorite ? 'card.unfavorite' : 'card.favorite')}
+            >
+              <Text style={{ color: palette.accent, fontSize: 22 }}>{favorite ? '★' : '☆'}</Text>
+            </Pressable>
+          ),
+        }}
+      />
 
       <Hero eyebrow={t('card.eyebrow')}>
         <EditableLine
@@ -175,6 +223,29 @@ export default function CardPage() {
               label={`＋ ${topic}`}
               hue={hueFrom(topic)}
               onPress={() => void addCardTopic(card.id, topic).then(load)}
+            />
+          ))}
+        </ChipRow>
+      ) : null}
+
+      <Block
+        title={t('card.tags')}
+        count={tags.length || undefined}
+        action={{ label: t('tag.add'), onPress: () => askTag(t, (tag) => void addCardTag(card.id, tag).then(load)) }}
+      >
+        {tags.length === 0 && otherTags.length === 0 ? <Empty text={t('card.noTags')} /> : null}
+      </Block>
+      {tags.length || otherTags.length ? (
+        <ChipRow>
+          {tags.map((tag) => (
+            <Chip key={tag} label={`#${tag}`} hue={hueFrom(tag)} onPress={() => confirmUntag(tag)} />
+          ))}
+          {otherTags.map((tag) => (
+            <Chip
+              key={tag}
+              label={`＋ #${tag}`}
+              hue={hueFrom(tag)}
+              onPress={() => void addCardTag(card.id, tag).then(load)}
             />
           ))}
         </ChipRow>

@@ -300,6 +300,21 @@ function pure() {
     const restored = await repo.writeBookRecord(await repo.readBookRecord((await repo.getEntity(card)).book_id));
     const back = (await repo.listEntities(restored, 'card')).find((entry) => entry.name === 'What is a basis?');
     check('a restore keeps its topics', back && (await topics.topicsOf(back.id)), ['Exams', 'Linear algebra']);
+
+    await topics.addCardTag(card, ' #Vectors ');
+    await topics.addCardTag(card, 'Vectors');
+    await topics.setFavorite(card, true);
+    await topics.setVerdict(card, 'later');
+    const line = (await topics.recentCards()).find((entry) => entry.id === card);
+    check('a tag is kept once, without its #', await topics.tagsOf(card), ['Vectors']);
+    check('a card carries its tag and marks', [line.tags, line.favorite, line.verdict], ['Vectors', 1, 'later']);
+    await topics.setVerdict(card, 'known');
+    check('a new verdict keeps the favorite', [await topics.isFavorite(card), (await topics.recentCards()).find((entry) => entry.id === card).verdict], [true, 'known']);
+    check('filtered by tag and mark',
+      topics.filterCards(await topics.recentCards(), { topic: 'Exams', tag: 'Vectors', mark: 'favorite' }).map((entry) => entry.id), [card]);
+    const again = await repo.writeBookRecord(await repo.readBookRecord((await repo.getEntity(card)).book_id));
+    const copy = (await topics.recentCards()).find((entry) => entry.book_id === again && entry.name === 'What is a basis?');
+    check('a restore keeps tags and marks', copy && [copy.tags, copy.favorite, copy.verdict], ['Vectors', 1, 'known']);
   }
 
   console.log('flashcards from a file');
@@ -313,8 +328,16 @@ its column space"\n,,,no front\n,,Null space,\nCharacters,${shelfBook.title.toUp
       [['Characters'], 'Who is here?', 'A reader', shelfBook.title.toUpperCase()],
       [[], 'Who is Ahab?', 'Captain', 'Not On Any Shelf'],
     ]);
-    const named = cardsFile.parseCardsFile('#separator:tab\nFront\tBook\tTags\nEigenvalue\t\tmath; exams\n');
-    check('any order under a header', named, [{ topics: ['math', 'exams'], front: 'Eigenvalue', back: '', book: '' }]);
+    const named = cardsFile.parseCardsFile('#separator:tab\nFront\tBook\tTags\tDeck\nEigenvalue\t\tmath; #exams\tLinear algebra\n');
+    check('any order under a header', named, [{ topics: ['Linear algebra'], tags: ['math', 'exams'], front: 'Eigenvalue', back: '', book: '' }]);
+    const tagged = cardsFile.parseCardsFile('Spanish,verbs;irregular,,ser,to be\nSpanish,,,casa,house\n');
+    check('topics, tags, book, front, back, in that order', tagged.map((card) => [card.topics, card.tags, card.front, card.back]), [
+      [['Spanish'], ['verbs', 'irregular'], 'ser', 'to be'],
+      [['Spanish'], [], 'casa', 'house'],
+    ]);
+    await topics.importCards(tagged, '');
+    const ser = (await topics.recentCards()).find((card) => card.name === 'ser');
+    check('imported tags land on the card', await topics.tagsOf(ser.id), ['irregular', 'verbs']);
     const first = await topics.importCards(csv, 'Imported');
     check('every card is added', first, { added: 4, skipped: 0, unmatched: 1 });
     const cards = await topics.recentCards();

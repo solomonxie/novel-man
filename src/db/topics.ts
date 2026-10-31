@@ -87,19 +87,131 @@ export async function listTopics(): Promise<{ topic: string; cards: number }[]> 
   );
 }
 
-export type CardLine = Entity & { book_title: string; book_kind: string; topics: string | null };
+export type Verdict = 'known' | 'later';
+
+export const MARK_GLYPH = { favorite: '★', later: '↺', known: '✓' } as const;
+
+export type CardLine = Entity & {
+  book_title: string;
+  book_kind: string;
+  topics: string | null;
+  tags: string | null;
+  favorite: number | null;
+  verdict: Verdict | null;
+};
+
+export const SEPARATOR = ' · ';
+
+export const listOf = (joined: string | null) => (joined ? joined.split(SEPARATOR) : []);
 
 /** Cards from every book and topic, newest first; a card never written on is not one yet. */
 export async function recentCards(limit = -1): Promise<CardLine[]> {
   const database = await db();
   return database.getAllAsync<CardLine>(
     `SELECT e.*, b.title AS book_title, b.kind AS book_kind,
-            (SELECT GROUP_CONCAT(topic, ' · ') FROM card_topics t WHERE t.entity_id = e.id) AS topics
+            (SELECT GROUP_CONCAT(topic, ' · ') FROM card_topics t WHERE t.entity_id = e.id) AS topics,
+            (SELECT GROUP_CONCAT(tag, ' · ') FROM card_tags g WHERE g.entity_id = e.id) AS tags,
+            m.favorite, m.verdict
        FROM entities e JOIN books b ON b.id = e.book_id
+       LEFT JOIN card_marks m ON m.entity_id = e.id
       WHERE e.kind = 'card' AND TRIM(e.name) != ''
       ORDER BY e.created_at DESC LIMIT ?`,
     limit
   );
+}
+
+export async function tagsOf(cardId: string): Promise<string[]> {
+  const database = await db();
+  const rows = await database.getAllAsync<{ tag: string }>(
+    'SELECT tag FROM card_tags WHERE entity_id = ? ORDER BY tag',
+    cardId
+  );
+  return rows.map((row) => row.tag);
+}
+
+export async function addCardTag(cardId: string, tag: string): Promise<void> {
+  const name = cleanTopic(tag.replace(/^\s*#+/, ''));
+  if (!name) return;
+  const database = await db();
+  await database.runAsync(
+    `INSERT OR IGNORE INTO card_tags (book_id, entity_id, tag)
+     SELECT book_id, id, ? FROM entities WHERE id = ?`,
+    name,
+    cardId
+  );
+}
+
+export async function removeCardTag(cardId: string, tag: string): Promise<void> {
+  const database = await db();
+  await database.runAsync('DELETE FROM card_tags WHERE entity_id = ? AND tag = ?', cardId, tag);
+}
+
+/** Tags used on cards sharing a topic with this one, or on any card if it has none. */
+export async function nearbyTags(cardId: string): Promise<string[]> {
+  const database = await db();
+  const rows = await database.getAllAsync<{ tag: string }>(
+    `SELECT g.tag FROM card_tags g
+      WHERE NOT EXISTS (SELECT 1 FROM card_topics WHERE entity_id = ?)
+         OR g.entity_id IN (SELECT entity_id FROM card_topics
+                             WHERE topic IN (SELECT topic FROM card_topics WHERE entity_id = ?))
+      GROUP BY g.tag ORDER BY COUNT(*) DESC, g.tag LIMIT 24`,
+    cardId,
+    cardId
+  );
+  return rows.map((row) => row.tag);
+}
+
+async function mark(cardId: string, column: 'favorite' | 'verdict', value: number | string | null) {
+  const database = await db();
+  // Not an upsert: its conflict clause would override the change trigger's OR IGNORE.
+  await database.runAsync(
+    'INSERT OR IGNORE INTO card_marks (book_id, entity_id) SELECT book_id, id FROM entities WHERE id = ?',
+    cardId
+  );
+  await database.runAsync(
+    `UPDATE card_marks SET ${column} = ?, marked_at = ? WHERE entity_id = ?`,
+    value,
+    Date.now(),
+    cardId
+  );
+}
+
+export const setFavorite = (cardId: string, favorite: boolean) => mark(cardId, 'favorite', favorite ? 1 : 0);
+
+export const setVerdict = (cardId: string, verdict: Verdict | null) => mark(cardId, 'verdict', verdict);
+
+export async function isFavorite(cardId: string): Promise<boolean> {
+  const database = await db();
+  const row = await database.getFirstAsync<{ favorite: number }>(
+    'SELECT favorite FROM card_marks WHERE entity_id = ?',
+    cardId
+  );
+  return Boolean(row?.favorite);
+}
+
+/** What narrows the deck: a topic, a tag in it, a mark, typed words. */
+export type CardFilter = { topic?: string; tag?: string; mark?: 'favorite' | Verdict; query?: string };
+
+export function filterCards(cards: CardLine[], { topic, tag, mark: wanted, query }: CardFilter): CardLine[] {
+  const typed = query?.trim().toLowerCase();
+  return cards.filter(
+    (card) =>
+      (!topic || listOf(card.topics).includes(topic)) &&
+      (!tag || listOf(card.tags).includes(tag)) &&
+      (!wanted || (wanted === 'favorite' ? Boolean(card.favorite) : card.verdict === wanted)) &&
+      (!typed ||
+        card.name.toLowerCase().includes(typed) ||
+        (card.summary ?? '').toLowerCase().includes(typed))
+  );
+}
+
+/** Tags on these cards, the most used first. */
+export function tagsAmong(cards: CardLine[]): { tag: string; cards: number }[] {
+  const counts = new Map<string, number>();
+  for (const card of cards) for (const tag of listOf(card.tags)) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  return [...counts]
+    .map(([tag, n]) => ({ tag, cards: n }))
+    .sort((a, b) => b.cards - a.cards || a.tag.localeCompare(b.tag));
 }
 
 export async function countCards(): Promise<number> {
@@ -164,6 +276,7 @@ export async function importCards(drafts: CardDraft[], fallback: string): Promis
       const cardId = await createEntity(draft.bookId ?? decks.get(draft.topics[0])!, 'card', draft.front);
       if (draft.back) await updateEntity(cardId, { summary: draft.back });
       for (const topic of draft.topics) await addCardTopic(cardId, topic);
+      for (const tag of draft.tags) await addCardTag(cardId, tag);
     }
   });
   return { added: fresh.length, skipped: drafts.length - fresh.length, unmatched };

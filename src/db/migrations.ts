@@ -1053,4 +1053,24 @@ export const migrations: string[] = [
    CREATE INDEX card_topics_book ON card_topics(book_id);
    CREATE INDEX entities_recent ON entities(kind, created_at DESC);
    ${tableTriggers('card_topics', false).join('\n   ')}`,
+
+  // Tags inside a topic, and what the reader said of a card while playing:
+  // understood, or to see again later, and whether it is a favourite.
+  `CREATE TABLE card_tags (
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+     tag TEXT NOT NULL,
+     PRIMARY KEY (entity_id, tag)
+   );
+   CREATE INDEX card_tags_tag ON card_tags(tag);
+   CREATE INDEX card_tags_book ON card_tags(book_id);
+   CREATE TABLE card_marks (
+     book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+     entity_id TEXT PRIMARY KEY NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+     favorite INTEGER NOT NULL DEFAULT 0,
+     verdict TEXT,
+     marked_at INTEGER
+   );
+   CREATE INDEX card_marks_book ON card_marks(book_id);
+   ${[...tableTriggers('card_tags', false), ...tableTriggers('card_marks', false)].join('\n   ')}`,
 ];

@@ -3,7 +3,17 @@ import { Alert, FlatList, Pressable, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect } from '../src/navigation/router';
 import { useTranslation } from 'react-i18next';
 
-import { createTopicCard, importCards, listTopics, recentCards, type CardLine } from '../src/db/topics';
+import {
+  createTopicCard,
+  MARK_GLYPH,
+  filterCards,
+  importCards,
+  listTopics,
+  recentCards,
+  tagsAmong,
+  type CardFilter,
+  type CardLine,
+} from '../src/db/topics';
 import { parseCardsFile } from '../src/sources/cardsFile';
 import { pickCardsFile } from '../src/import/sources/picker';
 import { File } from '../src/storage/fs';
@@ -11,7 +21,7 @@ import { CardRow } from '../src/ui/CardRow';
 import { askTopic } from '../src/ui/askTopic';
 import { Chip, ChipRow } from '../src/ui/detail';
 import { hueFrom } from '../src/ui/fields';
-import { Search } from '../src/ui/primitives';
+import { Row, Search, Section } from '../src/ui/primitives';
 import { space, usePalette } from '../src/theme';
 
 /** Every flashcard, from every book and topic, newest first. */
@@ -21,6 +31,8 @@ export default function AllCards() {
   const [cards, setCards] = useState<CardLine[] | null>(null);
   const [topics, setTopics] = useState<{ topic: string; cards: number }[]>([]);
   const [topic, setTopic] = useState<string | null>(null);
+  const [tag, setTag] = useState<string | null>(null);
+  const [mark, setMark] = useState<CardFilter['mark'] | null>(null);
   const [query, setQuery] = useState('');
 
   const load = useCallback(() => {
@@ -29,14 +41,31 @@ export default function AllCards() {
   }, []);
   useFocusEffect(load);
 
-  const typed = query.trim().toLowerCase();
-  const shown = (cards ?? []).filter(
-    (card) =>
-      (!topic || (card.topics ?? '').split(' · ').includes(topic)) &&
-      (!typed ||
-        card.name.toLowerCase().includes(typed) ||
-        (card.summary ?? '').toLowerCase().includes(typed))
-  );
+  const inTopic = filterCards(cards ?? [], { topic: topic ?? undefined });
+  const tags = tagsAmong(inTopic);
+  const filter: CardFilter = {
+    topic: topic ?? undefined,
+    tag: tag ?? undefined,
+    mark: mark ?? undefined,
+    query,
+  };
+  const shown = filterCards(cards ?? [], filter);
+  const marks = (['favorite', 'later', 'known'] as const)
+    .map((one) => ({ one, n: filterCards(inTopic, { tag: tag ?? undefined, mark: one }).length }))
+    .filter(({ one, n }) => n || mark === one);
+
+  function pickTopic(next: string | null) {
+    setTopic(next);
+    setTag(null);
+  }
+
+  function play() {
+    const params = Object.entries(filter)
+      .filter(([, value]) => value)
+      .map(([key, value]) => `${key}=${encodeURIComponent(value!)}`)
+      .join('&');
+    router.push(`/cards/play${params ? `?${params}` : ''}`);
+  }
 
   const check = <Text style={{ color: palette.accent, fontSize: 13, fontWeight: '700' }}>✓</Text>;
 
@@ -88,7 +117,7 @@ export default function AllCards() {
             ) : null}
             {topics.length ? (
               <ChipRow>
-                <Chip label={t('cards.all')} glyph={topic ? undefined : check} onPress={() => setTopic(null)} />
+                <Chip label={t('cards.all')} glyph={topic ? undefined : check} onPress={() => pickTopic(null)} />
                 {topics.map((entry) => (
                   <Chip
                     key={entry.topic}
@@ -96,10 +125,51 @@ export default function AllCards() {
                     detail={String(entry.cards)}
                     hue={hueFrom(entry.topic)}
                     glyph={topic === entry.topic ? check : undefined}
-                    onPress={() => setTopic(topic === entry.topic ? null : entry.topic)}
+                    onPress={() => pickTopic(topic === entry.topic ? null : entry.topic)}
                   />
                 ))}
               </ChipRow>
+            ) : null}
+            {tags.length ? (
+              <ChipRow>
+                {tags.map((entry) => (
+                  <Chip
+                    key={entry.tag}
+                    label={`#${entry.tag}`}
+                    detail={String(entry.cards)}
+                    hue={hueFrom(entry.tag)}
+                    glyph={tag === entry.tag ? check : undefined}
+                    onPress={() => setTag(tag === entry.tag ? null : entry.tag)}
+                  />
+                ))}
+              </ChipRow>
+            ) : null}
+            {marks.length ? (
+              <ChipRow>
+                {marks.map(({ one, n }) => (
+                  <Chip
+                    key={one}
+                    label={t(`cards.mark_${one}`)}
+                    detail={String(n)}
+                    glyph={mark === one ? check : <Text style={{ fontSize: 13 }}>{MARK_GLYPH[one]}</Text>}
+                    onPress={() => setMark(mark === one ? null : one)}
+                  />
+                ))}
+              </ChipRow>
+            ) : null}
+            {shown.length ? (
+              <Section flush>
+                <Row
+                  label={t('cards.play', { count: shown.length })}
+                  detail={t('cards.playDetail', {
+                    later: shown.filter((card) => card.verdict === 'later').length,
+                    known: shown.filter((card) => card.verdict === 'known').length,
+                  })}
+                  link
+                  onPress={play}
+                  last
+                />
+              </Section>
             ) : null}
           </View>
         }
@@ -130,3 +200,4 @@ export default function AllCards() {
     </View>
   );
 }
+

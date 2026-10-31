@@ -1293,7 +1293,11 @@
     "deleteConfirm": "删除这张卡？卡上的原文也会一起删除；书和你的划线不受影响。",
     "manage": "原文",
     "topics": "主题",
-    "noTopics": "还没有归入任何主题。"
+    "noTopics": "还没有归入任何主题。",
+    "tags": "标签",
+    "noTags": "还没有标签。标签把一个主题分成更小的组来记。",
+    "favorite": "收藏",
+    "unfavorite": "取消收藏"
   },
   "study": {
     "title": "记忆卡",
@@ -1579,7 +1583,7 @@
     "noMatches": "没有匹配的卡片。",
     "import": "从文件导入",
     "formatTitle": "记忆卡文件格式",
-    "format": "每行一张卡片，按这个顺序：\n\ntopics, book, front, back\n（主题、书、正面、背面）\n\n例如：\n\n线性代数;考试,,什么是基？,线性无关的生成集\n人物,白鲸,亚哈是谁？,裴廓德号的船长\n\n• 只有正面必填，其他可以留空。\n• 多个主题用 ; 分隔。\n• book 填书架上某本书的书名，卡片会放进那本书；书架上没有的书名会变成一个主题。\n• 含逗号的字段放在英文双引号里。\n• 有表头行（topics, book, front, back）时，列可以任意顺序。\n• 制表符分隔的文本和 CSV 一样可用。\n\n没有主题也没有书的卡片会放到你指定的主题下；已有的卡片会跳过。",
+    "format": "每行一张卡片，按这个顺序：\n\ntopics, tags, book, front, back\n（主题、标签、书、正面、背面）\n\n例如：\n\n线性代数;考试,证明,,什么是基？,线性无关的生成集\n人物,船员;捕鲸,白鲸,亚哈是谁？,裴廓德号的船长\n\n• 只有正面必填，其他可以留空。\n• 多个主题或标签用 ; 分隔。\n• 标签在主题内再分组，可以一次只练一个标签。\n• book 填书架上某本书的书名，卡片会放进那本书；书架上没有的书名会变成一个主题。\n• 含逗号的字段放在英文双引号里。\n• 有表头行（topics, tags, book, front, back）时，列可以任意顺序。\n• 制表符分隔的文本和 CSV 一样可用。没有标签列的旧文件也能读。\n\n没有主题也没有书的卡片会放到你指定的主题下；已有的卡片会跳过。",
     "importNone": "这个文件里没有记忆卡",
     "imported_one": "已添加 {{count}} 张记忆卡",
     "imported_other": "已添加 {{count}} 张记忆卡",
@@ -1587,7 +1591,13 @@
     "importSkipped_other": "{{count}} 张已存在，已跳过。",
     "importFailed": "读不了这个文件",
     "importUnmatched_one": "{{count}} 张写的书不在书架上，已改为以书名作主题。",
-    "importUnmatched_other": "{{count}} 张写的书不在书架上，已改为以书名作主题。"
+    "importUnmatched_other": "{{count}} 张写的书不在书架上，已改为以书名作主题。",
+    "mark_favorite": "收藏",
+    "mark_known": "已理解",
+    "mark_later": "稍后复习",
+    "play_one": "开始 {{count}} 张",
+    "play_other": "开始 {{count}} 张",
+    "playDetail": "{{later}} 张待复习 · {{known}} 张已理解"
   },
   "topic": {
     "ask": "主题",
@@ -1595,5 +1605,25 @@
     "add": "＋ 主题",
     "remove": "把“{{topic}}”从这张卡上移除？",
     "confirm": "添加"
+  },
+  "tag": {
+    "ask": "标签",
+    "askWhy": "用一个词把这张卡和同主题的其他卡归在一起。",
+    "add": "＋ 标签",
+    "remove": "从这张卡上去掉“#{{tag}}”？"
+  },
+  "play": {
+    "undo": "撤销",
+    "noBack": "背面还没有写内容。",
+    "done": "这一组完成了",
+    "again": "再来一遍",
+    "later_one": "复习这 {{count}} 张",
+    "later_other": "复习这 {{count}} 张",
+    "these": "只练这些",
+    "shuffle": "打乱",
+    "question": "问题",
+    "answer": "答案",
+    "swipeHint": "← 稍后复习   ·   已理解 →",
+    "summary": "本轮 {{known}} 张已理解 · {{later}} 张待复习"
   }
 }

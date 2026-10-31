@@ -59,6 +59,7 @@ export const screens: Screen[] = [
   { path: '/book/[id]/study', load: () => require('../../app/book/[id]/study').default, header: true },
   { path: '/book/[id]/cards', load: () => require('../../app/book/[id]/cards').default, header: true },
   { path: '/cards', load: () => require('../../app/cards').default, header: true },
+  { path: '/cards/play', load: () => require('../../app/cards/play').default, header: true },
   { path: '/card/[id]', load: () => require('../../app/card/[id]').default, header: true },
   { path: '/book/[id]/mapping', load: () => require('../../app/book/[id]/mapping').default, header: true },
   { path: '/book/[id]/script', load: () => require('../../app/book/[id]/script').default, header: true },
