@@ -16,33 +16,47 @@ export type Shape = 'portrait' | 'square';
 /**
  * How long a picture is worth waiting for, which is not the app's call.
  *
- * `normal` is the newer model at its cheapest pass: a picture judged in a
+ * `normal` is the current model at its cheapest pass: a picture judged in a
  * strip of 88-point thumbnails does not need the slowest setting, and the wait
- * is the thing that makes drawing feel broken rather than deliberate.
+ * is the thing that makes drawing feel broken rather than deliberate. `fast`
+ * is the small model, and `best` the slow, precise one at high quality.
  *
- * `fast` is the only genuinely smaller option there is — the newer model will
- * not draw below 1024 on its short side, so going lower means the older one at
- * 512. It is quick and cheap and markedly worse at doing as it is told, which
- * is the whole point here: a tear mole named in the prompt is the first thing
- * it drops. `best` is the same model as `normal` at its slowest.
+ * Each is a list, newest first. OpenAI retires image models on a schedule
+ * (gpt-image-1 went in October 2026), and a key may not have access to the
+ * newest yet, so a model the vendor says is gone or not allowed falls through
+ * to the next — and the one that answered is remembered until the app closes.
  */
 export type Grade = 'fast' | 'normal' | 'best';
 
 const DRAWING = 'ai.drawing.grade';
 
-const RECIPES: Record<Grade, { model: string; quality?: string; sizes: Record<Shape, string> }> = {
-  fast: { model: 'dall-e-2', sizes: { portrait: '512x512', square: '512x512' } },
-  normal: {
-    model: 'gpt-image-1',
-    quality: 'low',
-    sizes: { portrait: '1024x1536', square: '1024x1024' },
-  },
-  best: {
-    model: 'gpt-image-1',
-    quality: 'high',
-    sizes: { portrait: '1024x1536', square: '1024x1024' },
-  },
+type Recipe = { model: string; quality?: string; sizes: Record<Shape, string> };
+
+const TALL = { portrait: '1024x1536', square: '1024x1024' };
+const at = (quality: string, ...models: string[]): Recipe[] =>
+  models.map((model) => ({ model, quality, sizes: TALL }));
+
+const RECIPES: Record<Grade, Recipe[]> = {
+  fast: [
+    ...at('low', 'gpt-image-1-mini', 'gpt-image-2.5-flare', 'gpt-image-2'),
+    { model: 'dall-e-2', sizes: { portrait: '512x512', square: '512x512' } },
+  ],
+  normal: at('low', 'gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-1.5', 'gpt-image-1-mini'),
+  best: at('high', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-1.5'),
 };
+
+/** The model that last drew for each grade, so a gone one is asked about once. */
+const working = new Map<Grade, string>();
+
+/** The vendor saying this model is not one it will run for this key — not that the prompt was wrong. */
+function modelUnavailable(status: number, message: string): boolean {
+  return (
+    status === 404 ||
+    ((status === 400 || status === 403) &&
+      /model|does not exist|not found|not have access|deprecated|retired|shut ?down|unsupported/i.test(message) &&
+      !/safety|policy|moderation/i.test(message))
+  );
+}
 
 export async function getGrade(): Promise<Grade> {
   return ((await SecureStore.getItemAsync(DRAWING)) as Grade) ?? 'normal';
@@ -102,25 +116,35 @@ export async function drawImage(
   const key = await drawingKey();
   if (!key) throw new NoImageKey();
 
-  const recipe = RECIPES[await getGrade()];
-  const response = await fetch(`${key.baseUrl}/images/generations`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${key.secret}` },
-    body: JSON.stringify({
-      model: recipe.model,
-      prompt,
-      size: recipe.sizes[shape],
-      // The older model has no quality of its own, and refuses the field.
-      ...(recipe.quality ? { quality: recipe.quality } : { response_format: 'b64_json' }),
-      n: 1,
-    }),
-    signal,
-  });
-  const payload = (await response.json()) as {
-    data?: { b64_json?: string; url?: string }[];
-    error?: { message?: string };
-  };
-  if (!response.ok) throw new Error(payload.error?.message ?? `${response.status}`);
+  const grade = await getGrade();
+  const recipes = RECIPES[grade];
+  const first = Math.max(0, recipes.findIndex((recipe) => recipe.model === working.get(grade)));
+  let payload: { data?: { b64_json?: string; url?: string }[]; error?: { message?: string } } = {};
+  let lastProblem = '';
+  for (const recipe of [...recipes.slice(first), ...recipes.slice(0, first)]) {
+    const response = await fetch(`${key.baseUrl}/images/generations`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key.secret}` },
+      body: JSON.stringify({
+        model: recipe.model,
+        prompt,
+        size: recipe.sizes[shape],
+        // The older model has no quality of its own, and refuses the field.
+        ...(recipe.quality ? { quality: recipe.quality } : { response_format: 'b64_json' }),
+        n: 1,
+      }),
+      signal,
+    });
+    payload = ((await response.json().catch(() => null)) ?? {}) as typeof payload;
+    if (response.ok) {
+      working.set(grade, recipe.model);
+      break;
+    }
+    lastProblem = payload.error?.message ?? `${response.status}`;
+    if (!modelUnavailable(response.status, lastProblem)) throw new Error(lastProblem);
+    payload = {};
+  }
+  if (!payload.data) throw new Error(lastProblem || 'nothing came back');
 
   const drawn = payload.data?.[0];
   if (drawn?.b64_json) return fromBase64(drawn.b64_json);
