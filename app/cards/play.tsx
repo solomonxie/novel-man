@@ -297,7 +297,7 @@ export default function PlayCards() {
 
   return (
     <View style={{ flex: 1, backgroundColor: palette.bg }}>
-      <Stack.Screen options={{ title, headerBackTitle: ' ' }} />
+      <Stack.Screen options={{ title, headerBackTitle: ' ', gestureEnabled: false }} />
       <FlatList
         data={shown}
         scrollEnabled={!dragging}
