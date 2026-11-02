@@ -71,13 +71,16 @@ export default function PartPage() {
     return annotations.filter((entry) => entry.start >= part.start && entry.start < part.end);
   }, [annotations, part, book?.text_source, chapters]);
 
+  // Numbered within the part: John 3 is chapter 3 here, not the bible's 1000th.
+  const numbered = useMemo(() => chapters.map((chapter, at) => ({ chapter, n: at + 1 })), [chapters]);
+
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return chapters;
-    return chapters.filter((chapter) =>
-      `${chapter.idx + 1} ${chapter.title} ${chapter.brief ?? ''}`.toLowerCase().includes(needle)
+    if (!needle) return numbered;
+    return numbered.filter(({ chapter, n }) =>
+      `${n} ${chapter.title} ${chapter.brief ?? ''}`.toLowerCase().includes(needle)
     );
-  }, [chapters, query]);
+  }, [numbered, query]);
 
   if (!book || !part) {
     return (
@@ -124,10 +127,9 @@ export default function PartPage() {
           <>
             <Fact value={chapters.length} label={t('units.unit_chapters')} />
             {verses > 0 && <Fact value={formatCount(verses, 'en')} label={t('units.unit_verses')} />}
-            <Fact
-              value={formatCount(part.end - part.start, book.language)}
-              label={t('units.unit_long')}
-            />
+            {part.end > part.start && (
+              <Fact value={formatCount(part.end - part.start, book.language)} label={t('units.unit_long')} />
+            )}
             {notes.length > 0 && <Fact value={notes.length} label={t('units.unit_notes')} />}
           </>
         }
@@ -168,13 +170,13 @@ export default function PartPage() {
         {shown.length === 0 ? (
           <Empty text={t('book.jumpNone')} />
         ) : (
-          shown.map((chapter, index) => (
+          shown.map(({ chapter, n }, index) => (
             // The row reads it. A part is a place in the book, and its own page
             // is where a chapter is edited — reached from Chapters, not here.
             <Item
               key={chapter.id}
-              badge={<Badge n={chapter.idx + 1} />}
-              title={chapter.title.trim() || `${chapter.idx + 1}`}
+              badge={<Badge n={n} />}
+              title={chapter.title.trim() || `${n}`}
               detail={chapter.brief?.trim() || undefined}
               onPress={() => read(chapter)}
               last={index === shown.length - 1}
