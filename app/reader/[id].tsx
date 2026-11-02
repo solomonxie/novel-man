@@ -1748,8 +1748,11 @@ export default function Reader() {
             // Measured, not assumed: the bar's height and the safe area both
             // vary, and a guess put the first line under the bar.
             paddingTop: Math.max(TOUCH, topY + barLayout.y + barLayout.height - pageTop) + space.md,
-            paddingBottom: space.xxl * 3,
+            // The chapter's end sits on the bottom edge, with nothing below it.
+            paddingBottom: Math.max(insets.bottom, space.md) + space.md,
+            flexGrow: 1,
           }}
+          ListFooterComponentStyle={{ marginTop: 'auto' }}
           // The thumb follows natively at every frame; the listener still only
           // runs as often as it did, which is all the saving needs.
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
