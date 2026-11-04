@@ -11,9 +11,11 @@ import {
   importCards,
   listTopics,
   recentCards,
+  setVerdict,
   tagsAmong,
   type CardFilter,
   type CardLine,
+  type Verdict,
 } from '../src/db/topics';
 import { parseCardsFile } from '../src/sources/cardsFile';
 import { pickCardsFile } from '../src/import/sources/picker';
@@ -36,6 +38,7 @@ export default function AllCards() {
   const [tag, setTag] = useState<string | null>(null);
   const [mark, setMark] = useState<CardFilter['mark'] | null>(null);
   const [query, setQuery] = useState('');
+  const [dragging, setDragging] = useState(false);
 
   const load = useCallback(() => {
     recentCards().then(setCards);
@@ -68,6 +71,11 @@ export default function AllCards() {
     setBook(next);
     setTopic(null);
     setTag(null);
+  }
+
+  function decide(id: string, verdict: Verdict | null) {
+    setCards((was) => was?.map((one) => (one.id === id ? { ...one, verdict } : one)) ?? was);
+    void setVerdict(id, verdict);
   }
 
   function play() {
@@ -115,9 +123,10 @@ export default function AllCards() {
 
   return (
     <View style={{ flex: 1, backgroundColor: palette.bg }}>
-      <Stack.Screen options={{ title: t('cards.title'), headerBackTitle: ' ' }} />
+      <Stack.Screen options={{ title: t('cards.title'), headerBackTitle: ' ', gestureEnabled: false }} />
       <FlatList
         data={shown}
+        scrollEnabled={!dragging}
         keyExtractor={(card) => card.id}
         contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl * 2 }}
         keyboardShouldPersistTaps="handled"
@@ -213,7 +222,9 @@ export default function AllCards() {
             </Text>
           ) : null
         }
-        renderItem={({ item }) => <CardRow card={item} />}
+        renderItem={({ item }) => (
+          <CardRow card={item} onVerdict={(verdict) => decide(item.id, verdict)} onDragging={setDragging} />
+        )}
       />
     </View>
   );
